@@ -1,0 +1,133 @@
+INIT
+ITEM:__Me
+SPELL:%FireRainProjectileSpell = ProjectileStrike_TUT_UpperDeck_Bombardment
+CHARACTER:%Mindflayer = S_TUT_Helm_MindFlayer_22a400ec-5f01-4659-82e1-aed0b203c846
+FLOAT3:%FireRainOffset = {0;0;60}
+STRING:%FireRainEventOn = null
+STRING:%FireRainEventOff = null
+STRING:%FireRainShadowEffect = "VFX_Script_Stub_Loop_01"
+INT:%FireRainIsOn = 1
+INT:%CharacterIsNear = 0
+INT:%FireRainTimerIsOn = 0
+FLOAT:%FireRainSleepTime = 25.0
+FLOAT:%SleepTime = 10.0
+FLOAT:%FireRainTimeDelta = 0
+FLOAT:%FireRainIntervalRandomness = 35.0
+FLOAT:%MinDistance = 8.0
+
+EVENTS
+
+EVENT FireRain_TurnOff
+ON
+	OnCharacterItemEvent(_,_,%FireRainEventOff)
+ACTIONS
+	Set(%FireRainIsOn,0)
+	Interrupt("FireRain_Shoot")
+
+EVENT FireRain_TurnOn
+ON
+	OnCharacterItemEvent(_,_,%FireRainEventOn)
+ACTIONS
+	Set(%FireRainIsOn,1)
+	Interrupt("FireRain_Shoot")
+
+EVENT Shutdown
+ON
+	OnShutdown()
+	OnItemDestroying(__Me)
+ACTIONS
+	Set(%FireRainTimerIsOn,0)
+	StopTimer("UpdateFireRain")
+	
+EVENT Start
+ON
+	OnActivate()
+ACTIONS
+	IF "c1"
+		IsEqual(%FireRainTimerIsOn,0)
+	THEN
+		Set(%FireRainTimerIsOn,1)
+		StartTimer("UpdateFireRain",0.1,-1)
+	ENDIF
+	
+EVENT Update
+ON
+	OnTimer("UpdateFireRain")
+ACTIONS
+	IF "c1"
+		IsEqual(%FireRainIsOn,1)
+	THEN
+		IterateCharactersNear(__Me, %MinDistance, "FireRainCheck")	
+	ENDIF
+	
+EVENT CheckCharacter
+VARS
+CHARACTER:_Char
+FLOAT:_Dist
+ON
+	OnIterateCharacter(_Char,"FireRainCheck")
+ACTIONS
+	IF "c1&c2&!c3&!c4"
+		GetDistance(_Dist,_Char,__Me)
+		IsLessThen(_Dist,%MinDistance)
+		IsEqual(_Char,null)
+		CharacterIsDead(_Char)
+	THEN		
+		Set(%CharacterIsNear, 1)
+	ELSE
+		IF "!c1"
+			IsLessThen(_Dist,%MinDistance)
+		THEN
+			Set(%CharacterIsNear, 0)
+		ENDIF
+	ENDIF
+		
+EVENT FireRain_Combat
+VARS 
+	FLOAT3:_Dir
+ON
+	OnCombatTick()	
+ACTIONS
+	IF "c1&!c2&!c3"
+		IsEqual(%FireRainIsOn,1)
+		IsInCombatWith(__Me, %Mindflayer)
+		IsEqual(%CharacterIsNear,1)
+	THEN
+		GetForwardDirection(__Me,_Dir)
+		ShootLocalProjectile(%FireRainProjectileSpell,__Me,%FireRainOffset,_Dir)
+	ENDIF
+	EndTurn(__Me)
+
+BEHAVIOUR
+
+	
+REACTION FireRain_Shoot,1000
+USAGE PEACE
+VARS 
+	FLOAT3:_Dir
+	FLOAT:_SleepTime
+	FLOAT:_TimeDelta
+ACTIONS
+	IF "c1"
+		IsEqual(%FireRainIsOn,1)
+	THEN
+		Set(%SleepTime,%FireRainSleepTime)
+		GetRandomBetween(%FireRainTimeDelta,0.0,%FireRainIntervalRandomness)
+		IF "c1"
+			IsRandom(0.5)
+		THEN
+			Add(%SleepTime,%FireRainTimeDelta)
+		ELSE
+			Subtract(%SleepTime,%FireRainTimeDelta)
+		ENDIF
+		Sleep(%SleepTime)
+	ENDIF
+		IF "!c1"
+			IsEqual(%CharacterIsNear,1)
+		THEN
+			GetForwardDirection(__Me,_Dir)
+			ShootLocalProjectile(%FireRainProjectileSpell,__Me,%FireRainOffset,_Dir)
+		ENDIF
+INTERRUPT
+ACTIONS
+		Reset()

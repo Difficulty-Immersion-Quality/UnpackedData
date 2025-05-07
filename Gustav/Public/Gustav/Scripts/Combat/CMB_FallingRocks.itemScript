@@ -1,0 +1,68 @@
+INIT
+
+	ITEM:__Me
+	CHARACTER:%LastAttacker = null
+	INT:%Attacked= 0
+	INT64:%WaterDrippingEffect = null
+	EXTERN ITEMTEMPLATE:%FallingTemplate = Quest_CMB_FallingStalactite_Gravity_572084f8-e591-4c0f-8837-11eca14dea63
+	EXTERN INT:%bool_CreateWaterSurface = 0
+	EXTERN FLOAT3:%OffSetToGround = {0.0;-5.0;0.0}
+
+EVENTS
+EVENT Attacked
+VARS
+	CHARACTER:_Char
+	DAMAGE:_DamageType
+ON
+	OnDamage(_DamageType,_,_Char,_)
+ACTIONS
+	IF "c1&!c2"
+		IsEqual(%Attacked,0)
+		IsEqual(_DamageType, None)
+	THEN
+		Set(%LastAttacker,_Char)
+		Transform(__Me,%FallingTemplate,"",1)
+		Set(%Attacked,1)
+	ENDIF
+
+EVENT Stalactite_Init
+VARS
+	FLOAT3:_Pos
+ON
+	OnInit()
+ACTIONS
+	//StartTimer("Create_WaterPuddle",6.0,-1.0)
+	IF "c1"
+		GetPosition(__Me,_Pos)
+	THEN
+		Add(_Pos,{0.0;-2.0;0.0})
+		PlayLoopEffectAt(%WaterDrippingEffect,_Pos,"VFX_Environment_Stalactite_Droplet_01")
+	ENDIF
+	CallFunction("Create_WaterPuddle")
+	
+EVENT Stalactite_Shutdown
+ON
+	OnShutdown()
+ACTIONS
+	StopTimer("Create_WaterPuddle")
+	StopLoopEffect(%WaterDrippingEffect)
+
+EVENT CreateWaterPuddle
+VARS
+	FLOAT3:_Pos
+ON
+	//OnTimer("Create_WaterPuddle")
+	OnFunction("Create_WaterPuddle")
+ACTIONS
+	IF "c1&c2"
+		IsEqual(%bool_CreateWaterSurface,1)
+		GetPosition(__Me,_Pos)
+	THEN
+		Add(_Pos,%OffSetToGround)
+		IF "!c1"
+			ContainsSurface(_Pos,2.5,SurfaceWater)
+		THEN
+			CreateSurfaceAt(_Pos,SurfaceWater,0.8,-1.0)
+		ENDIF
+	ENDIF
+			

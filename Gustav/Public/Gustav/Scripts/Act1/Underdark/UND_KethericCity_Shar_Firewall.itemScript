@@ -1,0 +1,437 @@
+INIT
+	ITEM:__Me
+	INT64:%LoopFx = -1
+	STRING:%Fx = "VFX_Script_UND_KathericCity_FireTrap_Small_01"
+	INT:%Active = 0
+	INT:%Disarmed = 0
+	INT:%DamageEntities = 0
+	FLOAT:%TimeActive = 6.0
+	FLOAT:%TimeInactive = 6.0
+	EXTERN STRING:%OnEvent = null
+	EXTERN STRING:%OffEvent = null
+	EXTERN FIXEDSTRING:%EnterEvent = null
+	LIST<CHARACTER>:%AffectedCharacters
+	LIST<ITEM>:%AffectedItems
+	CHARACTER:%CharacterToAddOrRemove
+	ITEM:%ItemToAddOrRemove
+	LIST<CHARACTER>:%AffectedCharactersWithStatus
+	LIST<ITEM>:%AffectedItemsWithStatus
+
+EVENTS
+EVENT Init
+ON
+	OnInit()
+ACTIONS
+	IF "c1&c2"
+		IsEqual(%Active, 1)
+		IsEqual(%DamageEntities, 1)
+	THEN
+		ItemPlayLoopEffect(%LoopFx,__Me,%Fx)
+	ENDIF
+
+EVENT ShutDown
+ON
+	OnShutdown()
+	OnItemDestroying(__Me)
+ACTIONS
+	IF "c1&c2"
+		IsEqual(%Active, 1)
+		IsEqual(%DamageEntities, 1)
+	THEN
+		StopLoopEffect(%LoopFx)
+		Set(%LoopFx, -1)
+	ENDIF
+	
+EVENT TurnOn
+ON
+	OnCharacterItemEvent(_,_,%OnEvent)
+ACTIONS
+	IF "!c1&c2&c3"
+		IsEqual(%OnEvent,null)
+		IsEqual(%Disarmed, 0)
+		IsEqual(%Active, 0)
+	THEN
+		Set(%Active,1)
+		CallFunction("StartFire")
+		ItemEvent(__Me, "StoryReveal")
+		StartTimer("TurnOffFire", %TimeActive, 0)
+	ENDIF
+	
+EVENT TurnOff
+ON
+	OnCharacterItemEvent(_,_,%OffEvent)
+ACTIONS
+	IF "!c1&c2&c3"
+		IsEqual(%OffEvent,null)
+		IsEqual(%Disarmed, 0)
+		IsEqual(%Active, 1)
+	THEN
+		Set(%Active,0)
+		CallFunction("StopFire")
+		CallFunction("ClearStatuses")
+	ENDIF
+	StopTimer("TurnOffFire")
+	StopTimer("TurnOnFire")
+	
+EVENT Disarm
+VARS
+	INT:_Success
+ON
+	OnItemDisarmEvent(__Me, _, _, _Success)
+ACTIONS
+	IF "c1"
+		IsEqual(_Success, 1)
+	THEN
+		IF "c1&c2"
+			IsEqual(%Disarmed, 0)
+			IsEqual(%Active, 1)
+		THEN
+			CallFunction("StopFire")
+			CallFunction("ClearStatuses")
+		ENDIF
+		ItemDie(__Me, 1)
+		Set(%Disarmed, 1)
+	ELSE
+		ExplodeAt(__Me, Projectile_Fireball_Trap)
+	ENDIF
+	StopTimer("TurnOffFire")
+	StopTimer("TurnOnFire")
+	
+EVENT StartFire
+ON
+	OnTimer("TurnOnFire")
+ACTIONS
+	CallFunction("StartFire")
+	StartTimer("TurnOffFire", %TimeActive, 0)
+	
+EVENT StopFire
+ON
+	OnTimer("TurnOffFire")
+ACTIONS
+	CallFunction("StopFire")
+	StartTimer("TurnOnFire", %TimeInactive, 0)
+	
+EVENT ClearStatuses
+ON
+	OnFunction("ClearStatuses")
+VARS
+	CHARACTER:_Character = null
+	ITEM:_Item = null
+ACTIONS
+	WHILE "c1"
+		ListGet(%AffectedCharacters, 1, _Character)
+	DO
+		ListRemove(%AffectedCharacters, 1)
+	ENDWHILE
+	WHILE "c1"
+		ListGet(%AffectedItems, 1, _Item)
+	DO
+		ListRemove(%AffectedItems, 1)
+	ENDWHILE
+
+EVENT StartFire
+ON
+	OnFunction("StartFire")
+VARS
+	CHARACTER:_Character = null
+	ITEM:_Item = null
+	INT:_Index = null
+	INT:_Size = null
+ACTIONS
+	Set(%DamageEntities, 1)
+	ItemPlayLoopEffect(%LoopFx, __Me, %Fx)
+	Set(_Size, 0)
+	Set(_Index, 0)
+	WHILE "c1&(c2|c3)"
+		ListGetSize(%AffectedCharacters, _Size)
+		IsLessThen(_Index, _Size)
+		IsEqual(_Index, _Size)
+	DO
+		IF "c1"
+			ListGet(%AffectedCharacters, _Index, _Character)
+		THEN
+			Set(%CharacterToAddOrRemove, _Character)
+			CallFunction("CharacterApplyBurningStatus")
+		ENDIF
+		Add(_Index, 1)
+	ENDWHILE
+	Set(_Size, 0)
+	Set(_Index, 0)
+	WHILE "c1&(c2|c3)"
+		ListGetSize(%AffectedItems, _Size)
+		IsLessThen(_Index, _Size)
+		IsEqual(_Index, _Size)
+	DO
+		IF "c1"
+			ListGet(%AffectedItems, _Index, _Item)
+		THEN
+			Set(%ItemToAddOrRemove, _Item)
+			CallFunction("ItemApplyBurningStatus")
+		ENDIF
+		Add(_Index, 1)
+	ENDWHILE
+
+EVENT StopFire
+ON
+	OnFunction("StopFire")
+VARS
+	CHARACTER:_Character = null
+	ITEM:_Item = null
+	INT:_Index = null
+	INT:_Size = null
+ACTIONS
+	Set(%DamageEntities, 0)
+	IF "!c1"
+		IsEqual(%LoopFx, -1)
+	THEN
+		StopLoopEffect(%LoopFx)
+		Set(%LoopFx, -1)
+	ENDIF
+	Set(_Size, 0)
+	Set(_Index, 0)
+	WHILE "c1&(c2|c3)"
+		ListGetSize(%AffectedCharacters, _Size)
+		IsLessThen(_Index, _Size)
+		IsEqual(_Index, _Size)
+	DO
+		IF "c1"
+			ListGet(%AffectedCharacters, _Index, _Character)
+		THEN
+			Set(%CharacterToAddOrRemove, _Character)
+			CallFunction("CharacterRemoveBurningStatus")
+		ENDIF
+		Add(_Index, 1)
+	ENDWHILE
+	Set(_Size, 0)
+	Set(_Index, 0)
+	WHILE "c1&(c2|c3)"
+		ListGetSize(%AffectedItems, _Size)
+		IsLessThen(_Index, _Size)
+		IsEqual(_Index, _Size)
+	DO
+		IF "c1"
+			ListGet(%AffectedItems, _Index, _Item)
+		THEN
+			Set(%ItemToAddOrRemove, _Item)
+			CallFunction("ItemRemoveBurningStatus")
+		ENDIF
+		Add(_Index, 1)
+	ENDWHILE
+
+EVENT Entered
+VARS
+	CHARACTER:_Character = null
+	ITEM:_Item = null
+ON
+	OnTriggerEnter(_Character, _Item, %EnterEvent)
+ACTIONS
+	IF "!c1&c2&c3"
+		IsEqual(%EnterEvent,null)
+		IsEqual(%Disarmed, 0)
+		IsEqual(%Active, 1)
+	THEN
+		IF "!c1"
+			IsEqual(_Character, null)
+		THEN
+			ListAdd(%AffectedCharacters, _Character)
+			IF "c1"
+				IsEqual(%DamageEntities, 1)
+			THEN
+				Set(%CharacterToAddOrRemove, _Character)
+				CallFunction("CharacterApplyBurningStatus")
+			ENDIF
+		ELSE
+			ListAdd(%AffectedItems, _Item)
+			IF "c1"
+				IsEqual(%DamageEntities, 1)
+			THEN
+				Set(%ItemToAddOrRemove, _Item)
+				CallFunction("ItemApplyBurningStatus")
+			ENDIF
+		ENDIF
+	ENDIF
+	
+EVENT Left
+VARS
+	CHARACTER:_Character = null
+	ITEM:_Item = null
+	CHARACTER:_FoundChar = null
+	ITEM:_FoundItem = null
+	INT:_Index = null
+	INT:_Size = null
+ON
+	OnTriggerLeave(_Character, _Item, %EnterEvent)
+ACTIONS
+	Set(_Size, 0)
+	Set(_Index, 0)
+	IF "!c1&c2&c3"
+		IsEqual(%EnterEvent,null)
+		IsEqual(%Disarmed, 0)
+		IsEqual(%Active, 1)
+	THEN
+		IF "!c1"
+			IsEqual(_Character, null)
+		THEN
+			WHILE "c1&(c2|c3)"
+				ListGetSize(%AffectedCharacters, _Size)
+				IsLessThen(_Index, _Size)
+				IsEqual(_Index, _Size)
+			DO
+				IF "c1&c2"
+					ListGet(%AffectedCharacters, _Index, _FoundChar)
+					IsEqual(_FoundChar, _Character)
+				THEN
+					ListRemove(%AffectedCharacters, _Index)
+					Set(%CharacterToAddOrRemove, _Character)
+					CallFunction("CharacterRemoveBurningStatus")
+				ELSE
+					Add(_Index, 1)
+				ENDIF
+			ENDWHILE
+		ELSE
+			WHILE "c1&(c2|c3)"
+				ListGetSize(%AffectedItems, _Size)
+				IsLessThen(_Index, _Size)
+				IsEqual(_Index, _Size)
+			DO
+				IF "c1&c2"
+					ListGet(%AffectedItems, _Index, _FoundItem)
+					IsEqual(_FoundItem, _Item)
+				THEN
+					ListRemove(%AffectedItems, _Index)
+					Set(%CharacterToAddOrRemove, _Character)
+					CallFunction("ItemRemoveBurningStatus")
+				ELSE
+					Add(_Index, 1)
+				ENDIF
+			ENDWHILE
+		ENDIF
+	ENDIF
+
+EVENT CharacterApplyBurningStatus
+ON
+	OnFunction("CharacterApplyBurningStatus")
+VARS
+	CHARACTER:_FoundCharacter = null
+	INT:_IsInList = null
+	INT:_Index = null
+	INT:_Size = null
+ACTIONS
+	Set(_IsInList, 0)
+	Set(_Index, 0)
+	Set(_Size, 0)
+	WHILE "c1&(c2|c3)&c4"
+		ListGetSize(%AffectedCharactersWithStatus, _Size)
+		IsLessThen(_Index, _Size)
+		IsEqual(_Index, _Size)
+		IsEqual(_IsInList, 0)
+	DO
+		IF "c1&c2"
+			ListGet(%AffectedCharactersWithStatus, _Index, _FoundCharacter)
+			IsEqual(_FoundCharacter, %CharacterToAddOrRemove)
+		THEN
+			Set(_IsInList, 1)
+		ENDIF
+		Add(_Index, 1)
+	ENDWHILE
+	IF "c1"
+		IsEqual(_IsInList, 0)
+	THEN
+		ListAdd(%AffectedCharactersWithStatus, %CharacterToAddOrRemove)
+		AddStatusInfluence(%CharacterToAddOrRemove, BURNING_TRAPWALL, 1.0, "", 0, 1)
+	ENDIF
+	
+	
+EVENT ItemApplyBurningStatus
+ON
+	OnFunction("ItemApplyBurningStatus")
+VARS
+	ITEM:_FoundItem = null
+	INT:_IsInList = null
+	INT:_Index = null
+	INT:_Size = null
+ACTIONS
+	Set(_IsInList, 0)
+	Set(_Index, 0)
+	Set(_Size, 0)
+	WHILE "c1&(c2|c3)&c4"
+		ListGetSize(%AffectedItemsWithStatus, _Size)
+		IsLessThen(_Index, _Size)
+		IsEqual(_Index, _Size)
+		IsEqual(_IsInList, 0)
+	DO
+		IF "c1&c2"
+			ListGet(%AffectedItemsWithStatus, _Index, _FoundItem)
+			IsEqual(_FoundItem, %ItemToAddOrRemove)
+		THEN
+			Set(_IsInList, 1)
+		ENDIF
+		Add(_Index, 1)
+	ENDWHILE
+	IF "c1"
+		IsEqual(_IsInList, 0)
+	THEN
+		ListAdd(%AffectedItemsWithStatus, %ItemToAddOrRemove)
+		AddStatusInfluence(%ItemToAddOrRemove, BURNING_TRAPWALL, 1.0, "", 0, 1)
+	ENDIF
+	Set(%ItemToAddOrRemove, null)
+	
+EVENT CharacterRemoveBurningStatus
+ON
+	OnFunction("CharacterRemoveBurningStatus")
+VARS
+	CHARACTER:_FoundCharacter = null
+	INT:_RemovedFromList = null
+	INT:_Index = null
+	INT:_Size = null
+ACTIONS
+	Set(_RemovedFromList, 0)
+	Set(_Index, 0)
+	Set(_Size, 0)
+	WHILE "c1&(c2|c3)&c4"
+		ListGetSize(%AffectedCharactersWithStatus, _Size)
+		IsLessThen(_Index, _Size)
+		IsEqual(_Index, _Size)
+		IsEqual(_RemovedFromList, 0)
+	DO
+		IF "c1&c2"
+			ListGet(%AffectedCharactersWithStatus, _Index, _FoundCharacter)
+			IsEqual(_FoundCharacter, %CharacterToAddOrRemove)
+		THEN
+			ListRemove(%AffectedCharactersWithStatus, _Index)
+			Set(_RemovedFromList, 1)
+			RemoveStatusInfluence(%CharacterToAddOrRemove, BURNING_TRAPWALL, 1.0, "", 1)
+		ENDIF
+		Add(_Index, 1)
+	ENDWHILE
+	Set(%CharacterToAddOrRemove, null)
+	
+EVENT ItemRemoveBurningStatus
+ON
+	OnFunction("ItemRemoveBurningStatus")
+VARS
+	ITEM:_FoundItem = null
+	INT:_RemovedFromList = null
+	INT:_Index = null
+	INT:_Size = null
+ACTIONS
+	Set(_RemovedFromList, 0)
+	Set(_Index, 0)
+	Set(_Size, 0)
+	WHILE "c1&(c2|c3)&c4"
+		ListGetSize(%AffectedItemsWithStatus, _Size)
+		IsLessThen(_Index, _Size)
+		IsEqual(_Index, _Size)
+		IsEqual(_RemovedFromList, 0)
+	DO
+		IF "c1&c2"
+			ListGet(%AffectedItemsWithStatus, _Index, _FoundItem)
+			IsEqual(_FoundItem, %ItemToAddOrRemove)
+		THEN
+			ListRemove(%AffectedItemsWithStatus, _Index)
+			Set(_RemovedFromList, 1)
+			RemoveStatusInfluence(%ItemToAddOrRemove, BURNING_TRAPWALL, 1.0, "", 1)
+		ENDIF
+		Add(_Index, 1)
+	ENDWHILE
+	Set(%ItemToAddOrRemove, null)
