@@ -1,0 +1,49 @@
+Version 1
+SubGoalCombiner SGC_AND
+INITSECTION
+DB_SCL_Teleporters((ITEM)S_PLA_TeleporterToCrecheFromPlains_016525f4-0ddd-4cf1-85ab-3feaa6f6292a);
+DB_SCL_Teleporters((ITEM)S_GOB_TeleporterToCrecheFromGoblinCamp_a81232d7-af15-4c77-b0e1-d7e791fd463b);
+DB_SCL_Teleporters((ITEM)S_UND_Elevator_Fort_ToShadowlands_e48a9110-dabc-4471-bcae-3cc8aa57b8c5);
+KBSECTION
+IF
+LevelGameplayStarted("WLD_Main_A", 1)
+THEN
+DB_WLD_Main_A_IsEditor(1);
+
+PROC
+PROC_BlockUseOfItem(_Player, S_UND_Elevator_Fort_ToShadowlands_e48a9110-dabc-4471-bcae-3cc8aa57b8c5)
+THEN
+DB_CustomUseItemResponse(_Player, (ITEM)S_UND_Elevator_Fort_ToShadowlands_e48a9110-dabc-4471-bcae-3cc8aa57b8c5,0);
+ReadyCheckGlobal("ReadyCheck_EndEarlyAccessElevator", "ReadyCheck_EndEarlyAccessElevator", 1, _Player);
+
+IF
+ReadyCheckPassed("ReadyCheck_EndEarlyAccessElevator")
+AND
+NOT DB_WLD_Main_A_IsEditor(1) // game movie in the editor crashes the editor
+THEN
+TrackAnalyticsInfo("last_cutscene", "", NULL_00000000-0000-0000-0000-000000000000);
+TimerLaunch("UND_Elevator_Fort_ToShadowlands_AnalyticsDelay", 1000);
+
+IF
+TimerFinished("UND_Elevator_Fort_ToShadowlands_AnalyticsDelay")
+THEN
+GameEndWithMovie("BG3-End-Of-EA-Update");
+
+PROC
+PROC_BlockUseOfItem((CHARACTER)_Player,(ITEM)_SCL_Teleporter)
+AND
+DB_SCL_Teleporters(_SCL_Teleporter)
+AND
+NOT DB_CustomUseItemResponse(_,_SCL_Teleporter,_)
+THEN
+DB_CustomUseItemResponse(_Player,_SCL_Teleporter,0);
+ActOver();
+
+IF
+TextEvent("eoa")
+THEN
+ActOver();
+EXITSECTION
+
+ENDEXITSECTION
+ParentTargetEdge "Act1"
