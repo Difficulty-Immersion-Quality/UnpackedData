@@ -1,0 +1,317 @@
+game.states.GOB_VoloGuard = State{function()
+    description = [[Behaviour of goblin S_GOB_VoloGuard who is guarding Volo on stage in Festivities area and later escorts him to the cage]]
+
+    modules = { "shared.math", "shared.util", "shared.dialog" }
+
+    params.AtFestivities = { type = EParamType.State, required = true,
+        help = [[State for the festivities area]] }
+
+    local ch_Volo = nil
+
+    local fl_VoloPermaDefeated = Flag("GLO_Volo_State_PermaDefeated_90bacc1d-9755-4e24-adc3-9016698a7be6")
+    local fl_StartedVoloEscort = Flag("GOB_VoloBallad_Event_StartedEscorting_a434b9cc-ac7d-42a3-9bb5-097da1a6fe96")
+    local fl_GaveVoloToPlayers = Flag("GOB_VoloBallad_State_GuardGaveVoloToPlayers_e1041faa-5c24-bb66-92e9-4826f46d7e90")
+    local fl_VoloEscaped = Flag("GOB_VoloBallad_State_VoloEscaped_13ae819f-b0b7-434d-9ebb-cee412b1a407")
+    local cageDoor = Entity("S_GOB_VoloBallad_CageDoor_e370ae71-e10a-4a6c-9635-94783ae772cd")
+    local fl_VoloAtGob = Flag("GLO_Volo_State_AtGoblinCamp_fc815506-028d-582d-a953-4182d682aa07")
+    local tr_ThroneRoomSUB = nil
+    local tr_AtCagePoint = nil
+    local tr_AwayFromCagePoint= nil
+    local tr_defaultPoint = nil
+    local anim_Bored = Animation("CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef")
+    local it_Bench
+    local d_VoloAD = Dialog("GOB_VoloBallad_AD_AtCage_GuardAndVolo_5e06a878-6281-601b-ea69-8456f841f2b7")
+    local key = Entity("S_GOB_VoloCage_Key_82df88e8-f42f-4dd7-bb11-34b8bed5e622")
+
+    self.OnInit = function()
+        ch_Volo = FindEntity("S_GLO_Volo_2af25a85-5b9a-4794-85d3-0bd4c4d262fa")
+        tr_ThroneRoomSUB = FindEntity("S_GOB_ThroneRoom_SUB_bb81678b-641c-43fc-bd41-53295d59be03")
+        tr_AtCagePoint = FindEntity("S_GOB_VoloGuard_CagePoint_d3f2c1c1-fcc5-4a7d-85de-63fc7d1132c6")
+        tr_AwayFromCagePoint = FindEntity("S_GOB_VoloGuard_AwayFromCage_2c06d167-b8d8-44e8-bcf6-4abdfd492f12")
+        tr_defaultPoint = tr_AtCagePoint
+        it_Bench = FindEntity("S_GOB_VoloGuard_Bench_4d3fb20e-517b-4d9d-8bfc-ef1e13ca348a")
+    end
+
+
+    nodes.AtFestivities = Proxy{
+        params.AtFestivities,
+        Valid = function()
+            return not GetFlag(fl_StartedVoloEscort, me)
+        end
+    }
+
+    nodes.VoloEscaped = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(fl_VoloEscaped)
+        end
+    }
+
+    nodes.VoloPermaDefeated = Action{
+        function()
+            if(CanSee(me,ch_Volo)) then
+                SteerTo(ch_Volo)
+            end
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(fl_VoloPermaDefeated)
+        end
+    }
+
+    nodes.VoloFailedPoem = Action{
+        -- intermittent action between Volo reclaiming poem and guard escorting him to cage
+        function()
+            SteerTo(ch_Volo)
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(fl_StartedVoloEscort, me) and not IsInTrigger(me, tr_ThroneRoomSUB.Trigger)
+        end
+    }
+
+    nodes.VoloFree = Action{
+        function()
+            if not IsInDangerousSurfaceFor(tr_AwayFromCagePoint, me.Character) then
+                if GetDistanceTo(me, tr_AwayFromCagePoint) > 1.0 then
+                    try
+                        MoveTo(tr_AwayFromCagePoint)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me, "MoveTo failed tr_AwayFromCagePoint")
+                        LookAtEntity(tr_AwayFromCagePoint, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(tr_AwayFromCagePoint)
+                end
+            else
+                LookAtEntity(tr_AwayFromCagePoint, 3.0)
+            end
+            Sleep(5.0)
+        end,
+        Valid = function()
+            return GetFlag(fl_GaveVoloToPlayers) or not GetFlag(fl_VoloAtGob)
+        end
+    }
+
+    nodes.MoveTo_Cage = Action{
+        function()
+            try
+                MoveTo(tr_defaultPoint)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed tr_defaultPoint")
+            end
+            LookFrom(tr_defaultPoint)
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, tr_defaultPoint) > 4 and
+                   not GetFlag(fl_GaveVoloToPlayers) and
+                   not me.IsReposed
+        end
+    }
+
+    nodes.AtCage = Action{
+        function()
+            if not cageDoor.Item.IsClosed then
+                Close(cageDoor)
+            end
+            if not cageDoor.Item.IsLocked and
+                IsInInventoryOf(key, me) then
+                Lock(cageDoor, "GOB_VoloCage_Key")
+            end
+            if math.random() < 0.5 and not IsInDangerousSurfaceFor(it_Bench, me.Character) then
+                if not me.IsReposed then
+                    UseItem(it_Bench.Item)
+                end
+                mod.util.SleepRandom(4.0, 6.0)
+            end
+            try
+                Wander(1.5,4.0,MovementSpeed.Stroll)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Wander failed")
+            end
+            mod.util.SleepRandom(2.0, 4.0)
+            if math.random() < 0.5 then
+                if mod.dialog.AreSpeakersAvailableAndNear(me, 7.0, true, false, false, ch_Volo) and not IsInDialog(me,false) then
+                    SteerTo(ch_Volo)
+                    StartAutomatedDialog(d_VoloAD, true, me, ch_Volo)
+                end
+            end
+            mod.util.SleepRandom(4.0, 6.0)
+            if math.random() < 0.5 and not IsInDangerousSurfaceFor(tr_defaultPoint, me.Character) then
+                try
+                    MoveTo(tr_defaultPoint)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "MoveTo failed tr_defaultPoint")
+                end
+                LookFrom(tr_defaultPoint)
+            end
+            mod.util.SleepRandom(8.0, 12.0)
+        end,
+        Valid = function()
+            return not GetFlag(fl_GaveVoloToPlayers)
+        end
+    }
+end}
+
+game.states.GOB_VoloGuard_AtFestivities = State{function()
+    description = [[S_GOB_VoloGuard's substate at festivities area. Guarding Volo there, or dancing on a platform]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local fl_VoloOnStage = Flag("GOB_VoloBallad_State_OnStage_0bc1d7d7-9129-4c6e-188d-054640cea3b9")
+    local tr_DancePoint = nil
+    local tr_LookAtFromScene = nil
+    local tr_PukePos = nil
+    local anim_Dancing_Start = Animation("CUST_Dancing_01_Start_0a4a0000-7b24-4d6d-9f45-81ed5ab5f245")
+    local anim_Dancing_Loop = Animation("CUST_Dancing_01_6e23855c-4845-4301-bcf8-9c04f5a782c1")
+    local anim_Dancing_End = Animation("CUST_Dancing_01_End_f06e76ac-534c-44be-a743-13a150d367c7")
+    local anim_Cheering = Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0")
+    local anim_Puking = Animation("CUST_Puking_01_bde32f33-6c74-4834-a77a-17366cf5d0ca")
+
+    local b_DoPuke = false
+    local s_DoPukeReset = "GOB_VoloGuard_DoPukeReset"
+
+    local b_DoCheer = false
+    local s_DoCheerReset = "GOB_VoloGuard_DoCheerReset"
+
+    local ch_Volo = nil
+    local tr_AtStagePoint = nil
+    local anim_Mocking = Animation("CUST_Mocking_01_313bddc4-712f-4f08-874f-db9af7a6c4a1")
+
+    self.OnInit = function()
+        tr_DancePoint = FindEntity("S_GOB_VoloGuard_DancePoint_b0bce586-066f-4361-a7ac-ca95018254df")
+        tr_LookAtFromScene = FindEntity("S_GOB_VoloGuard_LookAt_bddbe7c4-835b-4d9a-b3a5-87e1ece33f24")
+        tr_PukePos = FindEntity("S_GOB_VoloGuard_PukePoint_1e10adb3-3e81-456c-bd80-72085a582775")
+        ch_Volo = FindEntity("S_GLO_Volo_2af25a85-5b9a-4794-85d3-0bd4c4d262fa")
+        tr_AtStagePoint = FindEntity("S_GOB_VoloGuard_StagePoint_fe60b517-d8bf-4d8a-980e-bea1e0d71879")
+
+        StartTimer(me, s_DoCheerReset, 20.0, 0)
+        StartTimer(me, s_DoPukeReset, 40.0, 0)
+    end
+
+    helpers.DoCheerReset = function()
+        b_DoCheer = false
+        StartTimer(me, s_DoCheerReset, mod.math.random(10.0, 20.0), 0)
+    end
+    helpers.DoPukeReset = function()
+        b_DoPuke = false
+        StartTimer(me, s_DoPukeReset, mod.math.random(90.0, 150.0), 0)
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_DoCheerReset then
+            b_DoCheer = true
+        elseif ev.TimerName == s_DoPukeReset then
+            b_DoPuke = true
+        end
+    end
+
+    nodes.VoloAtStage = Selector{
+        Valid = function()
+            return GetFlag(fl_VoloOnStage)
+        end
+    }
+
+    nodes.VoloAtStage.MoveTo_GuardVolo = Action{
+        function()
+            try
+                MoveTo(tr_AtStagePoint)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_AtStagePoint)")
+            end
+        end,
+
+        Valid = function()
+            return not tr_AtStagePoint or GetDistance2DTo(me, tr_AtStagePoint) > 1.0
+        end
+    }
+
+    nodes.VoloAtStage.GuardVolo = Action{
+        function()
+            SteerTo(ch_Volo)
+            if (mod.math.CoinToss(0.2)) then
+                PlayAnimation(anim_Mocking)
+            end
+            mod.util.SleepRandom(1.0, 3.0)
+        end
+    }
+
+
+    nodes.NoVolo = Selector{
+    }
+
+    nodes.NoVolo.Puke = Action
+    {
+        function()
+            try
+                MoveTo(tr_PukePos, MovementSpeed.Run)
+                LookFrom(tr_PukePos)
+                PlayAnimation(anim_Puking)
+                helpers.DoPukeReset()
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_PukePos)")
+            end
+        end,
+
+        CanEnter = function()
+            return b_DoPuke
+        end
+    }
+
+    nodes.NoVolo.DanceDance = Selector{
+        Valid = function(node)
+            return CheckAnyValid(node)
+        end
+    }
+
+    nodes.NoVolo.DanceDance.MoveToPedestal = Action{
+        function()
+            try
+                MoveTo(tr_DancePoint)
+                SteerTo(tr_LookAtFromScene)
+                LookAtEntity(tr_LookAtFromScene, 3.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_DancePoint)")
+            end
+        end,
+
+        Valid = function()
+            return not tr_DancePoint or GetDistanceTo(me, tr_DancePoint) > 0.2
+        end
+    }
+
+    nodes.NoVolo.DanceDance.Cheer = Action{
+        function()
+            PlayAnimation(anim_Cheering)
+            PlayAnimation(anim_Cheering)
+            helpers.DoCheerReset()
+        end,
+
+        CanEnter = function()
+            return b_DoCheer
+        end,
+
+        OnInterrupt = function()
+            -- for leaving by generic reaction reasons
+            -- don't return to this reaction
+            helpers.DoCheerReset()
+        end
+    }
+
+    nodes.NoVolo.DanceDance.Dance = Action{
+        function()
+            PlayLoopingAnimation(anim_Dancing_Start, {anim_Dancing_Loop}, anim_Dancing_End)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+end}

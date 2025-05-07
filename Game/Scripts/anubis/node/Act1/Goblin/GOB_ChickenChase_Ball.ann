@@ -1,0 +1,241 @@
+game.states.GOB_ChickenChase_Ball = State{function ()
+
+    description = [[Chicken or Owlbear's state for the Chicken Chase game]]
+
+    local fl_OwlbearDiscussion = Flag("GOB_ChickenChase_Event_OwlbearDiscussion_b0364ea7-a813-4d71-aebb-13bea72c812a")
+    local fl_GoalScored = Flag("GOB_ChickenChase_State_GoalScored_79b6eef1-c8b6-d471-f7ca-811c5abf564f")
+    local fl_PlayingChase = Flag("GOB_ChickenChase_State_PlayingChase_34de58e6-ca4a-d171-c1ac-32821bb036ed")
+
+    local fl_ToStations = Flag("GOB_GoblinToast_Event_ToStations_0b555ee8-2b8e-3881-b35e-9811f6baf77a")
+    local fl_OwlbearReplacedChicken = Flag("GOB_ChickenChase_State_OwlbearReplacedChicken_aabd6c48-57e4-12bb-8123-912f747f1f07")
+    local fl_InvitedToCamp = Flag("GOB_OwlbearCub_Event_InvitedToCamp_2b4acc5e-fe2f-0f0b-8945-043403b50e2f")
+    local fl_FestivitiesSwept = Flag("GOB_FestivitiesArea_State_Swept_01863b85-a514-473a-9fa9-2869612480a2")
+    local fl_OwlbearAcquired = Flag("GOB_ChickenChase_Event_OwlbearAcquired_775e6984-4640-41d3-97e5-b1f96c572ddd")
+
+    local spl_RunningLoop1 = Spline("S_GOB_ChickenChase_IntroSpline_1629c78e-5210-426a-865c-62ef4ae6091b")
+    local spl_RunningLoop2 = Spline("S_GOB_ChickenChase_IntroSpline_001_79ff7629-e34f-4e40-8884-8f2c663fa02f")
+    local spl_currentSpline = spl_RunningLoop1
+
+    -- Flee after the goblins went to the Battle Stations
+    nodes.Flee = Action{function()
+        SetFlag(Flag("GEN_DisappearOutOfSight_5dc33889-cbfb-c3d2-9e4e-8d826bf8566f"), me)
+        WaitForInterrupt()
+    end,
+    CanEnter = function()
+        return (GetFlag(fl_ToStations) or GetFlag(fl_FestivitiesSwept)) and not GetFlag(fl_OwlbearReplacedChicken)
+    end
+    }
+
+    nodes.OwlbearSpecificIntro = Action{
+        function()
+            Sleep(4.0)
+        end,
+
+        Valid = function()
+            return GetFlag(fl_OwlbearDiscussion) 
+                or GetFlag(fl_OwlbearAcquired) -- primarily for the case when its captors have beend defeated, to stop the owlbaer running around
+        end
+    }
+
+    nodes.Intro = Action{
+        function()
+            DoPatrol(spl_currentSpline, false, MovementSpeed.Run, 0)
+        end,
+        Valid = function()
+            return not GetFlag(fl_PlayingChase) and not GetFlag(fl_GoalScored)
+        end,
+        OnLeave = function()
+            ClearPatrol()
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if math.random(0,10) > 7 then
+            if spl_currentSpline == spl_RunningLoop1 then
+                spl_currentSpline = spl_RunningLoop2
+            else
+                spl_currentSpline = spl_RunningLoop1
+            end
+            Interrupt()
+        end
+    end
+
+    nodes.Game = Proxy{
+        game.states.GOB_ChickenChase_Ball_Game
+    }
+end}
+
+
+game.states.GOB_ChickenChase_Ball_Game = State{function()
+
+    local EGameStages = { NONE = 0, WAIT = 1, GOING = 2, AFTER = 3}
+    local e_InGameStage = EGameStages.WAIT
+
+
+    local fl_ChickeChaseInProgress = Flag("GOB_ChickenChase_State_PlayingChase_34de58e6-ca4a-d171-c1ac-32821bb036ed")
+    local fl_ChickenOnField = Flag("GOB_ChickenChase_State_BallOnField_afefbe32-abfc-4bd0-b0f7-d11206a2c7cc")
+    local fl_OwlbearReplacedChicken = Flag("GOB_ChickenChase_State_OwlbearReplacedChicken_aabd6c48-57e4-12bb-8123-912f747f1f07")
+
+    local tr_StartingPoint = nil
+    local tr_LookAtPoint = nil
+    local tr_GameArea = nil
+    local tr_GameBoxes = {}
+    local tr_GameRing = nil
+    local v_GameRing = nil
+    local f_GameRingRadius = 0.0
+    local tr_NearGates = nil
+    local tr_RestPoint = nil
+    local ch_RunFrom = nil
+    local dist_Run = 3.0
+
+    self.OnInit = function()
+        if GetFlag(fl_OwlbearReplacedChicken) then
+            tr_StartingPoint = FindEntity("S_GOB_ChickenChase_OwlbearStartPoint_6c2de754-b12a-4b2a-8d7c-66c8aa6d3be7")
+        else
+            tr_StartingPoint = FindEntity("S_GOB_ChickenChase_ChickenShovePoint_2e97f1e8-123c-4dde-be45-67ad8b49453c")
+        end
+
+        tr_LookAtPoint = FindEntity("S_GOB_ChickenChase_StartArea_37352f92-b862-47f8-ae3a-9c0a3f4a31d1")
+        tr_GameArea = FindEntity("S_GOB_ChickenChase_GameBox_c0ddc0f7-3e88-4dc2-90fa-42c623d676f2")
+        if #tr_GameBoxes == 0 then
+            table.insert(tr_GameBoxes, FindEntity("S_GOB_ChickenChase_GameBox_Center_d9bc094c-5dca-43ba-9d47-b80dac6add09"))
+            table.insert(tr_GameBoxes, FindEntity("S_GOB_ChickenChase_GameBox_Left_8e5584b6-4925-4be0-b4e5-da3afefc5c69"))
+            table.insert(tr_GameBoxes, FindEntity("S_GOB_ChickenChase_GameBox_Right_09aec707-af2d-4823-aba7-96f93c1d2cdf"))
+        end
+        tr_GameRing = FindEntity("S_GOB_ChickenChase_GameRing_feb54bd2-75dd-43cd-a7b1-bdc8a12026e5")
+        v_GameRing = tr_GameRing.Position
+        v_GameRing.Y = 0
+        f_GameRingRadius = tr_GameRing.Trigger.SphereRadius
+        tr_NearGates = FindEntity("S_GOB_Commentator_NearGates_b06ce4cb-0596-4e15-bec3-a4e8de8cc797")
+        tr_RestPoint = FindEntity("S_GOB_ChickenRestPoint_f03b6824-9281-4d09-bcea-1c963e015520")
+        ch_RunFrom = nil
+    end
+
+    nodes.PrepareForGame = Action{
+        function()
+            try
+                MoveTo(tr_StartingPoint, MovementSpeed.Run, true, false, 0.0, 0.2)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Movement failed")
+                Sleep(0.3)
+            end
+
+            SteerTo(tr_LookAtPoint)
+            Sleep(1.0)
+        end,
+
+        Valid = function()
+            return GetFlag(fl_ChickeChaseInProgress) and not GetFlag(fl_ChickenOnField)
+        end
+    }
+
+    nodes.InGame = Selector{
+        function(nodes)
+            return GetFirstCanEnter(nodes)
+        end,
+
+        Valid = function()
+            return GetFlag(fl_ChickeChaseInProgress) and GetFlag(fl_ChickenOnField)
+        end
+    }
+
+    nodes.InGame.FindCharacter = Action{
+        function()
+            if IsInTrigger(me, tr_GameArea.Trigger) then
+                local characters = GetActiveCharacters(me, dist_Run)
+                local charIdx = math.random(#characters)
+                if characters[charIdx].Character.IsPartyMember then
+                    ch_RunFrom = characters[charIdx]
+                end
+            else
+                local triggerIdx = math.random(#tr_GameBoxes)
+                MoveTo(tr_GameBoxes[triggerIdx], MovementSpeed.Run)
+            end
+        end,
+
+        Valid = function()
+            return (ch_RunFrom == nil)
+        end
+    }
+
+    nodes.InGame.RunFromCharacter = Action{
+        function()
+            local v_MyPos = me.Position
+            local v_RunFromPos = ch_RunFrom.Position
+            local myY = v_MyPos.Y
+
+            v_MyPos.Y = 0
+            v_RunFromPos.Y = 0
+            -- +/- 0.5
+            local dist_RunMod = dist_Run + math.random() - 0.5
+            if HasAppliedStatus(me, "DIFFICULT_TERRAIN") then
+                dist_RunMod = dist_RunMod * 1.5
+            end
+
+            local v_Shift = v_MyPos - v_RunFromPos
+            v_Shift = v_Shift * (dist_RunMod / v_Shift.Length)
+            local v_NewPos = v_MyPos + v_Shift
+
+            -- if we're not near the gates
+            if not IsInTrigger(me, tr_NearGates.Trigger) then
+                local dist_FromCenter = (v_NewPos - v_GameRing).Length
+                -- and v_NewPos is outside of circle
+                if dist_FromCenter > f_GameRingRadius then
+                    -- then we move perpendicular to radius away from player
+                    local v_RChicken = v_MyPos - v_GameRing
+                    v_RChicken = v_RChicken / v_RChicken.Length
+                    local v_PerpShift = ls.math.Vector3(-v_RChicken.Z, 0.0, v_RChicken.X)
+
+                    if v_PerpShift * v_Shift < 0.0 then
+                        v_PerpShift = ls.math.Vector3(v_RChicken.Z, 0.0, -v_RChicken.X)
+                    end
+                    v_PerpShift = v_PerpShift * dist_RunMod
+                    v_NewPos = v_MyPos + v_PerpShift
+                end
+                -- one last check if position is outside of game sphere trigger
+                -- because perpendicular to radius we can end up outside and get in fire
+                local dist_FromCenter = (v_NewPos - v_GameRing).Length
+                if dist_FromCenter > f_GameRingRadius then
+                    local f_ExtraDist = dist_FromCenter - f_GameRingRadius
+                    if f_GameRingRadius - 2 * f_ExtraDist > 0 then
+                        v_NewPos = v_NewPos + (v_GameRing - v_NewPos) * (f_GameRingRadius - 2 * f_ExtraDist) / (f_GameRingRadius + f_ExtraDist)
+                    else
+                        DebugLog("Chicken Chase Ball error: f_GameRingRadius - 2 * f_ExtraDist <= 0!! Tell the scripter who's responsible for it")
+                    end
+                end
+            end
+
+            v_NewPos.Y = myY
+            try
+                MoveTo(v_NewPos, MovementSpeed.Run)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                try
+                    DebugText(me, "MoveTo failed, Wander")
+                    Wander(2.5, 0.5, MovementSpeed.Run)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "Wander failed")
+                end
+            end
+            ch_RunFrom = nil
+        end
+    }
+
+    nodes.RestAfterGame = Action{
+        function()
+            try
+                MoveTo(tr_RestPoint, MovementSpeed.Walk)
+                LookFrom(tr_RestPoint)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_RestPoint)")
+            end
+            local SleepTime = math.random() * 1.5 + 1.0
+            Sleep(SleepTime)
+        end
+        ,
+
+        Valid = function()
+            return not GetFlag(fl_ChickeChaseInProgress)
+        end
+    }
+
+end}

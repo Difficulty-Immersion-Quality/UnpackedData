@@ -1,0 +1,1324 @@
+﻿<ls:UIWidget x:Name="SpellBook_c"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+             mc:Ignorable="d"
+             ls:UIWidget.Focusable="False"
+             d:DesignWidth="3840" d:DesignHeight="2160" 
+             FocusDown="UIDown" FocusLeft="UILeft" FocusRight="UIRight" FocusUp="UIUp"
+             CanCacheFocusSurroundingElements="False"
+             ls:TooltipExtender.Owner="{Binding CurrentPlayer.SelectedCharacter}"
+             ClipToBounds="True"
+             AutoFocusReset="True"
+             >
+
+    <ls:UIWidget.Template>
+        <ControlTemplate>
+            <ControlTemplate.Resources>
+                <System:Double x:Key="PageIconSize">400</System:Double>
+                <System:Double x:Key="RaceIconSize">300</System:Double>
+
+                <Thickness x:Key="PaperDollZoomIn">-400,-100,0,0</Thickness>
+                <Thickness x:Key="PaperDollZoomOut">-400,0,0,0</Thickness>
+                <Thickness x:Key="SrollViewSideMargin">0,0,-20,0</Thickness>
+
+                <System:Int32 x:Key="InitialTab">0</System:Int32>
+
+                <BitmapImage x:Key="SpellBookBackground" UriSource="pack://application:,,,/Core;component/Assets/Options/opaqueBG.png"/>
+
+                <Storyboard x:Key="ZoomCharacterIn" FillBehavior="Stop">
+                    <ThicknessAnimation Storyboard.TargetName="PaperDoll" Storyboard.TargetProperty="Margin" Duration="0:0:0.44" To="{StaticResource PaperDollZoomIn}">
+                        <ThicknessAnimation.EasingFunction>
+                            <SineEase EasingMode="EaseInOut"/>
+                        </ThicknessAnimation.EasingFunction>
+                    </ThicknessAnimation>
+                    <DoubleAnimation Duration="0:0:0.5" To="1" Storyboard.TargetProperty="Zoom" Storyboard.TargetName="PaperDoll">
+                        <DoubleAnimation.EasingFunction>
+                            <SineEase EasingMode="EaseInOut"/>
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                </Storyboard>
+
+                <Storyboard x:Key="ZoomCharacterOut" FillBehavior="Stop">
+                    <DoubleAnimation Duration="0:0:0.5" To="0.2" Storyboard.TargetProperty="Zoom" Storyboard.TargetName="PaperDoll">
+                        <DoubleAnimation.EasingFunction>
+                            <SineEase EasingMode="EaseInOut"/>
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <ThicknessAnimation Storyboard.TargetName="PaperDoll" Storyboard.TargetProperty="Margin" Duration="0:0:0.5" To="{StaticResource PaperDollZoomOut}" >
+                        <ThicknessAnimation.EasingFunction>
+                            <SineEase EasingMode="EaseInOut"/>
+                        </ThicknessAnimation.EasingFunction>
+                    </ThicknessAnimation>
+                </Storyboard>
+
+                <Style x:Key="NavigationLabelTextStyle" TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
+                    <Setter Property="FontSize" Value="{StaticResource ScaledLargeFontSize}"/>
+                </Style>
+
+                <ImageBrush x:Key="NavigableGridSlotBrush" ImageSource="{StaticResource InventoryGridBackground}" TileMode="Tile" Stretch="Uniform"  ViewportUnits="Absolute">
+                    <ImageBrush.Viewport>
+                        <MultiBinding Converter="{StaticResource CreateRectConverter}">
+                            <Binding Source="0"/>
+                            <Binding Source="0"/>
+                            <Binding Source="{StaticResource GenericSlotSizeSpellBook}"/>
+                            <Binding Source="{StaticResource GenericSlotSizeSpellBook}"/>
+                        </MultiBinding>
+                    </ImageBrush.Viewport>
+                </ImageBrush>
+
+                <Style x:Key="NameTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BaseTextStyle}">
+                    <Setter Property="FontSize" Value="{StaticResource ScaledHugeFontSize}"/>
+                </Style>
+
+                <Style x:Key="SectionTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BaseTextStyle}">
+                    <Setter Property="Foreground" Value="{StaticResource LS_baseTxtColor}"/>
+                    <Setter Property="noesis:Text.Stroke" Value="{StaticResource LS_textStrokeColor}"/>
+                    <Setter Property="noesis:Text.StrokeThickness" Value="4"/>
+                </Style>
+
+                <Style x:Key="GerneralItemsControlStyle" TargetType="ItemsControl">
+                    <Setter Property="ItemsPanel">
+                        <Setter.Value>
+                            <ItemsPanelTemplate>
+                                <StackPanel/>
+                            </ItemsPanelTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+
+                <!-- PREPARED SPELLS NINESLICE STYLE -->
+                <Style x:Key="PrepareSpellsBG" TargetType="ls:LSNineSliceImage" BasedOn="{StaticResource {x:Type ls:LSNineSliceImage}}">
+                    <Setter Property="ImageSource" Value="pack://application:,,,/Core;component/Assets/Tooltips_c/c_panel_tooltip.png" />
+                    <Setter Property="Slices" Value="42" />
+                    <Setter Property="Padding" Value="50,10,20,10" />
+                    <Setter Property="Margin" Value="-50" />
+                    <!-- Compensate the big shadow surrounding the image -->
+                    <Setter Property="Focusable" Value="False" />
+                </Style>
+
+                <!-- EXPANDER WIDTH STYLES -->
+                <Style x:Key="ExpanderWidthStyle" TargetType="Expander">
+                    <Setter Property="Margin" Value="0,0,0,12"/>
+                    <Setter Property="IsExpanded" Value="True"/>
+                    <Setter Property="Width">
+                        <Setter.Value>
+                            <MultiBinding Converter="{StaticResource RoundDownMultiConverter}">
+                                <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType={x:Type ScrollContentPresenter}}"/>
+                                <Binding Source="{StaticResource GenericSlotSizeSpellBook}"/>
+                            </MultiBinding>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+                
+                <Style x:Key="ExpanderWidthListStyle" TargetType="Expander" BasedOn="{StaticResource ExpanderWidthStyle}">
+                    <Setter Property="Width" Value="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollContentPresenter}}}"/>
+                </Style>
+
+                <!-- DEFAULT SLOT TEMPLATES -->
+                <DataTemplate x:Key="BasicActionSlotTemplate">
+                    <ContentControl x:Name="EntryRoot" Focusable="True" ls:MoveFocus.Focusable="True" Style="{StaticResource FocusableContentControlStyle}" Width="{StaticResource GenericSlotContentSize}" Height="{StaticResource GenericSlotSizeSpellBook}" ToolTipService.Placement="Right"  ToolTipService.HorizontalOffset="6" ToolTipService.VerticalOffset="120" >
+                        <ContentControl.ToolTip>
+                            <ls:LSTooltip Content="{TemplateBinding DataContext}"/>
+                        </ContentControl.ToolTip>
+
+                        <Rectangle x:Name="Icon" Fill="{Binding Icon}" Width="{StaticResource SpellSlotContentSize}" Height="{StaticResource SpellSlotContentSize}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </ContentControl>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding DataContext, RelativeSource={RelativeSource Mode=Self}}" Value="{x:Null}">
+                            <Setter TargetName="EntryRoot" Property="Focusable" Value="False"/>
+                        </DataTrigger>
+
+                        <DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=EntryRoot}" Value="True">
+                            <Setter Property="Panel.ZIndex" Value="1"/>
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+
+                <DataTemplate x:Key="BasicActionListTemplate">
+                    <ContentControl x:Name="EntryRoot" Focusable="True" ls:MoveFocus.Focusable="True" Margin="{StaticResource spellBookIconOffSet}" Style="{StaticResource FocusableContentControlStyle}" HorizontalAlignment="Stretch" Height="{StaticResource GenericSlotSizeSpellBook}" ToolTipService.Placement="Right"  ToolTipService.HorizontalOffset="6" ToolTipService.VerticalOffset="120" >
+                        <ContentControl.ToolTip>
+                            <ls:LSTooltip Content="{TemplateBinding DataContext}"/>
+                        </ContentControl.ToolTip>
+
+                        <DockPanel>
+                            <Rectangle x:Name="Icon" DockPanel.Dock="Left" Margin="12,12,22,12" Fill="{Binding Icon}" Width="{StaticResource SpellSlotContentSize}" Height="{StaticResource SpellSlotContentSize}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="SpellBookLabel" DockPanel.Dock="Left" Text="{Binding Name}" Style="{StaticResource BaseListItemStyle}" />
+                        </DockPanel>
+
+                    </ContentControl>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding DataContext, RelativeSource={RelativeSource Mode=Self}}" Value="{x:Null}">
+                            <Setter TargetName="EntryRoot" Property="Focusable" Value="False"/>
+                        </DataTrigger>
+
+                        <DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=EntryRoot}" Value="True">
+                            <Setter Property="Panel.ZIndex" Value="1"/>
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+
+                <!-- MANUALLY PREPARED SLOT TEMPLATE -->
+                <DataTemplate x:Key="ManuallyPreparedSlotTemplate" DataType="{x:Type ls:VMCharacterAction}">
+                    <ContentControl x:Name="EntryRoot" Style="{StaticResource FocusableContentControlStyle}" Width="{StaticResource GenericSlotSizeSpellBook}" Height="{StaticResource GenericSlotSizeSpellBook}" ls:MoveFocus.Focusable="True" Focusable="True" ToolTipService.Placement="Right" ToolTipService.HorizontalOffset="6" ToolTipService.VerticalOffset="120"  ToolTipService.IsEnabled="{Binding ., Converter={StaticResource NullToBoolFalseConverter}, FallbackValue=False}">
+                        <ContentControl.ToolTip>
+                            <ls:LSTooltip Content="{TemplateBinding DataContext}"/>
+                        </ContentControl.ToolTip>
+                        <Rectangle x:Name="Icon" Fill="{Binding Icon}" Width="{StaticResource SpellSlotContentSize}" Height="{StaticResource SpellSlotContentSize}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </ContentControl>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=EntryRoot}" Value="True">
+                            <Setter Property="Panel.ZIndex" Value="1"/>
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+
+                <!-- PREPARABLE SLOT TEMPLATES -->
+                <DataTemplate x:Key="PreparableActionSlotTemplate">
+                    <DataTemplate.Resources>
+                        <BitmapImage x:Key="PrepareHighlight" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_gridSquareHighlighted.png" />
+                        <BitmapImage x:Key="Preparecheck" UriSource="pack://application:,,,/Core;component/Assets/Shared_c/c_ico_bigTick.png" />
+                    </DataTemplate.Resources>
+                    <ContentControl x:Name="EntryRoot" Focusable="True" ls:MoveFocus.Focusable="True" Style="{StaticResource FocusableContentControlStyle}" Width="{StaticResource GenericSlotSizeSpellBook}" Height="{StaticResource GenericSlotSizeSpellBook}" Margin="{StaticResource spellBookIconOffSet}" ToolTipService.Placement="Right"  ToolTipService.HorizontalOffset="6" ToolTipService.VerticalOffset="120" Opacity="0.5">
+                        <ContentControl.ToolTip>
+                            <ls:LSTooltip Content="{TemplateBinding DataContext}"/>
+                        </ContentControl.ToolTip>
+                        <Grid>
+                            <Rectangle x:Name="Icon" Fill="{Binding Icon}" Width="{StaticResource SpellSlotContentSize}" Height="{StaticResource SpellSlotContentSize}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Rectangle.Effect>
+                                    <ls:SaturationEffect Saturation="0.3"/>
+                                </Rectangle.Effect>
+                            </Rectangle>
+                            <Grid x:Name="IsPreparedMark" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,0">
+                                <Image x:Name="IsPreparedMarkBg" Stretch="Fill" Width="{StaticResource GenericSlotContentSize}" Height="{StaticResource GenericSlotContentSize}" Source="{StaticResource PrepareHighlight}" Margin="0,0" HorizontalAlignment="Center" VerticalAlignment="Bottom"/>
+                                <Image x:Name="IsPreparedMarkIcon" Stretch="None" Source="{StaticResource Preparecheck}" Margin="0,14,0,-14" HorizontalAlignment="Center" VerticalAlignment="Bottom"/>
+                            </Grid>
+                        </Grid>
+                    </ContentControl>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding DataContext, RelativeSource={RelativeSource Mode=Self}}" Value="{x:Null}">
+                            <Setter TargetName="EntryRoot" Property="Focusable" Value="False"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=EntryRoot}" Value="True">
+                            <Setter Property="Panel.ZIndex" Value="1"/>
+                            <Setter TargetName="EntryRoot" Property="Opacity" Value="1"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Activated}" Value="True">
+                            <Setter TargetName="IsPreparedMark" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="EntryRoot" Property="Opacity" Value="1"/>
+                            <Setter TargetName="Icon" Property="Effect" >
+                                <Setter.Value>
+                                    <ls:SaturationEffect Saturation="1"/>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding NeedsActivation}" Value="False"/>
+                                <Condition Binding="{Binding Activated}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="IsPreparedMarkBg" Property="Visibility" Value="Hidden"/>
+                        </MultiDataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+
+                <DataTemplate x:Key="PreparableActionSlotListTemplate">
+                    <DataTemplate.Resources>
+                        <BitmapImage x:Key="PrepareHighlight" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_gridSquareHighlighted.png" />
+                        <BitmapImage x:Key="Preparecheck" UriSource="pack://application:,,,/Core;component/Assets/Shared_c/c_ico_bigTick.png" />
+                    </DataTemplate.Resources>
+                    <ContentControl x:Name="EntryRoot" Focusable="True" ls:MoveFocus.Focusable="True" Margin="{StaticResource spellBookIconOffSet}" Style="{StaticResource FocusableContentControlStyle}" HorizontalAlignment="Stretch" ToolTipService.Placement="Right" ToolTipService.VerticalOffset="0" Opacity="0.5">
+                        <ContentControl.ToolTip >
+                            <ls:LSTooltip Content="{TemplateBinding DataContext}" ToolTipService.HorizontalOffset="44"/>
+                        </ContentControl.ToolTip>
+                        <DockPanel>
+                            <Grid>
+                                <Rectangle x:Name="Icon" DockPanel.Dock="Left" Fill="{Binding Icon}" Width="{StaticResource SpellSlotContentSize}" Height="{StaticResource SpellSlotContentSize}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12,12,12,12">
+                                    <Rectangle.Effect>
+                                        <ls:SaturationEffect Saturation="0.3"/>
+                                    </Rectangle.Effect>
+                                </Rectangle>
+                                <Image x:Name="IsPreparedMarkBg" Stretch="Fill" Width="{StaticResource GenericSlotContentSize}" Height="{StaticResource GenericSlotContentSize}" Source="{StaticResource PrepareHighlight}" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom"/>
+                            </Grid>
+                            <TextBlock x:Name="spellBookLabel" DockPanel.Dock="Left" Text="{Binding Name}" Style="{StaticResource BaseListItemStyle}" Margin="10,0,0,0"/>
+                            <Image x:Name="IsPreparedMarkIcon" Visibility="Collapsed" Stretch="None" DockPanel.Dock="Right" Source="{StaticResource Preparecheck}" Margin="0,0,20,0" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </ContentControl>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding DataContext, RelativeSource={RelativeSource Mode=Self}}" Value="{x:Null}">
+                            <Setter TargetName="EntryRoot" Property="Focusable" Value="False"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Activated}" Value="True">
+                            <Setter TargetName="IsPreparedMarkBg" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="IsPreparedMarkIcon" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="EntryRoot" Property="Opacity" Value="1"/>
+                            <Setter TargetName="spellBookLabel" Property="Foreground" Value="{StaticResource LS_specialTxtColor}"/>
+                            <Setter TargetName="Icon" Property="Effect" >
+                                <Setter.Value>
+                                    <ls:SaturationEffect Saturation="1"/>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding NeedsActivation}" Value="False"/>
+                                <Condition Binding="{Binding Activated}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="IsPreparedMarkBg" Property="Visibility" Value="Collapsed"/>
+                        </MultiDataTrigger>
+                        <DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=EntryRoot}" Value="True">
+                            <Setter Property="Panel.ZIndex" Value="1"/>
+                            <Setter TargetName="spellBookLabel" Property="Foreground" Value="{StaticResource LS_selectedTextPad}"/>
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+                
+                <!-- ACTION GRID STYLE -->
+                <Style x:Key="SpellGridStyle" TargetType="ls:LSGrid">
+                    <Setter Property="noesis:Element.PPAAMode" Value="Disabled"/>
+                    <Setter Property="SnapsToDevicePixels" Value="True"/>
+                    <Setter Property="AutoIndex" Value="True"/>
+                    <Setter Property="ExtendedRows" Value="False"/>
+                    <Setter Property="Background" Value="{StaticResource NavigableGridSlotBrush}"/>
+                    <Setter Property="CellWidth" Value="{StaticResource GenericSlotSizeSpellBook}"/>
+                    <Setter Property="CellHeight" Value="{StaticResource GenericSlotSizeSpellBook}"/>
+                    <Setter Property="ActionUpEvent" Value="UIUp"/>
+                    <Setter Property="ActionDownEvent" Value="UIDown"/>
+                    <Setter Property="ActionRightEvent" Value="UIRight"/>
+                    <Setter Property="ActionLeftEvent" Value="UILeft"/>
+                    <Setter Property="UseWidgetNavigation" Value="True"/>
+                    <Setter Property="AlwaysSelectFirst" Value="True"/>
+                    <Setter Property="ls:MoveFocus.InternalFocusable" Value="True"/>
+                    <Setter Property="FocusElementVisualStyle" Value="{StaticResource Style.FocusVisualStyle}"/>
+                </Style>
+
+                <!-- ACTION ITEM CONTROLS STYLES -->
+                <Style x:Key="CharacterActionItemsControlStyle" TargetType="ItemsControl">
+                    <Setter Property="ItemTemplate" Value="{StaticResource BasicActionSlotTemplate}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate>
+                                <Grid Margin="0" ClipToBounds="False">
+                                    <Border x:Name="ContentBorder" BorderThickness="4" BorderBrush="{StaticResource LS_InventoryGridSurround}" Width="{Binding Width, ElementName=SpellItemsPresenter, Converter={StaticResource AddConverter}, ConverterParameter=4}">
+                                        <ItemsPresenter x:Name="SpellItemsPresenter" Margin="0" />
+                                    </Border>
+                                </Grid>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter Property="ItemsPanel">
+                        <Setter.Value>
+                            <ItemsPanelTemplate>
+                                <ls:LSGrid Style="{StaticResource SpellGridStyle}">
+                                    <ls:LSGrid.Columns>
+                                        <MultiBinding Converter="{StaticResource DivideMultiConverter}" ConverterParameter="Floor">
+                                            <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType={x:Type ScrollContentPresenter}}"/>
+                                            <Binding Source="{StaticResource GenericSlotSizeSpellBook}"/>
+                                        </MultiBinding>
+                                    </ls:LSGrid.Columns>
+                                </ls:LSGrid>
+                            </ItemsPanelTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+
+                <Style x:Key="CharacterActionItemsControlListStyle" TargetType="ItemsControl">
+                    <Setter Property="ItemTemplate" Value="{StaticResource BasicActionListTemplate}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate>
+                                <Grid Margin="0" ClipToBounds="False">
+                                    <ItemsPresenter x:Name="SpellItemsPresenter" Margin="0" />
+                                </Grid>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter Property="ItemsPanel">
+                        <Setter.Value>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel/>
+                            </ItemsPanelTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+                
+                <!-- ACTION GROUP TEMPLATE -->
+                <DataTemplate x:Key="ActionGroupTemplate" DataType="{x:Type ls:VMActionGroup}">
+                    <Expander x:Name="ExpanderButtonFeatures" Template="{StaticResource ExpanderButtonTemplateSpellBook}" Header="{Binding Name}" Style="{StaticResource ExpanderWidthStyle}" Visibility="{Binding Actions.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                        <ItemsControl x:Name="ActionsControl" ItemsSource="{Binding Actions}" AlternationCount="{Binding Actions.Count}" Style="{StaticResource CharacterActionItemsControlStyle}"/>
+                    </Expander>
+                    <DataTemplate.Triggers>
+                        <!-- Swap to list view -->
+                        <DataTrigger Binding="{Binding DataContext.CurrentPlayer.UIData.SpellbookIsListView, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="True">
+                            <Setter TargetName="ActionsControl" Property="Style" Value="{StaticResource CharacterActionItemsControlListStyle}"/>
+                            <Setter TargetName="ExpanderButtonFeatures" Property="Style" Value="{StaticResource ExpanderWidthListStyle}"/>
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+
+            </ControlTemplate.Resources>
+
+            <Grid x:Name="Root" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{StaticResource LS_tint00}">
+                <b:Interaction.Triggers>
+                    <!-- Close spell preparation when full screen gets bigger than 4:3. This doesn't work when done in normal triggers  -->
+                    <b:PropertyChangedTrigger Binding="{Binding Data.AspectRatio}">
+                        <b:Interaction.Behaviors>
+                            <b:ConditionBehavior>
+                                <b:ConditionalExpression>
+                                    <b:ComparisonCondition LeftOperand="{Binding Data.AspectRatio, Converter={StaticResource LessThanConverter}, ConverterParameter=0.75}" Operator="Equal" RightOperand="True" />
+                                    <b:ComparisonCondition LeftOperand="{Binding Layout}" Operator="Equal" RightOperand="Common" />
+                                </b:ConditionalExpression>
+                            </b:ConditionBehavior>
+                        </b:Interaction.Behaviors>
+                        <b:ChangePropertyAction TargetName="ShowPreparedSpellsButton" PropertyName="IsChecked" Value="False"/>
+                    </b:PropertyChangedTrigger>
+
+                    <!-- When toggling between list and grid view reset the focus. If the focus was inside the prepare spell list keep it in there, else focus the first thing available. -->
+                    <b:PropertyChangedTrigger Binding="{Binding CurrentPlayer.UIData.SpellbookIsListView}">
+                        <b:Interaction.Behaviors>
+                            <b:ConditionBehavior>
+                                <b:ConditionalExpression>
+                                    <b:ComparisonCondition LeftOperand="{Binding (ls:MoveFocus.IsKeyboardFocusWithin), ElementName=PreparableSpellGroups}" Operator="Equal" RightOperand="False" />
+                                </b:ConditionalExpression>
+                            </b:ConditionBehavior>
+                        </b:Interaction.Behaviors>
+                        <ls:SetMoveFocusAction TargetName="SpellBook_c"/>
+                    </b:PropertyChangedTrigger>
+                    <b:PropertyChangedTrigger Binding="{Binding CurrentPlayer.UIData.SpellbookIsListView}">
+                        <b:Interaction.Behaviors>
+                            <b:ConditionBehavior>
+                                <b:ConditionalExpression>
+                                    <b:ComparisonCondition LeftOperand="{Binding (ls:MoveFocus.IsKeyboardFocusWithin), ElementName=PreparableSpellGroups}" Operator="Equal" RightOperand="True" />
+                                </b:ConditionalExpression>
+                            </b:ConditionBehavior>
+                        </b:Interaction.Behaviors>
+                        <ls:SetMoveFocusAction TargetName="SpellBook_c" FocusElement="{Binding ElementName=PreparableSpellGroups}"/>
+                    </b:PropertyChangedTrigger>
+
+                    <b:EventTrigger EventName="GotKeyboardFocus">
+                        <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=SpellBook_c}" CommandParameter="{Binding Path=FocusedElement, ElementName=SpellBook_c}"/>
+                    </b:EventTrigger>
+                    <b:DataTrigger Binding="{Binding HasInputEnabled, ElementName=SpellBook_c}" Value="True">
+                        <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=SpellBook_c}" CommandParameter="{Binding Path=FocusedElement, ElementName=SpellBook_c}"/>
+                    </b:DataTrigger>
+
+                    <b:EventTrigger EventName="Loaded">
+                        <ls:LSPlaySound Sound="UI_HUD_SpellBook_Open"/>
+                        <b:InvokeCommandAction Command="{Binding EnableTooltipOnUIElementCommand, ElementName=SpellBook_c}"/>
+                    </b:EventTrigger>
+                    <b:EventTrigger EventName="Unloaded">
+                        <ls:LSPlaySound Sound="UI_HUD_SpellBook_Close"/>
+                    </b:EventTrigger>
+                </b:Interaction.Triggers>
+
+                <!-- BACKGROUND -->
+                <Image HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Source="{StaticResource SpellBookBackground}" Stretch="UniformToFill"/>
+
+                <!-- Shading behind paperdoll-->
+                <Rectangle  x:Name="BackgroundGradientSplitScreen" Width="2400" Height="2160" Opacity="0.8" Margin="-1000,0,-1000,0" HorizontalAlignment="Center">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="{StaticResource Trade.BackgroundTransparentColor}" Offset="0"/>
+                            <GradientStop Color="Black" Offset="0.6"/>
+                            <GradientStop Color="Black" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <Rectangle x:Name="BackgroundGradient" Width="4200" Height="2160" Opacity="0.9" Margin="0,0,0,0" HorizontalAlignment="Center" Visibility="Collapsed">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="{StaticResource Trade.BackgroundTransparentColor}" Offset="0"/>
+                            <GradientStop Color="Black" Offset="0.76"/>
+                            <GradientStop Color="{StaticResource Trade.BackgroundTransparentColor}" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+
+                <Grid x:Name="PanelContentHolder">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="LeftColumn" Width="80"/>
+                        <ColumnDefinition Width="3*"/>
+                        <ColumnDefinition Width="1*"/>
+                        <ColumnDefinition Width="2*"/>
+                        <ColumnDefinition x:Name="RightColumn" Width="0"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="164"/>
+                        <RowDefinition Height="200"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Paperdoll - First so it goes behind everything else -->
+                    <Grid x:Name="PaperDollGrid" Grid.Column="2" Grid.ColumnSpan="3" Grid.Row="0" Grid.RowSpan="3" Margin="0,60,0,0" >
+                        <ls:LSPaperdoll x:Name="PaperDoll" Margin="{StaticResource PaperDollZoomOut}" noesis:Element.BlendingMode="Additive" EntityRef="{Binding CurrentPlayer.SelectedCharacter.EntityHandle}" Width="1520" Height="2060" HorizontalAlignment="Left" UseCombatPose="True" Zoom="0.2" RenderScale="{Binding DataContext.Data.RenderScale, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" />
+                    </Grid>
+
+                    <Control  Grid.Row="0" Grid.ColumnSpan="7" x:Name="c_PartyGold" Style="{StaticResource PartyGoldStyle}" />
+
+                    <!-- Carousel Background -->
+                    <Control Template="{StaticResource TopCarouselBackground}" HorizontalAlignment="Center"  Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="5" Margin="0,0,0,2"/>
+
+                    <!-- Page navigation -->
+                    <DockPanel x:Name="Header" Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="4" HorizontalAlignment="Center" VerticalAlignment="Top" MinHeight="164">
+                        <ls:LSButton x:Name="NavigationLeftButton" BoundEvent="UITabPrev" DockPanel.Dock="Left" ContentTemplate="{StaticResource ControllerButtonHintImageOnly}" Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UITabPrev, Converter={StaticResource FindInputEventConverter}}" Width="{StaticResource ScaledControllerHintSize}" Height="{StaticResource ScaledControllerHintSize}" ls:LSButton.EatInput="False" VerticalAlignment="Center" Margin="0,0,40,0"/>
+
+                        <ls:LSButton x:Name="NavigationRightButton" BoundEvent="UITabNext" DockPanel.Dock="Right" ContentTemplate="{StaticResource ControllerButtonHintImageOnly}" Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UITabNext, Converter={StaticResource FindInputEventConverter}}" Width="{StaticResource ScaledControllerHintSize}" Height="{StaticResource ScaledControllerHintSize}" ls:LSButton.EatInput="False" VerticalAlignment="Center" Margin="20,0,0,0"/>
+
+                        <ListBox x:Name="Navigation" ItemsSource="{Binding SortedItems, ElementName=SpellbooksSortBehavior}" HorizontalAlignment="Center" SelectedIndex="{StaticResource InitialTab}" VerticalAlignment="Bottom">
+                            <b:Interaction.Triggers>
+                                <!-- Cycle selection using the navigation buttons -->
+                                <b:EventTrigger SourceName="NavigationLeftButton" EventName="Click">
+                                    <ls:SelectNextListBoxItem Reversed="True" TargetObject="{Binding ElementName=Navigation}" ForceMode="Cycle"/>
+                                </b:EventTrigger>
+                                <b:EventTrigger SourceName="NavigationRightButton" EventName="Click">
+                                    <ls:SelectNextListBoxItem TargetObject="{Binding ElementName=Navigation}" ForceMode="Cycle"/>
+                                </b:EventTrigger>
+                                
+                                <!-- When switching page hide prepare spells and re-focus the top of the spell list -->
+                                <b:EventTrigger EventName="SelectionChanged">
+                                    <b:ChangePropertyAction TargetName="ShowPreparedSpellsButton" PropertyName="IsChecked" Value="False"/>
+                                    <ls:SetMoveFocusAction TargetName="SpellBook_c" DeferFocusAction="True" FocusElement="{Binding ElementName=GeneralActions}"/>
+                                </b:EventTrigger>
+                                
+                                <!-- Is selection changed to an invalid index, force the selection back to the first option -->
+                                <b:EventTrigger EventName="SelectionChanged">
+                                    <b:Interaction.Behaviors>
+                                        <b:ConditionBehavior>
+                                            <b:ConditionalExpression>
+                                                <b:ComparisonCondition LeftOperand="{Binding SelectedIndex, ElementName=Navigation}" Operator="Equal" RightOperand="-1" />
+                                            </b:ConditionalExpression>
+                                        </b:ConditionBehavior>
+                                    </b:Interaction.Behaviors>
+                                    <b:ChangePropertyAction TargetName="Navigation" PropertyName="SelectedIndex" Value="0"/>
+                                </b:EventTrigger>
+                            </b:Interaction.Triggers>
+
+                            <b:Interaction.Behaviors>
+                                <ls:CollectionSortBehavior x:Name="SpellbooksSortBehavior" ItemsSource="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.SpellBooks}" Comparer="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.SpellBookComparer}" />
+                                <ls:CollectionFilterBehavior x:Name="PassivesFilter" ItemsSource="{Binding SelectedItem.Passives, ElementName=Navigation}" Predicate="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.TogglablePassivePredicate}"/>
+                                <ls:CollectionFilterBehavior x:Name="MetaMagicFilter" ItemsSource="{Binding SelectedItem.Passives, ElementName=Navigation}" Predicate="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.TogglableMetaMagicPassivePredicate}"/>
+                                <ls:CollectionFilterBehavior x:Name="CantripGroupFilter" ItemsSource="{Binding SelectedItem.ActionGroups, ElementName=Navigation}" Predicate="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.CantripGroupPredicate}"/>
+                                <ls:CollectionFilterBehavior x:Name="SpellLevelsGroupFilter" ItemsSource="{Binding SelectedItem.ActionGroups, ElementName=Navigation}" Predicate="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.SpellLevelsGroupPredicate}" SortDirection="Descending"/>
+                                <ls:CollectionFilterBehavior x:Name="ActionGroupFilter" ItemsSource="{Binding SelectedItem.ActionGroups, ElementName=Navigation}" Predicate="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.AllActionsGroupPredicate}"/>
+                                <ls:CollectionFilterBehavior x:Name="AllwaysPreparedActionsFilter" ItemsSource="{Binding SelectedItem.AlwaysPreparedActions, ElementName=Navigation}" Predicate="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.CharacterActionRemoveNullPredicate}"/>
+                            </b:Interaction.Behaviors>
+                            <ListBox.Template>
+                                <ControlTemplate>
+                                    <StackPanel MinWidth="500">
+                                        <TextBlock x:Name="Label" Text="{Binding Source='h2d773583g5f0dg4737g93d5g324f4bcfe2ac', Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource NavigationLabelTextStyle}" Margin="20,0" HorizontalAlignment="Center"/>
+                                        <ItemsPresenter HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                    <ControlTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedItem.SpellBookType, ElementName=Navigation}" Value="Base">
+                                            <Setter TargetName="Label" Property="Text" Value="{Binding Source='haf48b625gb2f0g449egb3aegfddfa1be81c2', Converter={StaticResource TranslatedStringConverter}}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding SelectedItem.SpellBookType, ElementName=Navigation}" Value="Class">
+                                            <Setter TargetName="Label" Property="Text" Value="{Binding SelectedItem.Class.ClassDisplayName, ElementName=Navigation}"/>
+                                        </DataTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ListBox.Template>
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="40,22"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <ContentPresenter VerticalAlignment="Bottom"/>
+                                                <ControlTemplate.Triggers>
+                                                    <MultiDataTrigger>
+                                                        <MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding SpellBookType}" Value="Tadpole"/>
+                                                            <Condition Binding="{Binding UngroupedSpellsAndActions.Count}" Value="0"/>
+                                                        </MultiDataTrigger.Conditions>
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Setter Property="Width" Value="0"/>
+                                                    </MultiDataTrigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <DataTemplate.Resources>
+                                        <BitmapImage x:Key="DotOn" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_pagination_on.png"/>
+                                        <BitmapImage x:Key="DotOff" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_pagination_off.png"/>
+                                    </DataTemplate.Resources>
+                                    <Image x:Name="Point" Source="{StaticResource DotOff}" Stretch="None"/>
+
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True">
+                                            <Setter TargetName="Point" Property="Source" Value="{StaticResource DotOn}"/>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+
+                    <TextBlock x:Name="CharacterNameSplitScreen" Grid.Column="1" Grid.ColumnSpan="1" Grid.Row="1" Text="{Binding CurrentPlayer.SelectedCharacter.Name}" Style="{StaticResource NameTextStyle}" Margin="0,80,0,0" HorizontalAlignment="Left" Visibility="Visible" />
+
+                    <!-- Learn Spell Button Full Screen -->
+                    <Grid x:Name="LearnSpellsButtonFullScreen" Grid.Column="1" Grid.ColumnSpan="1" Grid.Row="1" Visibility="Collapsed">
+                        <ContentControl Template="{StaticResource PrimaryButtonTemplateWrapper}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,60,-120" >
+                            <ls:LSButton
+								     Command="{Binding OpenLearnSpellsCommand}"
+								     ls:LSButton.BoundEvent="UIDelete"
+								     ContentTemplate="{StaticResource ControllerButtonHint}"
+								     Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIDelete, Converter={StaticResource FindInputEventConverter}}"
+								     Tag="{Binding Source='h9784a948g9d80g41d8gbb18ga9c838b90edd', Converter={StaticResource TranslatedStringConverter}}"
+								     VerticalAlignment="Center">
+                                <ls:LSButton.CommandParameter>
+                                    <MultiBinding Converter="{StaticResource PassThroughConverter}">
+                                        <Binding Path="DataContext.CurrentPlayer.SelectedCharacter" ElementName="SpellBook_c"/>
+                                        <Binding ElementName="SpellBook_c"/>
+                                    </MultiBinding>
+                                </ls:LSButton.CommandParameter>
+                            </ls:LSButton>
+                        </ContentControl>
+                    </Grid>
+
+                    <!-- General Panel -->
+                    <DockPanel x:Name="GeneralPanel" Grid.Column="1" Grid.ColumnSpan="1" Grid.Row="2" Height="1480" VerticalAlignment="Top" >
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="Loaded">
+                                <ls:SetMoveFocusAction TargetName="SpellBook_c"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
+
+
+                        <!-- UI Title Area -->
+                        <TextBlock x:Name="PanelTitle" DockPanel.Dock="Top" Width="Auto" Text="{Binding Source='hb4d6c027ge6c2g4ebag8d04g6d5f7febd91d', Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource PanelTitleStyle}" Margin="0,0,0,40" HorizontalAlignment="Left" />
+
+                        <TextBlock x:Name="ReplaceableSpellsNote" ls:TextBlockFormatter.SourceText="{Binding Source=hdefb242eg8d0bg4680gb37cg763784a9fdfe, Converter={StaticResource TranslatedStringConverter}}" DockPanel.Dock="Top" Style="{StaticResource BaseTextStyle}" FontSize="{StaticResource ScaledMediumFontSize}"  Foreground="{StaticResource LS_accent75TxtColor}" FontWeight="DemiBold" FontStyle="italic" HorizontalAlignment="Left" Visibility="Collapsed" Margin="0 0 0 28" />
+
+                        <!-- Spell Preperation Area -->
+
+                        <ls:LSNineSliceImage x:Name="PrepareSpellsHeader" DockPanel.Dock="Top" Visibility="Collapsed" Style="{DynamicResource PrepareSpellsBG}" Margin="-50,-20,-40,20" Panel.ZIndex="5">
+                            <Grid HorizontalAlignment="Stretch" Width="auto" MinHeight="240" Margin="-40,0,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                
+                                <ContentControl x:Name="SplitScreenPrepareToggle" Grid.Column="0" Template="{StaticResource PrimaryButtonTemplateWrapper}" Margin="30,0,0,0" VerticalAlignment="Center">
+                                    <ls:LSToggleButton x:Name="ShowPreparedSpellsButton" VerticalAlignment="Center" ls:LSToggleButton.BoundEvent="UICreate" ContentTemplate="{StaticResource ControllerButtonHint}" Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UICreate, Converter={StaticResource FindInputEventConverter}}" Tag="{Binding Source='hdbaa56a0gc5e6g4968gb3eag9d5fbcef225e', Converter={StaticResource TranslatedStringConverter}}" Focusable="False" ls:MoveFocus.Focusable="False"/>
+                                </ContentControl>
+                                <TextBlock x:Name="PrepareSpellsInfo" Grid.Column="1" Margin="40,20,100,20" HorizontalAlignment="Stretch" VerticalAlignment="Center" Width="auto" Text="{Binding Source='h14945827gcacag416ag866dgc7f12f96a705', Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource BaseTextStyle}" FontSize="{StaticResource ScaledMediumFontSize}"  Foreground="{StaticResource LS_accent75TxtColor}" FontWeight="DemiBold" FontStyle="italic" Visibility="Collapsed"/>
+                            </Grid>
+                        </ls:LSNineSliceImage>
+                        <Grid DockPanel.Dock="Top" >
+
+                            <!-- Main Spellbook Content -->
+                            <Grid x:Name="GeneralViewer" Width="Auto" Margin="{StaticResource SrollViewSideMargin}">
+                                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalAlignment="Top" ls:ScrollViewerHelper.VerticalScrollOffsetMargin="{StaticResource GenericSlotSizeSpellBook}" >
+
+                                    <StackPanel x:Name="GeneralActions" >
+
+                                        <!-- Manually prepared -->
+                                        <Expander x:Name="ManuallyPreparedTitle" Template="{StaticResource ExpanderButtonTemplateSpellBook}" Tag="Prepared" Header="{Binding Source='hb59e5cdegee72g4e11gabb3g8a3a071ae557', Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource ExpanderWidthStyle}" HorizontalAlignment="Left" Visibility="Collapsed">
+                                            <ItemsControl x:Name="ManuallyPreparedList" ItemsSource="{Binding SelectedItem.ManuallyPreparedActions, ElementName=Navigation}" ItemTemplate="{StaticResource ManuallyPreparedSlotTemplate}" Style="{StaticResource CharacterActionItemsControlStyle}" Visibility="Collapsed"/>
+                                        </Expander>
+
+                                        <!-- Inherited spells (always prepared) -->
+                                        <Expander x:Name="AlwaysPreparedTitle" Template="{StaticResource ExpanderButtonTemplateSpellBook}" Header="{Binding Source='h511f90c8gc713g45adga3e6gbd6e05982f78', Converter={StaticResource TranslatedStringConverter}}" Visibility="Collapsed" Style="{StaticResource ExpanderWidthStyle}" HorizontalAlignment="Left" >
+                                            <ItemsControl x:Name="AlwaysPreparedList" ItemsSource="{Binding SelectedItem.AlwaysPreparedActions, ElementName=Navigation}" Visibility="Collapsed" Style="{StaticResource CharacterActionItemsControlStyle}"/>
+                                        </Expander>
+
+                                        <!-- Cantrips -->
+                                        <ItemsControl x:Name="CantripGroups" ItemsSource="{Binding FilteredItems, ElementName=CantripGroupFilter}" HorizontalAlignment="Left" Style="{StaticResource GerneralItemsControlStyle}" ItemTemplate="{StaticResource ActionGroupTemplate}"/>
+
+                                        <!-- Spells -->
+                                        <ItemsControl x:Name="SpellGroups" ItemsSource="{Binding FilteredItems, ElementName=SpellLevelsGroupFilter}" HorizontalAlignment="Left"  Style="{StaticResource GerneralItemsControlStyle}" ItemTemplate="{StaticResource ActionGroupTemplate}"/>
+
+                                        <!-- Actions -->
+                                        <ItemsControl x:Name="ActionGroups" ItemsSource="{Binding FilteredItems, ElementName=ActionGroupFilter}" HorizontalAlignment="Left" Style="{StaticResource GerneralItemsControlStyle}" ItemTemplate="{StaticResource ActionGroupTemplate}"/>
+
+                                        <!-- Meta magic -->
+                                        <Expander x:Name="MetaMagicTitle" Template="{StaticResource ExpanderButtonTemplateSpellBook}" Header="{Binding Source='h007741f2ge0abg4842g99f1gcfa286352e4a', Converter={StaticResource TranslatedStringConverter}}" Visibility="{Binding ItemsSource.Count, ElementName=MetaMagicList, Converter={StaticResource CountToVisibilityConverter}}" Style="{StaticResource ExpanderWidthStyle}" HorizontalAlignment="Left">
+                                            <ItemsControl x:Name="MetaMagicList" ItemsSource="{Binding FilteredItems, ElementName=MetaMagicFilter}" Visibility="{Binding ItemsSource.Count, ElementName=MetaMagicList, Converter={StaticResource CountToVisibilityConverter}}" Style="{StaticResource CharacterActionItemsControlStyle}"/>
+                                        </Expander>
+
+                                        <!-- Passives -->
+                                        <Expander x:Name="PassivesTitle" Template="{StaticResource ExpanderButtonTemplateSpellBook}" Header="{Binding Source='hccb74959ga789g46f6g8cc2g73edf1536b6a', Converter={StaticResource TranslatedStringConverter}}" Visibility="{Binding ItemsSource.Count, ElementName=PassivesList, Converter={StaticResource CountToVisibilityConverter}}" Style="{StaticResource ExpanderWidthStyle}" HorizontalAlignment="Left">
+                                            <ItemsControl x:Name="PassivesList" ItemsSource="{Binding FilteredItems, ElementName=PassivesFilter}" Visibility="{Binding ItemsSource.Count, ElementName=PassivesList, Converter={StaticResource CountToVisibilityConverter}}" Style="{StaticResource CharacterActionItemsControlStyle}"/>
+                                        </Expander>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+                        </Grid>
+                    </DockPanel>
+
+                    <!-- Info Panel -->
+                    <StackPanel x:Name="InfoPanel" Grid.Column="3" Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,300" >
+                        <StackPanel.Resources>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="Foreground" Value="{StaticResource LS_tint100}"/>
+                            </Style>
+                        </StackPanel.Resources>
+
+                        <TextBlock x:Name="CharacterName" Text="{Binding CurrentPlayer.SelectedCharacter.Name}" Style="{StaticResource NameTextStyle}" HorizontalAlignment="Center" TextAlignment="Center" Visibility="Collapsed"  />
+
+                        <Image x:Name="PageIcon" HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="Uniform" Width="{StaticResource PageIconSize}" Visibility="Collapsed" Margin="0,-20,0,-10"/>
+
+                        <Rectangle x:Name="RaceIcon" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="{StaticResource LS_accent75TxtColor}" DataContext="{Binding CurrentPlayer.SelectedCharacter.Stats.Race}"  Style="{DynamicResource RaceIconStyle}" Width="{StaticResource RaceIconSize}" Height="{StaticResource RaceIconSize}" Visibility="Collapsed" Margin="0,40,0,40" />
+
+                        <TextBlock x:Name="RaceName" Text="{Binding CurrentPlayer.SelectedCharacter.Stats.Race.DisplayName}" HorizontalAlignment="Center" Style="{StaticResource BaseTextStyle}" FontSize="{StaticResource ScaledLargeFontSize}" TextAlignment="Center"/>
+
+                        <TextBlock x:Name="SubClassName" Text="{Binding SelectedItem.Class.SubclassDisplayName, ElementName=Navigation}" Visibility="{Binding Text, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource NullToCollapsedConverter}, ConverterParameter='EmptyString'}" Style="{StaticResource BaseTextStyle}" FontSize="{StaticResource ScaledIntermediateFontSize}"  HorizontalAlignment="Center"/>
+
+                        <Border x:Name="CastInfo" Visibility="Collapsed" Margin="0,60,0,0">
+                            <AdornerDecorator>
+                                <StackPanel x:Name="CastInfoStackPanel" Orientation="Vertical">
+                                    <ContentControl x:Name="CastAbilityContainer" ls:MoveFocus.Focusable="True" Focusable="True"  Style="{StaticResource FocusableContentControlStyleMinimal}" Width="300" ls:MoveFocus.FocusMovementBlockUpDirection="True" >
+                                        <ContentControl.ToolTip>
+                                            <ls:LSTooltip ToolTipService.Placement="Left" Content="{Binding ElementName=CastAbilityContainer,Path=DataContext}" >
+                                                <ls:LSTooltip.ContentTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel>
+                                                            <TextBlock ls:TextBlockFormatter.SourceText="{Binding Source=h3289692bg0388g4f68gad45g82b8fd0ffbf8, Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource TooltipTitleStyle}"/>
+                                                            <TextBlock ls:TextBlockFormatter.SourceText="{Binding Source=h91535f32g4f47g4d5bgbf59ge05726ecb96e, Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource TooltipDefaultTextStyle}"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ls:LSTooltip.ContentTemplate>
+                                            </ls:LSTooltip>
+                                        </ContentControl.ToolTip>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <Image x:Name="CastAbilityIcon" Source="pack://application:,,,/Core;component/Assets/CharacterPanel/ico_proficient.png" Stretch="Fill" VerticalAlignment="Center" Margin="-12,0,0,0" Width="100" Height="100"/>
+                                            <Control x:Name="CastAbility" Template="{StaticResource AbilityShortDisplayName}" DataContext="{Binding SelectedItem.Class.SpellCastAbility, ElementName=Navigation}" VerticalAlignment="Center"  >
+                                                <Control.Resources>
+                                                    <Style TargetType="TextBlock"  BasedOn="{StaticResource BaseTextStyle}" ></Style>
+                                                </Control.Resources>
+                                            </Control>
+                                        </StackPanel>
+                                    </ContentControl>
+
+                                    <ContentControl x:Name="SpellDCContainer" Style="{StaticResource FocusableContentControlStyleMinimal}" ls:MoveFocus.Focusable="True" Focusable="True"  Width="300" Margin="0,21,0,0">
+                                        <ContentControl.ToolTip>
+                                            <ls:LSTooltip Content="{Binding Path=SelectedItem.Class.SpellDifficultyCheck, ElementName=Navigation}" ToolTipService.Placement="Left" />
+                                        </ContentControl.ToolTip>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <Image x:Name="SpellDCIcon"  Source="pack://application:,,,/Core;component/Assets/SpellBook/ico_spellSaveDC.png" Stretch="Fill" VerticalAlignment="Center" Margin="-8,0,0,0" Width="100" Height="100"/>
+                                            <TextBlock x:Name="SpellDC" Text="{Binding SelectedItem.Class.SpellDifficultyCheck.Value, ElementName=Navigation}" VerticalAlignment="Center" Style="{StaticResource BaseTextStyle}" FontSize="{StaticResource ScaledBigFontSize}"/>
+                                        </StackPanel>
+                                    </ContentControl>
+
+                                    <ContentControl x:Name="SpellAttackContainer" Style="{StaticResource FocusableContentControlStyleMinimal}" ls:MoveFocus.Focusable="True" Focusable="True"   Margin="0,21,0,0" Width="300" ls:MoveFocus.FocusMovementBlockDownDirection="True">
+                                        <ContentControl.ToolTip>
+                                            <ls:LSTooltip Content="{Binding Path=(ls:TooltipExtender.Owner).Stats.SpellAttackBonus, RelativeSource={RelativeSource Mode=Self}}" ToolTipService.Placement="Left" />
+                                        </ContentControl.ToolTip>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <Image x:Name="SpellAttackIcon"  Source="pack://application:,,,/Core;component/Assets/SpellBook/ico_spellAttackBonus.png" Stretch="Fill" VerticalAlignment="Center" Margin="-10,0,0,0" Width="100" Height="100"/>
+                                            <TextBlock x:Name="SpellAttackBonus" Text="{Binding SelectedItem.Class.SpellAttackBonus.Value, ElementName=Navigation, StringFormat={}{0:+#;-#;0}}" VerticalAlignment="Center" Style="{StaticResource BaseTextStyle}" FontSize="{StaticResource ScaledBigFontSize}"/>
+                                        </StackPanel>
+                                    </ContentControl>
+                                </StackPanel>
+                            </AdornerDecorator>
+                        </Border>
+
+                        <!-- Learn Spell Button Split Screen -->
+                        <Grid x:Name="LearnSpellsButton" Visibility="Collapsed">
+                            <ContentControl Template="{StaticResource PrimaryButtonTemplateWrapper}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,0" >
+                                <ls:LSButton
+								     Command="{Binding OpenLearnSpellsCommand}"
+								     ls:LSButton.BoundEvent="UIDelete"
+								     ContentTemplate="{StaticResource ControllerButtonHint}"
+								     Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIDelete, Converter={StaticResource FindInputEventConverter}}"
+								     Tag="{Binding Source='h9784a948g9d80g41d8gbb18ga9c838b90edd', Converter={StaticResource TranslatedStringConverter}}"
+								     VerticalAlignment="Center" >
+                                    <ls:LSButton.CommandParameter>
+                                        <MultiBinding Converter="{StaticResource PassThroughConverter}">
+                                            <Binding Path="DataContext.CurrentPlayer.SelectedCharacter" ElementName="SpellBook_c"/>
+                                            <Binding ElementName="SpellBook_c"/>
+                                        </MultiBinding>
+                                    </ls:LSButton.CommandParameter>
+                                </ls:LSButton>
+                            </ContentControl>
+                        </Grid>
+
+                    </StackPanel>
+
+                    <!-- Prepare Panel Content -->
+                    <Border x:Name="PreparePanel" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Grid.Column="0" Grid.ColumnSpan="5" Grid.Row="0" Grid.RowSpan="4" Margin="0,0,0,0" Opacity="0" Visibility="Collapsed" Background="{StaticResource LS_PanelBackground}">
+                        <AdornerDecorator>
+                        <ls:LSNineSliceImage Style="{DynamicResource PrepareSpellsBG}" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,-90,0,0">
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="1400" Height="1800">
+                                <Grid Margin="100,0,100,100" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" >
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*"  />
+                                        <RowDefinition Height="100"  />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Prepare Overlay Title Area -->
+                                    <StackPanel HorizontalAlignment="Center" Grid.Row="0" Orientation="Vertical" VerticalAlignment="Top" Width="Auto" Margin="0,80,0,0">
+                                        <TextBlock Text="{Binding Source='h23ac2ed9g60c8g4d02gaedag5f37282cd1a5', Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource PanelTitleStyle}" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,0,0,20"/>
+                                        <TextBlock Text="{Binding Source='h14945827gcacag416ag866dgc7f12f96a705', Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource BaseTextStyle}" FontSize="{StaticResource ScaledMediumFontSize}"  Foreground="{StaticResource LS_accent75TxtColor}" FontWeight="DemiBold" FontStyle="italic" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,0,0,40"/>
+
+
+                                        <!-- Manually prepared -->
+                                        <TextBlock Style="{StaticResource PanelSubTitleStyle}" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,0,0,40">
+                                        <Run Text="{Binding Source='h9d690e3fg8baag4917ga818gf127b3da7b93', Converter={StaticResource TranslatedStringConverter}}" />
+                                        <Run Foreground="{StaticResource LS_accent100TxtColor}">
+                                            <Run.Text>
+                                                <MultiBinding StringFormat="{}{0}/{1}">
+                                                    <Binding Path="SelectedItem.PreparedSpellsStat.Value" ElementName="Navigation"/>
+                                                    <Binding Path="SelectedItem.PreparedSpellsStat.Max" ElementName="Navigation"/>
+                                                </MultiBinding>
+                                            </Run.Text>
+                                         </Run>
+                                        </TextBlock>
+                                        <ItemsControl x:Name="PreparedSpellsList" ItemsSource="{Binding SelectedItem.ManuallyPreparedActions, ElementName=Navigation}" ItemTemplate="{StaticResource BasicActionSlotTemplate}" Style="{StaticResource CharacterActionItemsControlStyle}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <ls:LSGrid Style="{StaticResource SpellGridStyle}">
+                                                        <ls:LSGrid.Columns>
+                                                            <MultiBinding Converter="{StaticResource DivideMultiConverter}">
+                                                                <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType={x:Type StackPanel}}"/>
+                                                                <Binding Source="{StaticResource GenericSlotSizeSpellBook}"/>
+                                                            </MultiBinding>
+                                                        </ls:LSGrid.Columns>
+                                                    </ls:LSGrid>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+
+                                        <!-- Preparable Spells Section -->
+                                        <TextBlock Text="{Binding Source='h60d9fcd7g33e4g4606g8fe9g8f5f25e03847', Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource PanelSubTitleStyle}" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,40,0,40"/>
+                                    </StackPanel>
+
+                                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" Grid.Row="1" VerticalScrollBarVisibility="Auto" VerticalAlignment="Stretch" >
+                                        <ItemsControl x:Name="PreparableSpellGroups" ItemsSource="{Binding FilteredItems, ElementName=SpellLevelsGroupFilter}" HorizontalAlignment="Center" Style="{StaticResource GerneralItemsControlStyle}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Expander x:Name="ExpanderButtonFeatures" Template="{StaticResource ExpanderButtonTemplateSpellBook}" Header="{Binding Name}" Visibility="{Binding Actions.Count, Converter={StaticResource CountToVisibilityConverter}}" Style="{StaticResource ExpanderWidthStyle}">
+                                                        <ItemsControl x:Name="ActionsControl" ItemsSource="{Binding Actions}" AlternationCount="{Binding Actions.Count}" Style="{StaticResource CharacterActionItemsControlStyle}" ItemTemplate="{StaticResource PreparableActionSlotTemplate}" Visibility="{Binding Actions.Count, Converter={StaticResource CountToVisibilityConverter}}"/>
+                                                    </Expander>
+
+                                                    <DataTemplate.Triggers>
+                                                        <DataTrigger Binding="{Binding DataContext.CurrentPlayer.UIData.SpellbookIsListView, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="True">
+                                                            <Setter TargetName="ActionsControl" Property="Style" Value="{StaticResource CharacterActionItemsControlListStyle}"/>
+                                                            <Setter TargetName="ActionsControl" Property="ItemTemplate" Value="{StaticResource PreparableActionSlotListTemplate}"/>
+                                                            <Setter TargetName="ExpanderButtonFeatures" Property="Style" Value="{StaticResource ExpanderWidthListStyle}"/>
+                                                        </DataTrigger>
+                                                    </DataTemplate.Triggers>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                                <ContentControl Template="{StaticResource PrimaryButtonTemplateWrapper}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,20" >
+                                    <ls:LSButton VerticalAlignment="Center" ls:LSButton.BoundEvent="UIMessageBoxY" ContentTemplate="{StaticResource ControllerButtonHint}" Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIMessageBoxY'}" Tag="{Binding Source='h31d65d36gfe5fg4f9bg9184g9f8ceee5f3ed',Converter={StaticResource TranslatedStringConverter}}">
+                                        <b:Interaction.Triggers>
+                                            <b:EventTrigger EventName="LSButtonPressed">
+                                                <b:ChangePropertyAction TargetName="ShowPreparedSpellsButton" PropertyName="IsChecked" Value="False"/>
+                                            </b:EventTrigger>
+                                        </b:Interaction.Triggers>
+                                    </ls:LSButton>
+                                </ContentControl>
+                            </Grid>
+                        </ls:LSNineSliceImage>
+                        </AdornerDecorator>
+                    </Border>
+
+                    <!-- Button hints -->
+                    <StackPanel x:Name="ButtonHints" Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="4" Height="250" Style="{StaticResource ButtonHint.Container.Center}">
+
+                        <ls:LSButton x:Name="ToggleTooltips" VerticalAlignment="Bottom" EatInput="False" 
+                                 Command="ls:UIWidget.ToggleTooltipOnUIElementCommand"
+                                 CommandParameter="{Binding FocusedElement, ElementName=SpellBook_c}"
+                                 ls:LSButton.BoundEvent="UIShowInfo"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIShowInfo, Converter={StaticResource FindInputEventConverter}}"
+                                 Tag="{Binding Source='hf8dd4c2fg97e0g4ccdgac1ag3cd1fe5060ef', Converter={StaticResource TranslatedStringConverter}}" TapTime="{StaticResource DefaultButtonTapTime}"/>
+
+                        <ls:LSInputBinding x:Name="PinTooltipBinding" Style="{StaticResource PinTooltipBindingStyle}"/>
+
+                        <!-- Add or remove prepared spell -->
+                        <ls:LSButton x:Name="PrepareButton" VerticalAlignment="Bottom" 
+                                     Command="{Binding ToggleCharacterAction}" 
+                                     CommandParameter="{Binding FocusedElement.DataContext, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" 
+                                     ls:LSButton.BoundEvent="UIAccept" 
+                                     ContentTemplate="{StaticResource ControllerButtonHint}" 
+                                     Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIAccept'}" 
+                                     Tag="{Binding Source='hc5326054gad2cg4afeg8a50g54d4a4a456b6', Converter={StaticResource TranslatedStringConverter}}" 
+                                     Visibility="Collapsed" IsEnabled="False"/>
+
+                        <ls:LSToggleButton x:Name="ToggleListView" IsChecked="{Binding CurrentPlayer.UIData.SpellbookIsListView}" ContentTemplate="{StaticResource ControllerButtonHint}" Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UISort, Converter={StaticResource FindInputEventConverter}}" ls:LSToggleButton.BoundEvent="UISort"
+                                 Tag="{Binding Source='hf3e2a9bfg56a0g4325g98a1gaf0136eee809', Converter={StaticResource TranslatedStringConverter}}" TapTime="{StaticResource DefaultButtonTapTime}" VerticalAlignment="Bottom" />
+
+                        <ls:LSButton x:Name="CloseButton" VerticalAlignment="Bottom" 
+                                     Command="{Binding CustomEvent}" 
+                                     CommandParameter="CloseWidget" 
+                                     ls:LSButton.BoundEvent="UICancel" 
+                                     ContentTemplate="{StaticResource ControllerButtonHint}" 
+                                     Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICancel'}" 
+                                     Tag="{Binding Source='h6fefa28bg2149g4cacga071gd95b236b2d0b',Converter={StaticResource TranslatedStringConverter}}" 
+                                     Visibility="{Binding Visibility, ElementName=BackButton, Converter={StaticResource InvertVisibilityConverter}}"/>
+
+                        <ls:LSButton x:Name="BackButton" VerticalAlignment="Bottom" 
+                                     ls:LSButton.BoundEvent="UICancel" 
+                                     ContentTemplate="{StaticResource ControllerButtonHint}" 
+                                     Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICancel'}" 
+                                     Tag="{Binding Source='hfe928c0dgb014g4eb2g8c52g6ed43b026e20',Converter={StaticResource TranslatedStringConverter}}" 
+                                     Visibility="Collapsed">
+                            <b:Interaction.Triggers>
+                                <b:EventTrigger EventName="LSButtonPressed">
+                                    <b:ChangePropertyAction TargetName="ShowPreparedSpellsButton" PropertyName="IsChecked" Value="False"/>
+                                </b:EventTrigger>
+                            </b:Interaction.Triggers>
+                        </ls:LSButton>
+                    </StackPanel>
+
+                    <ls:LSButton Grid.Column="0" Grid.Row="0" VerticalAlignment="Center" BoundEvent="CharacterCreationRotateLeft">
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="LSButtonPressed">
+                                <b:ChangePropertyAction PropertyName="RotationSpeed" Value="1.8" TargetName="PaperDoll"/>
+                            </b:EventTrigger>
+                            <b:EventTrigger EventName="LSButtonReleased" >
+                                <b:ChangePropertyAction PropertyName="RotationSpeed" Value="0" TargetName="PaperDoll"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
+                    </ls:LSButton>
+                    <ls:LSButton Grid.Column="0" Grid.Row="0"  VerticalAlignment="Center"  BoundEvent="CharacterCreationRotateRight">
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="LSButtonPressed">
+                                <b:ChangePropertyAction PropertyName="RotationSpeed" Value="-1.8" TargetName="PaperDoll"/>
+                            </b:EventTrigger>
+                            <b:EventTrigger EventName="LSButtonReleased" >
+                                <b:ChangePropertyAction PropertyName="RotationSpeed" Value="0" TargetName="PaperDoll"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
+                    </ls:LSButton>
+                    <ls:LSButton Grid.Column="0" Grid.Row="0"  VerticalAlignment="Center" BoundEvent="CameraZoomIn">
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="LSButtonPressed">
+                                <b:ControlStoryboardAction Storyboard="{StaticResource ZoomCharacterIn}"/>
+                            </b:EventTrigger>
+                            <b:StoryboardCompletedTrigger  Storyboard="{StaticResource ZoomCharacterIn}">
+                                <b:ChangePropertyAction TargetName="PaperDoll" PropertyName="Margin" Value="{StaticResource PaperDollZoomIn}" />
+                                <b:ChangePropertyAction TargetName="PaperDoll" PropertyName="Zoom" Value="1" />
+                            </b:StoryboardCompletedTrigger>
+
+                        </b:Interaction.Triggers>
+                    </ls:LSButton>
+                    <ls:LSButton Grid.Column="0" Grid.Row="0"  VerticalAlignment="Center" BoundEvent="CameraZoomOut">
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="LSButtonPressed">
+                                <b:ControlStoryboardAction Storyboard="{StaticResource ZoomCharacterOut}"/>
+                            </b:EventTrigger>
+                            <b:StoryboardCompletedTrigger Storyboard="{StaticResource ZoomCharacterOut}">
+                                <b:ChangePropertyAction TargetName="PaperDoll" PropertyName="Margin" Value="{StaticResource PaperDollZoomOut}" />
+                                <b:ChangePropertyAction TargetName="PaperDoll" PropertyName="Zoom" Value="0.2" />
+                            </b:StoryboardCompletedTrigger>
+                        </b:Interaction.Triggers>
+                    </ls:LSButton>
+
+                </Grid>
+            </Grid>
+
+            <ControlTemplate.Triggers>
+                <!-- Swap to list view templates and style -->
+                <DataTrigger Binding="{Binding CurrentPlayer.UIData.SpellbookIsListView}" Value="True">
+                    <Setter TargetName="PassivesTitle" Property="Style" Value="{StaticResource ExpanderWidthListStyle}"/>
+                    <Setter TargetName="PassivesList" Property="Style" Value="{StaticResource CharacterActionItemsControlListStyle}"/>
+                    <Setter TargetName="MetaMagicTitle" Property="Style" Value="{StaticResource ExpanderWidthListStyle}"/>
+                    <Setter TargetName="MetaMagicList" Property="Style" Value="{StaticResource CharacterActionItemsControlListStyle}"/>
+                    <Setter TargetName="ManuallyPreparedTitle" Property="Style" Value="{StaticResource ExpanderWidthListStyle}"/>
+                    <Setter TargetName="ManuallyPreparedList" Property="ItemTemplate" Value="{StaticResource BasicActionListTemplate}"/>
+                    <Setter TargetName="ManuallyPreparedList" Property="Style" Value="{StaticResource CharacterActionItemsControlListStyle}"/>
+                    <Setter TargetName="AlwaysPreparedTitle" Property="Style" Value="{StaticResource ExpanderWidthListStyle}"/>
+                    <Setter TargetName="AlwaysPreparedList" Property="Style" Value="{StaticResource CharacterActionItemsControlListStyle}"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding ShowUIElementTooltip, ElementName=SpellBook_c}" Value="True">
+                    <Setter TargetName="ToggleTooltips" Property="Tag" Value="{Binding Source='hb33ec471gd611g4ee3gbbffg699af8f79167', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding SelectedItem.Class.MustPrepareSpells, ElementName=Navigation}" Value="True"/>
+                        <Condition Binding="{Binding FilteredItems.Count, ElementName=SpellLevelsGroupFilter, Converter={StaticResource GreaterThanConverter},ConverterParameter=0}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ManuallyPreparedTitle" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ManuallyPreparedList" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="SpellGroups" Property="Visibility" Value="Collapsed"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding SelectedItem.Class.MustPrepareSpells, ElementName=Navigation}" Value="True"/>
+                        <Condition Binding="{Binding IsChecked, ElementName=ShowPreparedSpellsButton}" Value="False"/>
+                        <Condition Binding="{Binding CurrentPlayer.UIData.ActiveState}" Value="SpellBook"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="SplitScreenPrepareToggle" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="SplitScreenPrepareToggle" Property="IsEnabled" Value="True"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding SelectedItem.Class.MustPrepareSpells, ElementName=Navigation}" Value="True"/>
+                        <Condition Binding="{Binding FilteredItems.Count, ElementName=AllwaysPreparedActionsFilter, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="AlwaysPreparedTitle" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="AlwaysPreparedList" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding SelectedItem.Class.CanLearnSpells, ElementName=Navigation}" Value="True">
+                    <Setter TargetName="LearnSpellsButton" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding SelectedItem.Class.CanLearnSpells, ElementName=Navigation}" Value="True"/>
+                        <Condition Binding="{Binding Layout}" Value="Common"/>
+                        <Condition Binding="{Binding Data.AspectRatio, Converter={StaticResource LessThanConverter}, ConverterParameter=0.75}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="LearnSpellsButtonFullScreen" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="LearnSpellsButton" Property="Visibility" Value="Collapsed"/>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding SelectedItem.Class, ElementName=Navigation, Converter={StaticResource NullToBoolTrueConverter}}" Value="False">
+                    <Setter TargetName="CastInfo" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='h15329947gc691g4323gac0fge3fbcecb92d9', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="PageIcon" Property="DataContext" Value="{Binding SelectedItem.Class, ElementName=Navigation}"/>
+                    <Setter TargetName="PageIcon" Property="Style" Value="{DynamicResource ClassIconStyle}"/>
+                    <Setter TargetName="RaceName" Property="Text">
+                        <Setter.Value>
+                            <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                <Binding Source="h5df00b79ga6acg4d9fgb8dag23340151fba7"/>
+                                <Binding Path="SelectedItem.Class.Level.Value" ElementName="Navigation"/>
+                                <Binding Path="SelectedItem.Class.ClassDisplayName" ElementName="Navigation"/>
+                            </MultiBinding>
+                        </Setter.Value>
+                    </Setter>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding SelectedItem.Class.SpellCastAbility.Ability, ElementName=Navigation}" Value="None">
+                    <Setter TargetName="CastInfo" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding SelectedItem.SpellBookType, ElementName=Navigation}" Value="Tadpole">
+                    <Setter TargetName="RaceName" Property="Text" Value="{Binding Source='h2d773583g5f0dg4737g93d5g324f4bcfe2ac', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='h2d773583g5f0dg4737g93d5g324f4bcfe2ac', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="PageIcon" Property="Source" Value="pack://application:,,,/Core;component/Assets/PanelSelect_c/c_ico_illithidPowers_d.png"/>
+                </DataTrigger>
+
+                <!-- Spellbook Localized Titles -->
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Barbarian">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='he2b64912g09dfg401egad86g268f04a1a4a8', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Bard">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='h74e37ee4g9d93g4c51gae38g8bb1105706c4', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Cleric">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='hea496245g66feg46edga5d3g67412f3348a3', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Druid">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='hb22cd9e3g4591g4370gb6dagdbed08ca6e2a', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Fighter">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='h50ae50aeg387cg4183g8907g4af0fb97b1b1', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Monk">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='he5201ce2g0a0dg4e30ga732g7e40d27d0c35', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Paladin">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='h128c0875g0ce6g4935ga0ccgea9df4a6a94e', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Ranger">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='he32bbb6eg9a05g42c6gaae4g969456c69447', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Rogue">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='hdd92d50ag5cb0g4fc3ga80fga2366d3f4e16', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Sorcerer">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='h13627d4cg4844g4a44gab42gb3c03d37b64a', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Warlock">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='h4272f859g339ag4b31gb8fbgaf6ec7a8c53e', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Wizard">
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='h73638aaeg60ffg43d5gbb11g2237736ce715', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+
+                <Trigger Property="SelectedIndex" SourceName="Navigation" Value="-1">
+                    <Setter TargetName="Navigation" Property="SelectedIndex" Value="0"/>
+                </Trigger>
+
+                <Trigger Property="ls:MoveFocus.IsKeyboardFocusWithin" SourceName="PreparePanel" Value="True">
+                    <Setter TargetName="PrepareButton" Property="Visibility" Value="Visible"/>
+                </Trigger>
+
+                <DataTrigger Binding="{Binding Path=FocusedElement.DataContext, ElementName=SpellBook_c, Converter={StaticResource TypeConverter}}" Value="ls.VMCharacterAction">
+                    <Setter TargetName="PrepareButton" Property="IsEnabled" Value="True"/>
+                </DataTrigger>
+
+                <!-- Replaceable spells message -->
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Bard">
+                    <Setter TargetName="ReplaceableSpellsNote" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Warlock">
+                    <Setter TargetName="ReplaceableSpellsNote" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ReplaceableSpellsNote" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source=he5c71af9g2194g4b47g9613g79eeef5ccbea, Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Ranger">
+                    <Setter TargetName="ReplaceableSpellsNote" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding SelectedItem.Class.IDString, ElementName=Navigation}" Value="Sorcerer">
+                    <Setter TargetName="ReplaceableSpellsNote" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Path=FocusedElement.DataContext.NeedsActivation, ElementName=SpellBook_c}" Value="True"/>
+                        <Condition Binding="{Binding Path=FocusedElement.DataContext.Activated, ElementName=SpellBook_c}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="PrepareButton" Property="Tag" Value="{Binding Source='ha2f37b2fgeed6g4cccgbe6cga697f899f301', Converter={StaticResource TranslatedStringConverter}}"/>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding IsChecked, ElementName=ShowPreparedSpellsButton}" Value="True">
+                    <Setter TargetName="PreparePanel" Property="IsEnabled" Value="True"/>
+                    <Setter TargetName="GeneralViewer" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="InfoPanel" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="GeneralViewer" Property="Focusable" Value="False"/>
+                    <Setter TargetName="InfoPanel" Property="Focusable" Value="False"/>
+                    <Setter TargetName="GeneralViewer" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="InfoPanel" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="BackButton" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="PreparePanel" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="PreparePanel" Property="Opacity" Value="1.0"/>
+                    <Setter TargetName="LearnSpellsButton" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="LearnSpellsButtonFullScreen" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="SplitScreenPrepareToggle" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="Header" Property="IsEnabled" Value="False"/>
+
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="ShowPreparePanelAnim">
+                            <Storyboard FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetName="PreparePanel" Storyboard.TargetProperty="Opacity" To="1.0" Duration="0:0:0.1"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <BeginStoryboard x:Name="HidePreparePanelAnim">
+                            <Storyboard TargetName="PreparePanel" FillBehavior="Stop">
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.0" Duration="0:0:0.1"/>
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.Visibility)" >
+                                    <DiscreteObjectKeyFrame KeyTime="0:0:0.0" Value="{x:Static Visibility.Visible}"/>
+                                </ObjectAnimationUsingKeyFrames>
+                                <BooleanAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.IsEnabled)" >
+                                    <DiscreteBooleanKeyFrame KeyTime="0" Value="False"/>
+                                </BooleanAnimationUsingKeyFrames>
+                                <BooleanAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.Focusable)" >
+                                    <DiscreteBooleanKeyFrame KeyTime="0" Value="False"/>
+                                </BooleanAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+
+                <EventTrigger RoutedEvent="FrameworkElement.Unloaded">
+                    <StopStoryboard BeginStoryboardName="ShowPreparePanelAnim"/>
+                    <StopStoryboard BeginStoryboardName="HidePreparePanelAnim"/>
+                </EventTrigger>
+
+                <!-- Fullscreen stuff -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Layout}" Value="Common"/>
+                        <Condition Binding="{Binding Data.AspectRatio, Converter={StaticResource LessThanConverter}, ConverterParameter=0.75}" Value="True"/>
+                        <Condition Binding="{Binding SelectedItem.SpellBookType, ElementName=Navigation}" Value="Base"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="RaceIcon" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding SelectedItem.SpellBookType, ElementName=Navigation}" Value="Base"/>
+                        <Condition Binding="{Binding OpacityMask, ElementName=RaceIcon}" Value="{x:Null}"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="RaceIcon" Property="Visibility" Value="Collapsed"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Layout}" Value="Common"/>
+                        <Condition Binding="{Binding Data.AspectRatio, Converter={StaticResource LessThanConverter}, ConverterParameter=0.75}" Value="True"/>
+                        <Condition Binding="{Binding SelectedItem.SpellBookType, ElementName=Navigation}" Value="Tadpole"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="PageIcon" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Layout}" Value="Common"/>
+                        <Condition Binding="{Binding Data.AspectRatio, Converter={StaticResource LessThanConverter}, ConverterParameter=0.75}" Value="True"/>
+                        <Condition Binding="{Binding SelectedItem.Class, ElementName=Navigation, Converter={StaticResource NullToBoolTrueConverter}}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="PageIcon" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding SelectedItem.Class.MustPrepareSpells, ElementName=Navigation}" Value="True"/>
+                        <Condition Binding="{Binding FilteredItems.Count, ElementName=SpellLevelsGroupFilter, Converter={StaticResource GreaterThanConverter},ConverterParameter=0}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="PrepareSpellsHeader" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding SelectedItem.SpellBookType, ElementName=Navigation, Converter={StaticResource NullToBoolTrueConverter}}" Value="True">
+                    <Setter TargetName="ShowPreparedSpellsButton" Property="IsChecked" Value="False"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding SelectedItem.SpellBookType.MustPrepareSpells, ElementName=Navigation}" Value="False">
+                    <Setter TargetName="ShowPreparedSpellsButton" Property="IsChecked" Value="False"/>
+
+                </DataTrigger>
+
+                <!-- Full screen when bigger than 4:3 (AspectRatio < 0.75). -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Layout}" Value="Common"/>
+                        <Condition Binding="{Binding Data.AspectRatio, Converter={StaticResource LessThanConverter}, ConverterParameter=0.75}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="CharacterName" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="InfoPanel" Property="VerticalAlignment" Value="Top"/>
+                    <Setter TargetName="InfoPanel" Property="HorizontalAlignment" Value="Right"/>
+                    <Setter TargetName="InfoPanel" Property="Margin" Value="0,0,56,0"/>
+                    <Setter TargetName="InfoPanel" Property="Width" Value="800"/>
+                    <Setter TargetName="LeftColumn" Property="Width" Value="440"/>
+                    <Setter TargetName="PaperDollGrid" Property="Margin" Value="300,60,0,0"/>
+                    <Setter TargetName="PaperDoll" Property="Height" Value="2200"/>
+                    <Setter TargetName="CastInfoStackPanel" Property="Orientation" Value="Vertical"/>
+                    <Setter TargetName="PrepareSpellsInfo" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="BackgroundGradientSplitScreen" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="BackgroundGradient" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="CharacterNameSplitScreen" Property="Visibility" Value="Hidden"/>
+
+                    <Setter TargetName="Navigation" Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate>
+                                <ItemsPresenter/>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter TargetName="Navigation" Property="ItemTemplate">
+                        <Setter.Value>
+                            <DataTemplate>
+                                <TextBlock x:Name="Label" Text="{Binding Source='h2d773583g5f0dg4737g93d5g324f4bcfe2ac', Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource NavigationLabelTextStyle}" Margin="20,0" Foreground="{StaticResource LS_accent00TxtColor}"/>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True">
+                                        <Setter TargetName="Label" Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Focusable, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="False">
+                                        <Setter TargetName="Label" Property="Opacity" Value="0.65"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SpellBookType}" Value="Base">
+                                        <Setter TargetName="Label" Property="Text" Value="{Binding Source='haf48b625gb2f0g449egb3aegfddfa1be81c2', Converter={StaticResource TranslatedStringConverter}}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SpellBookType}" Value="Class">
+                                        <Setter TargetName="Label" Property="Text" Value="{Binding Class.ClassDisplayName}"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </Setter.Value>
+                    </Setter>
+
+                    <Setter TargetName="Navigation" Property="ItemContainerStyle">
+                        <Setter.Value>
+                            <Style TargetType="ListBoxItem" >
+                                <Setter Property="Padding" Value="40,22"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ControlTemplate.Resources>
+                                                <BitmapImage x:Key="Background" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNavSelectedBG.png"/>
+                                                <BitmapImage x:Key="Arrow" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNavSelectorArrow.png"/>
+                                                <BitmapImage x:Key="Selector" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNavSelectorbase.png"/>
+                                                <BitmapImage x:Key="Shadow" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNavSelectedSideShadow.png"/>
+                                                <BitmapImage x:Key="Divider" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNav_divider.png"/>
+                                            </ControlTemplate.Resources>
+                                            <Grid Height="164">
+                                                <Image x:Name="PageSelectedBg" VerticalAlignment="Center" HorizontalAlignment="Stretch" Source="{StaticResource Background}" Stretch="Fill" Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Converter={StaticResource BoolToVisibleConverter}}"/>
+
+                                                <ContentPresenter x:Name="PageName" VerticalAlignment="Center" Margin="24,0,24,0"/>
+
+                                                <Image x:Name="PageSelectedArrow" VerticalAlignment="Bottom" HorizontalAlignment="Center" Source="{StaticResource Arrow}" Stretch="Uniform" Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Converter={StaticResource BoolToVisibleConverter}}" Width="48" Margin="0,0,0,-12"/>
+
+                                                <Image x:Name="PageSelectedLine" VerticalAlignment="Bottom" Width="{Binding ActualWidth, ElementName=PageSelectedBg}" Height="60" Source="{StaticResource Selector}" Stretch="Fill" Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Converter={StaticResource BoolToVisibleConverter}}" Margin="0,0,0,-28"/>
+
+                                                <Image x:Name="PageSelectedShadowLeft" VerticalAlignment="Bottom" HorizontalAlignment="Left" Source="{StaticResource Shadow}" Stretch="None" Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Converter={StaticResource BoolToVisibleConverter}}"/>
+
+                                                <Image x:Name="PageSelectedShadowRight" VerticalAlignment="Bottom" HorizontalAlignment="Right" Source="{StaticResource Shadow}" Stretch="None" Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Converter={StaticResource BoolToVisibleConverter}}">
+                                                    <Image.RenderTransform>
+                                                        <ScaleTransform ScaleX="-1" CenterX="28"/>
+                                                    </Image.RenderTransform>
+                                                </Image>
+
+                                                <Image x:Name="PageSeparator" VerticalAlignment="Center" HorizontalAlignment="Left" Source="{StaticResource Divider}" Stretch="None"/>
+                                            </Grid>
+
+                                            <ControlTemplate.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding SpellBookType}" Value="Tadpole"/>
+                                                        <Condition Binding="{Binding UngroupedSpellsAndActions.Count}" Value="0"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Setter Property="Width" Value="0"/>
+                                                </MultiDataTrigger>
+                                                <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                    <Setter TargetName="PageSeparator" Property="Visibility" Value="Collapsed"/>
+                                                </Trigger>
+
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Setter.Value>
+                    </Setter>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding Layout}" Value="Right">
+                    <Setter TargetName="LeftColumn" Property="Width" Value="80"/>
+                    <Setter TargetName="ButtonHints" Property="Style" Value="{StaticResource ButtonHint.Container.Left}"/>
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+    <b:Interaction.Triggers>
+        <b:EventTrigger EventName="MoveFocusUp">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="MoveFocusDown">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="MoveFocusLeft">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="MoveFocusRight">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+    </b:Interaction.Triggers>
+</ls:UIWidget>

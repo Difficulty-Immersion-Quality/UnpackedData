@@ -1,0 +1,68 @@
+game.states.PLA_Tollhouse_Refugee_005_Idle = State{function()
+
+    modules = { "gustav.Act1.TollhouseRefugee" }
+
+    local DeadRefugee
+    local OutOfCorpseBounds = Flag("PLA_KarlachRecruitmentTollhouse_State_CorpseLeftBounds_4741a054-8532-42f1-bff4-a25b746e8714")
+    local OutOfBucketBounds = Flag("PLA_KarlachRecruitmentTollhouse_State_BucketOutOfBounds_2ef1c013-9069-4dba-b201-21c72b2bb8d1")
+    local mourning 
+    local inspect 
+    local scoop 
+    local Bucket
+
+    self.OnInit = function()
+        Bucket = FindEntity("S_PLA_WaterBucket_2e142774-8664-4fe2-9954-b74a78770038")
+        DeadRefugee = FindEntity("S_PLA_Refugee_006_eecfdb49-f726-4d23-9081-dca9b2481e7a")
+        inspect = Animation("CUST_DebugAsset_CustomAnim_01_Loop_50635108-0b10-4232-820a-aac14df09a75")
+        scoop = Animation("CUST_DebugAsset_CustomAnim_01_Loop_50635108-0b10-4232-820a-aac14df09a75")
+        mourning = Animation("CUST_DebugAsset_CustomAnim_01_Loop_50635108-0b10-4232-820a-aac14df09a75")
+
+    end
+
+    nodes.Selector = Selector{
+        function(nodes)
+            return GetWeightedCanEnter(nodes, {[nodes.DealWithBody] = 6,
+                                               [nodes.MournOverRefugee] = 1,
+                                               [nodes.RefreshWater] = 3}
+                                      )
+        end,
+        CanEnter = function()
+            return not GetFlag(OutOfCorpseBounds)
+        end
+    }
+
+    
+    nodes.Selector.MournOverRefugee = Action{
+        function()
+            mod.TollhouseRefugee.RefugeeAct(mourning, DeadRefugee, DeadRefugee)
+        end
+    }
+
+    nodes.Selector.DealWithBody = Action{
+        function()
+            mod.TollhouseRefugee.RefugeeAct(inspect, DeadRefugee, DeadRefugee)
+        end
+    }
+
+    nodes.Selector.RefreshWater = Action{
+        function()
+            mod.TollhouseRefugee.RefugeeAct(scoop, DeadRefugee, DeadRefugee)
+        end,
+        CanEnter = function()
+            return not GetFlag(OutOfBucketBounds)
+        end
+    }
+
+end
+}
+
+game.states.PLA_Tollhouse_Refugee_005_Fallback = State{function()
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+end
+}

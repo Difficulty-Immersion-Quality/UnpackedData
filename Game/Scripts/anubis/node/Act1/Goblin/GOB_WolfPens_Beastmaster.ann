@@ -1,0 +1,272 @@
+game.states.GOB_WolfPens_Beastmaster = State{function()
+
+    modules = { "shared.util", "shared.items", "gustav.Act1.Goblins" }
+
+    -- Behaviour params
+    params.otherBeastmaster = {  type = EParamType.String, help = "Other beastmaster" }
+    params.feedingAD = {  type = EParamType.String, help = "Feeding AD" }
+    params.talkingAD = {  type = EParamType.String, help = "Talking AD" }
+    params.defaultPosition = {  type = EParamType.String, help = "Default position" }
+    params.defaultFeeder = {  type = EParamType.Bool, default = false, help = "Start feeding" }
+
+    -- Prisoner checking (TODO: separate state for both the bestamasters and reinforcement)
+    params.PrisonerAD = {  type = EParamType.String, help = "Comment on Prisoner AD" }
+    params.minDistanceToPrisoner = {  type = EParamType.Number, default = 1.0, help = "Min range when approaching the prisoner's body" }
+    params.maxDistanceToPrisoner = {  type = EParamType.Number, default = 3.0, help = "Max range when approaching the prisoner's body" }
+
+    -- Local params
+    local canDoAD = true
+
+    local animStretching = Animation("CUST_Stretching_01_9af703b0-c02f-4c17-bfee-7e11f1f80d6b")
+
+    local meatTemplate, spawnedMeat
+    local otherBeastmaster = Entity(params.otherBeastmaster)
+    local feedingAD = Dialog(params.feedingAD)
+    local talkingAD = Dialog(params.talkingAD)
+    local defaultPosition = Entity(params.defaultPosition)
+    local feedingPosition = Entity("S_GOB_WolfPens_FeedingPosition_89d91f80-15de-48d9-91a9-8e917f85831b")
+    local meatTrigger = Entity("S_GOB_WolfPens_MeatTrigger_68574197-7b53-4777-afb5-4edc8d757c9e")
+    local cageTrigger = Entity("S_GOB_WolfPens_Cage_001_9aea6349-9a8f-453d-ad86-fee65a820bdf")
+    local worg001 = Entity("S_GOB_WolfPens_Worg_001_47ed5f19-5289-485a-a031-95f7f32ce5c8")
+    local worg002 = Entity("S_GOB_WolfPens_Worg_002_f3dbcf5d-c3f5-46bc-8401-782f731a3de8")
+    local forceReturnToPosition = false
+
+    local canFeedWorgs = params.defaultFeeder
+    local feeder = params.defaultFeeder
+    local currentWorgToFeed
+    local feedingAnimation = Animation("CMBT_Skill_Throw_Far_01_Prepare_b1befe57-ee3e-4126-8c9d-3b6cec7eb3f4")
+    local beastmaster001 = Entity("S_GOB_WolfPens_Beastmaster_001_20383707-2661-4d72-bcba-3aa4b2cbb35b")
+    local fl_MeatStolen = Flag("GOB_WolfPens_State_MeatStolen_f36cdfde-171b-4010-bc92-8f9a0d6ae361")
+
+    local worgsDead = 0
+
+    --TODO: remove after there is an SpawnItem
+    local meat = Entity("S_GOB_WolfPens_MeatPlaceholder_0c8ee3ad-4f89-49df-9ae6-1309482072ee")
+    local tr_meatSpawnPosition = Entity("S_GOB_WolfPens_MeatSpawnPosition_a60311ea-9842-4282-a0a3-8bb0d4851fab")
+    ------------------------------------------
+
+    -- Using placeholder animation for now
+    local chopAnimation002 = Animation("CUST_Chopping_Meat_01_Loop_93a76e06-9ebe-4b63-8957-a4ec89da07b3")
+
+    -- After killing the Prisoner
+    local PrisonersBody = Entity("S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323")
+    local commentOnPrisonersBody = false
+    local PrisonerAD = Dialog(params.PrisonerAD)
+    local minDistanceToPrisoner = params.minDistanceToPrisoner
+    local maxDistanceToPrisoner = params.maxDistanceToPrisoner
+
+    -- Local functions
+    helpers.ChangeWorgToFeed = function()
+        if currentWorgToFeed == worg001 and not worg002.Character.IsDead then
+            currentWorgToFeed = worg002
+        elseif not worg001.Character.IsDead then
+            currentWorgToFeed = worg001
+        else
+            canFeedWorgs = false -- If worgs are dead, can't feed them
+        end
+    end
+
+    -- State nodes
+    self.OnInit = function()
+        meatTemplate = FindTemplate("QUEST_GOB_SuspiciousMeat_f57ad063-af4c-411c-9c91-9ca02cd57dd4")
+        currentWorgToFeed = worg001
+    end
+
+    nodes.Action_CommentOnPrisonersBody = Action{
+        function()
+            try
+                mod.util.SleepRandom(1.0, 2.0)
+                MoveInRange(PrisonersBody, minDistanceToPrisoner, maxDistanceToPrisoner, MovementSpeed.Walk)
+                LookAtEntity(PrisonersBody, 3.0)
+                mod.util.SleepRandom(0.5, 2.5)
+                StartAutomatedDialog(PrisonerAD, true, me)
+                mod.util.SleepRandom(0.5, 2.0)
+                commentOnPrisonersBody = false
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                Sleep(1.0)
+                commentOnPrisonersBody = false
+            end
+        end,
+        CanEnter = function()
+            return commentOnPrisonersBody
+        end
+    }
+
+    -- Nodes
+    -- Return to position if worgs are dead and was feeding them
+    nodes.Action_ForceReturnToPosition = Action{
+        function()
+            MoveTo(defaultPosition)
+            LookFrom(defaultPosition)
+            forceReturnToPosition = false
+        end,
+        CanEnter = function()
+            return forceReturnToPosition and not commentOnPrisonersBody
+        end,
+        Valid = function()
+            return not commentOnPrisonersBody
+        end
+    }
+
+    -- Feed the hungry worgs
+    nodes.Action_FeedWorgs = Action{
+        function()
+            MoveTo(feedingPosition)
+
+            --[[ Till we have SpawnItem(ITEMTEMPLATE:rootTemplate,GAMEOBJECT|FLOAT3:position, OUT ITEM:result)
+                 in Anubis, move an off stage piece of meat.]]
+            TeleportTo(meat, tr_meatSpawnPosition)
+            SetOnStage(meat, true)
+            --------------------------------------------------------------------------------------------------
+            PlayAnimation(feedingAnimation)
+            local randPos = TriggerGetRandomPosition(meatTrigger.Trigger)
+            MoveItem(meat, randPos, -1, true, true, true)
+
+            if currentWorgToFeed.Character.IsDead or not IsInTrigger(currentWorgToFeed, cageTrigger.Trigger) then
+                helpers.ChangeWorgToFeed()
+            end
+            SetEntityEvent(currentWorgToFeed, "GOB_WolfPens_Event_GotFood")
+
+            if  (me == beastmaster001 and
+                currentWorgToFeed == worg001) or
+                not me == beastmaster001 then
+                    StartAutomatedDialog(feedingAD, true, me)
+            end
+
+            MoveTo(defaultPosition)
+            LookFrom(defaultPosition)
+
+            if not otherBeastmaster.Character.IsDead then
+                helpers.ChangeWorgToFeed()
+                SetEntityEvent(otherBeastmaster, "GOB_WolfPens_IsNowFeeder")
+                StartTimer(otherBeastmaster, "GOB_WolfPens_Timer_StartFeeding", 32.0, 0)
+            else
+                SetEntityEvent(me, "GOB_WolfPens_IsNowFeeder")
+                StartTimer(me, "GOB_WolfPens_Timer_StartFeeding", 32.0, 0)
+            end
+            canFeedWorgs = false
+            feeder = false
+        end,
+        CanEnter = function()
+            return canFeedWorgs
+        end,
+        Valid = function()
+            -- If during this action both worgs are dead, force him go back to his position
+            return worgsDead < 2  and not commentOnPrisonersBody and (IsInTrigger(worg001, cageTrigger.Trigger) and IsInTrigger(worg002, cageTrigger.Trigger)) and not GetFlag(fl_MeatStolen)
+        end
+    }
+
+    -- Default selector
+    nodes.Selector_Default = Selector{
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return not commentOnPrisonersBody
+        end
+    }
+
+    nodes.Selector_Default.Action_Talk = Action{
+        function()
+            MoveTo(defaultPosition)
+            LookFrom(defaultPosition)
+            if canDoAD and not IsInDialog(me, false) then
+                StartTimer(me, "PreventADFromPlaying", 18.0, 0)
+                StartAutomatedDialog(talkingAD, true, me)
+                canDoAD = false
+            end
+        end,
+        CanEnter = function()
+            return canDoAD
+        end,
+        Valid = function()
+            return not commentOnPrisonersBody
+        end
+    }
+
+    -- Chop meat
+    nodes.Selector_Default.Action_Chop = Action{
+        function()
+            MoveTo(defaultPosition)
+            LookFrom(defaultPosition)
+            try
+                SetWeaponUnsheathed(me, true, true)
+                Sleep(1.0)
+                PlayAnimation(chopAnimation002, true)
+                Sleep(1.0)
+                SetWeaponUnsheathed(me, false, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+            end
+            mod.util.SleepRandom(3.0, 5.0)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return not commentOnPrisonersBody
+        end
+    }
+
+    -- Do nothing
+    nodes.Selector_Default.Action_Stretch = Action{
+        function()
+            PlayAnimation(animStretching, true)
+            mod.util.SleepRandom(3.0, 5.0)
+        end,
+        Valid = function()
+            return not commentOnPrisonersBody
+        end
+    }
+
+    -- Do nothing
+    nodes.Selector_Default.Action_DoNothing = Action{
+        function()
+            mod.util.SleepRandom(3.0, 5.0)
+        end,
+        Valid = function()
+            return not commentOnPrisonersBody
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            Sleep(1.0)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "GOB_WolfPens_IsNowFeeder" then
+                feeder = true
+            elseif e.Event == "GOB_WolfPens_CommentOnPrisonersBody" then
+                commentOnPrisonersBody = true
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "GOB_WolfPens_Timer_StartFeeding" then
+            canFeedWorgs = true
+            helpers.ChangeWorgToFeed()
+        elseif e.TimerName == "PreventADFromPlaying" then
+            canDoAD = true
+        end
+    end
+
+    events.Dying = function(e)
+        if e.Target == otherBeastmaster and not feeder then
+            StartTimer(me, "GOB_WolfPens_Timer_StartFeeding", 32.0, 0)
+        end
+
+        if e.Target == worg001 or e.Target == worg002  then
+            worgsDead = worgsDead + 1
+            if worgsDead >= 2 and feeder then
+                forceReturnToPosition = true
+                canFeedWorgs = false
+                feeder = false
+            end
+        end
+    end
+
+end
+}

@@ -1,0 +1,71 @@
+game.states.UND_SocietyOfBrilliance_Combat = State { function ()
+    description = [[
+        Custom combat behaviour for the SoB members.
+        hey are just trying to teleport themself out of the danger.
+    ]]
+
+    modules = { "shared.math", "shared.dialog" }
+
+    params.sobADOnTeleport = { type = EParamType.String, required = false, help = [[
+        one-shot AD that played before teleporting
+    ]]}
+
+    params.otherMember = { type = EParamType.String, required = true, help = [[
+        Other SoB member to play AD with
+    ]]}
+
+    local triedToTeleport = false
+    local sobADOnTeleport = nil
+    local retreatedFlag = Flag("UND_SocietyOfBrilliance_State_Retreated_19eb5da8-b26b-470d-bc12-4e7df3ba2b77")
+    local otherMember = Entity(params.otherMember)
+
+    self.OnInit = function()
+        if params.sobADOnTeleport ~= nil then
+            sobADOnTeleport = Dialog(params.sobADOnTeleport)
+        end
+    end
+
+    self.Valid = function()
+        return not me.IsCombatPaused
+    end
+
+    self.OnEnter = function()
+        DebugText(me, "OnEnter")
+    end
+
+    nodes = Selector{
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Teleport = Action {
+        function()
+            try
+                if sobADOnTeleport ~= nil and not me.Character.IsDead then
+                    StartAutomatedDialog(sobADOnTeleport, true, me)
+                end
+                Sleep(1)
+                DebugText(me, "Casting Teleport")
+                UseSpell("Shout_UND_SocietyOfBrilliance_Teleportation", me, nil, nil, nil, true, true, true, false)
+            catch e if ls.CheckType(e, error.UseSpellFailed) then
+                DebugText(me, "UseSpellFailed")
+                Sleep(2)
+                EndTurn(me)
+            end
+            triedToTeleport = true
+        end,
+        CanEnter = function()
+            return me.CanActInCombatTeamTurn and
+                not HasAppliedStatus(me, "INCAPACITATED_DND") and
+                not triedToTeleport and
+                (otherMember.Character.IsDead or GetFlag(retreatedFlag) or me.HitpointsPercentage < 50.0)
+        end
+    }
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me then
+            triedToTeleport = false
+        end
+    end
+end}

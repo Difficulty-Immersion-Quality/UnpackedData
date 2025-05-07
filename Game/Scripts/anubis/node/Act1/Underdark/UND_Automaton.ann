@@ -1,0 +1,73 @@
+game.states.UND_Automaton = State{function()
+    description = [[State for an Automaton found in Cleric Tower in the Underdark]]
+
+    local s_Drain = "UND_SUSSURTREEANTIMAGIC"
+    local fl_Berserk = Flag("UND_Automaton_State_Berserk_d872f9ad-ac0b-99b5-48b4-0f80c562ee92")
+    local fl_Deactivated = Flag("UND_Automaton_State_Deactivated_4967548f-8f43-4020-be0f-d127209a7502")
+    local fl_Guarding = Flag("UND_Automaton_State_Guarding_00e17d6b-7147-809f-c251-0398d2c70ac4")
+    local fl_Serving = Flag("UND_Automaton_State_Serving_7a876651-c549-9b90-6a8a-37b25380beea")
+    local spl_Patrol = Spline("S_UND_AutomatonPatrol_2923772d-27b1-4b57-8249-e63f93de29a3")
+    local tr_StandPos = nil
+
+    self.OnInit = function()
+        tr_StandPos = FindEntity("S_UND_Automaton_DefPos_b4041102-648e-4dcc-8195-5ad161db5b8d")
+    end
+
+    nodes.Berserk = Action{
+        Valid = function()
+            return GetFlag(fl_Berserk, me)
+        end,
+
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    nodes.Deactivated = Action{
+        Valid = function()
+            return GetFlag(fl_Deactivated, me)
+        end,
+
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    nodes.Guarding = Selector{
+        Valid = function()
+            return GetFlag(fl_Guarding, me)
+        end
+    }
+
+    nodes.Serving = Selector{
+        Valid = function()
+            return GetFlag(fl_Serving, me)
+        end
+    }
+
+    nodes.Guarding.Patrol = Action{
+        function()
+            DoPatrol(spl_Patrol, false, MovementSpeed.Stroll)
+        end
+    }
+
+    nodes.Serving.StandStill = Action{
+        function()
+            try
+                MoveTo(tr_StandPos, MovementSpeed.Stroll)
+                LookFrom(tr_StandPos)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_StandPos)")
+                SteerTo(tr_StandPos)
+                Sleep(3.0)
+            end
+            Sleep(2.0)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(2.0)
+        end
+    }
+end}

@@ -1,0 +1,78 @@
+
+game.states.GOB_Rats = State{function()
+
+
+---------------------------------------
+-- local variables 
+
+local captive = Entity("S_GOB_TortureredAdventurer_0dd6e9f1-d32d-41f1-b230-d540558e0847")
+local tortureRack = Entity("S_GOB_HappyTorturers_TortureRack_dae2b64c-f4c3-4e44-bc57-1a17ad17d3a6")
+local wanderTrigger = Entity("S_GOB_Torturers_MiceWanderTrigger_ee4af071-c32c-40ea-9658-6fb17021265a")
+local wanderDialog = Dialog("6d4cfb7f-7602-5998-b283-7af211b79cc8")
+local attackAnim = Animation("CMBT_Melee_RHand_01_Attack_f4ac302b-1569-404f-bd52-1fe443e265df")
+local useAnim = Animation("UTIL_Use_Activate_01_f891c618-1706-44e0-88ee-b08c4f0e191d")
+local movedOut = Flag("GOB_Torturers_State_MovedOut_a20ec730-dfec-56a7-6cc3-71ff51e16502")
+local spikeDead = Flag("GOB_Torturers_State_SpikeIsDead_a9f8e52f-fa21-1731-ec55-81b3b64c79e1")
+
+---------------------------------------
+-- nodes
+
+nodes.Rats_Torture_Selector = Selector{
+	function(nodes)
+		return FindRandomSelectable(nodes)
+	end,
+	Valid = function()
+		return not GetFlag(movedOut,me)
+	end
+}
+
+
+nodes.Rats_Torture_Selector.Bite = Action{
+	function()
+		MoveTo(tortureRack)
+		LookAtEntity(captive, 3.0)
+		DebugText(me,"attack anim")
+		--PlayAnimation(attackAnim,true,false,1)
+		Sleep(6.0)
+		DebugText(me,"use anim")
+		--PlayAnimation(useAnim,true,false,1)
+		Sleep(3.0)
+	end,
+	CanEnter = function()
+		return not GetFlag(spikeDead)
+	end
+}
+
+nodes.Rats_Torture_Selector.Wander = Action{
+	function()
+		Wander(3,6,MovementSpeed.Stroll,nil,false)
+	end
+}
+
+nodes.Rats_MoveOut = Action{
+	function()
+		MoveTo(wanderTrigger,MovementSpeed.Walk)
+	end,
+	Valid = function()
+		return GetFlag(movedOut,me) and GetDistanceTo(me,wanderTrigger)>4
+	end
+}
+
+nodes.Rats_WanderOut = Action{
+	function()
+		Wander(3,6,MovementSpeed.Stroll,wanderTrigger,false)
+	end,
+	Valid = function()
+		return GetFlag(movedOut,me) and GetDistanceTo(me,wanderTrigger)<4
+	end
+
+}
+
+nodes.fallback = Action{
+	function()
+		WaitForInterrupt()
+	end
+}
+
+
+end}

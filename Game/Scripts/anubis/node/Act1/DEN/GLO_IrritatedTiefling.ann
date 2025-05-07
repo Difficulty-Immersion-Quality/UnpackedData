@@ -1,0 +1,225 @@
+game.states.GLO_IrritatedTiefling = State { function ()
+
+    description = [[The tiefling is practicing his sword technique on a dummy and irritated that he's not landing his hits.
+                    If the kids are also training, he may observe them and the trainer]]
+
+    modules = {"shared.moveto"}
+
+    params.AD = { type = EParamType.String, required = true,
+        help=[[AD to use. The behaviour can be used in different states of the Grove with different AD.]]
+    }
+    params.canLook = { type = EParamType.Bool, required = false, default = true,
+        help=[[Determines whether Guex should even try looking at the trainees nearby. Set false after Duid Attack.]]
+    }
+
+    local AD = Dialog(params.AD)
+    local canAD = true
+    local doLookAt = false
+    local canLook = params.canLook
+    local trainingDummy = Entity("S_DEN_TrainingDummy_b7df8fbc-cded-4df1-b5ba-5d70d4e5d44e")
+
+    nodes.LookAtTrainees = Proxy {
+        CanEnter = function()
+            return canLook and doLookAt
+        end,
+        OnEnter = function()
+            doLookAt = false
+        end,
+        game.states.DEN_IrritatedTiefling_LookAtTrainees,
+    }
+
+    nodes.Training = Action {
+        CanEnter = function()
+            return not IsInDangerousSurfaceFor(trainingDummy, me.Character)
+        end,
+        OnEnter = function()
+            if canLook then
+                doLookAt = true
+            end
+        end,
+        function()
+            local i = 1
+            SetWeaponUnsheathed(me,true,false)
+            Sleep(0.5)
+            if mod.moveto.MoveToPoint(trainingDummy,MovementSpeed.Stroll,me) then
+                while (i < 8) or IsInDialog(me, false) do
+                    Sleep(1.0)
+                    if canAD and not IsInDialog(me, false) then
+                        StartAutomatedDialog(AD, false, me)
+                        canAD = false
+                    end
+                    Attack(trainingDummy,false,false)
+                    Sleep(1.5)
+                    i = i + 1
+                end
+            end
+        end
+    }
+
+    nodes.FallbackSleep = Action {
+        function()
+            Sleep(3.0)
+        end
+    }
+
+    events.DialogEnded = function(e)
+        local uuid = e.Instance.DialogUUID
+        if (uuid == AD.Guid)then
+            StopTimer(me, "GLO_IrritatedTiefling_ADTimer")
+            StartTimer(me, "GLO_IrritatedTiefling_ADTimer", 45.0, 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "GLO_IrritatedTiefling_ADTimer" then
+            canAD = true
+        end
+    end
+end}
+
+game.states.DEN_IrritatedTiefling_LookAtTrainees = State {function ()
+
+    local trainingLookAt = Entity("S_DEN_IrritatedLookAt_a702ab92-5339-4ec8-8a81-6c87a48fa7e1")
+    local lookAtAnim = Animation("02802050-bfcd-49e6-b052-f8039f99fe27") --CUST_Observing_01
+    local trainingFlag = Flag("DEN_Trainer_State_InTraining_d31cc229-45d9-4987-8e73-506456a62690")
+    local scaredFlag = Flag("DEN_Trainer_State_TraineesAreScared_b50848b6-8bbe-907c-b65a-c7f03bd797ad")
+
+    self.CanEnter = function()
+        return GetFlag(trainingFlag) and not GetFlag(scaredFlag)
+    end
+    -- Look towards the training area
+    nodes.LookAtTrainees = Action {
+        function()
+            Sleep(3.0) --gives time to the animation post-attack to stop
+            SetWeaponUnsheathed(me,false)
+            Sleep(1.5)
+            SteerTo(trainingLookAt)
+            PlayAnimation(lookAtAnim)
+            Sleep(1.0)
+        end,
+    }
+end}
+
+
+game.states.DEN_AttackOnDen_IrritatedTiefling = State {function ()
+    description = [[Filling oil barrels with Pandirna, or in safe area when attack started.]]
+
+    local signalSentFlag = Flag("DEN_AttackOnDen_Event_HornBlown_92dd6f14-e011-4c21-9738-5d49c720a24e")
+    local AD = Dialog([[DEN_AttackOnDen_AD_FillingOilBarrel_fd49d10a-a7f7-c03f-c1c6-0035628f3476]])
+    local tiefling = Entity([[S_DEN_Tiefling_005_e5319db6-ea86-43cc-9fd0-5ec1e0eab492]])
+    local canAD = true
+
+    nodes.AtSafeArea = Selector{
+        Valid = function()
+            return GetFlag(signalSentFlag)
+        end
+    }
+    nodes.AtSafeArea.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_SafeIrritatedPos_c3c4afb5-bda2-4cd7-831b-25085c0ac728]]
+        }
+    }
+
+    nodes.AtGate = Selector{
+        Valid = function()
+            return not GetFlag(signalSentFlag)
+        end
+    }
+
+    nodes.AtGate.AD = Action{
+        CanEnter = function()
+            return canAD
+        end,
+        
+        OnEnter = function()
+            canAD = false
+        end,
+        
+        function()
+            Sleep(4)
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = false,
+                },
+                me,
+                tiefling
+            )
+        end,
+            OnLeave = function()
+            StartTimer(me, "DEN_AttackOnDen_IrritatedTiefling_ADTimer", math.random(40, 70), 0)
+        end
+    }
+    nodes.AtGate.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_OilPos_001_e4288a7b-6cb2-419b-8e96-9046a754c2ea]]
+        }
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_AttackOnDen_IrritatedTiefling_ADTimer") then
+            canAD = true
+        end
+    end
+
+end}
+
+game.states.GLO_IrritatedTiefling_PostAttackOnDen = State { function ()
+
+    description = [[The tiefling is helping others pick out weapons before they leave the Grove.]]
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    local AD = Dialog("DEN_AttackOnDen_AD_GettingArmed_1c8c3360-0c78-a4c5-ffe1-afef565522e9")
+    local standPoint1 = Entity("S_DEN_VictoryIrritatedPos1_c56f147a-6e91-43c7-868e-300e7b95c1a9")
+    local standPoint2 = Entity("S_DEN_VictoryIrritatedPos2_2b119807-08ab-42aa-a3db-341898584408")
+    -----------------------------------------
+    -- Params
+    params.Custom = {type=EParamType.State, required=false, default=nil, help=[[State for Custom Behavior]]}
+
+    -----------------------------------------
+    -- state section
+
+    nodes.Default = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.doAD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 20.0,
+                },
+                me
+            )
+        end
+    }
+
+    nodes.Default.WeaponShow1 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint1,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint1)
+                Sleep(math.random(12,18))
+            end
+        end
+    }
+
+    nodes.Default.WeaponShow2 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint2,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint2)
+                Sleep(math.random(12,18))
+            end
+        end
+    }
+
+
+end}

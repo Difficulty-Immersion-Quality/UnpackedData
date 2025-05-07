@@ -1,0 +1,47 @@
+game.states.WYR_Axe_Guard_01 = State{function()
+    description = [[Danthelon's Axe guard. Walks along spline with stops]]
+
+    modules = { "shared.math" }
+
+    local spline = Spline("S_WYR_Axe_GuardPatrol_000_b9ace99e-ae0c-44f5-970c-08209e2b0b01")
+    local chilling = false
+    local reverse = false
+
+
+    nodes.Chill = Action{
+        CanEnter = function()
+            return chilling
+        end,
+
+        function()
+            LookFrom(spline)
+            Sleep(1.0)
+        end
+    }
+
+    nodes.DoPatrol = Action{
+        function()
+            DoPatrol(spline, reverse, MovementSpeed.Stroll, -1, false)
+        end
+    }
+
+    events.SplineControlPointReached = function(ev)
+        if ev.EndReached then
+            chilling = true
+            reverse = not reverse
+            StartTimer(me, "Timer_WYR_Axe_Guard_StopChilling", mod.math.random(10.0, 20.0), 0)
+        elseif ev.Event == "WaitMaybeReverse" then
+            chilling = true
+            if mod.math.CoinToss(0.3) then
+                reverse = not reverse
+            end
+            StartTimer(me, "Timer_WYR_Axe_Guard_StopChilling", mod.math.random(10.0, 20.0), 0)
+        end
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_Axe_Guard_StopChilling" then
+            chilling = false
+        end
+    end
+end}

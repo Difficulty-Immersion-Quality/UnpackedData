@@ -1,0 +1,154 @@
+game.states.SCE_Gnomes = State{
+    function()
+        
+        params.standAtTrigger  = {type = EParamType.String, required=true, help=[[Trigger to stand at.]]}
+        params.patrolSpline  = {type = EParamType.String, required=false, default = "", help=[[Optional patrol spline.]]}
+        params.sleepTimeMin  = {type = EParamType.Number, default = 16, help=[[Minimum sleep time at patrol point named "Sleep"]]}
+        params.sleepTimeMax  = {type = EParamType.Number, default = 28, help=[[Maximum sleep time at patrol point named "Sleep"]]}
+
+        local inEpilogue = Flag("SCE_State_AtEpilogue_3541abb5-6aaf-48c7-bf30-5a13b3abc718")
+        local patrolSpline = nil
+        local doSleep = false
+        local studyShelf = false
+        local randomAnims = {
+            Animation([[CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba]]),
+            Animation([[CUST_Thinking_02_43a70168-2f92-42e5-bfc2-845adf4013f6]]),
+            Animation([[CUST_Thinking_03_9407dc5c-7155-40a6-a2ef-43ec37b0eda0]])
+        }
+
+        --Wulbren
+        local wulbren = Entity([[S_GLO_Wulbren_2d70edbf-1a70-4047-8099-48f3e75d93bf]])
+        local randomAnimsWulbren = {
+            Animation([[CUST_Thinking_02_43a70168-2f92-42e5-bfc2-845adf4013f6]]),
+            Animation([[CUST_Thinking_03_9407dc5c-7155-40a6-a2ef-43ec37b0eda0]])
+        }
+        local studyShelves = false
+        local studyShelvesAnim = Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+
+        self.OnInit = function()
+            if params.patrolSpline ~= nil and params.patrolSpline ~= "" then
+                patrolSpline = Spline(params.patrolSpline)
+            end
+        end
+    
+        self.Valid = function()
+            return GetFlag(inEpilogue, me)
+        end
+
+        nodes.PatrolSleep = Action{
+            function()
+                if studyShelf then
+                    Sleep(2.0)
+                    PlayAnimation(studyShelvesAnim,true,false)
+                    Sleep(2.0)
+                    studyShelf = false
+                elseif (math.random()<0.8) then
+                    if wulbren == me then
+                        local randomAnim = randomAnimsWulbren[math.random(#randomAnimsWulbren)]
+                        PlayAnimation(randomAnim,false,false)
+                    else
+                        local randomAnim = randomAnims[math.random(#randomAnims)]
+                        PlayAnimation(randomAnim,false,false)
+                    end
+                end
+
+                doSleep = false
+                Sleep(math.random(params.sleepTimeMin,params.sleepTimeMax))
+            end,
+            CanEnter = function()
+                return doSleep
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.Patrol = Proxy{
+            game.states.GEN_Patrol,
+            params = {
+                patrolSpline = params.patrolSpline,
+                patrolSpeed = "Stroll"
+            },
+            CanEnter = function()
+                return params.patrolSpline ~= nil and params.patrolSpline ~= ""
+            end
+        }
+    
+        nodes.StandAtTrigger = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = params.standAtTrigger
+            }
+        }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Sleep" then
+            doSleep = true
+        elseif e.Event == "StudyShelf" then
+            DebugText(me,"StudyShelf")
+            studyShelf = true
+            doSleep = true
+        end
+    end
+
+    end
+    }
+
+game.states.SCE_Gnomes_Wulbren = State{
+    function()
+        modules = {"shared.items"}
+
+        local inEpilogue = Flag("SCE_State_AtEpilogue_3541abb5-6aaf-48c7-bf30-5a13b3abc718")
+        local lookingAtStoneWork = Flag("SCE_GnomeFollowUp_Wulbren_State_AtStoneWork_b728e652-c3f2-44b4-bd50-a86ed0f9d8cb")
+
+        params.LookingAtStoneWork = { type = EParamType.State,required = true, help = [[State to be active when looking at the Moonrise stonework.]]}
+        params.IdleState = { type = EParamType.State,required = true, help = [[State to be active when not looking at the Moonrise stonework.]]}
+    
+        local doAnim = false
+        local randomAnims = {
+            Animation([[CUST_Thinking_02_43a70168-2f92-42e5-bfc2-845adf4013f6]]),
+            Animation([[CUST_Thinking_03_9407dc5c-7155-40a6-a2ef-43ec37b0eda0]])
+        }
+    
+        nodes.LookingAtStoneWork_DoAnim = Action {
+            function()
+                local randomAnim = randomAnims[math.random(#randomAnims)]
+                PlayAnimation(randomAnim,true,false)
+                Sleep(1.0)
+                doAnim = false
+            end,
+            CanEnter = function()
+                return doAnim
+            end
+        }
+
+        nodes.LookingAtStoneWork = Proxy {
+            params.LookingAtStoneWork,
+            CanEnter = function()
+                return GetFlag(lookingAtStoneWork)
+            end,
+            OnEnter = function()
+                StartTimer(me,"SCE_Wulbren_DoAnim",math.random(6,12),0)
+            end,
+            OnLeave = function()
+                StopTimer(me,"SCE_Wulbren_DoAnim")
+            end
+        }
+
+        nodes.IdleState = Proxy {
+            params.IdleState
+        }
+
+        self.Valid = function()
+            return GetFlag(inEpilogue, me)
+        end
+
+        events.TimerFinished = function(e)
+            if(e.TimerName == "SCE_Wulbren_DoAnim") then 
+                doAnim = true
+            end
+        end
+    end
+}

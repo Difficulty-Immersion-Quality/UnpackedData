@@ -1,0 +1,589 @@
+game.states.DEN_DruidAttack_GeneralDruid = State {function ()
+
+    modules = {"shared.items","shared.moveto"}
+
+    params.moveTarget = {type = EParamType.String, required = false, default = nil,
+    help=[[MoveTo Before Attack (specific)]]}
+    params.areaMoveTarget = {type = EParamType.String, required = false, default = nil,
+    help=[[MoveTo Before Attack (if specific is blocked)]]}
+    params.prisonMusterArea = {type = EParamType.String, required = false, default = "S_DEN_DruidAttack_PrisonTargetArea_c8fb3e69-92f1-429f-aefa-4371a58f4357",
+    help=[[Prison Move Target]]}
+    params.attackAD = {type=EParamType.String, required=false, default=nil,
+    help=[[Default AD]]}
+    params.startMovingAD = {type = EParamType.Bool, required = false, default = false,
+    help=[[]]}
+    params.spline = {type = EParamType.String, required = false, default = nil,
+    help=[[]]}
+    params.attackPrisonDoor = {type = EParamType.Bool, required = false, default = true,
+    help=[[]]}
+    params.prisonLookAt = {type = EParamType.String, required = false, default = "S_DEN_DruidAttack_PrisonCowerArea_4597f504-b855-462c-80f9-33a606b76138",
+    help=[[Prison Move Target]]}
+    params.victoryState = {type=EParamType.State, required=false, default=nil, help=[[State to do between Druid Attack and Lockdown.]]}
+
+    local moveTarget
+    local areaMoveTarget
+    local r_MoveTarget
+    local attackAD
+    local startMovingAD = params.startMovingAD
+    local spline
+    
+    local prisonMusterArea
+    local r_PrisonMusterArea
+    local prisonDefendArea = Entity("S_DEN_DruidAttack_PrisonDefendArea_61c737ce-3ef6-47ce-b7ef-91d289d348f3")
+    local r_PrisonDefendArea
+    local prisonLookAt
+
+    local lairDoor = Entity("S_DEN_LairMainInDoor_026d20eb-779c-4e49-a6f6-70b2dfe8678b")
+    local lairArea = Entity("S_DEN_DruidLair_SUB_a9794f19-187a-4d79-b739-443548411d29")
+    local groveSplineWaitArea = Entity("S_DEN_DruidAttack_SplineWaitArea_77da310f-745f-4d78-801c-a22b31751b72")
+    local r_groveSplineWaitArea
+    local prisonDoor = Entity("S_DEN_PrisonMainDoor_c166068b-38dd-4891-b811-c4b2fde19e1c")
+
+    local inPositionFlag = Flag("DEN_DruidAttack_State_InPosition_fb382926-afc1-492c-85ba-65198765b3fd")
+    local combatActiveFlag = Flag("DEN_DruidAttack_State_Attacking_a161639d-ea59-4adc-a858-ac9297684057")
+    local druidVictoryFlag = Flag("DEN_DruidAttack_State_PrepAfterDeathOfTieflings_79826e3c-1dd7-4a8b-a5ca-cf4dfde51d12")
+    local canAD = false
+    local aDDelay = 20.0
+
+    local prevSplineIndex = -1
+    local currentSplineIndex = -1
+    local targetSplineIndex = -1
+    local canWalkOnSpline = false
+    local usedSpline = false
+    local waitingForSpline = false
+    local preparingDAFlag = Flag("DEN_DruidAttack_Event_DruidsPrepare_4faee0c9-018a-47e2-a754-d331c746a67f")
+    local postDAFlag = Flag("DEN_DruidAttack_State_PrepAfterDeathOfDruids_b4754af7-07ec-433c-87d2-e78ef4c79e6e")
+    local toPrisonFlag = Flag("DEN_DruidAttack_State_ToPrison_41e02f5e-e390-424e-ba8f-38fd6c4c1121")
+    -----------------------------------------
+    -- Helpers
+    helpers.ResetADDelay = function(delay)
+        StopTimer(me, "DEN_DruidAttack_ADTimer")
+        StartTimer(me, "DEN_DruidAttack_ADTimer", delay, 0)
+        canAD = false
+    end
+
+    helpers.action.SayAD = function()
+        if canAD and attackAD then
+            helpers.ResetADDelay(aDDelay)
+            StartAutomatedDialog(attackAD, false, me)
+        end
+    end
+
+    helpers.GetRandomAreaPos = function(areaTrigger)
+        local trigger = TriggerGetRandomPosition(areaTrigger.Trigger)
+        return FindValidPosition(trigger, 4.0, me)
+    end
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        moveTarget = params.moveTarget and Entity(params.moveTarget) or nil
+        areaMoveTarget = params.areaMoveTarget and Entity(params.areaMoveTarget) or nil
+        prisonMusterArea = params.prisonMusterArea and Entity(params.prisonMusterArea) or nil
+        attackAD = params.attackAD and Dialog(params.attackAD) or nil
+        spline = params.spline and Spline(params.spline) or nil
+        prisonLookAt = params.prisonLookAt and Entity(params.prisonLookAt) or nil
+
+        if startMovingAD then
+            canAD = true
+        else
+            StartTimer(me, "DEN_DruidAttack_ADTimer", math.random(2.0, 6.0), 0)
+        end
+
+        r_PrisonDefendArea = helpers.GetRandomAreaPos(prisonDefendArea) or prisonDefendArea
+        r_PrisonMusterArea = helpers.GetRandomAreaPos(prisonMusterArea) or prisonMusterArea
+        r_MoveTarget = helpers.GetRandomAreaPos(areaMoveTarget) or areaMoveTarget
+        r_groveSplineWaitArea = helpers.GetRandomAreaPos(groveSplineWaitArea) or groveSplineWaitArea
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes.AfterAttack = Proxy{
+        params.victoryState,
+        Valid = function()
+            return (params.victoryState ~= nil) and GetFlag(druidVictoryFlag)
+        end
+    }
+
+    nodes.KnockDownPrisonDoor = Action {
+        OnEnter = function()
+            canAD = false
+            helpers.ResetADDelay(math.random(3,7))
+            aDDelay = math.random(25,35)
+            SetWeaponUnsheathed(me,true)
+        end,
+        function()
+            helpers.SayAD()
+            if mod.moveto.MoveToPoint(r_PrisonDefendArea,MovementSpeed.Run,me,4.0,true) then
+                Attack(prisonDoor,false,false)
+            end
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return not mod.items.SafeIsDestroyed(prisonDoor) and prisonDoor.Item.IsLocked and params.attackPrisonDoor and GetFlag(toPrisonFlag, me)
+        end,
+    }
+
+    nodes.MoveToPrison = Action {
+        OnEnter = function()
+            canAD = false
+            helpers.ResetADDelay(math.random(3,7))
+            aDDelay = math.random(25,35)
+            SetWeaponUnsheathed(me,true)
+        end,
+        function()
+            helpers.SayAD()
+            if mod.moveto.MoveToPoint(r_PrisonMusterArea,MovementSpeed.Run,me,4.0,true) then
+                SteerTo(prisonLookAt)
+            elseif mod.moveto.MoveToPoint(r_PrisonDefendArea,MovementSpeed.Run,me,4.0,true) then
+                SteerTo(prisonLookAt)
+            end
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return GetFlag(toPrisonFlag, me)
+        end
+    }
+
+    nodes.MoveToAttackPosition = Action {
+        function()
+            helpers.SayAD()
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Run,me,4.0,true) then
+                if not GetFlag(inPositionFlag,me) then
+                    SetFlag(inPositionFlag,me)
+                end
+            end
+        end,
+        Valid = function()
+            return not GetFlag(inPositionFlag,me)
+        end
+    }
+
+    nodes.WaitToAttack = Action {
+        OnEnter = function()
+            aDDelay = math.random(20,30)
+        end,
+        function()
+            helpers.SayAD()
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Run,me,4.0,true) then
+                LookFrom(moveTarget)
+            end
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return GetFlag(inPositionFlag,me)
+        end
+    }
+
+
+
+    nodes.Wait = Action{
+        function()
+            Wait(1.0)
+        end
+    }
+    -----------------------------------------
+    -- Events
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_DruidAttack_ADTimer") then
+            canAD = true
+        elseif(e.TimerName == "DEN_DruidAttack_SplineTimer") then
+            canWalkOnSpline = true
+            Interrupt()
+        end
+    end
+
+    events.LeftCombat = function(e)
+        if e.Entity == me then
+            SetUnicastEntityEvent(me, "ClearPeaceReturn")
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == inPositionFlag.Guid then
+            usedSpline = true
+        end
+    end
+
+end}
+
+game.states.DEN_DruidAttack_GeneralTiefling = State {function ()
+
+    modules = {"shared.moveto"}
+
+    params.moveTarget = {type = EParamType.String, required = false, default = nil,
+    help=[[MoveTo Before Attack (specific)]]}
+    params.areaMoveTarget = {type = EParamType.String, required = false, default = nil,
+    help=[[MoveTo Before Attack (if specific is blocked)]]}
+    params.attackAD = {type=EParamType.String, required=false, default=nil,
+    help=[[Default AD]]}
+    params.startMovingAD = {type = EParamType.Bool, required = false, default = false,
+    help=[[]]}
+    params.alternateState = {type=EParamType.State, required=false, default=nil, help=[[State to do instead of standard Druid Attack.]]}
+
+
+    local moveTarget
+    local areaMoveTarget
+    local r_MoveTarget
+    local attackAD
+    local startMovingAD = params.startMovingAD
+    
+    local prisonMusterArea = Entity("S_DEN_DruidAttack_PrisonDefendArea_61c737ce-3ef6-47ce-b7ef-91d289d348f3")
+    local r_PrisonMusterArea
+    local prisonLookAt = Entity("S_DEN_DruidAttack_PrisonLookAt_73bc197e-1cc8-40a5-97e3-9e6a6fb3ece0")
+
+    local inPositionFlag = Flag("DEN_DruidAttack_State_InPosition_fb382926-afc1-492c-85ba-65198765b3fd")
+    local combatActiveFlag = Flag("DEN_DruidAttack_State_Attacking_a161639d-ea59-4adc-a858-ac9297684057")
+    local bypassFlag = Flag("DEN_DruidAttack_Event_BypassDone_a66b1d52-046d-41e2-909c-e01045126e77")
+
+    local canAD = false
+    local aDDelay = 20.0
+
+    -----------------------------------------
+    -- Helpers
+    helpers.ResetADDelay = function(delay)
+        StopTimer(me, "DEN_DruidAttack_ADTimer")
+        StartTimer(me, "DEN_DruidAttack_ADTimer", delay, 0)
+        canAD = false
+    end
+
+    helpers.action.SayAD = function()
+        if canAD and attackAD then
+            helpers.ResetADDelay(aDDelay)
+            StartAutomatedDialog(attackAD, false, me)
+        end
+    end
+
+    helpers.GetRandomAreaPos = function(areaTrigger)
+        local trigger = TriggerGetRandomPosition(areaTrigger.Trigger)
+        return FindValidPosition(trigger, 5.0, me)
+    end
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        moveTarget = params.moveTarget and Entity(params.moveTarget) or nil
+        areaMoveTarget = params.areaMoveTarget and Entity(params.areaMoveTarget) or nil
+        attackAD = params.attackAD and Dialog(params.attackAD) or nil
+
+        if startMovingAD then
+            canAD = true
+        else
+            StartTimer(me, "DEN_DruidAttack_ADTimer", math.random(2.0, 6.0), 0)
+        end
+
+        r_PrisonMusterArea = helpers.GetRandomAreaPos(prisonMusterArea) or prisonMusterArea
+        r_MoveTarget = helpers.GetRandomAreaPos(areaMoveTarget) or areaMoveTarget
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.AlternateAttack = Proxy{
+        params.alternateState,
+        Valid = function()
+            return (params.alternateState ~= nil) and not GetFlag(bypassFlag,me)
+        end
+    }
+
+    nodes.MoveToAttackPosition = Action {
+        function()
+            helpers.SayAD()
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Run,me,4.0,true) then
+                if not GetFlag(inPositionFlag,me) then
+                    SetFlag(inPositionFlag,me)
+                end
+            end
+        end,
+        Valid = function()
+            return not GetFlag(inPositionFlag,me)
+        end
+    }
+
+    nodes.WaitToAttack = Action {
+        OnEnter = function()
+            aDDelay = math.random(40,60)
+            SetWeaponUnsheathed(me,true)
+        end,
+        function()
+            helpers.SayAD()
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Run,me,4.0,true) then
+                LookFrom(moveTarget)
+            end
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return GetFlag(inPositionFlag,me)
+        end
+    }
+
+    nodes.MoveToPrison = Action {
+        OnEnter = function()
+            canAD = false
+            helpers.ResetADDelay(math.random(3,7))
+            aDDelay = math.random(45,75)
+            SetWeaponUnsheathed(me,true)
+        end,
+        function()
+            helpers.SayAD()
+            if mod.moveto.MoveToPoint(r_PrisonMusterArea,MovementSpeed.Run,me,4.0,true) then
+                SteerTo(prisonLookAt)
+            end
+            Sleep(1.0)
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_DruidAttack_ADTimer") then
+            canAD = true
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me and GetFlag(combatActiveFlag) and me.ForceUpdate then
+            SetForceUpdate(me, false)
+        end
+    end
+
+    events.LeftCombat = function(e)
+        if e.Entity == me then
+            SetUnicastEntityEvent(me, "ClearPeaceReturn")
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == combatActiveFlag.Guid and me.ForceUpdate then
+            SetForceUpdate(me, false)
+        end
+    end
+
+    events.Died = function(e)
+        if e.Target == me and me.ForceUpdate then
+            SetForceUpdate(me, false)
+        end
+    end
+
+end}
+
+game.states.DEN_DruidAttack_Cowering = State {function ()
+
+    modules = {"shared.moveto"}
+
+    params.attackAD = {type=EParamType.String, required=false, default=nil,
+    help=[[Default AD]]}
+    params.alternateState = {type=EParamType.State, required=false, default=nil, help=[[State to do instead of standard Druid Attack cower.]]}
+
+    local attackAD
+    
+    local moveTarget = Entity("S_DEN_DruidAttack_PrisonCowerArea_4597f504-b855-462c-80f9-33a606b76138")
+    local r_MoveTarget
+    local prisonLookAt = Entity("S_DEN_DruidAttack_PrisonDefendArea_61c737ce-3ef6-47ce-b7ef-91d289d348f3")
+
+    local inPositionFlag = Flag("DEN_DruidAttack_State_InPosition_fb382926-afc1-492c-85ba-65198765b3fd")
+    local combatActiveFlag = Flag("DEN_DruidAttack_State_Attacking_a161639d-ea59-4adc-a858-ac9297684057")
+    local bypassFlag = Flag("DEN_DruidAttack_Event_BypassDone_a66b1d52-046d-41e2-909c-e01045126e77")
+    local canAD = false
+    local aDDelay = 30.0
+    local cowerAnimation = Animation("CUST_DebugAsset_CustomAnim_01_95ff9541-9c09-4356-8f50-da327d7a64bc")
+
+    -----------------------------------------
+    -- Helpers
+    helpers.ResetADDelay = function(delay)
+        StopTimer(me, "DEN_DruidAttack_ADTimer")
+        StartTimer(me, "DEN_DruidAttack_ADTimer", delay, 0)
+        canAD = false
+    end
+
+    helpers.action.SayAD = function()
+        if canAD and attackAD then
+            helpers.ResetADDelay(aDDelay)
+            StartAutomatedDialog(attackAD, false, me)
+        end
+    end
+
+    helpers.GetRandomAreaPos = function(areaTrigger)
+        local trigger = TriggerGetRandomPosition(areaTrigger.Trigger)
+        return FindValidPosition(trigger, 4.0, me)
+    end
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        attackAD = params.attackAD and Dialog(params.attackAD) or nil
+        StartTimer(me, "DEN_DruidAttack_ADTimer", math.random(1.0, 3.0), 0)
+        r_MoveTarget = helpers.GetRandomAreaPos(moveTarget) or moveTarget
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.AlternateCower = Proxy{
+        params.alternateState,
+        Valid = function()
+            return (params.alternateState ~= nil) and not GetFlag(bypassFlag,me)
+        end
+    }
+
+    nodes.MoveToPrison = Action {
+        function()
+            helpers.SayAD()
+            if mod.moveto.MoveToPoint(r_MoveTarget,MovementSpeed.Run,me,4.0,true) then
+                if not GetFlag(inPositionFlag,me) then
+                    SetFlag(inPositionFlag,me)
+                end
+            end
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return not GetFlag(inPositionFlag,me)
+        end
+    }
+
+    nodes.InCowerPosition = Action {
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+        end,
+        OnEnter = function()
+            canAD = false
+            helpers.ResetADDelay(math.random(3,7))
+            aDDelay = math.random(25,40)
+            ApplyStatus(me, "ANIM_COWER")
+        end,
+        function()
+            if not IsInTrigger(me,moveTarget.Trigger) then
+                MoveTo(r_MoveTarget,MovementSpeed.Run,false,false)
+            else
+                if (math.random (1, 10) < 3) then
+                    Wander(1.0, 1.0, MovementSpeed.Stroll, r_MoveTarget)
+                end
+                if (math.random (1, 10) < 5) then
+                    SteerTo(prisonLookAt)
+                end
+                Sleep(math.random(12,18))
+            end
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_DruidAttack_ADTimer") then
+            canAD = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == inPositionFlag.Guid and e.Entity == me then
+            if me.ForceUpdate then
+                SetForceUpdate(me, false)
+            end
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me and GetFlag(combatActiveFlag) and me.ForceUpdate then
+            SetForceUpdate(me, false)
+        end
+    end
+
+    events.LeftCombat = function(e)
+        if e.Entity == me then
+            SetUnicastEntityEvent(me, "ClearPeaceReturn")
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == combatActiveFlag.Guid and me.ForceUpdate then
+            SetForceUpdate(me, false)
+        end
+    end
+
+    events.Died = function(e)
+        if e.Target == me and me.ForceUpdate then
+            SetForceUpdate(me, false)
+        end
+    end
+
+end}
+
+game.states.DEN_DruidAttack_Kid = State {function ()
+
+    params.moveTarget = {type = EParamType.String, required = false, default = nil, help=[[MoveTo Before Attack (specific)]]}
+    params.areaMoveTarget = {type = EParamType.String, required = false, default = nil, help=[[MoveTo Before Attack (if specific is blocked)]]}
+
+    modules = {"shared.moveto"}
+
+    --
+    local moveTarget
+    local areaMoveTarget
+
+    local inPositionFlag = Flag("DEN_DruidAttack_State_InPosition_fb382926-afc1-492c-85ba-65198765b3fd")
+    local combatActiveFlag = Flag("DEN_DruidAttack_State_Attacking_a161639d-ea59-4adc-a858-ac9297684057")
+
+    -----------------------------------------
+    -- Helpers
+    helpers.GetRandomAreaPos = function(areaTrigger)
+        local trigger = TriggerGetRandomPosition(areaTrigger.Trigger)
+        return FindValidPosition(trigger, 4.0, me)
+    end
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        moveTarget = params.moveTarget and Entity(params.moveTarget) or nil
+        areaMoveTarget = params.areaMoveTarget and Entity(params.areaMoveTarget) or nil
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.MoveToAttackPosition = Action {
+        function()
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Run,me,4.0,true) or mod.moveto.MoveToPoint(areaMoveTarget,MovementSpeed.Run,me,4.0,true) then
+                if not GetFlag(inPositionFlag,me) then
+                    SetFlag(inPositionFlag,me)
+                end
+                LookFrom(moveTarget)
+            end
+        end,
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+        end,
+        OnEnter = function()
+            ApplyStatus(me, "ANIM_COWER")
+        end,
+    }
+
+    -----------------------------------------
+    -- Events
+
+    events.FlagSet = function(e)
+        if e.Flag == inPositionFlag.Guid and e.Entity == me then
+            if me.ForceUpdate then
+                SetForceUpdate(me, false)
+            end
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == combatActiveFlag.Guid and me.ForceUpdate then
+            SetForceUpdate(me, false)
+        end
+    end
+
+    events.OnStageChanged = function(e)
+        if not e.OnStage and me.ForceUpdate then
+            SetForceUpdate(me, false)
+        end
+    end
+
+end}

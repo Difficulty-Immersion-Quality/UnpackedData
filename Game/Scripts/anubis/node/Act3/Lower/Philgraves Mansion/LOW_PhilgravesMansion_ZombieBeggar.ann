@@ -1,0 +1,119 @@
+game.states.LOW_PhilgravesMansion_ZombieBeggar = State{
+    function ()
+
+        params.houseSpline = {type=EParamType.String, required = false, help = [[meeting spline GUID]]}
+        params.WanderTrigger =  {type=EParamType.String, required = false, help = [[wander area]]}
+        params.InitialSceneAD =  {type=EParamType.String, required = false, help = [[initial scene dialog]]}
+
+        local InHouseFlag = Flag("LOW_PhilgravesMansion_State_ZombieInHouse_1b0c0656-5d5a-4d4a-89cd-83949b09dd98")
+        local InInitialScene = true
+        local houseSpline = Spline(params.houseSpline)
+        local WanderTrigger = Entity(params.WanderTrigger)
+        local InitialSceneAD = Dialog(params.InitialSceneAD)
+        local saveGamePatchedWanderTrigger = false
+        local MovingFlag = Flag("LOW_PhilgravesMansion_ZombieMoving_9fa1155b-8a73-4cd2-8344-ae7faa34cbbb")
+        local playerPaid = nil
+
+        events.SavegameLoaded = function(ev)
+            if saveGamePatchedWanderTrigger == false and WanderTrigger ~= Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e") and GetFlag(InHouseFlag,me) then
+                saveGamePatchedWanderTrigger = true
+                WanderTrigger = Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e")
+            end
+        end
+
+        events.Activated = function(ev)
+            if saveGamePatchedWanderTrigger == false and WanderTrigger ~= Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e") and GetFlag(InHouseFlag,me) then
+                saveGamePatchedWanderTrigger = true
+                WanderTrigger = Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e")
+            end
+        end
+
+        events.EntityEvent = function(e)
+            if e.TargetEntity == me then
+                if e.Event == "LOW_PhilgravesMansion_EndedInitialScene" then
+                    InInitialScene = false
+                elseif e.Event == "LOW_Lumbar_PlayerPaid" then
+                    playerPaid = e.Params[1]
+                elseif e.Event == "LOW_Lumbar_PlayerAttacked" then
+                    playerPaid = nil
+                end
+            end
+        end
+        
+        nodes.WaitingForPlayerAttack = Action {
+            function()
+                SteerTo(playerPaid, true)
+            end,
+            Valid = function()
+                return playerPaid ~= nil and
+                not GetFlag(MovingFlag,me)
+            end
+        }
+
+        nodes.InInitialScene = Action {
+            function()
+                WaitForInterrupt()                
+            end,
+            Valid = function()
+                return InInitialScene and not GetFlag(MovingFlag,me) and
+                playerPaid == nil
+            end
+
+        }
+
+        nodes.Sleep = Action {
+            function()
+                Wander(10.0,math.random(3,15), MovementSpeed.Walk,WanderTrigger)
+                Sleep(math.random(6,10))
+            end,
+
+            Valid = function()
+                return  (not InInitialScene and not GetFlag(MovingFlag,me)) or GetFlag(InHouseFlag,me) and
+                playerPaid == nil
+            end
+
+        }
+
+        nodes.Moving = Proxy {
+            game.states.LOW_PhilgravesMansion_ZombieMoving,
+            params = {
+                houseSpline = params.houseSpline,
+            },
+            OnEnter = function() 
+                InInitialScene = false
+                WanderTrigger = Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e")
+            end,
+            Valid = function() 
+                return GetFlag(MovingFlag,me)
+            end
+        }
+    
+end}
+
+game.states.LOW_PhilgravesMansion_ZombieMoving = State {
+
+    function ()
+        params.houseSpline = {type=EParamType.String, required = false, help = [[meeting spline GUID]]}
+
+        local houseSpline = Spline(params.houseSpline)
+        local InHouseFlag = Flag("LOW_PhilgravesMansion_State_ZombieInHouse_1b0c0656-5d5a-4d4a-89cd-83949b09dd98")
+        local MovingFlag = Flag("LOW_PhilgravesMansion_ZombieMoving_9fa1155b-8a73-4cd2-8344-ae7faa34cbbb")
+        local targetSplineIndex = -1
+        nodes.Moving = Action{
+            function()
+
+                if not GetFlag(InHouseFlag,me) then
+                    DoPatrol(houseSpline, false, MovementSpeed.Run, targetSplineIndex)
+                else
+                    ClearFlag(MovingFlag,me)
+                    ClearPatrol()
+                    local insidePosition = Entity("S_LOW_FatherCarrionTeleportTo_5681db68-1e7c-4f82-8a07-e62a33ce17ea")
+                    local validPos = FindValidPosition(insidePosition, 10.0, me,true)
+                    if validPos ~= nil then
+                        MoveTo(validPos, MovementSpeed.Run)
+                    end
+                end
+            end
+        }
+    end
+}

@@ -1,0 +1,163 @@
+game.states.GOB_Torturers_Goblet = State{function()
+
+    modules = { "shared.moveto", "shared.math" }
+
+    ---------------------------------------------
+    -- Params
+
+    params.outPoint = {type = EParamType.String, required=true, default=nil, help=[[
+        Point where goblin moves after player persuaded him to.
+    ]]}
+
+    ------------------------------------------------
+    -- Local variables
+
+    -- Torture flow
+    local companion = Entity("S_GOB_Torturers_Spike_3f1fa953-6a0d-4589-adfd-23c69603da2f")
+    local captive = Entity("S_GOB_TortureredAdventurer_0dd6e9f1-d32d-41f1-b230-d540558e0847")
+    local pierceAnimation = Animation("CMBT_Melee_RHand_01_Attack_f4ac302b-1569-404f-bd52-1fe443e265df")
+    local persuadedFlag = Flag("GOB_Torturers_State_Persuaded_d68ef3fa-08ba-52b9-8f39-7594dfde5c89") -- global
+    local reportedFlag = Flag("GOB_Torturers_State_Reported_1756c594-0337-4c15-a4b9-98b6861a34d7") -- global
+    local drowCommander = Entity("S_GOB_DrowCommander 25721313-0c15-4935-8176-9f134385451b")
+    local torturedFlag = Flag("GOB_Torturers_State_TorturedEnough_5ee00add-a8c8-4d61-4560-80582db6fe58") -- global
+    local tortureOverLongRestFlag = Flag("GOB_Torturers_State_AfterLongRest_78b07dee-8461-9d1b-028a-1e7cf8d39532")
+    local tortureSpot = Entity("S_GOB_Torturers_Goblet_TorturePointTrigger_de39d140-0588-4767-b0d5-f0f5ec4e150e")
+    local adventurerFreedFlag = Flag("GOB_Torturers_State_PrisonerFreed_c3ebd7d6-243c-f355-5cff-94ceb315d5c9")
+
+    -- Penance flow
+    local outPoint = Entity(params.outPoint)
+    local penanceFlag = Flag("GOB_PainPriest_State_Penitent_5e6ff7d1-7018-4938-8030-20ec00b3ce64")
+    local penancePoint = Entity("S_GOB_PenanceRotation_910b416d-5600-4f57-8026-05112f19a8db")
+    local painPriest = Entity("S_FOR_PainPriest_cad1854b-8f41-4038-b640-156ee0272f81") -- character
+    local lowHealthFlag = Flag("GOB_PainPriest_State_LowHealth_bf01a677-b13c-4992-8d02-4121ecd2adf5")
+    local toPriestFlag = Flag("GOB_Torturers_Event_ToPainPriest_a0f2c0f1-3709-49ac-866f-ea83998b7891")
+    local drinkingAnim = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+    ---------------------------------------------
+    -- Local functions
+    helpers.CheckMoveOut = function()
+        return GetFlag(torturedFlag) or GetFlag(persuadedFlag) or GetFlag(tortureOverLongRestFlag)
+        or GetFlag(adventurerFreedFlag) or captive.Character.IsDead or companion.Character.IsDead
+    end
+
+    --------------------------------------
+    -- State nodes
+
+    --------------------------------------
+    -- Nodes
+    nodes.Torture = Action{
+        function()
+            mod.moveto.MoveToPoint(tortureSpot, MovementSpeed.Stroll, me)
+            SteerTo(captive)
+            Sleep(1.0)
+        end,
+
+        Valid = function()
+            return not helpers.CheckMoveOut()
+        end
+    }
+
+
+    nodes.PostTorture = Selector{
+        function(nodes)
+            if (GetFlag(reportedFlag) or not GetFlag(torturedFlag) or drowCommander.Character.IsDead) then
+                return nodes["PenanceFlow"]
+            else
+                return nodes["ReportFlow"]
+            end
+        end,
+        CanEnter = function()
+             return helpers.CheckMoveOut()
+        end
+    }
+
+    nodes.PostTorture.ReportFlow = Action{
+        function()
+            mod.moveto.MoveToPoint(drowCommander, MovementSpeed.Walk, me)
+            Sleep(3)
+        end,
+        Valid = function()
+            return not (GetFlag(reportedFlag) or GetFlag(persuadedFlag))
+        end
+    }
+
+    nodes.PostTorture.PenanceFlow = Selector{
+    }
+
+    nodes.PostTorture.PenanceFlow.Penitent = Action{
+        OnEnter = function()
+            SetDoNotFace(me, true)
+        end,
+        function()
+            if GetDistance2DTo(me,penancePoint) > 1 then
+                try
+                    MoveTo(penancePoint)
+                    LookFrom(penancePoint)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    SteerTo(penancePoint)
+                    Sleep(3)
+                end
+            else
+                LookFrom(penancePoint)
+            end
+            Sleep(2)
+        end,
+        OnLeave = function()
+            SetDoNotFace(me, false)
+        end,
+        Valid = function()
+            return GetFlag(penanceFlag,me) and not GetFlag(lowHealthFlag,me)
+        end
+    }
+    nodes.PostTorture.PenanceFlow.WatchPriest = Action{
+        CanEnter = function()
+            return GetFlag(toPriestFlag)
+        end,
+        function()
+            Sleep(4) --sleep is at the beginning for when this is entered after getting hit by the priest and getting too low HP
+            mod.moveto.MoveToPoint(outPoint, MovementSpeed.Walk, me)
+            if painPriest and not IsInDialog(me, false) then
+                SteerTo(painPriest)
+            end
+            Sleep(1)
+            if mod.math.CoinToss(0.4) then
+                PlayAnimation(drinkingAnim, true)
+                Sleep(math.random(3, 5))
+            end
+        end
+    }
+
+    nodes.PostTorture.PenanceFlow.MoveTo = Action{
+        OnEnter = function()
+            SetFlag(toPriestFlag)
+        end,
+        function()
+            Sleep(1.5) --sleep slightly longer than Spike's to ideally have Spike walk in front
+            mod.moveto.MoveToPoint(outPoint, MovementSpeed.Walk, me)
+        end,
+        Valid = function()
+            return GetDistance2DTo(me,outPoint) >= 1
+        end
+    }
+
+    nodes.PostTorture.PenanceFlow.Wait = Action{
+        function()
+            --will play while Spike is still talking, then WatchPriest or Penitent will take over
+            Sleep(0.5)
+        end
+    }
+
+    nodes.FallbackSleep = Action{
+        function()
+            Sleep(1)
+        end
+    }
+
+    -----------------------------
+    -- Events
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "GOB_Torturers_Events_OrderedPenance" then
+            SetFlag(penanceFlag,me)
+        end
+    end
+
+end}

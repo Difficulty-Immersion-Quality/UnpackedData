@@ -1,0 +1,51 @@
+game.states.SHA_Orthon = State{
+function()
+
+    modules = {"shared.util", "shared.dialog"}
+
+    ---------------------------------------------
+    -- Local values
+    local trLairPos = Entity("S_SHA_OrthonLair_Orthon_Pos_d9188af0-4c6b-4e81-a4b8-5ad488fd4c5e")
+
+    local flAmbushing = Flag("SHA_OrthonLair_State_AmbushInProgress_3fb4d528-b422-43e4-816b-54261450b401")
+
+    local AD = Dialog("SHA_Orthon_AD_09e8c8ce-e318-ae8f-a76f-88548feef1f4")
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- Nodes
+    nodes.Action_Ambushing = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(flAmbushing)
+        end
+    }
+
+    nodes.Action_AtLair = Action{
+        function()
+            if not IsInDangerousSurfaceFor(trLairPos, me.Character) then
+                local moveToResult = MoveTo(trLairPos, MovementSpeed.Walk, true, false, 0.5, 1.0, false)
+
+                if moveToResult == error.MovementError.None then
+                    LookFrom(trLairPos)
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(AD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 12.0,
+                        }, me)
+                    mod.util.SleepRandom(6.0, 12.0)
+                else
+                    DebugText(me, "Error: MovementFailed towards the lair")
+                    Sleep(3.0)
+                end
+            else
+                DebugText(me, "Error: MoveTo in dangerous surface")
+                Sleep(3.0)
+            end
+        end,
+    }
+    ---------------------------------------------
+end
+}

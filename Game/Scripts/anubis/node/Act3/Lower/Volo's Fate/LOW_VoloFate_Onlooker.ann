@@ -1,0 +1,46 @@
+game.states.LOW_VoloFate_Onlooker = State{function()
+    
+    modules = {"shared.dialog"}
+
+    params.idleAD = {type = EParamType.String, required=false, help=[[The AD to play.]]}
+    params.idleAnimation = {type = EParamType.String, required=true, help=[[The idle animation to play.]]}
+    params.triggerString = {type = EParamType.String, required=true, help=[[Idle trigger string to stand at.]]}
+
+    local idleAD = Dialog(params.idleAD)
+    local idleAnimation = Animation(params.idleAnimation)
+    local trigger = Entity(params.triggerString)
+
+
+    nodes.Idle = Action{        
+        function()
+            LookFrom(trigger)
+            PlayAnimation(idleAnimation,false,true)
+            Sleep(math.random(1,6))
+            if(idleAD ~= nil) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    idleAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 10
+                    },
+                    me
+                )
+            end
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, trigger) <= 2.0
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.triggerString
+        }
+    }
+end}

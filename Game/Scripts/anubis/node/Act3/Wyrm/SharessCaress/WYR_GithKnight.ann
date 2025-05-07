@@ -1,0 +1,56 @@
+game.states.WYR_GithKnight = State { function()
+
+    description = [[ 
+        Behaviour for Voss when he is in Sharess Caress.
+    ]]
+
+    modules = { "shared.moveto" }
+
+    local inTaproomTrigger = Entity("S_WYR_RaphaelTango_Voss_TaproomPos_b12f8da4-f190-4736-b5fc-f66c37c63759")    
+    local tangoInProgress = Flag("WYR_RaphaelTango_Voss_State_TangoInProgress_2228d775-30ff-45b6-a711-e2865b704b51")
+    local inTaproomFlag = Flag("WYR_RaphaelTango_State_VossInTaproom_bcff9e30-220f-44e8-93d2-b6bef5e69646")
+    
+    local waitingStart = Animation("CUST_Voss_Waiting_01_Start_aa304fa9-a643-4b99-ae48-07e722c56062")
+    local waitingLoop = { Animation("CUST_Voss_Waiting_01_Loop_b71a010e-5767-4c98-8f74-1cb568c35e2d") }
+    local waitinEnd = Animation("CUST_Voss_Waiting_01_End_3ed6b2b1-f5f7-4a3b-8298-e62e53eb26df")
+
+    -- Nodes
+    nodes.TangoWithRaphael = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_WYR_RaphaelTango_Voss_RoomPos_beeff8fd-373e-408d-af9a-1bce83eacd2e"
+        },    
+        Valid = function()
+            return GetFlag(tangoInProgress)
+        end
+    }
+    
+    nodes.MoveToTaproom = Action{
+        function()            
+            local moveResult = MoveTo(inTaproomTrigger, MovementSpeed.Walk, true, true, 1.0, 2.0, false, PathClimbingMode.Enabled)
+            if moveResult ~= error.MovementError.None then
+                DebugText(entity, "Taproom move Failed")
+                Sleep(6.0)
+            end                       
+        end,
+        Valid = function()
+            return not GetFlag(tangoInProgress) and not GetFlag(inTaproomFlag, me) 
+        end,
+    }
+    
+    nodes.InTaproom = Action{
+        function()
+            Sleep(1)
+            if mod.moveto.MoveToPoint(inTaproomTrigger, MovementSpeed.Walk, me, 0.5) then
+                LookFrom(inTaproomTrigger)            
+                PlayLoopingAnimation(waitingStart, waitingLoop, waitinEnd)
+            end 
+        end, 
+        Valid = function()
+            return not GetFlag(tangoInProgress) and GetFlag(inTaproomFlag, me) 
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+end}

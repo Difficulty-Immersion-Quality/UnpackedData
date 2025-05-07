@@ -1,0 +1,61 @@
+game.states.GOB_WarchiefBrave = State{
+    function()
+        description = [[Warchief Brave behaviour after attack on Den.]]
+
+        modules = {"shared.util", "shared.dialog"}
+        --------------------------------------------------
+        -- Local variables
+        local patrolSpline = Spline("S_Den_BravePatrol_aee07aaa-74f8-443e-b6d2-df8f3d8db7e2")
+        local patrolSplineIndex = -1
+
+        local AD = Dialog("DEN_AttackOnDen_AD_WarchiefBraveVictory_423db449-c0ea-26f2-c89c-b62cffde1b1d")
+        local ADprobability = 0.3
+        local canTalk = false
+        --------------------------------------------------
+
+        --------------------------------------------------
+        -- Nodes
+        nodes.Action_PlayAD = Action{
+            function()
+                -- Let's not stop him while playing the AD so it feels more natural
+                try
+                    StartAutomatedDialog(AD, false, me)
+                catch e if ls.CheckType(e, error.StartAutomatedDialogStartFailed) then
+                    DebugText(me, "Error: StartAutomatedDialogStartFailed")
+                end
+                canTalk = false
+            end,
+            Valid = function()
+                return canTalk
+            end
+        }
+
+        nodes.Action_Patrol = Action{
+            function()
+                try
+                    DoPatrol(patrolSpline, false, MovementSpeed.Walk, patrolSplineIndex)
+                catch e if ls.CheckType(e, error.MissingComponent) then
+                    DebugText(me, "Error: MissingComponent on DoPatrol()")
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return not canTalk
+            end
+        }
+        --------------------------------------------------
+
+        --------------------------------------------------
+        -- Events
+        events.SplineControlPointReached = function(e)
+            patrolSplineIndex = e.NewIndex
+
+            if not canTalk and math.random() < ADprobability then
+                canTalk = true
+            end
+
+        end
+        --------------------------------------------------
+
+    end
+}

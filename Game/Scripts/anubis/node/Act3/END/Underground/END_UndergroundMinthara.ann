@@ -1,0 +1,50 @@
+game.states.END_UndergroundMinthara = State{function() 
+
+    local undergroundRegion = Entity("S_END_Underground_SUB_07f16e8a-fc85-4130-a908-1ae0972c3502")
+    local atHaltPoint = false
+    local patrolSpline = Spline("S_END_UndergroundMintharaPatrol_2fb90e0c-6ede-42aa-858a-c8b3d54c1db5")
+
+    self.Valid = function() 
+        return IsInTrigger(me, undergroundRegion.Trigger)
+    end
+
+    nodes.State_PausePatrolMinthara = Action{
+        CanEnter = function()
+            return atHaltPoint
+        end,
+        
+        OnEnter = function()
+            atHaltPoint = false
+        end,
+
+        function()
+            if not atHaltPoint then
+                Sleep(9.0)
+            end
+        end
+    }
+
+    nodes.State_PatrolMinthara = Action{
+        Valid = function()
+           return not atHaltPoint;
+        end,
+
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Walk, 0)
+            catch e if ls.CheckType(e, error.MissingComponent) then
+                DebugText(me, "Error: MissingComponent")
+                Sleep(3.0)
+            end
+        end
+    }
+
+    
+
+    events.SplineControlPointReached = function(e)
+        if e.Event == "END_Underground_Minthara_HaltPoint" then
+            atHaltPoint = true
+        end
+    end
+end
+}

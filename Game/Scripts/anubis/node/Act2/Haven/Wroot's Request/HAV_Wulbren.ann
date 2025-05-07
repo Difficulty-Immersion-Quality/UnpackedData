@@ -1,0 +1,192 @@
+game.states.HAV_Wulbren = State {function ()
+
+    modules = {"shared.moveto", "shared.math"}
+
+    description = [[Behaviour of Wulbren in Haven]]
+
+    local leaveInspectionFlag = Flag("HAV_SavingPrisoners_Event_PrisonersLeaveInspection_6582e781-ba50-4dcc-b88c-cf0bc4c144b1")
+    local inspectionPos = nil
+
+    nodes.WaitForInspection = Action{
+        function()
+            Sleep(math.random(0,2))
+            SetEntityEvent(me, "HAV_SavingPrisoners_AppearedAtHaven_Boat")
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos == nil
+        end
+    }
+
+    nodes.Inspection = Action{
+        function()
+            if mod.moveto.MoveToPoint(inspectionPos,  MovementSpeed.Walk, me) then
+                LookFrom(inspectionPos)
+                SetEntityEvent(me, "HAV_SavingPrisoners_AtInspectionPos")
+                WaitForInterrupt()
+            else
+                SteerTo(inspectionPos)
+            end
+            Sleep(4)
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos ~= nil
+        end
+    }
+
+    nodes.Sitting = Proxy {
+        game.states.Sit,
+        params = {
+            seat = "S_HAV_WulbrenSeat_b325d079-edc5-4cb4-a0ca-b487fe2d5ca2",
+            seatTrigger = "S_HAV_WulbrenSeatArea_298de392-11f6-4072-b382-1e098fddc355",
+            sitIdle = StateRef{game.states.HAV_Wulbren_Sitting},
+            nonSitIdle = StateRef{game.states.HAV_Wulbren_Standing},
+            useSeatPositionAsFallBack = false,
+            sitOnGroundAsFallback = false
+        }
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if(e.Event == "HAV_SavingPrisoners_SetInspectionPos") then
+                inspectionPos = e.Params[1]
+                DebugLog((tostring(e.Params[1])))
+                Interrupt()
+            end
+        end
+    end
+
+end}
+
+game.states.HAV_Wulbren_Sitting = State {function ()
+
+    modules = {"shared.dialog"}
+
+    description = [[Behaviour of Wulbren in Haven while he is sitting]]
+
+    local nimble = Entity("S_GLO_GnomePrisoner_001_4fbd62e8-a486-471e-8a65-00966b058dd5")
+    local nickels = Entity("S_GLO_GnomePrisoner_002_c9a7d921-bef0-4829-8792-d48c529daee5")
+    local AD = Dialog("HAV_WrootRequest_AD_ReturnedPrisoners_b571d8a6-556d-07d1-4a74-707311599249")
+
+    local nimbleDefeatedFlag = Flag("MOO_GnomePrisoner001_State_Defeated_a75d7674-a909-4252-be15-673b4eeda75c")
+    local nickelsDefeatedFlag = Flag("MOO_GnomePrisoner002_State_Defeated_fc079d0c-2c74-437c-aa00-fb358d4658a2")
+
+    local barcusPresentFlag = Flag("HAV_WrootRequest_State_WithWulbren_35bd10c9-fb1f-4670-8069-191282c0da34")
+    local reunionOverFlag = Flag("HAV_WrootRequest_Event_FriendTalkOver_ae967954-99fd-5e27-e083-98884ba8f9f0")
+
+    events.FlagSet = function(e)
+        if e.Flag == nimbleDefeatedFlag.Guid then
+            nimble = nil
+        elseif e.Flag == nickelsDefeatedFlag.Guid then
+            nickels = nil
+        end
+    end
+
+    nodes.WithBarcus = Action {
+        function()
+            Sleep(4.0)
+        end,
+        CanEnter = function()
+            return GetFlag(barcusPresentFlag) and not GetFlag(reunionOverFlag)
+        end
+    }
+
+    nodes.NoBarcus = Action {
+        function()
+            Sleep(4.0)
+            if(nimble or nickels) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0,
+                        allowNilSpeakers = true
+                    },
+                    me,
+                    nimble,
+                    nickels
+                )
+            end
+        end
+    }
+
+end}
+
+game.states.HAV_Wulbren_Standing = State {function ()
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    description = [[Behaviour of Wulbren in Haven while he is standing]]
+
+    local armsCrossedAnim = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+
+    local position = Entity("S_HAV_WulbrenPos_91c1ffeb-cb7c-4a52-9bbd-0e9928aa8eb3")
+    local nimble = Entity("S_GLO_GnomePrisoner_001_4fbd62e8-a486-471e-8a65-00966b058dd5")
+    local nickels = Entity("S_GLO_GnomePrisoner_002_c9a7d921-bef0-4829-8792-d48c529daee5")
+
+    local AD = Dialog("HAV_WrootRequest_AD_ReturnedPrisoners_b571d8a6-556d-07d1-4a74-707311599249")
+
+    local nimbleDefeatedFlag = Flag("MOO_GnomePrisoner001_State_Defeated_a75d7674-a909-4252-be15-673b4eeda75c")
+    local nickelsDefeatedFlag = Flag("MOO_GnomePrisoner002_State_Defeated_fc079d0c-2c74-437c-aa00-fb358d4658a2")
+
+    local barcusPresentFlag = Flag("HAV_WrootRequest_State_WithWulbren_35bd10c9-fb1f-4670-8069-191282c0da34")
+    local reunionOverFlag = Flag("HAV_WrootRequest_Event_FriendTalkOver_ae967954-99fd-5e27-e083-98884ba8f9f0")
+
+    events.FlagSet = function(e)
+        if e.Flag == nimbleDefeatedFlag.Guid then
+            nimble = nil
+        elseif e.Flag == nickelsDefeatedFlag.Guid then
+            nickels = nil
+        end
+    end
+
+    nodes.WithBarcus = Action {
+        CanEnter = function()
+            return GetFlag(barcusPresentFlag) and not GetFlag(reunionOverFlag)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(position, MovementSpeed.Walk, me) then
+                LookFrom(position)
+            else
+                SetDoNotFace(me, true)
+                SteerTo(position)
+            end
+            PlayAnimation(armsCrossedAnim, false, true)
+            Sleep(2)
+        end,
+        OnLeave = function()
+            SetDoNotFace(me, false)
+        end
+    }
+
+    nodes.NoBarcus = Action {
+        function()
+            if mod.moveto.MoveToPoint(position, MovementSpeed.Walk, me) then
+                LookFrom(position)
+            else
+                SetDoNotFace(me, true)
+                SteerTo(position)
+            end
+            PlayAnimation(armsCrossedAnim, false, true)
+            Sleep(4.0)
+            if(nimble or nickels) then
+                SetDoNotFace(me, true)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0,
+                        allowNilSpeakers = true
+                    },
+                    me,
+                    nimble,
+                    nickels
+                )
+                SetDoNotFace(me, false)
+            end
+        end,
+        OnLeave = function()
+            SetDoNotFace(me, false)
+        end
+    }
+
+end}

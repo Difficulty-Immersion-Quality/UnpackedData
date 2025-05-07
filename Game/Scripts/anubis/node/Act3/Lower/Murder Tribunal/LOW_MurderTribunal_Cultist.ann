@@ -1,0 +1,59 @@
+game.states.LOW_MurderTribunal_Cultist = State{
+    function()
+
+    modules = { "shared.util", "shared.dialog" }
+
+    params.baptismTrigger = {type=EParamType.String, default = "",
+        help = [[This character will walk here if the Baptism of Blood has started.]]}
+
+        
+    local baptismTrigger_Internal = nil
+    local steerToPoint = Entity("S_LOW_MurderTribunal_Baptism_Valeria_Point_2ddc0200-9b06-436f-8d7c-b8f11498811c")
+    local chantAD = Dialog("LOW_MurderTribunal_AD_Baptism_Cultists_63de21ad-d5d8-bcd0-594f-cc673dbe7b03")
+    local combatChantAD = Dialog("LOW_MurderTribunal_AD_Baptism_Cultists_Combat_cb8f7452-6338-3e26-43b8-8f981a847dd9")
+    local chanting = true
+
+    self.OnInit = function()
+        if params.baptismTrigger~=nil then
+            baptismTrigger_Internal = FindEntity(params.baptismTrigger)
+        end
+    end
+
+    nodes.Chanting= Action{
+        function()
+            if baptismTrigger_Internal ~= nil and not IsInDialog(me,true,false) then
+                local moveResult = MoveTo(baptismTrigger_Internal,MovementSpeed.Walk, true, false)
+                
+                if moveResult == error.MovementError.None then
+                    SteerTo(steerToPoint)
+                    if not chanting then
+                        chanting = true
+                    end
+                    Sleep(2.0)
+                else
+                    if chanting then
+                        chanting = false
+                    end
+                end
+            end
+        end,
+
+        OnLeave = function()
+            local chanting = false
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "LOW_MurderTribunal_CultistChant" and
+        chanting and not me.Character.IsDead and me.OnStage then
+            --DebugText(me,"CHANT")
+            if me.IsInCombat then
+                StartAutomatedDialogImmediate(combatChantAD,me)
+            else
+                StartAutomatedDialogImmediate(chantAD,me)
+            end
+        end
+    end
+
+    end
+}

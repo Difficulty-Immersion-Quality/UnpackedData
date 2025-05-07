@@ -1,0 +1,69 @@
+game.states.UND_MinotaurPatrol = State{
+    function()
+        ------------------------------------------------
+        -- Params
+        params.patrolSpline = {type = EParamType.String, required = true,
+            help = [[Patrol spline]]}
+        params.waitTime = {type = EParamType.Number, required = false, default = 0,
+            help = [[Wait between control points]]}
+        params.ignoredIndexes = {type = EParamType.Int, arrayRange = "..", required = false,
+            help = [[Don't wait in specified indexes]]}
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Local variables
+        local wait = false
+        local ignoredIndexes = {}
+
+        local patrolSpline = Spline(params.patrolSpline)
+        local patrolSplineIndex = 0
+        ------------------------------------------------
+
+        self.OnInit = function()
+            if params.ignoredIndexes ~= nil then
+                for i, v in ipairs(params.ignoredIndexes) do
+                    ignoredIndexes[v] = true
+                end
+            end
+        end
+
+        ------------------------------------------------
+        -- Nodes
+        nodes.Action_PatrolWait = Action{
+            function()
+                ShortPatrolInterrupt()
+                LookFrom(patrolSpline)
+                Sleep(params.waitTime)
+                wait = false
+            end,
+            Valid = function()
+                return wait
+            end
+
+        }
+        nodes.Action_Patrol = Action{
+            function()
+                try
+                    DoPatrol(patrolSpline, false, MovementSpeed.Walk, patrolSplineIndex)
+                catch e if ls.CheckType(e, error.MissingComponent) then
+                    DebugText(me, "Error: MissingComponent on DoPatrol()")
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return not wait
+            end
+        }
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Events
+        events.SplineControlPointReached = function(e)
+            if not ignoredIndexes[e.Index] and params.waitTime ~= 0 then
+                wait = true
+            end
+            patrolSplineIndex = e.NewIndex
+        end
+        ------------------------------------------------
+    end
+}

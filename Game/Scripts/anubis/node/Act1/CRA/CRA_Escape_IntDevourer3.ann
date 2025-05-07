@@ -1,0 +1,76 @@
+game.states.CRA_Escape_IntDevourer3 = State{function ()
+
+    local jumpPoint
+    local jumpToPoint
+    local patrolPoint
+    local inPlace = false
+    local activated = false
+
+    self.OnInit = function()
+        jumpPoint = FindEntity("S_CRA_Escape_IntDevourer3JumpPos_1c59829e-7b27-4866-8d01-2414d724eb5a")
+        jumpToPoint = FindEntity("S_CRA_Escape_IntDevourer3JumpToPos_aed28ed8-a4d5-4381-8fed-542f2e1189aa")
+        patrolPoint = FindEntity("S_CRA_Escape_IntDevourer3PatrolPos_1_80dd02b2-17cd-43b4-b0b8-d6ee11bdc36a")
+    end
+
+    nodes.Deactivated = Action{function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not activated
+        end
+    }
+
+    nodes.Activated = Selector
+    {
+        CanEnter = function()
+            return activated
+        end
+    }
+
+    nodes.Activated.Idle =  Action{function()
+        try
+            MoveTo(jumpToPoint)
+            Sleep(4.5)
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            Sleep(1.0)
+        end
+        try
+            MoveTo(patrolPoint)
+            Sleep(4.5)
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            Sleep(1.0)
+        end
+    end,
+    CanEnter = function()
+        return inPlace
+    end
+    }
+
+    nodes.Activated.JumpDown =  Action{function()
+        try
+            MoveTo(jumpPoint)
+            inPlace = true
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            Sleep(1.0)
+        end
+    end,
+    CanEnter = function()
+        return not inPlace
+    end
+    }
+
+    events.EnteredCombat = function(e)
+        -- no need ot interrupt since we're in combat
+        if (e.Entity == me) then
+            inPlace = true
+            activated = true
+        end
+    end
+
+    events.EnteredTrigger = function(e)
+        if (e.Trigger == FindEntity("S_CRA_Escape_IntDevourer3_JumpStartTrigger_609f8e54-dae3-4599-9bb1-5c85a3186a30")) then
+            activated = true
+        end
+    end
+end
+}

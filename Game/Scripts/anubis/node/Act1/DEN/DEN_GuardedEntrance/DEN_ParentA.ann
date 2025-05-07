@@ -1,0 +1,313 @@
+game.states.DEN_ParentA = State { function ()
+
+    description = [[The father of the kid that is imprisoned by druids (AD starter).]]
+
+    modules = { "shared.dialog", "shared.moveto" }
+
+    --Scene
+    local sceneAD = Dialog("DEN_GuardedEntrance_AD_ParentsScene_1a0f5f07-b125-493e-da10-caaaf27b4325")
+    local sceneDoneFlag = Flag("DEN_GuardedEntrance_Event_SceneDone_1e021614-e219-4a5d-b4dc-15bb78d345dd")
+    local sceneGuard = Entity("S_DEN_DruidGuard_001_d1de6b4d-02d1-47f9-8e9e-55a593e3dc71")
+
+    --Default
+    local parentB = Entity("S_DEN_ParentB_397467d4-1631-447b-a505-d44275dca78e")
+    local kid = Entity("S_DEN_SnakeKid_02257c1c-bbec-4ae3-9bcb-31c75a0a982f")
+    local canAD = false
+    local ADDelay = 20.0
+    local AD = Dialog("DEN_GuardedEntrance_AD_Parents_04a841ee-bbfc-0773-c935-93b102f20891")
+    local kidAD = Dialog("DEN_GuardedEntrance_AD_ParentsWithKid_ae04ffe3-fbfb-236e-5d05-e4cb9aca3a64")
+
+    local kidBackFlag = Flag("DEN_GuardedEntrance_State_KidIsBack_9da2a326-fc9f-f67c-d839-adc2122a2485")
+    local worryAnim = Animation("CUST_Worried_01_a4616816-be6d-4fa1-a65a-2da057196af4")
+    local waitPoint = Entity("S_DEN_ParentWaitPointA_54efbd04-7cc2-4746-ace2-66d133336cf8")
+
+    local mourningFlag =  Flag("DEN_GuardedEntrance_State_ParentsKnowDeath_f22fc759-6072-4c9a-13a9-9b80ff5e384d")
+    local mourningAnim = Animation([[KneelingFrustratedMourning_01_Loop_c3edb863-be1e-4c0a-93ca-9af9177f5c6b]])
+
+    -----------------------------------------
+    -- helper functions
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.ParentsScene = Action {
+        CanEnter = function()
+            return not GetFlag(sceneDoneFlag)
+        end,
+        function()
+            Sleep(1)
+            if canAD then
+                if not IsInDialog(me, false) and mod.dialog.AreSpeakersAvailableAndNear(me, 10.0, true, false, false, {sceneGuard, parentB}) then
+                    canAD = false
+                    StartAutomatedDialog(sceneAD, true, me, sceneGuard, parentB)
+                end
+            end
+        end,
+    }
+
+    nodes.AD = Action {
+        CanEnter = function()
+            return canAD
+        end,
+        function()
+            Sleep(1)
+            if (GetFlag(kidBackFlag,nil)) then
+                if (not mod.dialog.IsSpeakerAvailableAndNear(kid, me, 10.0, true, false)) then return end
+                StartAutomatedDialog(kidAD, true, me, parentB, kid)
+            else
+                StartAutomatedDialog(AD, true, me, parentB)
+            end
+            canAD = false
+        end
+    }
+
+    nodes.Mourning = Action {
+        Valid = function()
+            return GetFlag(mourningFlag)
+        end,
+        function()
+            if not parentB.Character.IsDead and GetDistance2DTo(me, parentB) < 5.0 then
+                Sleep(5)
+            else
+                PlayAnimation(mourningAnim, false, true)
+            end
+        end
+    }
+
+    nodes.Waiting = Action {
+        function()
+            if mod.moveto.MoveToPoint(waitPoint,MovementSpeed.Stroll,me) then
+                LookFrom(waitPoint)
+                Sleep(1.0)
+                if (not GetFlag(kidBackFlag,nil)) then
+                    try
+                        PlayAnimation(worryAnim,false,true)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "Animation Failed")
+                    end
+                end
+            else
+                LookAtEntity(waitPoint, 3.0)
+            end
+            Sleep(1.0)
+        end,
+        OnLeave = function()
+            StopAnimation(me, true)
+            SetEntityEvent(me, "ForceStopDialog")
+            SetEntityEvent(parentB, "ForceStopDialog")
+            StopTimer(me, "DEN_ParentA_ADTimer")
+            StartTimer(me, "DEN_ParentA_ADTimer", 15, 0)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.DialogEnded = function(e)
+        local uuid = e.Instance.DialogUUID
+        if (uuid == AD.Guid) or (uuid == sceneAD.Guid) or (uuid == kidAD.Guid) then
+            StopTimer(me, "DEN_ParentA_ADTimer")
+            StartTimer(me, "DEN_ParentA_ADTimer", ADDelay, 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_ParentA_ADTimer" then
+            canAD = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.Event == "DEN_GuardedEntrance_StartArguing" then
+            StopTimer(me, "DEN_ParentA_ADTimer")
+            canAD = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if (e.Flag == kidBackFlag.Guid) then
+            StopAnimation(me)
+            StopTimer(me, "DEN_ParentA_ADTimer")
+            SetEntityEvent(me, "ForceStopDialog")
+            SetEntityEvent(parentB, "ForceStopDialog")
+            SetEntityEvent(kid, "ForceStopDialog")
+            canAD = true
+        elseif e.Flag == Guid("DEN_GuardedEntrance_Event_Shapeshift_648f475f-163d-c84b-8e53-10afd17fd4bf") then
+            StopTimer(me, "DEN_ParentA_ADTimer")
+            StartTimer(me, "DEN_ParentA_ADTimer", 30, 0)
+            ADDelay = 45.0
+            canAD = false
+            mod.moveto.MoveTo(waitPoint,false,1.5,"Stroll","DEN_GuardedEntrance_Fled")
+        end
+    end
+end}
+
+
+
+game.states.CAMP_GoblinHuntCelebration_ParentA = State {function ()
+
+    description = [[Parent is avenging their dead daughter in the scene with druid leader.]]
+    modules = { "shared.dialog", "shared.moveto" }
+
+    local deadDruidFlag = Flag("CAMP_GoblinHuntCelebration_Event_DruidLeaderKilled_b9fa0384-79c8-ab10-aae3-8ecefd8472c9")
+    local goneDruidFlag = Flag("CAMP_GoblinHuntCelebration_Event_SavedKagha_06dc65df-495c-882f-bda3-1d96434e01a4")
+        --scene with Kagha
+    local withKaghaAD = Dialog([[CAMP_GoblinHuntCelebration_AD_ParentsAndDruidLeader_c60184c7-a2e6-215b-3a8e-11f1dcfc39fd]])
+    local withKaghaPos = Entity([[S_CAMP_ParentAPos_887aafe0-04eb-4a57-a931-8da22cdd2da7]])
+    local kagha = Entity([[S_DEN_DruidLeader_95eb2b0b-a522-4ea5-8167-c5f4d1418156]])
+        --parents alone
+    local parentsAloneAD = Dialog([[CAMP_GoblinHuntCelebration_AD_ParentsAlone_256ab6bc-ee64-26aa-64d0-8838b577a4f3]])
+    local pos2 = Entity([[S_CAMP_ParentAPos2_bd9692f7-ddbd-4724-b214-7e58c739ead1]])
+    local partner = Entity([[S_DEN_ParentB_397467d4-1631-447b-a505-d44275dca78e]])
+
+    nodes.AfterTalkWithLeader = Action {
+        CanEnter = function()
+            return GetFlag(deadDruidFlag) or GetFlag(goneDruidFlag)
+        end,
+        function()
+            Sleep(6)
+            mod.moveto.MoveToPoint(pos2)
+            Sleep(2.0)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                parentsAloneAD,
+                {minDelay = math.random(40.0, 60.0)},
+                me, partner
+            )
+        end
+    }
+
+    nodes.BeforeTalkWithLeader = Action {
+        Valid = function()
+            return not GetFlag(deadDruidFlag) and not GetFlag(goneDruidFlag)
+        end,
+        function()
+            mod.moveto.MoveToPoint(withKaghaPos)
+            Sleep(2.0)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                withKaghaAD,
+                {minDelay = math.random(20.0, 40.0)},
+                me, partner, kagha
+            )
+            Sleep(2)
+        end
+    }
+
+end}
+
+game.states.DEN_ParentA_AfterAttack= State { function ()
+
+    description = [[Parents are packing and talking to each other about their child.]]
+
+    modules = {"shared.dialog"}
+
+    -----------------------------------------
+
+    local AD = Dialog([[DEN_DruidAttack_AD_ParentsAfterAttack_4bcaf296-9c51-1e33-a2f2-a0c0ecd165f1]])
+    local parentB = Entity("S_DEN_ParentB_397467d4-1631-447b-a505-d44275dca78e")
+    local canAD = false
+    local canTryAD = false
+    local movedToTalk = false
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Default = Selector {
+        function(nodes)
+            if canAD and canTryAD and movedToTalk then
+                return nodes.doAD
+            elseif canTryAD and mod.dialog.IsSpeakerAvailable(parentB) then
+                return nodes.moveToAndTalk
+            else
+                return nodes.Actions
+            end
+        end
+    }
+
+    nodes.Default.moveToAndTalk  = Proxy {
+        game.states.DEN_GeneralGroveStates_MoveToAndTalk,
+            params = {
+                moveTarget = "S_DEN_ParentB_397467d4-1631-447b-a505-d44275dca78e",
+                lookTarget = "S_DEN_ParentB_397467d4-1631-447b-a505-d44275dca78e"
+            }
+    }
+
+    nodes.Default.doAD = Action {
+        OnEnter = function()
+            canAD = false
+            canTryAD = false
+            movedToTalk = false
+        end,
+        function()
+            if not IsInDialog(me, false) and mod.dialog.IsSpeakerAvailableAndNear(parentB, me, 10.0, true) then
+                StartAutomatedDialog(AD, true, me, parentB)
+            end
+        end
+    }
+
+    nodes.Default.Actions = Selector{
+        OnEnter = function()
+            canAD = false
+        end,
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.Actions.Packing = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params = {
+            moveTarget = "S_DEN_PostDruidAttack_ParentAPos1_c0f644c8-352e-4b91-929f-d87e4f3f6f20",
+            anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0
+        },
+        OnLeave = function()
+            if (mod.dialog.IsSpeakerAvailable(parentB)) and not canAD then
+                canTryAD = true
+            end
+        end
+    }
+
+    nodes.Default.Actions.Overlook = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params = {
+            moveTarget = "S_DEN_PostDruidAttack_ParentAPos2_a7b43bf9-53ff-4a0f-9bc8-c4cec9a8146c",
+            anim = "CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0
+        },
+        OnLeave = function()
+            if (mod.dialog.IsSpeakerAvailable(parentB)) and not canAD then
+                canTryAD = true
+            end
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if (e.Event == "DEN_MovedToTalk") then
+                movedToTalk = true
+            end
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == AD.Guid) then
+            StopTimer(me, "DEN_ParentA_ADTimer")
+            StartTimer(me, "DEN_ParentA_ADTimer", math.random(50, 70), 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if (e.TimerName == "DEN_ParentA_ADTimer") then
+            canAD = true
+        end
+    end
+
+end}

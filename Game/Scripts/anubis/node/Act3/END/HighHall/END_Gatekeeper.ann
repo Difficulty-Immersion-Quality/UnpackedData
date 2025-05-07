@@ -1,0 +1,60 @@
+game.states.END_Gatekeeper_Combat = State {function()
+
+    local gate = Entity("S_END_CourtyardGate_7d4c17b9-cd14-42df-90f1-c818a950606c")
+    local gateLever = Entity("S_END_GateLever_19fd3dc8-f4ad-4767-93ea-ca8996cbb929")
+    local canCloseGateFlag = Flag("END_Courtyard_State_PlayerInCourtyard_f7e06241-25d8-433a-90b9-0695e63768a8")
+    local closedGate = false
+
+    self.Valid = function()
+        return not closedGate and GetFlag(canCloseGateFlag) and me.CanActInCombatTeamTurn
+    end
+
+    nodes.CloseGate = Action{
+        function()
+            try
+                local moveResult = MoveTo(gateLever, MovementSpeed.Run, false, true, 0.5, 1.0, false)
+                if moveResult == error.MovementError.None then
+                    SteerTo(gateLever)
+                    try
+                        UseItem(gateLever.Item)
+                    catch e then
+                        closedGate = true
+                    end
+                    SetWeaponUnsheathed(me, false, true)
+                    closedGate = true
+                    EndTurn(me)     
+                elseif moveResult == error.MovementError.NoResources then
+                    Sleep(1.0)
+                    EndTurn(me)
+                else
+                    closedGate = true
+                end
+            end
+        end
+    }
+end
+}
+
+game.states.END_General_Ceremorphosis = State {function()
+
+    modules = { "shared.dialog" }
+
+    local turned = false
+    local netherbrain = Entity("S_GLO_Netherbrain_3858e896-d7dd-4699-b37d-d3919ff15ba7")
+    --local turnAD = Dialog("END_General_AD_Conversion_2595d6b6-08b9-7d12-cdfd-bc15b7fa0ff1")
+
+    self.Valid = function()
+        return not turned and me.CanActInCombatTeamTurn
+    end
+
+    nodes.BecomeMindflayer = Action{
+        function()
+            --Sleep(1)
+            --StartAutomatedDialog(turnAD, true, me)
+            Sleep(1)
+            SetEntityEvent(me, "END_Converted")
+            turned = true
+        end
+    }
+end
+}

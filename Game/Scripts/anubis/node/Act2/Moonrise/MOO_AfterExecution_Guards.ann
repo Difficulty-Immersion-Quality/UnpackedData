@@ -1,0 +1,79 @@
+game.states.ExecutionGuard_Patrol = State{function ()
+    description = [[Patrolling behaviour after execution]]
+
+    modules = { "shared.moveto" }
+--------------------------------PARAMS--------------------------------
+    params.patrolSpline = {type = EParamType.String}
+    params.patrolSpeed = {type = EParamType.String}
+    params.idlePoint = {type = EParamType.String} --Fallback
+--------------------------------LOCAL--------------------------------
+    local patrolSpline = Spline(params.patrolSpline)
+    local idlePoint = Entity(params.idlePoint)
+    local patrolFailed = false
+    local isObserving = false
+--------------------------------NODES--------------------------------
+    nodes.Observe = Action {
+        CanEnter = function()
+            return isObserving
+        end,
+
+        OnEnter = function()
+            isObserving = false
+        end,
+
+        function()
+            LookFrom(patrolSpline)
+            Sleep(10 + 10 * math.random())
+        end
+    }
+
+    nodes.Patrol = Action {
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed[params.patrolSpeed], -1)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                patrolFailed = true
+                if mod.moveto.MoveToPoint(idlePoint, MovementSpeed.Stroll, me) and patrolFailed then
+                    LookFrom(idlePoint)
+                    Sleep(6 + 10 * math.random())
+                    patrolFailed = false
+                else
+                    LookAtEntity(idlePoint, 3.0)
+                    Sleep(6 + 10 * math.random())
+                    patrolFailed = false
+                end
+            end
+        end
+    }
+--------------------------------EVENTS--------------------------------
+    events.SplineControlPointReached = function(e)
+        if e.Event == "MOO_AfterExecution_Observe" then
+            isObserving = true
+        end
+    end
+
+end
+}
+
+game.states.ExecutionGuard_Idle = State{function ()
+    description = [[Idle behaviour after the execution]]
+
+    modules = { "shared.moveto" }
+--------------------------------PARAMS--------------------------------
+    params.idlePoint = {type = EParamType.String}
+--------------------------------ENTITY--------------------------------
+    local idlePoint = Entity(params.idlePoint)
+--------------------------------NODES--------------------------------
+    nodes.Idle = Action {
+        function()
+            if mod.moveto.MoveToPoint(idlePoint,  MovementSpeed.Walk, me) then
+                LookFrom(idlePoint)
+                Sleep(6 + 10 * math.random())
+            else
+                LookAtEntity(idlePoint, 3.0)
+                Sleep(6 + 10 * math.random())
+            end
+        end
+    }
+end
+}

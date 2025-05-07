@@ -1,0 +1,186 @@
+game.states.GOB_Spiders = State{function()
+
+    modules = {"shared.moveto"}
+
+    params.outPoint ={type = EParamType.String, required=true, help=[[
+        Point where spiders move after player persuaded him to kill goblins.
+    ]]}
+
+    -----------------------------
+    -- Local variables
+    local victim = nil
+    local outPoint = Entity(params.outPoint) -- entity, trigger
+    local doorOpened = Flag("GOB_SpiderNest_State_DoorOpen_a86f4402-d1b3-4fc2-8056-0995f9b10b7c")
+    local waitingFlag = Flag("GOB_SpiderNest_State_SpidersChill_7e28b817-42cc-2d7c-8bca-9f4b6fd9c35e")
+    local outFlag = Flag("GOB_SpiderNest_State_SpidersOut_0aa86afb-0304-871a-a943-2e93ada3b6f8")
+	local biteAnimation = Animation("CMBT_Melee_RHand_01_Attack_f4ac302b-1569-404f-bd52-1fe443e265df")
+    local thePit = Entity("TRIGGERGUID_S_GOB_SpiderNest_ThePit_0f3188b4-5cfe-4353-8bf0-d528cda0a446")
+    local spiderTag = Tag("SPIDER_8c8932c5-45f7-4d45-8f62-182db82ddcb0")
+
+    local readyToEscape = false
+    local leftCage = false
+    local adjustedVictimPos = false
+    -----------------------------
+    -- State nodes
+
+    -----------------------------
+    -- Nodes
+
+    nodes.leaveCage = Action{
+        function()
+            DebugText(me,"runOut")
+            if mod.moveto.MoveToPoint(outPoint, MovementSpeed.Run, me, 0.5) then
+                leftCage = true
+            else
+                if (GetFlag(outFlag)) then Sleep(4) 
+                else readyToEscape = false
+                end
+            end            
+        end,
+        Valid = function()
+            return GetFlag(doorOpened) and (GetFlag(waitingFlag) or readyToEscape) and not leftCage
+        end
+    }
+
+    nodes.enjoyFreedom = Action{
+        function()
+            WaitForInterrupt()          
+        end,
+        Valid = function()
+            return leftCage
+        end
+    }
+
+    nodes.idleCage = Selector{
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end,
+        Valid = function()
+            return victim~=nil 
+        end
+    }
+
+    nodes.idleCage.attack = Action{
+        function()
+            readyToEscape = false
+            if mod.moveto.MoveToPoint(victim, MovementSpeed.Walk, me, 1) then
+                SetEntityEvent(victim, "GOB_SpiderNest_VictimHostile")
+                Sleep(5)
+            end
+        end,
+        Valid = function()
+            return not victim.Character.IsDead
+        end
+    }
+
+    nodes.idleCage.bite = Selector{
+		function(nodes)
+			return FindFirstSelectable(nodes)
+		end,
+		Valid = function()
+			return victim.Character.IsDead and IsInTrigger(victim,thePit.Trigger) and not (GetFlag(doorOpened) and (GetFlag(waitingFlag) or readyToEscape))
+		end
+	}
+
+	nodes.idleCage.bite.moveTo = Action{
+        function()
+            DebugText(me,"Moving closer to play anim")
+            DebugText(me,"Distance: [1]",GetDistanceTo(me, victim))
+            local validPos = FindValidPosition(victim, 3.0, me)
+            adjustedVictimPos = false
+            if not mod.moveto.MoveToPoint(validPos, MovementSpeed.Walk, me)
+            then                
+                readyToEscape = true
+                DebugText(me,"Movement failed exception!")
+                Sleep(6)
+                readyToEscape = false
+            end
+		end,
+		Valid = function()
+			return GetDistanceTo(me, victim)>3.5
+		end
+	}
+
+    nodes.idleCage.bite.adjust = Action {
+        function()
+            DebugText(me,"adjust")
+            local validPos = FindValidPosition(victim, 2.0, me)
+            if mod.moveto.MoveToPoint(validPos, MovementSpeed.Walk, me) then
+                adjustedVictimPos = true
+            end
+        end,
+		Valid = function()
+			return not adjustedVictimPos
+		end
+    }
+
+	nodes.idleCage.bite.anim = Action{
+	   function()
+            DebugText(me,"bite")
+            SteerTo(victim)
+            Sleep(5)            
+            PlayAnimation(biteAnimation, true, false)
+            SteerTo(victim)
+            Sleep(5)   
+            readyToEscape = true
+       end
+	}
+
+	nodes.idleCage.bite.fallback = Action{
+		function()
+			DebugText(me,"nodes.idleCage.bite.fallback")
+            victim = nil
+            WaitForInterrupt()
+		end
+    }
+
+	nodes.idleCage.fallback = Action{
+		function()
+			DebugText(me,"nodes.idleCage.fallback")
+            victim = nil
+            readyToEscape = true
+            WaitForInterrupt()
+		end
+    }
+
+    nodes.idleWait = Action{
+        function()
+            --DebugText(me,"idleWait, IsOpened [1], victim = [2], GetFlag(waitingFlag) [3]", GetFlag(doorOpened), victim ,GetFlag(waitingFlag, nil))            
+            readyToEscape = true
+            WaitForInterrupt()
+        end
+    }
+
+
+    -----------------------------
+    -- Events
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me then
+            SetUnicastEntityEvent(me,"ClearPeaceReturn")
+        end
+    end
+
+    events.EnteredTrigger = function(e)
+        if e.Target.IsCharacter and not e.Target.Character.IsPartyMember and not IsTagged(e.Target,spiderTag)
+        and e.Trigger.Trigger.IsEventTrigger and e.Trigger.Trigger.EnterEvent =="GOB_SpiderNest_EnteredSpiderPit" then
+            victim = e.Target
+            SetEntityEvent(victim, "GOB_SpiderNest_VictimFell")
+            Interrupt()
+        end
+    end
+
+	events.LeftTrigger = function(e)
+        if e.Target.IsCharacter then
+           if e.Event =="GOB_SpiderNest_LeftSpiderPit" then 
+                if victim == e.Target then
+                    victim = nil
+                end
+                SetEntityEvent(e.Target, "GOB_SpiderNest_Left")
+            end
+        end
+    end
+
+
+end
+}

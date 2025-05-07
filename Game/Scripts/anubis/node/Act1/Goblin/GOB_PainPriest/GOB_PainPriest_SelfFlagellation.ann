@@ -1,0 +1,102 @@
+game.states.GOB_PainPriest_SelfFlagellation = State { function()
+
+    description = [[Pain Priest's main action before doing a penance with the player.]]
+
+    modules = {"shared.items"}
+
+    local ready = false
+    local scourge = Entity("S_GOB_PenanceScourge_ecd4e32e-0cd1-4d9a-b4ab-8b42917d666f")
+    local penancePoint = Entity("S_GOB_PenanceRotation_910b416d-5600-4f57-8026-05112f19a8db")
+    local selfPenanceAnimEnter = Animation("CUST_KneelFlailingSelf_01_Start_abf48a17-aa77-4280-98c0-2c7938a844c4")
+    local selfPenanceAnimLoop = Animation("CUST_KneelFlailingSelf_01_Loop_da880601-0edd-435c-ba05-7ec71f60b8e1")
+    local selfPenanceAnimExit = Animation("CUST_KneelFlailingSelf_01_End_9858396f-000d-44ee-ba94-1f03c21fed73")
+    local selfPenanceAD = Dialog("GOB_PainPriest_AD_SelfFlagellation_5418d8fa-c957-cb10-96c5-cf3f04779934")
+    local selfPenanceFlag = Flag("GOB_PainPriest_State_SelfFlagellating_281a70a7-e26f-41f6-860f-e164976a2b18")
+    local painPenanceSub = Entity("S_GOB_PainPenance_SUB_3189cec7-0f63-468c-a147-6a5fe426f518")
+    -----------------------------------------
+    -- Local functions
+    helpers.ResetSelfFlagellation = function()
+        ready = false
+        ClearFlag(selfPenanceFlag, me)
+        DebugText(me, "ResetSelfFlagellation")
+        StopAnimation(me, false)
+        Sleep(5)
+    end
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnLeave = function()
+        helpers.ResetSelfFlagellation()
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes.Flagellation = Action {
+        CanEnter = function()
+            return ready == true
+        end,
+        OnEnter = function()
+            SetFlag(selfPenanceFlag, me)
+        end,
+        function()
+            if not IsInDialog(me, false) then
+                StartAutomatedDialog(selfPenanceAD, false, me)
+            end
+            Sleep(math.random(15, 25))
+            ready = false
+        end,
+        OnLeave = function()
+            helpers.ResetSelfFlagellation()
+        end,
+        OnInterrupt = function()
+            helpers.ResetSelfFlagellation()
+        end,
+    }
+
+    nodes.GetInPosition = Action {
+        function()
+            Sleep(1.0)
+            try
+                MoveTo(penancePoint)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(1.0)
+            end
+            LookFrom(penancePoint)
+
+            if (helpers.ItemIsAvailable(scourge)) then
+                Equip(me.Character, scourge.Item)
+                SetWeaponUnsheathed(me, true, false)
+                Sleep(2.0)
+                PlayLoopingAnimation(selfPenanceAnimEnter, {selfPenanceAnimLoop}, selfPenanceAnimExit)
+                Sleep(25 + 10 * math.random())
+                StopAnimation(me)
+                Sleep(5 + 2 * math.random())
+                SetWeaponUnsheathed(me, false, true)
+                Unequip(me.Character, scourge.Item)
+                SLeep(1.0)
+            end
+            ready = true
+        end,
+    }
+
+    helpers.ItemIsAvailable = function (item)
+        --[[the priest puts the weapon down after the penance,
+            so I'm not handling having it already into the priest's inventory.
+            That would only be caused by failure of putting the weapon down or by reverse pickpocketing;
+            the fallbacks are sufficient (picking another weapon / summoning a weapon)]]
+        if (item ~= nil and not mod.items.SafeIsDestroyed(item)) then
+            if item.IsItem and not item.Item.IsDestroyed then
+                if item == scourge then
+                    -- the scourge is in the priest inventory at the start
+                    if IsInTrigger(item, painPenanceSub.Trigger) or IsInInventoryOf(item, me) then
+                        return true
+                    end
+                elseif not item.Item.IsInInventory and IsInTrigger(item, painPenanceSub.Trigger) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+end}

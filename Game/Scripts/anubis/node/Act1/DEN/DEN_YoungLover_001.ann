@@ -1,0 +1,198 @@
+game.states.DEN_YoungLover_001 = State {function ()
+    description = [[]]
+
+    modules = { "gustav.Act1.GroveRefugee", "shared.moveto", "shared.dialog"}
+
+    -----------------------------------------
+    -- Local variables
+    --Tables
+    local crateItems = {
+        Entity("S_DEN_YoungLoverGoods_02_82770767-69ec-4b57-a3da-c4976d192512"),
+        Entity("S_DEN_YoungLoverGoods_03_837ac93a-6a56-41d0-ac37-3333aaabdb85")
+    }
+    local goodsPos = {}
+
+    --Entities
+    local youngLover002 = Entity("S_GLO_YoungLover_02_dcf597c0-36c5-4c81-957a-6fe9fca50a68")
+
+    --Bools
+    local canAD = false
+    local canTryAD = false
+    local blockedAD = false
+
+    --Dialogs
+
+    local dualAD = Dialog("DEN_AD_YoungLover1_2_1bbf53ba-7ece-4983-e120-76d683beceb5")
+    local soloAD = Dialog("DEN_YoungLover_AD_1_eec44154-4c2b-1b59-b5e9-896b6f48376e")
+    local postAttackAD = Dialog("DEN_DruidAttack_AD_LoversPackingAfterAttack_777de706-611d-fd0f-fc80-023161171f02")
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        mod.GroveRefugee.SetGoodsPos(crateItems, goodsPos)  
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Default = Selector{
+        function(nodes)
+            if ((canTryAD and canAD and mod.dialog.IsSpeakerAvailableAndNear(youngLover002, me, 5.0, true)) or not mod.dialog.IsSpeakerAvailable(youngLover002)) and nodes.doAD.IsSelectable() then
+                return nodes.doAD
+            elseif canTryAD and nodes.doAD.IsSelectable() then
+                return nodes.moveToAndTalk
+            else
+                return nodes.Actions
+            end
+        end
+    }
+
+    nodes.Default.moveToAndTalk  = Proxy {
+        game.states.DEN_GeneralGroveStates_MoveToAndTalk,
+            params={
+                moveTarget = "S_GLO_YoungLover_02_dcf597c0-36c5-4c81-957a-6fe9fca50a68",
+                lookTarget = "S_GLO_YoungLover_02_dcf597c0-36c5-4c81-957a-6fe9fca50a68"
+            }
+    }
+
+    nodes.Default.doAD = Action {
+        OnEnter = function()
+            canAD = false
+            canTryAD = false
+        end,
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                dualAD,
+                {
+                    waitForCompletion = true,
+                    fallbackSoloDialog = soloAD,
+                },
+                me,
+                youngLover002
+            )
+            blockedAD = true
+        end,
+        OnLeave = function()
+            blockedAD = true
+            StopTimer(me,"ADTimer_DEN_AD_YoungLover1_2")
+            StartTimer(me,"ADTimer_DEN_AD_YoungLover1_2", 40 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return not blockedAD
+        end
+    }
+
+    nodes.Default.Actions = Selector{
+        OnEnter = function()
+            canAD = false
+        end,
+        function(nodes)
+            if mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+            and mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2]) then
+                return FindDifferentRandomSelectable(nodes)
+            else
+                return FindRandomSelectable(nodes)
+            end
+        end
+    }
+
+    nodes.Default.Actions.AtCrate1 = Proxy {
+        Valid = function()
+           return mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1]) --must use local variables as params cannot pass updated vector3
+        end,
+        game.states.DEN_GeneralGroveStates_WorldBehaviourAtPoint,
+        params={
+            moveTarget = "S_DEN_YoungLover01_Position1_5ab20c48-1f92-47d4-988d-9f19e143d38c",
+            lookTarget = "S_DEN_YoungLoverGoods_02_82770767-69ec-4b57-a3da-c4976d192512",
+            worldBehaviour = "BHVR_WRLD_GLO_Packing_03_8ad65b3f-2765-9112-3524-d4c413c12047",
+            worldBehaviourTrigger = "S_BHVR_WRLD_DEN_Packing_03_Lover02_SceneTrigger_6f80c10a-9688-4fb1-838b-10e9ad15f8ff",
+            behaviourPartners = {"S_DEN_YoungLoverGoods_02_82770767-69ec-4b57-a3da-c4976d192512"},
+            waitMin = 0,
+            waitMax = 0
+        },
+        OnLeave = function()
+            if (mod.dialog.IsSpeakerAvailable(youngLover002)) and not canAD then
+                canTryAD = true
+            end
+        end
+    }
+
+    nodes.Default.Actions.AtCrate2 = Proxy {
+        Valid = function()
+           return mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])--must use local variables as params cannot pass updated vector3
+        end,
+        game.states.DEN_GeneralGroveStates_WorldBehaviourAtPoint,
+        params={
+            moveTarget = "S_DEN_YoungLover01_Position2_1927b596-1833-4238-b20a-c9acf3b9eff0",
+            lookTarget = "S_DEN_YoungLoverGoods_03_837ac93a-6a56-41d0-ac37-3333aaabdb85",
+            worldBehaviour = "BHVR_WRLD_GLO_PackingHappy_01_2d5ed1e2-9cbe-f035-48a3-6d9c0973d5de",
+            worldBehaviourTrigger = "S_BHVR_WRLD_DEN_PackingHappy_01_Lover02_SceneTrigger_532d400f-3d24-4da5-a9fa-c75f3f02966e",
+            behaviourPartners = {"S_DEN_YoungLoverGoods_03_837ac93a-6a56-41d0-ac37-3333aaabdb85"},
+            waitMin = 0,
+            waitMax = 0
+        },
+        OnLeave = function()
+            if (mod.dialog.IsSpeakerAvailable(youngLover002)) and not canAD then
+                canTryAD = true
+            end
+        end
+    }
+
+    nodes.Default.Actions.Wander = Proxy {
+        CanEnter = function()
+            return not mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+            and not mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])
+        end,
+        game.states.DEN_GeneralGroveStates_Wander,
+        params={
+            anchor = "S_DEN_YoungLover01_Position3_83d7d45f-2bcf-49d8-9183-beeaf0aebb13",
+            wanderMin = 2.0,
+            wanderMax = 3.0
+        },
+        OnLeave = function()
+            if (mod.dialog.IsSpeakerAvailable(youngLover002)) and not canAD then
+                canTryAD = true
+            end
+        end
+    }
+
+    nodes.Default.Actions.Rest = Action {
+        CanEnter = function()
+            return not mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+            and not mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])
+        end,
+        function()
+            Sleep(math.random(4,8))
+        end,
+        OnLeave = function()
+            if (mod.dialog.IsSpeakerAvailable(youngLover002)) and not canAD then
+                canTryAD = true
+            end
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_MovedToTalk") then
+                canAD = true
+            end
+        end
+    end
+
+    events.FlagSet = function(e)
+        if(e.Flag == Guid("DEN_DruidAttack_State_PrepAfterDeathOfDruids_b4754af7-07ec-433c-87d2-e78ef4c79e6e")) then
+            dualAD = postAttackAD
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_AD_YoungLover1_2") then 
+            blockedAD = false
+        end
+    end
+
+
+end}

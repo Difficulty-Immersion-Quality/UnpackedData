@@ -1,0 +1,66 @@
+game.states.FOR_SeluneStash_ArcanaCheck = State{
+    function()
+        description = [[Triggers Arcana check when the player sees the Selune Stash]]
+
+        ---------------------------------------------
+        -- Local params
+        params.maxDistance = {type = EParamType.Number, required=false, default=3.0, help=[[
+            maximum distance that players are required to be in
+        ]]}
+        ---------------------------------------------
+
+        ---------------------------------------------
+        -- Local values
+        local seen = false
+        local characterAttemptedCheck = {}
+        ---------------------------------------------
+
+        ---------------------------------------------
+        -- Nodes
+        nodes.Idle = Action{
+            function()
+                WaitForInterrupt()
+            end
+        }
+        ---------------------------------------------
+
+        ---------------------------------------------
+        -- Events
+        events.Activated = function()
+            if not seen then
+                StartTimer(me, "CheckSight", 0.5, -1)
+            end
+        end
+
+        events.Deactivated = function()
+            if not seen then
+                StopTimer(me, "CheckSight")
+            end
+        end
+
+        events.TimerFinished  = function(e)
+            if e.TimerName == "CheckSight" then
+                local actives = GetActiveCharacters(me, params.maxDistance)
+                for _,char in pairs(actives) do
+                    if char.Character.IsPlayer and CanSee(char, me) and not characterAttemptedCheck[char.Character] then
+                        seen = true
+                        SetEntityEvent(char, "FOR_SeluneStash_ChestSeen", me)
+                        characterAttemptedCheck.insert(char.Character)
+                    end
+                end
+            end
+        end
+
+        events.Destroyed = function(e)
+            if e.Entity == me and not seen then
+                StopTimer(me, "CheckSight")
+            end
+        end
+
+        events.StatusRemoved = function(e)
+            if e.Status.StatusID == "FOR_SELUNESTASH_CHESTSEAL" then
+                StopTimer(me, "CheckSight")
+            end
+        end
+    end
+}

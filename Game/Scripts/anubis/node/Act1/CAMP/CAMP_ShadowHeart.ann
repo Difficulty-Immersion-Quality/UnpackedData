@@ -1,0 +1,448 @@
+game.states.CAMP_ShadowHeart = State {function()
+    description = [[Behaviour of ShadowHeart at the campsite]]
+
+    modules = { "shared.dialog", "shared.moveto", "shared.math" ,"shared.character"}
+
+    -- Flags
+    local campNight = Flag("GLO_CAMP_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+    local nightsongPoints = Flag("ORI_Shadowheart_State_NightsongPoint_HasEnoughPoints_82893505-534a-461a-8dd5-0f4677dad6ce")
+    local irregularState = Flag("ORI_Shadowheart_State_IrregularBehaviour_a1e4a324-4c58-48fb-b08e-d538fec45af8")
+    local hasBox = Flag("GLO_InfernalBox_State_BoxBoundedTo_f4d2be66-0443-4069-8ca2-570143f17e27")
+    local hasSpearOfNight = Flag("ORI_Shadowheart_Behaviour_HasSpearOfNight_bd6f222d-e7fe-4d78-a72f-ed1f44a752e9")
+    local knowBox = Flag("GOB_Orpheus_State_HadVoiceOfAbsoluteEvent_9546407d-19e3-4f26-88af-5970896997d7")
+    local sharPath = Flag("ORI_Shadowheart_State_SharPath_bf9ae334-ff6a-458d-b898-3074bca0bdfb")
+    local enemyOfSharPath = Flag("ORI_Shadowheart_State_EnemyOfSharPath_055bbe0f-05f5-444b-a7e2-0f66edd2178c")
+
+    local dogChaseFlag = Flag("CAMP_Courier_Dog_Event_ChaseOwlbearCub_a52a966c-e387-42c6-85a8-ced6dd9d4a74")
+    local dog = Entity("S_FOR_Courier_Dog_3059f69c-068d-4e28-8491-55953c027901")
+    local dogFlag = Flag("CAMP_Courier_Dog_Moved2Camp_7dcb7732-1c76-463a-bec9-251f30860e6c")
+    local owlbearCub = Entity("S_FOR_OwlBear_Cub_001_c66b2865-6613-4372-b97a-e330c1d75d09")
+    local owlbearCubFlag = Flag("GOB_ChickenChase_State_OwlbearAcquired_da704027-02ea-717c-4390-f538e5e5cd7a")
+    local pet = nil
+    local anim_petting = Animation("CUST_CallingPet_01_faf30563-36c3-46d9-998d-86d37a0a7483")
+    local ad = Dialog("CAMP_Shadowheart_PAD_CallPet_8c951c6b-bb62-09f4-8fab-937300799d70")
+    local flag_calldog = Flag("CAMP_Shadowheart_Event_CallDog_a77ef785-def5-45cc-a5a1-e9e0cd08765b")
+    local flag_callowlbear = Flag ("CAMP_Shadowheart_Event_CallOwlbear_6a1fe539-f2ea-47fa-ab19-916958b23eee")
+    local petcoming = Flag("CAMP_Shadowheart_Event_PetArrived_3fc1c969-f630-4d20-a61e-b1924873d8e2")
+
+    local WasIrregular = false
+    local CalledPet = false
+
+    local selectedBehaviour = nil
+    local ignoreReselectionUponInterrupt = false
+
+    self.OnEnter = function()
+        selectedBehaviour = nil
+        ignoreReselectionUponInterrupt = false
+    end
+
+    nodes.Irregularity = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_Dejected_01_Start_55dac046-b8d2-4681-906d-f263c263071c",
+                    idleAnim = "CUST_Dejected_01_Loop_487b6cb3-1ca3-4041-acba-bcac93cfcbe5",
+                    idleAnimEnd = "CUST_Dejected_01_End_c49344c6-72ce-460a-b55c-94708983e6be"},
+        OnEnter = function()
+            SetFlag(irregularState)
+            DebugText(me, "Irregular State")
+        end,
+        OnLeave = function()
+            ClearFlag(irregularState) 
+            WasIrregular = true   
+        end,
+        Valid = function()
+            return GetFlag(nightsongPoints) and not WasIrregular and not GetFlag(sharPath) and not GetFlag(enemyOfSharPath)
+        end
+    }
+
+    nodes.ReachPet = Action {
+        function()
+            StopTimer(me, "CAMP_Shadowheart_PetWait")
+            if pet ~= nil then
+                SteerTo(pet)
+                if mod.dialog.IsSpeakerAvailable(me) and pet ~= nil then
+                    StartAutomatedDialog(ad, false, me)
+                    PlayAnimation(anim_petting)
+                    ClearFlag(petcoming)
+                    CalledPet = true
+                end
+            end
+        end,
+
+        OnLeave = function()
+            if GetFlag(flag_callowlbear) then
+                ClearFlag(flag_callowlbear)
+            end
+
+            if GetFlag(flag_calldog) then
+                ClearFlag(flag_calldog)
+            end
+            ClearFlag(petcoming)
+        end,
+        Valid = function()
+            return GetFlag(petcoming) and not mod.character.IsDefeated(pet) and not CalledPet 
+        end
+    }
+
+    nodes.CAMP_ShadowHeart = Selector{
+        function(nodes)
+            -- Check if the behaviour was interrupted and enter it again if still valid
+            if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                ignoreReselectionUponInterrupt = false
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+
+            -- Always clear this, in case it was interrupted but was not able to select a node
+            ignoreReselectionUponInterrupt = false
+
+            -- Select new behaviour
+            local selectedNode = FindWeightedRandomSelectable(nodes, {
+                [nodes.Pray] = 1,
+                [nodes.Meditate] = 1,
+                [nodes.PlayingWithPuzzleBox] = 1,
+                [nodes.WoundFlare] = 1,
+                [nodes.ReadingBook] = 1,
+                [nodes.WateringPlant] = 1,
+                [nodes.CallingPet] = 2,
+                [nodes.PolishSpearOfNight] = 2,
+            })
+            selectedBehaviour = selectedNode.Name
+            return nodes.TryGetChild(selectedBehaviour)
+        end,
+
+        Valid = function(nodes)
+            return CheckAnySelectable(nodes)
+        end
+    }
+
+    -- Full Camp Behaviours
+
+    nodes.CAMP_ShadowHeart.CallingPet = Action {
+        function()
+            if GetFlag(owlbearCubFlag) and GetFlag(dogFlag) then    
+                if mod.math.CoinToss(0.5) then
+                    pet = owlbearCub
+                    SetFlag(flag_callowlbear)
+                    StartTimer(me, "CAMP_Shadowheart_PetWait", 20.0, 0)
+                    WaitForInterrupt()
+                elseif not GetFlag(flag_callowlbear) then
+                    pet = dog
+                    SetFlag(flag_calldog)
+                    StartTimer(me, "CAMP_Shadowheart_PetWait", 20.0, 0)
+                    WaitForInterrupt()
+                end
+
+            elseif GetFlag(owlbearCubFlag) and not GetFlag(flag_calldog) then
+                pet = owlbearCub
+                SetFlag(flag_callowlbear)
+                StartTimer(me, "CAMP_Shadowheart_PetWait", 20.0, 0)
+                WaitForInterrupt()
+            elseif GetFlag(dogFlag) and not GetFlag(flag_callowlbear) then
+                pet = dog
+                SetFlag(flag_calldog)
+                StartTimer(me, "CAMP_Shadowheart_PetWait", 20.0, 0)
+                WaitForInterrupt()
+            end
+        end,
+
+        CanEnter = function()
+            return not GetFlag(dogChaseFlag) and GetFlag(dogFlag) and not CalledPet or GetFlag(owlbearCubFlag) and not CalledPet
+        end,
+
+        Valid = function()
+            return not mod.character.IsDefeated(dog) or not mod.character.IsDefeated(owlbearCub)
+        end
+    }
+
+    nodes.CAMP_ShadowHeart.WateringPlant = Proxy {
+        game.states.CAMP_Shadowheart_WateringPlants
+    }
+
+    nodes.CAMP_ShadowHeart.PolishSpearOfNight = Proxy {
+        game.states.CAMP_WorldBehaviourAtIdlePos,
+        params = {  behaviourPos = "CAMPPOS",
+                    worldBehaviourDialog = "BHVR_WRLD_CAMP_Shadowheart_PolishSpearOfNight_e1884fd0-cf99-f6be-4a38-3b7d699ef2d5"},
+
+        Valid = function()
+            return GetFlag(hasSpearOfNight)
+        end
+    }
+
+    nodes.CAMP_ShadowHeart.ReadingBook = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716",
+                    loopIdleAnim = false,
+                    sleepDurationMin = 10.0,
+                    sleepDurationMax = 18.0}
+    }
+
+    nodes.CAMP_ShadowHeart.Pray = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_Praying_01_Start_e5488b36-2aa0-40be-b6e3-2165a9d38f02",
+                    idleAnim = "CUST_Praying_01_Loop_b45ab827-aebd-49ed-9ac7-07a1489a5490",
+                    idleAnimEnd = "CUST_Praying_01_End_a1c0b0da-ea50-48a0-aba8-d2986c8b2737",
+                    loopIdleAnim = false,
+                    idleAnimLength = 21.2,
+                    idleAnimEndLength = 4.7,
+                    sleepDurationMin = 10.0,
+                    sleepDurationMax = 20.0}
+    }
+
+    nodes.CAMP_ShadowHeart.WoundFlare = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_EPI_Shadowheart_WoundFlaring_01_1e154f3b-825a-4a19-8200-e777bb87388f",
+                    loopIdleAnim = false,
+                    sleepDurationMin = 15.0,
+                    sleepDurationMax = 25.0}
+    }
+
+    nodes.CAMP_ShadowHeart.Meditate = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_Meditating_01_Start_12c9c463-0762-4ef3-a24e-29b5254f580f",
+                    idleAnim = "CUST_Meditating_01_45b1a54b-b127-46d2-bfe6-daa8963398ea",
+                    idleAnimEnd = "CUST_Meditating_01_End_ad0be56c-63b4-4b24-9859-ebcd282ba9f8",
+                    loopIdleAnim = false,
+                    idleAnimLength = 30.4,
+                    idleAnimEndLength = 3.3,
+                    sleepDurationMin = 20.0,
+                    sleepDurationMax = 30.0}
+    }
+
+    nodes.CAMP_ShadowHeart.PlayingWithPuzzleBox = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_PlayingWithPuzzleBox_01_Start_bcd55478-f24e-47e3-b085-a6e48639daca",
+                    idleAnim = "CUST_PlayingWithPuzzleBox_01_Loop_f5fc41e1-1331-47c1-924b-bf30ce704d93",
+                    idleAnimEnd = "CUST_PlayingWithPuzzleBox_01_End_bdd45fea-c48b-4f96-b6e7-161af3ec7404",
+                    loopIdleAnim = false,
+                    idleAnimLength = 24.7,
+                    idleAnimEndLength = 1.6,
+                    sleepDurationMin = 5.0,
+                    sleepDurationMax = 15.0},
+        Valid = function()
+            return GetFlag(hasBox, me) and GetFlag(knowBox)
+        end
+    }
+
+    -- Clear current behaviour on day<->night transition
+    events.FlagSet = function(e)
+        if e.Flag == campNight.Guid then
+            CalledPet = false
+            Interrupt()
+        end
+
+        if e.Flag == petcoming.Guid then
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == campNight.Guid then
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if e.Event == "InterruptCampBehaviour" then
+                selectedBehaviour = nil
+                Interrupt()
+            elseif e.Event == "InterruptCampBehaviour_WithoutReselection" then
+                Interrupt()
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "CAMP_Shadowheart_PetWait" then
+            if GetFlag(flag_callowlbear) then
+                ClearFlag(flag_callowlbear)
+            end
+
+            if GetFlag(flag_calldog) then
+                ClearFlag(flag_calldog)
+            end
+
+            if GetFlag(petcoming) then
+                ClearFlag(petcoming)
+            end
+            Interrupt()
+        end
+    end
+
+end}
+
+game.states.CAMP_ShadowHeartNightBehaviours = State {function()
+    modules = { "shared.util" }
+
+    -- Dialogs
+    local nightCRDs = {}
+
+    -- Flags
+    local CAMP_GLO_State_InCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+    local NIGHT_DaisyDream1 = Flag("NIGHT_DaisyDream1_52669b07-9584-4c9d-8219-49679811fd4f")
+
+    -- Behaviour Vars
+    local inProgressCrd = nil
+
+
+    self.OnInit = function()
+        nightCRDs["Ceremorphosis_NightOne"] = Guid("CAMP_Night1_CRD_Shadowheart_04e27ea1-5c2b-46c5-fcfe-ab88d27ab91d")
+    end
+
+    -- Behaviours tied to specific camp nights
+    nodes.ceremorphosis_NightOne = Proxy {
+        game.states.CAMP_Sitting,
+        params = {  behaviourPos = "CAMPPOS"},
+
+        Valid = function()
+            return inProgressCrd == nightCRDs["Ceremorphosis_NightOne"]
+        end
+    }
+
+    nodes.DaisyDream1 = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS"},
+
+        Valid = function()
+            return HasActiveStatus(me, "CAMP_DAISY_EXHAUSTED")
+        end
+    }
+
+    nodes.DefaultBehaviour = Proxy {
+        game.states.CAMP_ShadowHeart,
+
+        Valid = function()
+            return inProgressCrd == nil
+        end
+    }
+
+    -- Update inProgressCrd
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "NightInProgress" and mod.util.ContainsValue(nightCRDs, e.Params[1]) then
+            inProgressCrd = e.Params[1]
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == CAMP_GLO_State_InCamp.Guid and e.Entity == me then
+            inProgressCrd = nil
+            Interrupt()
+        end
+    end
+end}
+
+game.states.CAMP_Shadowheart_WateringPlants = State{function()
+
+    modules = { "shared.dialog", "shared.moveto" }
+
+    local anim_waterplant = Animation("CUST_WateringPlants_01_e82094c5-48aa-47fc-b734-17406b51d28e")
+
+    local trig_plant1 = nil
+    local trig_plant2 = nil
+    local pos = nil
+
+    local int_plantpick = nil
+
+
+    nodes.WaterPlants = Action {
+        function()
+            if trig_plant1 ~= nil and trig_plant2 ~= nil then
+                if int_plantpick == nil then
+                    int_plantpick = math.random (1, 2)
+                elseif int_plantpick == 1 then
+                    int_plantpick = 2
+                elseif int_plantpick == 2 then
+                    int_plantpick = 1
+                end
+
+                if int_plantpick == 1 then
+                    pos = trig_plant1
+                else
+                    pos = trig_plant2
+                end
+
+                if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 0.2, false) then
+                    SteerTo(pos)
+                    PlayAnimation(anim_waterplant, true, false)
+                    Sleep(1.0)
+                else
+                    Sleep(2.0)
+                end
+            else
+                Sleep(2.0)
+            end
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    self.CanEnter = function()
+        return trig_plant1 ~= nil and trig_plant2 ~= nil
+    end 
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "CAMP_CamperInCamp_WLDMAIN" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_2038f68c-cebe-8e05-044c-c370f82aecc6")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_b681d9ca-7b90-8d85-0983-d783a9776874")
+            elseif e.Event == "CAMP_CamperInCamp_WLDCAVGRN" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_9f501c5b-616a-84e9-38f7-b5ea2b587124w")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_25a9ff99-1e4c-8369-3d3e-c9fddca5fdd2")
+            elseif e.Event == "CAMP_CamperInCamp_WLDCAVSND" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_3a8721d3-5779-8325-0ec8-66cc8499c99e")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_c0d00411-045b-82a5-030f-7adf35e6454c")
+            elseif e.Event == "CAMP_CamperInCamp_WLDDUNABB" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_723e41a8-382e-84b7-12bf-73f1c204dd93")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_088724e6-e500-8337-17f6-870473515941")
+            elseif e.Event == "CAMP_CamperInCamp_WLDDUNSHA" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_d3b279f7-7ad2-81d4-0eb2-fb2ff9212c25")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_690b5c35-27b4-8054-03f9-0f32aa7ea8d3")
+            elseif e.Event == "CAMP_CamperInCamp_WLDUND" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_ae79b0df-c43d-8fa1-11d9-372626830695")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_34c2931d-711f-8e21-1610-4b39d7d08243")
+            elseif e.Event == "CAMP_CamperInCamp_WLDBAS" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_bbcf7e53-2a92-81f0-16bb-7aeb7547c652")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_41185191-d774-8070-1bf2-8efe26944200")
+            elseif e.Event == "CAMP_CamperInCamp_CREMAIN" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_af309257-a708-8bfb-1cc1-c326940880c7")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_35897595-54ea-8a7b-1108-d73945550c75")
+            elseif e.Event == "CAMP_CamperInCamp_CREINSIDE" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_1a23cadc-27e6-847d-1d95-a8c7e511bd25")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_a07cad1a-d4c8-83fd-12dc-bcda966e39d3")
+            elseif e.Event == "CAMP_CamperInCamp_SCLMAIN" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_f6ff5afe-37ed-84c1-02e5-e94b4f55f99d")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_8c483d3c-e4cf-8341-072c-fd5ef0a2754b")
+            elseif e.Event == "CAMP_CamperInCamp_HAVEN" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_57bed193-4b39-8520-262c-cc2030719650")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_ed07b4d1-f81b-84a0-2b63-d033e1ce120e")
+            elseif e.Event == "CAMP_CamperInCamp_MOONRISE" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_150911b7-f24c-8b66-13c3-d55a857c9b64")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_ab52f4f5-af2e-8ae6-180a-e96d36c91712")
+            elseif e.Event == "CAMP_CamperInCamp_SHARTEMPLE" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_3ba26a41-c19f-880c-1c2f-1948e0015fb2")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_c1fb4d8f-7e71-878c-1166-2d5b915edb60")
+            elseif e.Event == "CAMP_CamperInCamp_INTMAIN" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_ee924049-050e-8207-211b-1586ef331290")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_74eb2387-b2e0-8187-2652-299990809e4e")
+            elseif e.Event == "CAMP_CamperInCamp_FARM" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_e0f10f2c-ba95-8a0d-2ec8-d0a40b57542a")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_764ae26a-6777-898d-230f-e4b7bca4d0d8")
+            elseif e.Event == "CAMP_CamperInCamp_SLUMS" then
+                trig_plant1 = Entity("S_CMP_Shadowheart_Plant1_8daa04b7-f29f-8d7e-227a-ed126ebc2d23")
+                trig_plant2 = Entity("S_CMP_Shadowheart_Plant2_13f3e7f5-af71-8cfe-27b1-f1251f09a9d1")
+            elseif e.Event == "CAMP_CamperInCamp_ELFSONG" then
+                trig_plant1 = nil
+                trig_plant2 = nil
+            end
+        end
+    end
+
+
+end}

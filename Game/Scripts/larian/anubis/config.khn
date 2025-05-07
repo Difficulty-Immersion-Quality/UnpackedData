@@ -1,0 +1,172 @@
+local __util = require 'larian.util'
+local __enum = require 'larian.anubis.enum'
+local __env = require 'larian.anubis.env'
+local __expression = require 'larian.anubis.expression'
+local __socket = require 'larian.anubis.socket'
+local __params = require 'larian.anubis.params'
+
+local __m = {}
+
+local ParamReferencer = ls.Class('larian.anubis.config.ParamReferencer', function()end)
+function ParamReferencer:__index(name)
+    return __params.MakeConfigRef(name)
+end
+
+local function processReferences(ref, paramSpecs, unreferencedParams)
+    __util.AssertType(ref, __enum.Ref.State, __enum.Ref.Expression)
+
+    local paramValues = __util.CheckType(ref, __enum.Ref.State) and ref.params or ref.args
+
+    for k, v in pairs(paramValues) do
+        if __util.CheckType(v, __enum.Ref.State) then
+            processReferences(v, paramSpecs, unreferencedParams)
+        elseif __util.CheckType(v, __enum.Ref.Expression) then
+            processReferences(v, paramSpecs, unreferencedParams)
+            __expression.ValidateRefArgs(v)
+        elseif __util.CheckType(v, __enum.Ref.ConfigParam) then
+            local spec = paramSpecs[v.name]
+
+            __util.Assert(spec ~= nil, "params.%s does not exist in the config", v.name)
+
+            unreferencedParams[v.name] = nil
+        end
+    end
+end
+
+local function makeAnubisConfig(...)
+    local kwargs = __util.KWArgs("Config", ...)
+
+    local root = kwargs.TakeRequired("root", "root", __enum.Ref.State)
+    local params = kwargs.TakeOptional("params", {}, "params definitions", "table")
+
+    return {
+        type=__enum.Ref.Config,
+        root=root,
+        params=params
+    }
+end
+
+local function makeConstellationConfig(...)
+    local kwargs = __util.KWArgs("Config", ...)
+
+    local root = kwargs.TakeRequired("root", "root", __enum.Ref.State)
+    local inputs = kwargs.TakeOptional("inputs", {}, "input socket definitions", "table")
+    local outputs = kwargs.TakeOptional("outputs", {}, "output socket definitions", "table")
+    local connections = kwargs.TakeOptional("connections", {}, "connection definitions", "table")
+    local params = kwargs.TakeOptional("params", {}, "params definitions", "table")
+
+    return {
+        type=__enum.Ref.Config,
+        root=root,
+        inputs = inputs,
+        outputs = outputs,
+        connections = connections,
+        params=params
+    }
+end
+
+local function finalize(configName, config)
+    try
+        unreferencedParams = {}
+
+        for name, _ in pairs(config.params) do
+            unreferencedParams[name] = true
+        end
+
+        processReferences(config.root, config.params, unreferencedParams)
+
+        for name, _ in pairs(unreferencedParams) do
+            __util.Assert("param %s is not referenced in any state configuration", name)
+        end
+    catch e then
+        __util.Rethrow(e, "While processing config game.configs.%s", configName)
+    end
+end
+
+__m.MakeStateRef = function(...)
+    local kwargs = __util.KWArgs("StateRef", ...)
+
+    local state
+    try
+        state = kwargs.TakeRequired(1, "state", __enum.Prototype.State, __enum.Stub.State)
+    catch e then
+        ls.anubis.game.DebugLogCritical("StateRef points to nonexistent state. Dummy state substituted.\n" .. debug.traceback(nil, 2))
+        state = __m.game.states["Dummy"]
+    end
+    local params = kwargs.TakeAll()
+
+    return {
+        type=__enum.Ref.State,
+        prototype=state,
+        params=params
+    }
+end
+
+local function loadScript(game, path, env)
+    local configs = {}
+    local storeRefConfig = game.configs
+
+    local meta = {
+        __newindex =  function(tbl, key, value)
+            finalize(key, value)
+            rawset(storeRefConfig, key, value)
+            configs[key] = value
+        end
+    }
+    game.configs = setmetatable({}, meta)
+    
+    __m.game = game
+    local chunk = ls.Load(path, env)
+    try
+        chunk()
+    catch e then
+        __util.Rethrow(e, "While loading config file: " .. tostring(path))
+    end
+
+    game.configs = storeRefConfig
+    return configs
+end
+
+__m.LoadAnubis = function (game, configPath)
+    local env = __env.MakeScriptEnv{
+        game = game,
+        math = {
+            Vector3 = ls.math.Vector3
+        },
+        params = ParamReferencer(),
+
+        Config = makeAnubisConfig,
+        StateRef = __m.MakeStateRef,
+        ExpressionRef = __expression.MakeRef,
+        Param = __params.MakeParamSpec,
+
+        Vector3 = ls.math.Vector3,
+        Guid = ls.core.Guid
+    }
+
+    return loadScript(game, configPath, env)
+end
+
+__m.LoadConstellation = function (game, configPath)
+    local env = __env.MakeScriptEnv{
+        game = game,
+        math = {
+            Vector3 = ls.math.Vector3
+        },
+        params = ParamReferencer(),
+
+        Config = makeConstellationConfig,
+        StateRef = __m.MakeStateRef,
+        ExpressionRef = __expression.MakeRef,
+        Param = __params.MakeParamSpec,
+        SocketRef = __socket.MakeConfigSocketRef,
+        ExtSocket = __socket.MakeConfigExtSocket,
+
+        Vector3 = ls.math.Vector3,
+        Guid = ls.core.Guid
+    }
+
+    return loadScript(game, configPath, env)
+end
+
+return __m

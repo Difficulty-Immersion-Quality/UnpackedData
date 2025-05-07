@@ -1,0 +1,102 @@
+game.states.DEN_ShadowDruid = State { function ()
+
+    description = [[These druids are in rat shape pretty much the whole time]]
+
+    modules = { "shared.util" }
+
+    -----------------------------------------
+    -- params section
+    params.follow = { type = EParamType.Bool, required = false, default = true,
+        help = [[Whether to follow Kagha.]]
+    }
+
+    local druidLeader = Entity("S_DEN_DruidLeader_95eb2b0b-a522-4ea5-8167-c5f4d1418156")
+    local proxSphere = Entity("S_DEN_RatsWanderSphere_161bff68-23d0-4714-a932-841b991058b8")
+    local wolf = Entity("S_DEN_PetWolf_63471e30-7413-4496-97de-0bdf67c2f753")
+    local waitForKagha = true
+
+    -----------------------------------------
+    -- helper functions
+
+    -----------------------------------------
+    -- state node functions
+
+    -----------------------------------------
+    -- node section
+    nodes.PostSnakesCourt = Action {
+        CanEnter = function()
+            return waitForKagha
+        end,
+        function()
+            waitForKagha = false
+            while not IsInTrigger(druidLeader, proxSphere.Trigger) do
+                Sleep(1)
+            end
+        end
+    }
+
+    nodes.FleeFromWolf = Action {
+        CanEnter = function()
+            return GetDistance2DTo(me, wolf) < 3.0
+        end,
+        function()
+            try
+                FleeFrom(RelationType.Neutral, 4.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(3.0)
+            end
+        end
+    }
+
+    nodes.Wander = Selector {
+        function(nodes)
+            return GetRandomCanEnterNoRepeat(nodes)
+        end
+    }
+
+    nodes.Wander.Stroll = Action {
+        function()
+            if GetDistance2DTo(me, druidLeader) > 5 then
+                try
+                    MoveInRange(druidLeader, 1.5, 3.0, MovementSpeed.Run)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    SteerTo(druidLeader)
+                    Sleep(math.random(3, 6))
+                end
+            end
+            try
+                local wanderTime = math.random(3, 8)
+                Wander(4.0, wanderTime, MovementSpeed.Stroll, druidLeader)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                SteerTo(druidLeader)
+                Sleep(math.random(3, 6))
+            end
+        end,
+        CanEnter = function()
+            return params.follow
+        end
+    }
+
+    nodes.Wander.Pace = Action {
+        function()
+            try
+                local wanderTime = math.random(3, 8)
+                Wander(proxSphere, wanderTime, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(math.random(3, 6))
+            end
+        end,
+        CanEnter = function()
+            return not params.follow
+        end
+    }
+
+    nodes.Wander.Sleep = Action {
+        function()
+            Sleep(math.random(2, 6))
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+end}

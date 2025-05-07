@@ -1,0 +1,49 @@
+game.states.HAV_Siege_Enemy = State{function()
+
+    modules = { "shared.math", "shared.util" }
+
+    description = [[Common state for Haven Siege enemies. If they fall out of combat,
+        they'll start roaming the inn searching for survivors]]
+
+    local tr_InnGroundFloor = Entity("S_HAV_Siege_EnemiesRoamTrigger_963047cd-0486-43ea-bd4d-4a437b554736")
+    local v_NextPos = nil
+
+    self.OnInit = function()
+        v_NextPos = nil
+    end
+
+    nodes.NonMoving = Action{
+        CanEnter = function()
+            return not me.Character.CanMove
+        end,
+
+        function()
+            mod.util.SleepRandom(1.0,3.0)
+        end
+    }
+
+    nodes.RoamInnGroundFloor = Action{
+        function()
+            local movRes = MoveTo(v_NextPos, MovementSpeed.Walk, false, false, 1.0, 3.0, false)
+            if movRes ~= error.MovementError.None then
+                DebugText(me, "MoveTo failed")
+            end
+            mod.util.SleepRandom(1.0, 2.0)
+        end,
+
+        Valid = function()
+            return v_NextPos ~= nil and GetDistanceTo(me, v_NextPos) > 10.0
+        end
+    }
+
+    nodes.FindNextPos = Action{
+        function()
+            local v_Pos = TriggerGetRandomPosition(tr_InnGroundFloor.Trigger)
+            v_Pos = FindValidPosition(v_Pos, 5.0, me, true)
+            if v_Pos ~= nil then
+                v_NextPos = v_Pos
+            end
+        end
+    }
+
+end}

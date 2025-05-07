@@ -1,0 +1,125 @@
+game.states.UND_PetrifiedDrow_Spectator = State
+{    
+    function ()
+
+        params.PatrolSpline = { type=EParamType.String, default = "", help = [[]]}        
+
+        nodes.Patrol = Proxy{
+            game.states.GEN_Patrol,
+            params = {
+                patrolSpline = params.PatrolSpline
+            }
+        }
+
+        nodes.Fallback = Action 
+        {
+            function()
+               Sleep(6.0) 
+            end
+        }
+
+    end
+}
+
+game.states.UND_PetrifiedDrow_Spectator_Combat = State
+{
+    function()
+
+        helpers.IsPetrifiedByMe = function(character)
+            return HasActiveStatus(character, "UND_SPECTATOR_PETRIFIED_001")
+                    or HasActiveStatus(character, "UND_SPECTATOR_PETRIFIED_002")
+                    or HasActiveStatus(character, "UND_SPECTATOR_PETRIFIED_003")
+                    or HasActiveStatus(character, "UND_SPECTATOR_PETRIFIED_004")
+                    or HasActiveStatus(character, "UND_SPECTATOR_PETRIFIED_005")                    
+        end
+
+        description = [[Combat state for the Spectator near the fort]]
+
+        local fl_CanUnpetrify = Flag("UND_PetrifiedDrow_State_CanShootUnpetrificationRay_880a4a7f-d2cf-4eae-b31d-52318c279672")
+
+        local tr_ShootingRange = Entity("S_UND_PetrifiedDrow_ShootingRange_bece74f7-8b63-4f35-8269-9e24acb7b441")
+        local tr_ShootingPos = Entity("S_UND_PetrifiedDrow_ShootingPosition_9b192f47-8f0b-48ce-b043-f1a5a66e271f")
+        local drow
+
+        self.Valid = function()
+            return me.CanActInCombatTeamTurn and GetFlag(fl_CanUnpetrify, me)
+        end
+
+        self.OnInit = function()
+
+            drow = {}
+
+            table.insert(drow, FindEntity("S_UND_PetrifiedDrow_Wizard_1f86d2de-db96-4662-a360-6ba5ad902fd7"))            
+            table.insert(drow, FindEntity("S_UND_PetrifiedDrow_002_34722f55-c90a-4458-8740-7e3620cb9600"))
+            table.insert(drow, FindEntity("S_UND_PetrifiedDrow_003_7d816c9b-2274-423f-bc81-7e1e4a889e12"))
+            table.insert(drow, FindEntity("S_UND_PetrifiedDrow_004_28830520-e1e4-4fa8-be35-3e9feee219c9"))
+            table.insert(drow, FindEntity("S_UND_PetrifiedDrow_005_7f57e4f0-125a-4a09-85df-81465b40cde4"))
+            table.insert(drow, FindEntity("S_UND_PetrifiedDrow_006_0d5f2f17-9827-45c1-aa6e-67ff0aa4f2f1"))            
+
+        end
+
+        -- check if can see a drow to unpetrify
+        -- yes - unpetrify
+        -- no - move to shooting position (could be trigger dependant! need a separate trigger for each platform)
+
+        nodes.Seeking = Action{
+            function()
+
+                DebugText(me, "My TURN!")
+
+                -- trying to shoot at a drow that we can see from the current position
+                if #drow > 0 then
+                    for key, character in ipairs(drow) do
+                        if not character.Character.IsDead
+                                and HasLineOfSight(me, character)
+                                and helpers.IsPetrifiedByMe(character) then
+                            SteerTo(character, true)
+                            UseSpell("Target_UND_Spectator_UnpetrifyingRay", character, nil, nil, nil, true, true, true)
+                            ClearFlag(fl_CanUnpetrify, me)
+                            break
+                        end
+                    end
+                end
+
+                -- if we got here - can't see any drow from the current position, need to move
+                -- we have N different shooting positions, depending on which platform we are right now
+
+                if IsInTrigger(me, tr_ShootingRange.Trigger) then
+                    try
+                        MoveTo(tr_ShootingPos, MovementSpeed.Run, true, false)
+                        LookFrom(tr_ShootingPos)
+                    catch ex if ls.CheckType(ex, error.MovementFailed) then
+                        DebugText(me, "Movement failed to " .. tr_ShootingPos)
+                        Sleep(1.0)
+                    end
+
+                    if #drow > 0 then
+                        for key, character in ipairs(drow) do
+                            if not character.Character.IsDead
+                                    and HasLineOfSight(me, character)
+                                    and helpers.IsPetrifiedByMe(character) then
+
+                                SteerTo(character, true)
+                                UseSpell("Target_UND_Spectator_UnpetrifyingRay", character, nil, nil, nil, true, true, true)
+                                ClearFlag(fl_CanUnpetrify, me)
+                                break
+                            end
+                        end
+                    end
+                end
+                ClearFlag(fl_CanUnpetrify, me)
+            end,
+
+            Valid = function()
+                return GetFlag(fl_CanUnpetrify, me)
+            end
+        }
+
+        nodes.Fallback = Action{
+            function()
+                DebugText(me, "Fallback!")
+            end
+        }
+
+    end
+}

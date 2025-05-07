@@ -1,0 +1,65 @@
+game.states.MOO_Assault_CombatReadyIdle = State { function()
+
+    modules = { "shared.moveto" }
+
+    params.IsWeaponUnsheathed = {
+        type = EParamType.Bool,
+        required = false,
+        default = true,
+        help = [[Does the character have their weapon unsheathed?]]
+    }
+
+    params.IsCombatIdleAnim = {
+        type = EParamType.Bool,
+        required = false,
+        default = true,
+        help = [[Is the character looping the combat idle stance?]]
+    }
+
+    local assaultActiveFlag = Flag("MOO_Assault_State_Started_60786c6f-0761-4035-a462-3b42a591fdc1")
+    local nightsongPermaDeathFlag = Flag("SHA_Nightsong_State_PermaDefeated_d02e8ea4-dec7-4824-8117-efc075dee4ba")
+
+    local combatReadyAnim = Animation("CUST_Idle_Still_Combat_01_590ea7e8-ae43-4307-916b-b1133ef47dfa")
+
+    local activeIdlePoint
+
+    self.CanEnter = function()
+        return GetFlag(assaultActiveFlag) or GetFlag(nightsongPermaDeathFlag)
+    end
+
+    nodes.Idle = Action {
+        function()
+            Sleep(1.0 + 2.0 * math.random())
+
+            if params.IsWeaponUnsheathed then
+                SetWeaponUnsheathed(me, true)
+            end
+
+            if idlePoint ~= nil then
+                if mod.moveto.MoveToPoint(idlePoint, MovementSpeed.Run, me) then
+                    LookFrom(idlePoint)
+                else
+                    SteerTo(Trigger)
+                end
+            end
+
+            if params.IsCombatIdleAnim then
+                PlayAnimation(combatReadyAnim, false, true)
+            end
+
+        end,
+
+        OnLeave = function()
+            SetWeaponUnsheathed(me, false, false)
+            StopAnimation(me)
+        end
+    }
+
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "MOO_Assault_IdlePointChange" then
+            activeIdlePoint = e.Params[1]
+        end
+    end
+
+end}

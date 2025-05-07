@@ -1,0 +1,63 @@
+﻿<ls:UIWidget x:Name="Overlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:b="http://schemas.microsoft.com/xaml/behaviors" 
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+			 mc:Ignorable="d"
+             d:DesignHeight="2160" d:DesignWidth="3840"
+			 ls:UIWidget.ContextName="Overlay" d:DataContext="{d:DesignInstance {x:Type ls:DCOverlay}, IsDesignTimeCreatable=True}">
+
+    <ls:UIWidget.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Core;component/Library/CriticalHitAnimation.xaml"/>
+                <ResourceDictionary Source="/Core;component/Library/WorldTextTemplates.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </ls:UIWidget.Resources>
+    
+    <ls:UIWidget.Template>
+        <ControlTemplate>
+            <Grid>
+              <Control Visibility="{Binding CurrentPlayer.UIData.ShowHud, Converter={StaticResource BoolToVisibleConverter}}" Template="{StaticResource WorldTextDisplay}"/>
+                <!-- Show dice roll and damage during CritCam -->
+                <Grid Visibility="{Binding CurrentPlayer.UIData.ShowHud, Converter={StaticResource BoolToCollapsedConverter}}">
+                    <Control x:Name="CritCamInfo" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" IsHitTestVisible="False"/>
+
+                    <Control Template="{StaticResource WorldTextDisplay}">
+                        <Control.Resources>
+                            <Style x:Key="WorldTextPositioning" BasedOn="{StaticResource MiddlePosition}"/>
+                        </Control.Resources>
+                    </Control>
+                </Grid>
+
+                <!-- World context menu -->
+                <!-- On-release input event can be eaten by some internal code processes -like cancelling a character movement- leaving this input binding in a pressed state until you click again, 
+                missing the context opening, so to prevent this we're adding this TapTime so it will get auto released after that time -->
+                <ls:LSInputBinding x:Name="WorldContextBinding" BoundEvent="ContextMenu" Command="{Binding ShowWorldContextMenu}" TapTime="{StaticResource DelayedButtonTapTime}" EatInput="False"/>
+
+                <!--Cancel active action, before requesting game menu (except for forced casts on hovering an enemy in combat mode)-->
+                <ls:LSInputBinding x:Name="CancelInputBinding" BoundEvent="ToggleInGameMenu" Command="{Binding ActionCancelCommand}" IsEnabled="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.IsCasting}"
+                                   EatInput="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.IsForceCasting, Converter={StaticResource InvertBoolConverter}}"/>
+            </Grid>
+
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding CriticalHitAnimation, Mode=OneWay}" Value="True">
+                    <Setter TargetName="CritCamInfo" Property="Template" Value="{StaticResource Overlay.CriticalHitAnimation}" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.IsCasting}" Value="True"/>
+                        <Condition Binding="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.IsForceCasting}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <!-- If we're casting but not force-casting, the input should go to the CancelInputBinding instead -->
+                    <Setter TargetName="WorldContextBinding" Property="IsEnabled" Value="False"/>
+                </MultiDataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+</ls:UIWidget>

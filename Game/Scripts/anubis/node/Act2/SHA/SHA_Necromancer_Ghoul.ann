@@ -1,0 +1,74 @@
+game.states.SHA_Necromancer_Ghoul = State{function()
+    description=[[Behaviour for the Necromancer's ghouls]]
+
+    modules = { "shared.dialog", "shared.util" }
+
+    local ghoulMaster = Entity("S_SHA_Necromancer_53651a9f-7ea8-444f-ba2d-224390b72f7d")
+    local barricadeArea = Entity("S_SHA_Necromancer_ShadowquakeArea_9c40152a-9065-4c65-b216-ded0b09b11be")
+    local necroSharTempleLair = Entity("S_SHA_Necromancer_Lair_186344d1-746d-424e-8822-2c29179ab34c")
+    local corpsePiles = {
+        Entity("S_SHA_Necromancer_CorpsePile_001_f6aa1960-c3b4-4777-9512-4c64376fc444") ,
+        Entity("S_SHA_Necromancer_CorpsePile_002_c935aec8-ffd6-4173-9a93-7ffd662c4ace")
+    }
+    local snarlAD = Dialog("SHA_Necromancer_AD_GhoulSnarl_800d437b-cd46-c3be-881d-bfa90e9ba45e")
+
+    nodes.necroLair = Selector{
+        function(nodes)
+            return FindWeightedRandomSelectable(nodes, {
+                [nodes.Wander] = 1,
+                [nodes.Eat] = 2
+            })
+        end,
+
+        Valid = function()
+            return IsInTrigger(me, necroSharTempleLair.Trigger)
+        end
+
+    }
+
+    nodes.necroLair.Wander = Action{
+        function()
+            Wander(14.0, 3.0, MovementSpeed.Stroll, ghoulMaster)
+            local player = mod.util.GetNearbyPartyMember(me, 2.0)
+
+            if player ~= nil then
+                SteerTo(player)
+
+                if mod.dialog.IsSpeakerAvailable(me) then
+                    StartAutomatedDialog(snarlAD, false, me)
+                end
+            end
+
+            mod.util.SleepRandom(2.0,5.0)
+        end,
+
+        CanEnter = function()
+            return IsInTrigger(me, necroSharTempleLair.Trigger)
+        end
+    }
+
+    nodes.necroLair.Eat = Action{
+        function()
+
+            local target = corpsePiles[math.random(#corpsePiles)]
+            local moveResult = MoveTo(target, MovementSpeed.Stroll, true, false, 0.1, 0.5, false)
+            if moveResult ~= error.MovementError.None then
+                DebugText(me, "Movement to pile failed")
+                return
+            end
+            --trigger looping eating animation
+            DebugText(me, "Animation needed: eating from pile")
+            SteerTo(target)
+            mod.util.SleepRandom(5.0,10.0)
+        end,
+        CanEnter = function()
+            return IsInTrigger(me, necroSharTempleLair.Trigger)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

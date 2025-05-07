@@ -1,0 +1,66 @@
+game.states.LOW_MinscHideout_SluiceGuard = State{function()
+    description = [[Sluice gate guard that initiates gossip with one of the other guards]]
+
+    modules = {"shared.dialog"}
+
+    local postHeistFlag = Flag("LOW_Guildhall_State_PreCoup_9df31a91-16da-4aee-9ae0-8a824d5fccef")
+    local playerNearOneTimePartner = Flag("LOW_MinscHideout_State_PlayerNearSluiceGuard_002_18cf4b81-0cae-4856-9d71-495359733d99")
+
+    local oneTimeAD = Dialog("LOW_MinscHideout_AD_SluiceGuards_Conversation_6761c6a3-7e4a-bc3a-7e4c-425dcce023bd")
+    local repeatedAD = Dialog("LOW_MinscHideout_AD_SluiceGuardsBeforeHeist_c3808f40-ced2-5d9d-0196-d1769fa70db4")
+
+    local oneTimePartner = Entity("S_LOW_MinscHideout_SluiceGuard_002_c24f4c4a-58ad-4c82-b968-5eb7c422993c")
+    local repeatedPartner = Entity("S_LOW_MinscHideout_SluiceGuard_001_b68a4b00-ed19-4b68-8eb3-990f432c10c6")
+
+    local trigger = "S_LOW_MinscHideout_Point_SluiceGuard_000_f50bc683-c5a3-48a5-8fc4-d0874cf6ca45"
+
+    local playedOneTimeAD = false
+    
+    events.FlagSet = function(e)
+        if e.Flag == postHeistFlag.Guid then
+            repeatedAD = Dialog("LOW_MinscHideout_AD_SluiceGuardsAfterHeist_89ea98b4-eab3-dbac-2a74-4287c02c69ef")
+        end
+    end
+
+    nodes.Act = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Act.TalkToOneTimePartner = Action{
+        function()
+            local moveError = MoveTo(oneTimePartner, MovementSpeed.Walk, true, true, 1.0, 3.0)
+            if moveError ~= error.MovementError.None then
+                sleep(5.0)
+            else
+                if not playedOneTimeAD and GetFlag(playerNearOneTimePartner) then
+                    StartAutomatedDialog(oneTimeAD, true, me, oneTimePartner)
+                    playedOneTimeAD = true
+                    Sleep(math.random(3, 8))
+                else
+                    Sleep(math.random(15, 25))
+                end
+            end
+        end
+    }
+
+    nodes.Act.TalkToRepeatedPartner = Action{
+        function()
+            local moveError = MoveTo(repeatedPartner, MovementSpeed.Walk, true, true, 1.0, 3.0)
+            if moveError ~= error.MovementError.None then
+                sleep(5.0)
+            else
+                StartAutomatedDialog(repeatedAD, true, me, repeatedPartner)
+                Sleep(math.random(3, 8))
+            end
+        end
+    }
+
+    nodes.Act.StandAtTrigger = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = trigger
+        }
+    }
+end}

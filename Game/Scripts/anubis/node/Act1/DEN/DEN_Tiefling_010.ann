@@ -1,0 +1,194 @@
+game.states.DEN_Tiefling_010 = State {function ()
+    
+    description = [[Tiefling 10 on the beach sitting on a rock]]
+
+    modules = {"shared.dialog"}
+
+    local canAD = true
+    local AD = Dialog("DEN_General_AD_TieflingGuard10_d9addca1-1e17-2ba7-b833-6c64baaf7b21")
+
+    nodes.AD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = false
+                },
+                me
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_General_AD_TieflingGuard10")
+            StartTimer(me,"ADTimer_DEN_General_AD_TieflingGuard10", 40 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return canAD
+        end
+    }
+
+    nodes.TowerSit = Proxy{
+        game.states.Sit,
+        params = {
+            seat = "S_DEN_Tiefling10_Seat_a739a713-af3b-4651-bab4-a0623efc4773",
+            seatTrigger = "S_DEN_Tiefling10_SeatArea_5432ee6c-33ee-41d8-80d1-cf495898d426",
+            useSeatPositionAsFallBack = false,
+            sitIdle = StateRef{game.states.DEN_Tiefling_010_SitAtTower},
+            nonSitIdle = StateRef{game.states.DEN_Tiefling_010_StandAtTower}
+        }
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_General_AD_TieflingGuard10") then 
+            canAD = true
+        end
+    end
+
+end}
+ 
+game.states.DEN_Tiefling_010_SitAtTower = State{function()
+
+    nodes.Sitting = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+    
+end}
+
+game.states.DEN_Tiefling_010_StandAtTower = State{function()
+
+    nodes.Default = Selector {
+        function()
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.Wander = Proxy {
+        game.states.DEN_GeneralGroveStates_Wander,
+        params={
+            anchor = "S_DEN_Tiefling10_Position1_5c126105-a9de-41f7-ac9f-ac0d465b6737",
+            wanderMin = 2.0,
+            wanderMax = 3.0
+        }
+    }
+
+    nodes.Default.Rest = Action {
+        function()
+            Sleep(math.random(4,8))
+        end
+    }
+
+end}
+
+
+game.states.DEN_AttackOnDen_Tiefling010 = State {function ()
+    description = [[Helping Kaldani build barricades, or standing in cave if attack started.]]
+
+    local signalSentFlag = Flag("DEN_AttackOnDen_Event_HornBlown_92dd6f14-e011-4c21-9738-5d49c720a24e")
+
+    local hammerAnimation = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+
+    local canAD = true
+    local AD = Dialog("DEN_AttackOnDen_AD_CheckingBarricade_e7050da9-829f-c7c8-4b48-5d94acc3390c")
+    local guard = Entity("S_DEN_Tiefling_004_c9562174-44af-4ffa-9e5e-da58538f23d8")
+
+    --Patrol
+    local patrolSpline = Spline("S_DEN_BarricadePatrolSpline_c0883946-8839-4f78-8538-b16e2ea06919")
+    local canWalkOnSpline = true
+    local splineEvent = ""
+
+    nodes.AtCave = Selector{
+        Valid = function()
+            return GetFlag(signalSentFlag)
+        end
+    }
+
+    nodes.AtCave.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_AttackLakrissaPos_ed043a81-03fd-4e0c-bcf0-8d920b5f432e]]
+        }
+    }
+
+    nodes.AtGate = Selector{
+        Valid = function()
+            return not GetFlag(signalSentFlag)
+        end
+    }
+
+    nodes.AD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true
+                },
+                me,
+                guard
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_AttackOnDen_AD_CheckingBarricade")
+            StartTimer(me,"ADTimer_DEN_AttackOnDen_AD_CheckingBarricade", 40 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return canAD and splineEvent == "DEN_AttackOnDen_LakrissaBarricade"
+        end
+    }
+
+    nodes.AtGate.Patrolling = Action {
+        OnEnter = function()
+            splineEvent = ""
+        end,
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    nodes.AtGate.AtLocation = Action {
+        function()
+            if(splineEvent == "DEN_AttackOnDen_SkipPatrolPoint") then
+                canWalkOnSpline = true
+            elseif(splineEvent == "DEN_AttackOnDen_LakrissaBarricade") then
+                LookFrom(patrolSpline)
+                PlayAnimation(hammerAnimation, true, false)
+                Sleep(5)
+            else
+                LookFrom(patrolSpline)
+                Sleep(30)
+            end
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_AttackOnDen_AD_CheckingBarricade") then 
+            canAD = true
+        end
+    end
+end}

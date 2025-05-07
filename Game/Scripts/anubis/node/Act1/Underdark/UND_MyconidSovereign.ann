@@ -1,0 +1,162 @@
+game.states.UND_MyconidSovereign = State{function()
+    ----------------------------------
+    -- Local variables
+
+    modules = {"shared.moveto", "gustav.Act1.Underdark"}
+
+    local firstResurrect = Entity("S_UND_PlantDuergar_002_0028d0c1-1fb1-4c0f-baad-bf44eeae6dc1")
+    local secondResurrect = Entity("S_UND_PlantDuergar_003_6da6d51e-8cf6-4b49-a780-3f46971d5b33")
+    local fakeResurrect = Entity("S_UND_MyconidCricle_Corpses_DuergarCorpse_002_f3128b07-1354-4b84-a580-5901f11b1321")
+    local idlePos = Entity("S_UND_MyconidCircle_SovereignIdlePoint_304a2732-9882-4084-b7ad-4e38c3b4e989")
+    local resurrectArea = Entity("S_UND_MyconidCircle_CorpsesOwnershipTrigger_4baf1005-3455-44e3-bd6d-4a165c75f826")
+    local injuredGnome = Entity("S_GLO_InjuredGnome_fcf53ac7-1805-4e57-b6ed-4f7b0f90cf96")
+
+    local idleResurrectionAnim_Start = Animation("CUST_SporesAnimating_01_Start_d4bb6319-6d0e-44ff-96ff-9525bb3ec35e")
+    local idleResurrectionAnim_Loop = { Animation("CUST_SporesAnimating_01_Loop_3185d77b-fc29-4dfb-afce-593fc13a8ba9") }
+    local idleResurrectionAnim_End = Animation("CUST_SporesAnimating_01_End_6d7c8169-c749-46e1-a247-7631295db237")
+
+    local sovereignDialogGuid = Guid("UND_MyconidSovereign_934d97d0-922c-7c31-05fe-054bcc630447")
+
+    local reviveFinished = false
+    local spokeWithPlayer = false
+    local firstResSuccess = false
+    local needResurrectGnome = false
+
+    local fallbackTeleportEffect
+    local validPos = nil
+
+    self.OnInit = function()
+        fallbackTeleportEffect = PrepareEffect("VFX_Script_Stub_Poof_01_f0cf792a-0f74-d17e-ad0d-6052a6131416")
+    end
+
+    ----------------------------------
+    -- Nodes
+
+    nodes.PlacingTrophy = Proxy {
+        game.states.UND_MyconidCircle_SovereignTrophy
+    }
+
+    nodes.RevivingPlant = Selector {
+        Valid = function()
+            return firstResurrect~=nil
+        end
+    }
+
+    nodes.RevivingPlant.ResurrectGnome = Action {
+        function()
+            Sleep(1.0)
+            firstResSuccess = mod.Underdark.SporesResurrection(me, injuredGnome, MovementSpeed.Stroll, resurrectArea, false)
+            needResurrectGnome = false
+        end,
+
+        Valid = function()
+            return needResurrectGnome
+        end
+    }
+
+    nodes.RevivingPlant.IdleAfterResurrection = Action {
+        function()
+            if GetDistanceTo(me, idlePos) > 2 then
+                   if not mod.moveto.MoveToPoint(idlePos, MovementSpeed.Stroll, me) then
+                        validPos = FindValidPosition(idlePos,5.0,me)
+                        if validPos ~= nil then
+                            PlayEffectAt(fallbackTeleportEffect,me)
+                            TeleportTo(me,idlePos)
+                            PlayEffectAt(fallbackTeleportEffect,me)
+                        end
+                   end
+            end
+            LookFrom(idlePos)
+            WaitForInterrupt()
+        end,
+
+        CanEnter = function()
+            return reviveFinished
+        end,
+        Valid = function()
+            return not needResurrectGnome
+        end
+    }
+
+    nodes.RevivingPlant.FirstResurrection = Action {
+        function()
+            Sleep(2.0)
+            firstResSuccess = mod.Underdark.SporesResurrection(me, firstResurrect, MovementSpeed.Stroll, resurrectArea, false)
+        end,
+
+        Valid = function()
+            return spokeWithPlayer and not firstResSuccess
+        end
+    }
+
+    nodes.RevivingPlant.SecondResurrection = Action {
+        function()
+            Sleep(2.0)
+            reviveFinished = mod.Underdark.SporesResurrection(me, secondResurrect, MovementSpeed.Stroll, resurrectArea, false)
+        end,
+
+        Valid = function()
+            return spokeWithPlayer and not reviveFinished
+        end
+    }
+
+    nodes.RevivingPlant.PreDialogIdle = Action {
+        function()
+            if not IsInTrigger(fakeResurrect, resurrectArea.Trigger) then
+                return
+            end
+
+            if GetDistanceTo(me, fakeResurrect) > 2 then
+                local moveResult = MoveTo(fakeResurrect, MovementSpeed.Stroll, false, false, 0.5, 0.6, false)
+
+                if moveResult ~= error.MovementError.None then
+                    SteerTo(fakeResurrect)
+                    Sleep(2.0)
+                else
+                    PlayLoopingAnimation(idleResurrectionAnim_Start, idleResurrectionAnim_Loop, idleResurrectionAnim_End)
+                    WaitForInterrupt()
+                end
+            end
+
+        end,
+
+        CanEnter = function()
+            return not spokeWithPlayer
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    ----------------------------------
+    -- Events
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == sovereignDialogGuid then
+            spokeWithPlayer = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.Event == "UND_MyconidSovereign_ResurrectGnome" then
+            needResurrectGnome = true
+        end
+    end
+
+    events.Deactivated = function(e)
+        if GetDistanceTo(me, idlePos) > 2 then
+            validPos = FindValidPosition(idlePos,5.0,me)
+            if validPos ~= nil then
+                PlayEffectAt(fallbackTeleportEffect,me)
+                TeleportTo(me,validPos)
+                PlayEffectAt(fallbackTeleportEffect,me)
+            end
+        end
+    end
+end
+}

@@ -1,0 +1,174 @@
+game.states.PLA_ZhentDungeon_Zhent01 = State{function ()
+
+    modules = { "shared.moveto"}
+
+    local PLA_EscapingZhentarim_SneakingPosition
+    local PLA_EscapingZhentarim_Escape = Flag("PLA_EscapingZhentarim_Escape_05222e53-c29d-39c2-8795-0a18565a7226")
+    local PLA_EscapingZhentarim_UpTrigger
+    local PLA_EscapingZhentarim_HiddenEntranceKey2
+    local PLA_Cellar_TriggerDown
+    local PLA_EscapingZhentarim_HiddenEntrance
+    local PLA_ZhentDungeon_Zhent02
+    local PLA_Explosive_011
+    local PLA_ZhentDungeon_LadderExplosiveTrigger
+    local PLA_EscapingZhentarim_HiddenEntrance_State_Open = Flag("PLA_EscapingZhentarim_HiddenEntrance_State_Open_9bc094ea-343b-4525-ae21-04f1f85df833")
+
+    local sneakAnimation = Animation("8a2d2e0e-bd6b-4ac7-afa0-86b87f6cd997")
+    local escaped = false
+    local arrived = false
+    local leaderPassedLadder = false
+    local cancelDetonateLadder = true
+
+    self.OnInit = function()
+        PLA_EscapingZhentarim_SneakingPosition = FindEntity("S_PLA_EscapingZhentarim_SneakingPosition_2cda21f0-014d-4381-ae77-8e3194903d9d")
+        PLA_EscapingZhentarim_UpTrigger = FindEntity("S_PLA_EscapingZhentarim_UpTrigger_c7e2d500-428a-4bc2-bd91-206e99ab037a")
+        PLA_EscapingZhentarim_HiddenEntranceKey2 = FindEntity("S_PLA_EscapingZhentarim_HiddenEntranceKey2_d377fa14-70f3-45fd-906c-701480238cc1")
+        PLA_Cellar_TriggerDown = FindEntity("S_PLA_Cellar_TriggerDown_f7ca358e-ad27-428a-a565-af1344b30de6")
+        PLA_EscapingZhentarim_HiddenEntrance = FindEntity("S_PLA_EscapingZhentarim_HiddenEntrance_216fae68-3bff-486c-b32d-5bbb378d1335")
+        PLA_ZhentDungeon_Zhent02 = FindEntity("S_PLA_ZhentDungeon_Zhent02_8a064abd-3582-4a32-a9f8-748ad60f63ca")
+        PLA_Explosive_011 = FindEntity("S_PLA_Explosive_011_08cab672-97e9-4d71-b505-87da719d8d2c")
+        PLA_ZhentDungeon_LadderExplosiveTrigger = FindEntity("S_PLA_ZhentDungeon_LadderExplosiveTrigger_62e7e5f9-311a-46a2-ac25-8e552ee1a2a4")
+    end
+
+    events.EntityEvent = function(e)
+        if  e.TargetEntity == me then
+            if e.Event == "PLA_ZhentDungeon_Arrived" then
+                arrived = true
+            elseif e.Event == "PLA_EscapingZhentarim_Escaped" then
+                escaped = true
+            end
+        elseif e.Event == "PLA_ZhentMovedPastLadder" then
+            leaderPassedLadder = true
+        end
+    end
+
+    nodes.Action_Packing = Proxy{
+        game.states.PLA_ZhentDungeon_Zhents,
+        params = {backPosition = "S_PLA_ZhentDungeon_EscapeTrigger1_2_6692b9c0-1114-4e95-9a5b-2780d187244c",
+                  packingBehaviour = StateRef{game.states.PLA_ZhentDungeon_ZhentsPacking,
+                    AD = "PLA_ZhentDungeon_Zhent01_AD_Idle_da02f66b-5c0d-fb8e-2f2a-7be53c470e0b",
+                    regionBlockFlag = "PLA_ZhentDungeon_State_BlockAD_f2d6834a-a9ef-4328-9ed1-a1cb84226d8c",
+                    dialogBlockFlag = "PLA_ZhentDungeon_State_BlockAD_Zhent01_cba5e872-9938-4f1b-8c48-e81fa1416c23",
+                    home = "S_PLA_ZhentDungeon_EscapeTrigger1_1_9e1f98c1-0700-49c6-89c6-ee6c43c48355",
+                    trapNegotiationBehaviour = StateRef{game.states.GLO_StandAtTrigger,
+                        trigger = "S_PLA_ZhentDungeon_EscapeTrigger1_WatchTrap_68588308-95b3-4fd4-b9e2-d1ab7419811f"}}
+                },
+        Valid = function()
+                return arrived and
+                       not leaderPassedLadder
+        end
+    }
+
+    nodes.Action_TorchLadder = Action{function()
+            Sleep(0.2)
+            try
+                UseSpell("Projectile_FireBolt", PLA_Explosive_011, nil, nil, nil, true, true)
+            catch e if ls.CheckType(e, error.UseSpellFailed) then
+                DebugText(me, "Fire bolt failed")
+                cancelDetonateLadder = true
+            end
+        end,
+        Valid = function()
+                return arrived and
+                       leaderPassedLadder and
+                       not PLA_ZhentDungeon_Zhent02.Character.IsDead and
+                       EntityExists(PLA_Explosive_011) and
+                       not PLA_Explosive_011.Item.IsDestroyed and
+                       IsInTrigger(PLA_ZhentDungeon_LadderExplosiveTrigger, PLA_ZhentDungeon_LadderExplosiveTrigger.Trigger) and
+                       not cancelDetonateLadder
+        end
+    }
+
+    nodes.Action_FallBack = Proxy{
+        game.states.PLA_ZhentDungeon_ZhentsFallBack,
+        params = {backPosition = "S_PLA_ZhentDungeon_EscapeTrigger1_3_9e3007bd-4284-47e3-a939-427a82dea438"
+                 },
+        CanEnter = function()
+            return arrived
+        end
+    }
+
+    nodes.Action_Cellar= Action{function()
+            MoveTo(PLA_Cellar_TriggerDown, MovementSpeed.Sprint)
+            if GetDistance2DTo(PLA_Cellar_TriggerDown, me) < 2.0 then
+                if GetFlag(PLA_EscapingZhentarim_HiddenEntrance_State_Open) then
+                    Sleep(1.0)
+                    SetEntityEvent(me, "PLA_ZhentDungeon_ReachedLadderToDungeon")
+                else
+                    SetEntityEvent(me, "PLA_ZhentDungeon_OpenSecretDoor")
+                    SteerTo(PLA_EscapingZhentarim_HiddenEntrance)
+                    Sleep(3.0)
+                end
+            end
+        end,
+        CanEnter = function()
+            return not arrived and
+                   escaped and
+                   IsInInventoryOf(PLA_EscapingZhentarim_HiddenEntranceKey2, me) and
+                   not IsInDangerousSurfaceFor(PLA_Cellar_TriggerDown, me.Character)
+        end,
+        Valid = function()
+            return IsInInventoryOf(PLA_EscapingZhentarim_HiddenEntranceKey2, me) and
+                   not IsInDangerousSurfaceFor(PLA_Cellar_TriggerDown, me.Character)
+        end
+    }
+
+    nodes.Action_CellarBlocked = Action{function()
+        Wander(8.0, 2.0)
+        Sleep(3.0)
+    end,
+    CanEnter = function()
+        return not arrived and
+               escaped and
+               not IsInInventoryOf(PLA_EscapingZhentarim_HiddenEntranceKey2, me) or
+               IsInDangerousSurfaceFor(PLA_Cellar_TriggerDown, me.Character)
+    end,
+    Valid = function()
+        return not IsInInventoryOf(PLA_EscapingZhentarim_HiddenEntranceKey2, me) or
+               IsInDangerousSurfaceFor(PLA_Cellar_TriggerDown, me.Character)
+    end
+}
+
+    nodes.Action_Hiding = Action{function()
+        LookFrom(PLA_EscapingZhentarim_SneakingPosition)
+        PlayAnimation(sneakAnimation, false, true)
+        Sleep(2.0)
+    end,
+    Valid = function()
+        return GetDistance2DTo(PLA_EscapingZhentarim_SneakingPosition, me ) < 2.0 and
+               not IsInDangerousSurfaceFor(PLA_EscapingZhentarim_SneakingPosition, me.Character) and
+               (not GetFlag(PLA_EscapingZhentarim_Escape) or
+               IsInDialog(me, false))
+    end,
+    OnLeave = function()
+        StopAnimation(me)
+    end
+    }
+
+    nodes.Action_ReturnToHiding = Action{function()
+        MoveTo(PLA_EscapingZhentarim_SneakingPosition)
+    end,
+    Valid = function()
+        return  GetDistance2DTo(PLA_EscapingZhentarim_SneakingPosition, me ) > 2.0 and
+                not IsInDangerousSurfaceFor(PLA_EscapingZhentarim_SneakingPosition, me.Character) and
+                not GetFlag(PLA_EscapingZhentarim_Escape, nil) or
+                IsInDialog(me, false)
+    end}
+
+    nodes.Action_Flee = Action{function()
+        if not escaped then
+            mod.moveto.MoveTo(PLA_EscapingZhentarim_UpTrigger, false, 2.5, "Sprint", "PLA_EscapingZhentarim_Escaped")
+            Sleep(1.0)
+        else
+            SetEntityEvent(me, "PLA_EscapingZhentarim_Escaped") --Rerun the Story logic that makes him run downstairs.
+            Sleep(1.0)
+        end
+    end,
+    Valid = function()
+        return not arrived and
+               GetFlag(PLA_EscapingZhentarim_Escape, nil) and
+               not IsInDialog(me, false)
+    end}
+
+end
+}

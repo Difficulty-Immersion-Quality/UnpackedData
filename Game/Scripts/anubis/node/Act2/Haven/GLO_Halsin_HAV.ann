@@ -1,0 +1,173 @@
+game.states.GLO_Halsin_HAV = State{function()
+
+    modules = { "shared.dialog" }
+
+    local Trig_Lakeside = Entity("S_HAV_HalsinShorePoint_64c1cdf5-0a4c-462e-a9ea-71e5edc3031d")
+    local trig_Bedside = Entity("S_HAV_HalsinPoint_80c9ba1b-e997-4c89-9e40-0310ade1b8d5")
+
+    local flag_AtHaven = Flag ("HAV_LiftingTheCurse_State_HalsinAtHaven_5bb65571-a6ad-4c34-abd3-b1f407a9cafc")
+    local Flag_GoToLake = Flag("HAV_HalsinQuest_State_HalsinGoToLake_bc4cd1f7-5e60-40e1-a583-aa886fe5b682")
+    local Flag_ArrivedAtLake = Flag("HAV_HalsinQuest_State_HalsinArrivedAtLake_78dc335f-ec52-4c22-8b3a-33705205c2a0")
+
+    local spareTorch = Entity("S_HAV_LiftingTheCurse_HalsinTorch_9370f471-680d-4ba7-8cbd-7c2fbe18f0c7")
+    local atBed = false
+    local fistTalk = Dialog("HAV_HalsinQuest_AD_BedTalk_c427d0d9-417c-7c02-1021-23591ce78c76")
+    local seat = Entity("S_HAV_HalsinStool_143f59f3-8af6-42c6-92b3-f751907e462d")
+    local FlamingFist = Entity("S_HAV_FlamingFist_004_eb083eb6-066c-4693-8fb8-575bc4c71373")
+
+    self.OnInit = function()
+       local torchTemplate = FindTemplate("WPN_HUM_Torch_A_50c43f27-a12e-412c-88f0-56e15eba692a")
+       local torch = GetFirstItemByTemplateInInventory(me, torchTemplate)
+    end
+
+
+    nodes.MoveToBedside = Action{
+        function()
+            if not IsInDangerousSurfaceFor(trig_Bedside, me.Character) then
+                local moveResult = MoveTo(trig_Bedside, MovementSpeed.Walk, true, false, 0.0, 0.5, false)
+
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                else
+                    atBed = true
+                end
+            else
+                Sleep(3.0)
+            end
+        end,
+        Valid = function()
+            return GetFlag(flag_AtHaven) and not GetFlag(Flag_GoToLake) and not atBed
+        end
+    }
+
+    nodes.StayAtBedside = Selector{
+        function(nodes)
+            return GetWeightedCanEnter(nodes, {
+                [nodes.Sitting] = 10,
+                [nodes.Converse] = 1
+            })
+
+        end,
+        Valid = function()
+            return GetFlag(flag_AtHaven) and not GetFlag(Flag_GoToLake) and atBed
+        end
+    }
+
+    nodes.StayAtBedside.Sitting = Action {
+        function()
+            if not IsInDangerousSurfaceFor(trig_Bedside, me.Character) then
+                UseItem(seat.Item, true, false, true)
+                Sleep(15.0)
+            end
+        end
+    }
+
+    nodes.StayAtBedside.Converse = Action {
+        function()
+            if not IsInDangerousSurfaceFor(trig_Bedside, me.Character) then
+                local moveResult = MoveTo(trig_Bedside, MovementSpeed.Walk, true, false, 0.0, 0.5, false)
+
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                else
+                    if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailable(FlamingFist) then
+                        StartAutomatedDialog(fistTalk , true, me, FlamingFist)
+                        Sleep (3.0)
+                    end
+                end
+            else
+                Sleep(3.0)
+            end
+        end
+    }
+
+    nodes.MoveToLake = Action{
+        OnEnter = function()
+            try
+                Equip(me.Character, torch)
+            catch e then
+                ToInventory(spareTorch.Item, me, 1, false, false)
+                Equip(me.Character, spareTorch.Item)
+            end
+        end,
+
+        function()
+            if not IsInDangerousSurfaceFor(Trig_Lakeside, me.Character) then
+                local moveResult = MoveTo(Trig_Lakeside, MovementSpeed.Walk, true, false, 0.0, 0.5, false)
+
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                else
+                    SetFlag(Flag_ArrivedAtLake)
+                    ClearFlag(Flag_GoToLake)
+                end
+            else
+                Sleep(3.0)
+            end
+        end,
+        Valid = function()
+            return GetFlag(Flag_GoToLake)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not GetFlag(Flag_GoToLake)
+        end
+    }
+
+end
+}
+
+
+game.states.GLO_Halsin_HAV_Combat = State{function()
+
+    local Trig_Lakeside = Entity("S_HAV_HalsinShorePoint_64c1cdf5-0a4c-462e-a9ea-71e5edc3031d")
+    local Trig_Portal = Entity("S_HAV_PortalPoint_520a70e1-f45b-42ef-9be6-0fc8d1a3d82b")
+    local Flag_PortalReached = Flag("HAV_HalsinQuest_State_ReachedPortal_9deedd00-3ffc-4b91-98ff-56aa4873c850")
+    local Flag_Ritual = Flag("HAV_HalsinQuest_State_HalsinIsInRitual_3350ed7d-835e-4b5e-886e-3c544d27ce61")
+
+    self.Valid = function()
+        return me.CanActInCombatTeamTurn
+            and GetFlag(Flag_Ritual)
+    end
+
+    nodes.Channeling = Action{
+        function()
+            if not IsInDangerousSurfaceFor(Trig_Lakeside, me.Character) then
+                local moveResult = MoveTo(Trig_Lakeside, MovementSpeed.Walk, true, false, 0.0, 0.5, false)
+
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                else
+                    DebugText(me, "Channeling")
+                    Sleep(3.0)
+                    EndTurn(me)
+                end
+            else
+                Sleep(3.0)
+            end
+        end,
+        Valid = function()
+            return HasActiveStatus(me, "HAV_CHANNELING")
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not HasActiveStatus(me, "HAV_CHANNELING")
+        end
+    }
+
+end
+}

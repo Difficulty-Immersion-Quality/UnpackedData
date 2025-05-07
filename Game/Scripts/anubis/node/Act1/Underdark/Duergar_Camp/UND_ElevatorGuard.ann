@@ -1,0 +1,128 @@
+game.states.UND_ElevatorGuard = State{
+    function()
+
+        modules = {"shared.dialog", "shared.math"}
+
+        params.svirfneblinAD = {type=EParamType.String, help="AD with Skickpit"}
+        params.otherDuergarAD = {type=EParamType.String, help="AD with other Duergar", required=false}
+        params.otherDuergar = {type=EParamType.String, help="other Duergar"}
+        params.trigger = {type = EParamType.String, help=[[
+            The trigger at which the character stands.
+        ]]}
+
+        local trigger = Entity(params.trigger)
+        local otherDuergarAD = Dialog(params.otherDuergarAD)
+        local otherDuergar = Entity(params.otherDuergar)
+        local canDoAD = Flag("UND_ElevatorGuards_State_CanDoAD_b5921dd9-9e1a-4d08-a59f-6ddcd1802bf7")
+        local svirfneblin = Entity("S_UND_ElevatorGnome_348c5bc8-c514-41d7-a997-c8e58814d765")
+        local svirfneblinAD = Dialog(params.svirfneblinAD)
+        local gotPoisonedBooze = Flag("UND_ElevatorGnome_Event_GotPoisonedBeer_33c2894c-9788-413d-b9e9-411e3052ee00")
+        local gotRegularBooze = Flag("UND_ElevatorGnome_Event_GotRegularBooze_56b05a2a-b48f-4e66-be9b-401073725304")
+        local drinking = Dialog("BHVR_WRLD_GLO_StandAndDrink_a4065598-1ea2-8866-d23f-f765b5008273")
+        local hasBooze = Flag("UND_ElevatorGnome_State_HasBooze_b8859744-967e-460c-8e73-9636ace4ffd8")
+
+        local drinkingLoop = Animation("CUST_Drinking_01_Loop_cd71f715-fa82-45f0-afd2-b82664838104")
+        local drinkingEnd = Animation("CUST_Drinking_01_End_7570d663-e45e-4139-a599-b24a48447220")
+
+        nodes.ReturnHome = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {trigger = params.trigger},
+            CanEnter = function()
+                return GetDistanceTo(me, trigger) > 2.0
+            end
+        }
+
+        nodes.DrinkPoisonedBooze = Action {
+            function()
+                PlayLoopingAnimation(nil, {drinkingLoop}, drinkingEnd, false)
+                --StartBehaviorDialog(drinking, trigger.Trigger, true, me)
+                Sleep(7.0)
+                StopAnimation(me, false)
+                --BehaviorDialogRequestGracefulStop(me, nil)
+                if otherDuergarAD ~= nil then -- a little delay for the main duergar to sync dying
+                    Sleep(2.5)
+                end
+                SetEntityEvent(me, "UND_ElevatorGnome_Poisoned")
+            end,
+            CanEnter = function()
+                return GetFlag(gotPoisonedBooze, me)
+            end
+        }
+
+        nodes.DrinkRegularBooze = Action {
+            function()
+                PlayLoopingAnimation(nil, {drinkingLoop}, drinkingEnd, false)
+                --StartBehaviorDialog(drinking, trigger.Trigger, true, me)
+                Sleep(18.0)
+                --BehaviorDialogRequestGracefulStop(me, nil)
+                StopAnimation(me, false)
+                ClearFlag(gotRegularBooze, me)
+            end,
+            CanEnter = function()
+                return GetFlag(gotRegularBooze, me)
+            end,
+            Valid = function()
+                return GetFlag(gotRegularBooze, me)
+            end
+        }
+
+        nodes.TalkSometimes = Action{
+            function()
+                Sleep(math.random(3.0, 7.0))
+                if otherDuergarAD ~= nil and
+                    math.random(3) == 1 and
+                    GetFlag(canDoAD, otherDuergar) and
+                    mod.dialog.IsSpeakerAvailableAndNear(otherDuergar, me, 5.0, true, false)
+                    and not GetFlag(hasBooze, svirfneblin) then
+                        -- StartBehaviorDialog(drinking, trigger.Trigger, false, me)
+                        -- DebugText(me, "start dialog 1")
+                        mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                            otherDuergarAD,
+                            {
+                                waitForCompletion = true,
+                                minDelay = 25.0,
+                            },
+                            me,
+                            otherDuergar
+                        )
+                        
+
+                elseif math.random(3) == 1 and
+                    GetFlag(canDoAD, svirfneblin) and
+                    mod.dialog.IsSpeakerAvailableAndNear(svirfneblin, me, 5.0, true, false)
+                    and not GetFlag(hasBooze, svirfneblin) then
+                        -- StartBehaviorDialog(drinking, trigger.Trigger, false, me)
+                        -- DebugText(me, "start dialog 2")
+                        mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                            svirfneblinAD,
+                            {
+                                waitForCompletion = true,
+                                minDelay = 25.0,
+                            },
+                            me,
+                            svirfneblin
+                        )
+                        
+                else
+                    LookFrom(trigger)
+                end
+            end,
+            OnEnter = function()
+                SetFlag(canDoAD, me)
+            end,
+            Valid = function()
+                return not GetFlag(gotPoisonedBooze, me) and not GetFlag(gotRegularBooze, me)
+            end,
+            OnLeave = function()
+                ClearFlag(canDoAD, me)
+            end
+        }
+
+        nodes.Fallback = Action {
+            function()
+                WaitForInterrupt()
+            end
+        }
+
+    end
+}

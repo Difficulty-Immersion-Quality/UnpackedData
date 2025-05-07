@@ -1,0 +1,373 @@
+game.states.PLA_ConflictedFlind_GnollCaveGuard = State { function ()
+
+    description = [[
+        Behaviour tree for gnolls near the cave entrance,
+        nervously yelling at cave. Each 20 or so seconds gnoll tries
+        to rush into the cave but gets fire flask in it's head and backs off.
+    ]]
+
+        modules = { "shared.math", "shared.params", "shared.dialog", "gustav.Act1.ZhentShipment"}
+
+    -----------------------------------------
+    -- params section
+    params.pauseBeforeRunIntoFire = { type = EParamType.Number, required = false, default = 2.0, help = [[
+        Timer wait time before first attempt to run into the fire
+    ]]}
+
+    params.restTime = { type = EParamType.Number, required = false, default = 2.0, help = [[
+        Timer wait time after animation playing, before running into fire attempts
+    ]]}
+
+    params.unsheatWeaponsOnStart = {type = EParamType.Bool, required = false, default = false, help=[[
+        Should Gnoll unsheat his weapons on start
+    ]]}
+
+    params.basePositionTrigger = { type = EParamType.String, required = true, help = [[
+        Base position trigger to look from
+    ]]}
+
+    params.backFromFireTrigger = { type = EParamType.String, required = true, help = [[
+        Trigger to run when catch on fire
+    ]]}
+
+    params.aggroAnims = {type = EParamType.String, arrayRange = "1..", required = true, help=[[
+        Aggressive animations to play at Zhents in the cave
+    ]]}
+
+    -- grunt ADs
+    params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+        The AD to play.
+    ]]}
+
+    params.regionBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks the ADs for the entire group of characters (prevents overlap)
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks this specific AD from happening (prevents repetition)
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+
+    local rampingAnim
+    local hurtAnim
+    local burnedAnim
+    local aggroAnims = {}
+    local groupSyncedAD
+    local basePositionTrigger = nil
+    local rushIntoFireTargetTrigger = nil
+    local backFromFireTrigger = nil
+    local firstIdleSleepDesync = true
+    -- states
+    local hurtByFire = false
+    local readyToRunIntoFire = false
+    local arrivedToBasePos = true
+    local waitingToBeHurt = false
+    local playedHurtAnim = false
+    local arrivedToFlind = false
+    local playedBurnedAnim = false
+    local otherGnollHurt = false
+    -- flags
+    local dialogBlockFlag
+    local dialogEndedFlag
+    local regionBlockFlag
+    local alchFireThrowFlag = Flag("PLA_ZhentShipment_State_ZhentsThrowAlchFire_ce92177b-1162-4dc2-980f-ec64f3085c7a")
+    local instigateFlag = Flag("PLA_ConflictedFlind_State_Instigate_273fb05a-4c2c-4816-8458-7af837d919a2")
+    local zhentsDeadFlag = Flag("PLA_ZhentShipment_State_SurvivorsAreDead_bb54af09-b0c2-46c2-84e8-642280ccec6a")
+    -- Tags
+    local ignoreDangerousSurfacesTag = Tag("IGNORE_DANGEROUS_SURFACES_bbf62461-4af4-4631-807a-eb0bd988d9a6")
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        if params.AD then
+            groupSyncedAD = Dialog(params.AD)
+        end
+        if params.regionBlockFlag then
+            regionBlockFlag = Flag(params.regionBlockFlag)
+        end
+        if params.dialogBlockFlag then
+            dialogBlockFlag = Flag(params.dialogBlockFlag)
+        end
+        basePositionTrigger = FindEntity(params.basePositionTrigger)
+        rushIntoFireTargetTrigger = FindEntity("S_PLA_ConflictedFlind_BehindFireTrigger_850796f3-766e-4955-acf7-1490796ebe5a")
+        backFromFireTrigger = FindEntity(params.backFromFireTrigger)
+        hurtAnim = Animation("IDLE_Random_Combat_01_6dd3d472-9e11-47bf-8f7a-04e75ffe6c26")
+        burnedAnim = Animation("CUST_Burning_01_265cc1b3-ce22-486f-8632-541e3efdf741")
+        rampingAnim = Animation("CUST_Ramping_01_6ef47592-c8a5-4765-b14c-8cbe6703e6e5")
+        aggroAnims = mod.params.ParamArrayToAnimationsList(params.aggroAnims)
+    end
+
+    self.OnEnter = function()
+        if params.unsheatWeaponsOnStart and sheathed then
+            SetWeaponUnsheathed(me, true, true)
+        end
+        if not readyToRunIntoFire and not hurtByFire then
+            StopTimer(me, "PLA_ConflictedFlind_RunIntoFire_Timer")
+            StartTimer(me, "PLA_ConflictedFlind_RunIntoFire_Timer", params.pauseBeforeRunIntoFire, 0)
+        end
+    end
+
+    self.OnLeave = function()
+        StopTimer(me, "PLA_ConflictedFlind_RunIntoFire_Timer")
+        mod.ZhentShipment.RemoveAbstraction(me)
+    end
+
+    helpers.CanRunIntoFire = function()
+        return me.HitpointsPercentage > 60.0 and GetFlag(alchFireThrowFlag)
+    end
+
+    helpers.ResetState = function()
+        RemoveTag(me, ignoreDangerousSurfacesTag)
+        readyToRunIntoFire = false
+        hurtByFire = false
+        arrivedToBasePos = false
+        playedHurtAnim = false
+        arrivedToFlind = false
+        playedBurnedAnim = false
+        waitingToBeHurt = false
+        otherGnollHurt = false
+    end
+
+    -----------------------------------------
+    -- node section
+
+    -- In Camp : rushing into fire, making an impression of attacking the Zhents
+    nodes.RushIntoTheFire = Action {
+        CanEnter = function()
+            return (readyToRunIntoFire and helpers.CanRunIntoFire()) or waitingToBeHurt
+        end,
+        function()
+            mod.ZhentShipment.ApplyAbstraction(me)
+            if not waitingToBeHurt then
+                waitingToBeHurt = true
+                arrivedToBasePos = false
+                readyToRunIntoFire = false
+                SetEntityEvent(me, "PLA_ConflictedFlind_Event_GnollRushesIntoFire") -- to Osiris
+                AddTag(me, ignoreDangerousSurfacesTag)
+            end
+            try
+                MoveTo(rushIntoFireTargetTrigger, MovementSpeed.Run, false, false, 0.0, 0.1)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed")
+                Sleep(mod.math.random(1, 3))
+            end
+            if not hurtByFire then
+                Sleep(1.0)
+                hurtByFire = true
+            end
+        end,
+        Valid = function()
+            return not hurtByFire
+        end
+    }
+
+    -- In Camp - RunFromFire : run back from fire after being hit by burn damage
+    nodes.RunFromFire = Selector {
+        Valid = function()
+            return not arrivedToBasePos and hurtByFire
+        end
+    }
+
+    nodes.RunFromFire.PlayHurtAnim = Action {
+        CanEnter = function()
+            return waitingToBeHurt
+        end,
+        function()
+            SetEntityEvent(me, "PLA_ConflictedFlind_Event_GnollHitByFire") -- To other gnoll's to play animation
+            Sleep(0.5)
+            try
+                PlayAnimation(hurtAnim)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Gnoll: PlayAnimationFailed (hurtAnim)")
+            end
+            waitingToBeHurt = false
+            playedHurtAnim = true
+        end,
+        Valid = function()
+            return not playedHurtAnim
+        end
+    }
+
+    nodes.RunFromFire.ReturnToFlindFromFire = Action {
+        CanEnter = function()
+            return playedHurtAnim
+        end,
+        function()
+            try
+                MoveTo(backFromFireTrigger, MovementSpeed.Run, true, false, 0.1, 0.9)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed")
+                Sleep(2)
+            end
+            arrivedToFlind = true
+            playedHurtAnim = false
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, backFromFireTrigger) > 0.5 or not arrivedToFlind
+        end
+    }
+
+    nodes.RunFromFire.PlayBurnAnimation = Action {
+        CanEnter = function()
+            return arrivedToFlind
+        end,
+        function()
+            SetEntityEvent(me, "PLA_ConflictedFlind_Event_GnollAfterBeingBurned")
+            RemoveTag(me, ignoreDangerousSurfacesTag)
+            try
+                RemoveStatus(me, "BURNING")
+                PlayAnimation(burnedAnim)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Gnoll: PlayAnimationFailed (burnedAnim)")
+            end
+            arrivedToFlind = false
+            playedBurnedAnim = true
+        end,
+        Valid = function()
+            return not playedBurnedAnim
+        end
+    }
+
+    nodes.RunFromFire.ReturnToBasePosAfterFire = Action {
+        CanEnter = function()
+            return playedBurnedAnim
+        end,
+        function()
+            try
+                MoveTo(basePositionTrigger, MovementSpeed.Run, true, false, 0.1, 0.9)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed")
+                Sleep(mod.math.random(1, 3))
+            end
+            LookFrom(basePositionTrigger)
+            arrivedToBasePos = true
+            playedBurnedAnim = false
+            hurtByFire = false
+            StopTimer(me, "PLA_ConflictedFlind_RunIntoFire_Timer")
+            StartTimer(me, "PLA_ConflictedFlind_RunIntoFire_Timer", params.restTime, 0)
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, basePositionTrigger) > 0.5 or not arrivedToBasePos
+        end
+    }
+
+    -- In Camp : Idle aggressive anim towards Zhents in cave
+    nodes.PlayAggressiveAnim = Action {
+        CanEnter = function()
+            return arrivedToBasePos
+        end,
+        function()
+            mod.ZhentShipment.RemoveAbstraction(me)
+            SetEntityEvent(me, "PLA_ConflictedFlind_Event_PlayAggressiveAnim")
+            -- Animation
+            LookFrom(basePositionTrigger)
+            if firstIdleSleepDesync then
+                firstIdleSleepDesync = false
+                Sleep(mod.math.random(1, 3))
+            end
+            try
+                if otherGnollHurt then
+                    Sleep(mod.math.random(0.5, 3))
+                    if otherGnollHurt then
+                        otherGnollHurt = false
+                        SetEntityEvent(me, "PLA_ConflictedFlind_Event_GnollHitByFire_Taken")
+                        PlayAnimation(rampingAnim)
+                    end
+                else
+                    local randomAnim = aggroAnims[math.random(1,#aggroAnims)]
+                    PlayAnimation(randomAnim)
+                end
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Gnoll: PlayAnimationFailed")
+                Sleep(2)
+            end
+            -- Playing grunt AD
+            if not GetFlag(regionBlockFlag) and not GetFlag(dialogBlockFlag) and
+                mod.dialog.IsSpeakerAvailable(me)
+            then
+                try
+                    StartAutomatedDialog(groupSyncedAD, false, me)
+                catch e if  ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    DebugText(me, "Gnoll: AutomatedDialogStartFailed")
+                end
+            end
+        end,
+        Valid = function()
+            return not hurtByFire and (not helpers.CanRunIntoFire() or not readyToRunIntoFire)
+        end
+    }
+
+    nodes.ReturnBackFallback = Action {
+        function()
+            mod.ZhentShipment.RemoveAbstraction(me)
+            try
+                MoveTo(basePositionTrigger, MovementSpeed.Run, true, true, 0.1, 0.9)
+                arrivedToBasePos = true
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Gnoll: MoveTo failed")
+                Sleep(mod.math.random(1, 3))
+            end
+        end,
+        Valid = function()
+            return (GetDistance2DTo(me, basePositionTrigger) > 0.5 or not arrivedToBasePos) and
+                not readyToRunIntoFire and
+                not hurtByFire and
+                not waitingToBeHurt
+        end
+    }
+
+    nodes.Action_Fallback = Action {
+        function()
+            Sleep(3)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.Damaged = function(e)
+        if e.DamageType == DamageType.FIRE and not hurtByFire and waitingToBeHurt then
+            hurtByFire = true
+            mod.ZhentShipment.ApplyAbstraction(me)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "PLA_ConflictedFlind_RunIntoFire_Timer" then
+            if not hurtByFire and arrivedToBasePos and helpers.CanRunIntoFire() then
+                readyToRunIntoFire = true
+            else
+                StartTimer(me, "PLA_ConflictedFlind_RunIntoFire_Timer", params.restTime, 0)
+            end
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        helpers.ResetState()
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == instigateFlag.Guid or e.Flag == zhentsDeadFlag.Guid then
+            helpers.ResetState()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == alchFireThrowFlag.Guid and waitingToBeHurt then
+            hurtByFire = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity ~= me then
+            if e.Event == "PLA_ConflictedFlind_Event_GnollHitByFire" or e.Event == "PLA_ZhentShipment_FireFlaskThrown" then
+                if math.random() > 0.5 then
+                    otherGnollHurt = true
+                end
+            elseif e.Event == "PLA_ConflictedFlind_Event_GnollHitByFire_Taken" then
+                otherGnollHurt = false
+            end
+        end
+    end
+end}

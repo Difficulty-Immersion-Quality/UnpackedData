@@ -1,0 +1,133 @@
+game.states.UND_GnomeForeman = State{function ()
+    description = [[Behaviour for the Gnome Foreman, the trapped gnome leader in the Duergar Camp]]
+
+	modules = {"shared.dialog", "shared.moveto"}
+
+    params.homeTrigger = {type = EParamType.String, required = false, default=nil, help=[[
+        home trigger
+        ]]}
+
+    params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled.
+    ]]}
+
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is about to be destroyed or has been already.
+    ]]}
+
+    local char_GnomeSilly
+	local char_GnomeDaffy
+	local char_GnomeInjuredGnome
+
+    local tr_homeTrigger
+    local tr_caveInPosition
+	local tr_postMutinyPosition
+	local tr_atMyconidsPosition
+
+    local d_ReunitedAD = Dialog("UND_GnomeWorkerSillyAndForeman_AD_Reunited_02378cc0-c0ed-4d1f-3b84-5c423d041e27")
+	local d_AtMyconidsAD = Dialog("UND_MyconidCircle_AD_GnomesSaved_89469351-7742-14d9-c4de-b8d7b7e24c5c")
+
+    local flag_CaveInCleared = Flag("UND_DuergarCamp_State_CaveInCleared_e0d8a48b-e0cf-4cc8-96bc-b637b79ce9bd")
+	local flag_PostMutiny = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+	local flag_AtMyconids = Flag("UND_DuergarCamp_State_GnomeAtMyconids_f48d9c4e-e6eb-46dc-93a7-89326d11829b")
+
+    self.OnInit = function()
+        char_GnomeSilly = FindEntity("S_UND_GnomeWorkerSilly_e63ee5da-32cc-4574-849b-e2b61ca9586e")
+		char_GnomeDaffy = FindEntity("S_GLO_GnomeWorkerDaffy_fdaeccaa-d903-4568-ac36-a0a0ec24977d")
+		char_GnomeInjuredGnome = FindEntity("S_GLO_InjuredGnome_fcf53ac7-1805-4e57-b6ed-4f7b0f90cf96")
+        tr_homeTrigger = FindEntity(params.homeTrigger)
+        tr_caveInPosition = FindEntity(params.CaveInPosition)
+		tr_postMutinyPosition = FindEntity(params.PostMutinyPosition)
+		tr_atMyconidsPosition = FindEntity("S_UND_GnomeForeman_SavedTrigger_ae84fc10-001b-4052-8f2b-c7e1e9e004e4")
+    end
+
+	nodes.State_AtMyconids = Action {
+		function()
+			if mod.moveto.MoveToPoint(tr_atMyconidsPosition, MovementSpeed.Walk, me) then
+                LookFrom(tr_atMyconidsPosition)
+			end
+			local gnomeDaffy = mod.dialog.IsSpeakerAvailableAndNear(char_GnomeDaffy, me, 10, false) and char_GnomeDaffy or nil
+			local gnomeSilly = mod.dialog.IsSpeakerAvailableAndNear(char_GnomeSilly, me, 10, false) and char_GnomeSilly or nil
+			local gnomeInjuredGnome = mod.dialog.IsSpeakerAvailableAndNear(char_GnomeInjuredGnome, me, 10, false) and char_GnomeInjuredGnome or nil
+			mod.dialog.StartCheckedAutomatedDialogRateLimited(
+				d_AtMyconidsAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 10,
+                        checkSight = false,
+                        fallbackSoloDialog = d_AtMyconidsAD
+                    },
+                    me,
+                    gnomeDaffy,
+					gnomeSilly,
+					gnomeInjuredGnome
+                )
+			Sleep(5)
+		end,
+		CanEnter = function()
+			return GetFlag(flag_AtMyconids)
+		end
+	}
+
+	nodes.State_PostMutiny = Action {
+		function()
+		if not IsInDangerousSurfaceFor(tr_postMutinyPosition, me.Character,3.0) then
+			if GetDistanceTo(me, tr_postMutinyPosition) > 3.0 then
+				try
+					MoveTo(tr_postMutinyPosition,MovementSpeed.Run)
+				catch e if ls.CheckType(e, error.MovementFailed) then
+					LookAtEntity(tr_postMutinyPosition, 3.0)
+					Sleep(2.0)
+				end
+			else
+				LookFrom(tr_postMutinyPosition)
+				if mod.dialog.AreSpeakersAvailableAndNear(me, 20.0, false,false,false,char_GnomeSilly) and math.random() < 0.6 then
+					StartAutomatedDialog(d_ReunitedAD,true,char_GnomeSilly,me)
+				end
+				Wander(2.0,3.0, MovementSpeed.Walk,tr_postMutinyPosition)
+			end
+		else
+			LookAtEntity(tr_postMutinyPosition, 3.0)
+		end
+		Sleep(10.0)
+	end,
+	Valid = function()
+		return GetFlag(flag_PostMutiny)
+	end,
+	OnLeave = function()
+		DialogRequestStop(me,d_ReunitedAD)
+	end
+}
+
+	nodes.State_CaveInCleared_ToGnome = Action {
+		function()
+			if not IsInDangerousSurfaceFor(tr_caveInPosition, me.Character,3.0) then
+				if GetDistanceTo(me, tr_caveInPosition) > 3.0 then
+					try
+						MoveTo(tr_caveInPosition,MovementSpeed.Run)
+					catch e if ls.CheckType(e, error.MovementFailed) then
+						LookAtEntity(tr_caveInPosition, 3.0)
+						Sleep(2.0)
+					end
+				else
+					LookFrom(tr_caveInPosition)
+					if mod.dialog.AreSpeakersAvailableAndNear(me, 20.0, false,false,false,char_GnomeSilly) and math.random() < 0.6 then
+						StartAutomatedDialog(d_ReunitedAD,true,char_GnomeSilly,me)
+					end
+				end
+			else
+				LookAtEntity(tr_caveInPosition, 3.0)
+			end
+			Sleep(10.0)
+		end,
+		Valid = function()
+			return GetFlag(flag_CaveInCleared)
+		end,
+		OnLeave = function()
+			DialogRequestStop(me,d_ReunitedAD)
+		end
+	}
+    nodes.Idling = function()
+        Sleep(5.0)
+    end
+end}

@@ -1,0 +1,92 @@
+game.states.WYR_Circus_Bouncer = State { function ()
+    description = [[ Behaviour for the circus bouncer. ]]
+
+    modules = { "shared.util", "shared.moveto" }
+
+    local guardPos = Entity("S_WYR_Circus_BouncerPos_bb9abda4-7616-4f70-acad-4c4fa93af35d")
+    local combatPos = Entity("S_WYR_Circus_BouncerCombatPos_3c83b900-fbae-406b-8fee-a4b03ea762f3")
+    local combatStartedFlag = Flag("WYR_Circus_Clown_State_Hostile_59c1f674-0985-4d4d-9679-b8a1e4982f45")
+    local combatOverFlag = Flag("WYR_Circus_State_PostCombat_ee4b2f6e-9d52-4bc5-bde6-bc0e1c015de4")
+    local crossArmAnim = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+
+    local patrolSpline = Spline("S_WYR_Circus_Bouncer_PatrolSpline_cdda97e6-3362-4254-ba3f-1b34db46b4f9")
+    local patrolAnims = {
+        Animation("CUST_Pondering_02_c6b5f1ab-aa50-4b19-8139-fa66ee0abafe"),
+        Animation("CUST_Pondering_03_7872d8f3-fda0-4d85-931e-ea73988fe743")
+    }
+    local targetSplineIndex = -1
+    local canWalkOnSpline = true
+
+    -- Post combat
+    nodes.Patroling = Action {
+        function()
+            DoPatrol(patrolSpline, true, MovementSpeed.Stroll, targetSplineIndex, false)
+        end,
+        OnLeave = function()
+            if canWalkOnSpline then
+                ShortPatrolInterrupt()
+            end
+        end,
+        Valid = function()
+            return GetFlag(combatOverFlag) and canWalkOnSpline
+        end
+    }
+
+    nodes.PatrolPoint = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(1)
+            PlayAnimation(patrolAnims[math.random(#patrolAnims)],true)
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnLeave = function()
+            canWalkOnSpline = true
+        end,
+        OnInterrupt = function()
+            canWalkOnSpline = true
+        end
+    }
+
+    -- During combat
+    nodes.CombatOngoing = Action {
+        function()
+            SetWeaponUnsheathed(me, true)
+            SteerTo(combatPos)
+            Sleep(6.0)
+            if mod.moveto.MoveToPoint(combatPos, MovementSpeed.Run, me) then
+                LookFrom(combatPos)
+            end
+        end,
+        Valid = function()
+            return GetFlag(combatStartedFlag) and not GetFlag(combatOverFlag)
+        end
+    }
+
+    -- Before combat
+    nodes.Guarding = Action {
+        function()
+            if mod.moveto.MoveToPoint(guardPos, MovementSpeed.Walk, me) then
+                LookFrom(guardPos)
+                PlayAnimation(crossArmAnim, false, true)
+            end
+        end,
+        Valid = function()
+            return not GetFlag(combatStartedFlag) and not GetFlag(combatOverFlag)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+        end
+    }
+
+    -- event section
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        canWalkOnSpline = false
+    end
+end}

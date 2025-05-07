@@ -1,0 +1,657 @@
+game.states.DEN_GeneralGroveStates_WorldBehaviourAtPoint = State {function ()
+
+    modules = {"shared.moveto"}
+
+    params.moveTarget = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.lookTarget = {type = EParamType.String, required = false, default = nil,  
+    help=[[]]}
+    params.lookFromMoveTarget = {type = EParamType.Bool, required = false, default = false,  
+    help=[[]]}
+    params.worldBehaviour = { type = EParamType.String, required = true, default = nil,
+    help=[[]]}
+    params.worldBehaviourTrigger = { type = EParamType.String, required = false, default = nil,
+    help=[[]]}
+    params.behaviourPartners = {type=EParamType.String, arrayRange="..", required=false, default={}, 
+    help=[[]]}
+    params.repeatMin = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.repeatMax = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.waitMin = {type = EParamType.Number, required = false, default = 2.0, 
+    help=[[]]}
+    params.waitMax = {type = EParamType.Number, required = false, default = 4.0, 
+    help=[[]]}
+    params.moveWaitMin = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.moveWaitMax = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+
+    local behaviourPartners = {}
+
+    local moveTarget = Entity(params.moveTarget)
+    local lookTarget = Entity(params.lookTarget)
+    local lookFromMoveTarget = params.lookFromMoveTarget
+    local worldBehaviour = Dialog(params.worldBehaviour)
+    local worldBehaviourTrigger = Entity(params.worldBehaviourTrigger)
+    local repeatMin = params.repeatMin
+    local repeatMax = params.repeatMax
+    local waitMin = params.waitMin
+    local waitMax = params.waitMax
+    local moveWaitMin = params.moveWaitMin
+    local moveWaitMax = params.moveWaitMax
+
+    self.OnInit = function()
+        if #params.behaviourPartners > 0 then
+            for _, speaker in pairs(params.behaviourPartners) do
+                table.insert(behaviourPartners, Entity(speaker))
+            end
+        end
+    end
+
+    nodes.Working = Action {
+        function()
+            Sleep(math.random(moveWaitMin,moveWaitMax))
+            for i = 1, math.random(repeatMin, repeatMax), 1 do
+                if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Stroll,me) then
+                    if lookFromMoveTarget then
+                        LookFrom(moveTarget)
+                    elseif lookTarget then
+                        SteerTo(lookTarget)
+                    end
+                    StartBehaviorDialog(worldBehaviour, worldBehaviourTrigger.Trigger, true, me, table.unpack(behaviourPartners))
+                    Sleep(math.random(waitMin,waitMax))
+                end
+            end
+        end
+    }
+end}
+
+game.states.DEN_GeneralGroveStates_AnimateAtPoint = State {function ()
+
+    modules = {"shared.moveto"}
+
+    params.moveTarget = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.lookTarget = {type = EParamType.String, required = false, default = nil,  
+    help=[[]]}
+    params.lookFromMoveTarget = {type = EParamType.Bool, required = false, default = false,  
+    help=[[]]}
+    params.anim = { type = EParamType.String, required = false, default = nil,
+    help=[[]]}
+    params.repeatMin = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.repeatMax = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.waitMin = {type = EParamType.Number, required = false, default = 2.0, 
+    help=[[]]}
+    params.waitMax = {type = EParamType.Number, required = false, default = 4.0, 
+    help=[[]]}
+    params.moveWaitMin = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.moveWaitMax = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.loopingAnim = {type = EParamType.Bool, required = false, default = false,  
+    help=[[]]}
+
+    local moveTarget = Entity(params.moveTarget)
+    local lookTarget = Entity(params.lookTarget)
+    local lookFromMoveTarget = params.lookFromMoveTarget
+    local anim = Animation(params.anim)
+    local repeatMin = params.repeatMin
+    local repeatMax = params.repeatMax
+    local waitMin = params.waitMin
+    local waitMax = params.waitMax
+    local moveWaitMin = params.moveWaitMin
+    local moveWaitMax = params.moveWaitMax
+    local loopingAnim = params.loopingAnim
+
+    nodes.Working = Action {
+        function()
+        if not loopingAnim then
+            Sleep(math.random(moveWaitMin,moveWaitMax))
+            for i = 1, math.random(repeatMin, repeatMax), 1 do
+                if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Stroll,me) then
+                    if lookFromMoveTarget then
+                        LookFrom(moveTarget)
+                    elseif lookTarget then
+                        SteerTo(lookTarget)
+                    end
+                    if anim then
+                        PlayAnimation(anim)
+                    end
+                    Sleep(math.random(waitMin,waitMax))
+                end
+            end
+        else
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Stroll,me) then
+                if lookFromMoveTarget then
+                    LookFrom(moveTarget)
+                elseif lookTarget then
+                    SteerTo(lookTarget)
+                end
+                PlayAnimation(anim,false,true)
+                WaitForInterrupt()
+            end
+        end
+    end
+    }
+end}
+
+game.states.DEN_GeneralGroveStates_LoopAnimateAtPointWithStartEnd = State {function ()
+
+    modules = {"shared.moveto"}
+
+    params.moveTarget = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.lookTarget = {type = EParamType.String, required = false, default = nil,  
+    help=[[]]}
+    params.lookFromMoveTarget = {type = EParamType.Bool, required = false, default = false,  
+    help=[[]]}
+    params.animLoop = { type = EParamType.String, required = false, default = nil,
+    help=[[]]}
+    params.animStart = { type = EParamType.String, required = false, default = nil,
+    help=[[]]}
+    params.animEnd = { type = EParamType.String, required = false, default = nil,
+    help=[[]]}
+    params.repeatMin = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.repeatMax = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.waitMin = {type = EParamType.Number, required = false, default = 2.0, 
+    help=[[]]}
+    params.waitMax = {type = EParamType.Number, required = false, default = 4.0, 
+    help=[[]]}
+    params.moveWaitMin = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.moveWaitMax = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+
+    local moveTarget = Entity(params.moveTarget)
+    local lookTarget = Entity(params.lookTarget)
+    local lookFromMoveTarget = params.lookFromMoveTarget
+    local animLoop = Animation(params.animLoop)
+    local animStart = Animation(params.animStart)
+    local animEnd = Animation(params.animEnd)
+    local repeatMin = params.repeatMin
+    local repeatMax = params.repeatMax
+    local waitMin = params.waitMin
+    local waitMax = params.waitMax
+    local moveWaitMin = params.moveWaitMin
+    local moveWaitMax = params.moveWaitMax
+
+    nodes.Working = Action {
+        function()
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Stroll,me) then
+                if lookFromMoveTarget then
+                    LookFrom(moveTarget)
+                elseif lookTarget then
+                    SteerTo(lookTarget)
+                end
+                PlayLoopingAnimation(animStart, {animLoop}, animEnd, false)
+                WaitForInterrupt()
+            end
+        end
+    }
+end}
+
+game.states.DEN_GeneralGroveStates_AnimateAtPointAndTalk = State {function ()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    params.moveTarget = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.lookTarget = {type = EParamType.String, required = false, default = nil,  
+    help=[[]]}
+    params.lookFromMoveTarget = {type = EParamType.Bool, required = false, default = false,  
+    help=[[]]}
+    params.anim = { type = EParamType.String, required = false, default = nil,
+    help=[[]]}
+    params.repeatMin = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.repeatMax = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.waitMin = {type = EParamType.Number, required = false, default = 2.0, 
+    help=[[]]}
+    params.waitMax = {type = EParamType.Number, required = false, default = 4.0, 
+    help=[[]]}
+    params.moveWaitMin = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.moveWaitMax = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.loopingAnim = {type = EParamType.Bool, required = false, default = false,  
+    help=[[]]}
+    params.AD = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.ADPartners = {type=EParamType.String, arrayRange="..", required=false, default={}, 
+    help=[[]]}
+    params.ADMaxDistance = {type = EParamType.Number, required = false, default = 10.0, 
+    help=[[]]}
+    params.ADCheckSight = {type = EParamType.Bool, required = false, default = true, 
+    help=[[]]}
+    params.ADIgnoreCower = {type = EParamType.Bool, required = false, default = false, 
+    help=[[]]}
+    params.ADWaitForCompletion = {type = EParamType.Bool, required = false, default = false, 
+    help=[[]]}
+    params.ADFallbackSoloDialog = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.ADMinDelay = {type = EParamType.Number, required = false, default = 40.0, 
+    help=[[]]}
+    params.ADCullingDistance = {type = EParamType.Number, required = false, default = 5.0, 
+    help=[[]]}
+
+    local AD = Dialog(params.AD)
+    local fallbackSoloAD = Dialog(params.ADFallbackSoloDialog)
+    local ADPartners = {}
+    local ADTimerName = params.AD
+    local canAD = true
+    local notAnimating = true
+    local moveTarget = Entity(params.moveTarget)
+    local lookTarget = Entity(params.lookTarget)
+    local lookFromMoveTarget = params.lookFromMoveTarget
+    local anim = Animation(params.anim)
+    local repeatMin = params.repeatMin
+    local repeatMax = params.repeatMax
+    local waitMin = params.waitMin
+    local waitMax = params.waitMax
+    local moveWaitMin = params.moveWaitMin
+    local moveWaitMax = params.moveWaitMax
+    local loopingAnim = params.loopingAnim
+
+
+    self.OnInit = function()
+        if #params.ADPartners > 0 then
+            for _, speaker in pairs(params.ADPartners) do
+                table.insert(ADPartners, Entity(speaker))
+            end
+        end
+    end
+
+    nodes = ImmediateSelector{}
+
+    nodes.AD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    maxDistance = params.ADMaxDistance,
+                    checkSight = params.ADCheckSight,
+                    ignoreCower = params.ADIgnoreCower,
+                    waitForCompletion = params.ADWaitForCompletion,
+                    fallbackSoloDialog = fallbackSoloAD,
+                    cullingDistance = params.ADCullingDistance
+                },
+                me,
+                table.unpack(ADPartners)
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_" .. ADTimerName)
+            StartTimer(me,"ADTimer_" .. ADTimerName, params.ADMinDelay + math.random(0,10),0)
+        end,
+        Valid = function()
+            return canAD and notAnimating
+        end
+    }
+
+    nodes.Working = Action {
+        function()
+        if not loopingAnim then
+            Sleep(math.random(moveWaitMin,moveWaitMax))
+            for i = math.random(repeatMin, repeatMax), 1, -1 do
+                if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Stroll,me) then
+                    notAnimating = false --prevent dialogue interrupting animation
+                    if lookFromMoveTarget then
+                        LookFrom(moveTarget)
+                    elseif lookTarget then
+                        SteerTo(lookTarget)
+                    end
+                    if anim then
+                        PlayAnimation(anim)
+                    end
+                    Sleep(math.random(waitMin,waitMax))
+                    if i == 1 then
+                        notAnimating = true --ensure the character is in position before they can talk
+                    end
+                end
+            end
+        else
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Stroll,me) then
+                notAnimating = true --ensure the character is in position before they can talk
+                if lookFromMoveTarget then
+                    LookFrom(moveTarget)
+                elseif lookTarget then
+                    SteerTo(lookTarget)
+                end
+                PlayAnimation(anim,false,true)
+                DebugText(me, "Failed to play animation")
+                WaitForInterrupt()
+            end
+        end
+    end
+    } 
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_" .. ADTimerName) then 
+            canAD = true
+        end
+    end
+end}
+
+game.states.DEN_GeneralGroveStates_LoopAnimateAtPointWithStartEndAndTalk = State {function ()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    params.moveTarget = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.lookTarget = {type = EParamType.String, required = false, default = nil,  
+    help=[[]]}
+    params.lookFromMoveTarget = {type = EParamType.Bool, required = false, default = false,  
+    help=[[]]}
+    params.animLoop = { type = EParamType.String, required = false, default = nil,
+    help=[[]]}
+    params.animStart = { type = EParamType.String, required = false, default = nil,
+    help=[[]]}
+    params.animEnd = { type = EParamType.String, required = false, default = nil,
+    help=[[]]}
+    params.repeatMin = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.repeatMax = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.waitMin = {type = EParamType.Number, required = false, default = 2.0, 
+    help=[[]]}
+    params.waitMax = {type = EParamType.Number, required = false, default = 4.0, 
+    help=[[]]}
+    params.moveWaitMin = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.moveWaitMax = {type = EParamType.Number, required = false, default = 1.0, 
+    help=[[]]}
+    params.AD = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.ADPartners = {type=EParamType.String, arrayRange="..", required=false, default={}, 
+    help=[[]]}
+    params.ADMaxDistance = {type = EParamType.Number, required = false, default = 10.0, 
+    help=[[]]}
+    params.ADCheckSight = {type = EParamType.Bool, required = false, default = true, 
+    help=[[]]}
+    params.ADIgnoreCower = {type = EParamType.Bool, required = false, default = false, 
+    help=[[]]}
+    params.ADWaitForCompletion = {type = EParamType.Bool, required = false, default = false, 
+    help=[[]]}
+    params.ADFallbackSoloDialog = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.ADMinDelay = {type = EParamType.Number, required = false, default = 40.0, 
+    help=[[]]}
+    params.ADCullingDistance = {type = EParamType.Number, required = false, default = 5.0, 
+    help=[[]]}
+
+    local AD = Dialog(params.AD)
+    local fallbackSoloAD = Dialog(params.ADFallbackSoloDialog)
+    local ADPartners = {}
+    local ADTimerName = params.AD
+    local canAD = true
+    local notAnimating = true
+    local moveTarget = Entity(params.moveTarget)
+    local lookTarget = Entity(params.lookTarget)
+    local lookFromMoveTarget = params.lookFromMoveTarget
+    local animLoop = Animation(params.animLoop)
+    local animStart = Animation(params.animStart)
+    local animEnd = Animation(params.animEnd)
+    local repeatMin = params.repeatMin
+    local repeatMax = params.repeatMax
+    local waitMin = params.waitMin
+    local waitMax = params.waitMax
+    local moveWaitMin = params.moveWaitMin
+    local moveWaitMax = params.moveWaitMax
+
+
+    self.OnInit = function()
+        if #params.ADPartners > 0 then
+            for _, speaker in pairs(params.ADPartners) do
+                table.insert(ADPartners, Entity(speaker))
+            end
+        end
+    end
+
+    nodes = ImmediateSelector{}
+
+    nodes.AD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    maxDistance = params.ADMaxDistance,
+                    checkSight = params.ADCheckSight,
+                    ignoreCower = params.ADIgnoreCower,
+                    waitForCompletion = params.ADWaitForCompletion,
+                    fallbackSoloDialog = fallbackSoloAD,
+                    cullingDistance = params.ADCullingDistance
+                },
+                me,
+                table.unpack(ADPartners)
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_" .. ADTimerName)
+            StartTimer(me,"ADTimer_" .. ADTimerName, params.ADMinDelay + math.random(0,10),0)
+        end,
+        Valid = function()
+            return canAD and notAnimating
+        end
+    }
+
+    nodes.Working = Action {
+        function()
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Stroll,me) then
+                notAnimating = true --ensure the character is in position before they can talk
+                if lookFromMoveTarget then
+                    LookFrom(moveTarget)
+                elseif lookTarget then
+                    SteerTo(lookTarget)
+                end
+                PlayLoopingAnimation(animStart, {animLoop}, animEnd, false)
+                WaitForInterrupt()
+            end
+        end
+    } 
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_" .. ADTimerName) then 
+            canAD = true
+        end
+    end
+end}
+
+game.states.DEN_GeneralGroveStates_MoveToAndTalk = State {function ()
+
+    modules = {"shared.moveto"}
+
+    params.moveTarget = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.lookTarget = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.lookFrom = {type = EParamType.Bool, required = false, default = false, 
+    help=[[]]}
+
+    local moveTarget = Entity(params.moveTarget)
+    local lookTarget = Entity(params.lookTarget)
+    local lookFrom = params.lookFrom
+    local timerCheck = false
+
+    self.OnEnter = function()
+        StartTimer(me,"DEN_General_MoveToDialogPartnerTimer",10.0,0)
+        timerCheck = true
+    end
+
+    nodes.MoveToAndTalk = Action {
+        function()
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Stroll,me) then
+                if lookTarget then
+                    SteerTo(lookTarget)
+                elseif lookFrom then
+                    LookFrom(moveTarget)
+                end
+                if timerCheck then
+                    StopTimer(me,"DEN_General_MoveToDialogPartnerTimer")
+                    timerCheck = false
+                end
+                SetUnicastEntityEvent(me,"DEN_MovedToTalk")
+                Sleep(math.random(1.0))
+            end
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_General_MoveToDialogPartnerTimer") then 
+            timerCheck = false
+            SetUnicastEntityEvent(me,"DEN_MovedToTalk")
+            Interrupt()
+        end
+    end
+
+end}
+
+game.states.DEN_GeneralGroveStates_stopAndTalk = State {function ()
+
+    params.lookTarget = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+
+    local lookTarget = Entity(params.lookTarget)
+
+    nodes.stopAndTalk = Action {
+        OnEnter = function()
+            StopAnimation(me)
+        end,
+        function()
+            SteerTo(lookTarget)
+            WaitForInterrupt()
+    end
+    }
+end}
+
+game.states.DEN_GeneralGroveStates_Wander = State {function ()
+
+    modules = { "gustav.Act1.GroveRefugee","shared.moveto"}
+
+    params.anchor = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.wanderMin = {type = EParamType.Number, required = false, default = 2.0, 
+    help=[[]]}
+    params.wanderMax = {type = EParamType.Number, required = false, default = 3.0, 
+    help=[[]]}
+
+    local anchor = Entity(params.anchor)
+    local wanderMin = params.wanderMin
+    local wanderMax = params.wanderMax
+
+    nodes.Wandering = Action {
+        function()
+            if mod.moveto.MoveToPoint(anchor,MovementSpeed.Stroll,me) then
+                for i = 1, math.random(wanderMin, wanderMax), 1 do
+                    Wander(1.5, 2.0, MovementSpeed.Stroll, anchor)
+                    Sleep(math.random(2, 6))
+                end
+            end
+        end
+    }
+end}
+
+game.states.DEN_GeneralGroveStates_Patrol = State {function ()
+
+    params.spline = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+    params.patrolSpeed = {type = EParamType.String, required = false, default = "Stroll", 
+    help=[[]]}
+    params.waitAtNode = {type = EParamType.Bool, required = false, default = false, 
+    help=[[]]}
+    params.waitMin = {type = EParamType.Number, required = false, default = 3.0, 
+    help=[[]]}
+    params.waitMax = {type = EParamType.Number, required = false, default = 5.0, 
+    help=[[]]}
+    params.lookFromNode = {type = EParamType.Bool, required = false, default = false, 
+    help=[[]]}
+    params.animOnNode = {type = EParamType.String, required = false, default = nil, 
+    help=[[]]}
+
+    local spline = Spline(params.spline)
+    local prevSplineIndex = -1
+    local currentSplineIndex = -1
+    local targetSplineIndex = -1
+    local canWalkOnSpline = true
+    local waitAtNode = params.waitAtNode
+    local waitMin = params.waitMin
+    local waitMax = params.waitMax
+    local lookFromNode = params.lookFromNode
+    local animOnNode = Animation(params.animOnNode)
+    local localWait = false
+    local localLookFrom = false
+    local customEvent = false
+
+    -----------------------------------------
+    -- Helper functions
+
+    helpers.CheckSplineEvent = function(e)
+        if e.Event == "Wait" then
+            localWait = true
+        elseif e.Event == "WaitLookFrom" then
+            localWait = true
+            localLookFrom = true
+        elseif e.Event == "DEN_CustomNodeEvent1" then
+            customEvent = true
+            SetUnicastEntityEvent(me, "DEN_CustomNodeEvent1")
+        elseif e.Event == "DEN_CustomNodeEvent2" then
+            customEvent = true
+            SetUnicastEntityEvent(me, "DEN_CustomNodeEvent2")
+        elseif e.Event == "DEN_CustomNodeEvent3" then
+            customEvent = true
+            SetUnicastEntityEvent(me, "DEN_CustomNodeEvent3")
+        end
+    end
+
+    -----------------------------------------
+
+    nodes.Patrol = Action {
+        function()
+            try
+                DoPatrol(spline,false,MovementSpeed[params.patrolSpeed])
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end
+    }
+
+    nodes.AtPoint = Action {
+        function()
+            if lookFromNode or localLookFrom then
+                localLookFrom = false
+                LookFrom(spline)
+            end
+            if animOnNode and (localWait or waitAtNode) and not customEvent then
+                PlayAnimation(animOnNode, true, false)
+            end
+            if waitAtNode or localWait then
+                localWait = false
+                Sleep(math.random(waitMin,waitMax))
+            end
+            customEvent = false
+            canWalkOnSpline = true
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        helpers.CheckSplineEvent(e)
+        canWalkOnSpline = false
+        if e.EndReached then
+            SetUnicastEntityEvent(me, "DEN_GroveRefugeeStopPatrol")
+            ClearPatrol()
+        end
+    end
+end}
+

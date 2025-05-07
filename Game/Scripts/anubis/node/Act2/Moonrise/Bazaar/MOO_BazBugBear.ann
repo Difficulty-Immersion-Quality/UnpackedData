@@ -1,0 +1,92 @@
+game.states.MOO_BazBugBear = State {function ()
+
+    modules = {"shared.moveto", "shared.math", "shared.util"}
+
+    local dummy = Entity("S_MOO_BazBugBearDummy_9108e54e-5048-4481-b51f-8b9a144619e6")
+    local standingPoint = Entity("S_MOO_BazBugBearPoint_fdd871f3-2eb2-44e3-9c87-a83eeb423956")
+    local axe = Entity("S_MOO_BazBugBearAxe_8f779e61-8fc9-442c-a698-21d31c556c82")
+    local toughAnim = Animation("CUST_ActingTough_02_e6c64011-c095-4312-99c8-8b1b973ff09a")
+    local isPickingUpAxe = false
+    local hasFailedToPickUp = false
+
+    nodes.PickupAxe = Action{
+        CanEnter = function()
+            return isPickingUpAxe and CanSee(me, axe)
+        end,
+        
+        function()
+            if mod.moveto.MoveToPoint(axe, MovementSpeed.Stroll, me) then
+                try
+                    PickUpItem(axe)
+                    mod.util.SleepRandom(1.0, 3.0)
+                    hasFailedToPickUp = false
+                    isPickingUpAxe = false
+                catch e if ls.CheckType(e, error.PickUpItemFailed) then
+                    LookAtEntity(dummy, 3.0)
+                    DebugText(me, "Failed to pickup, reason " .. tostring(e.Reason))
+                    hasFailedToPickUp = true
+                    isPickingUpAxe = false
+                end
+            else
+                LookAtEntity(dummy, 3.0)
+                Sleep(4 + 8 * math.random())
+                hasFailedToPickUp = true
+                isPickingUpAxe = false
+            end
+            
+        end
+
+    }
+
+    nodes.ThrowAxe = Action {
+        CanEnter = function()
+            return not hasFailedToPickUp
+        end,
+        
+        function()
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Stroll, me) then
+                LookFrom(standingPoint)
+                Sleep(math.random(20, 40))
+                if IsInInventoryOf(axe, me) then
+                    try
+                        UseSpell("Throw_Throw_Bugbear", dummy, axe, nil, nil, true, true, true)
+                    catch e if ls.CheckType(e, error.UseSpellFailed) then
+                        DebugText(me,"Failed at throwing axe")
+                    end
+                    Sleep(2.0)
+                    if mod.math.CoinToss(0.25) then
+                        PlayAnimation(toughAnim, true, false)
+                    else
+                        mod.util.SleepRandom(2.0, 6.0)
+                    end
+                    isPickingUpAxe = true
+                else
+                    hasFailedToPickUp = true
+                end
+            else
+                LookAtEntity(standingPoint, 3.0)
+                mod.util.SleepRandom(4.0, 12.0)
+            end
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Walk, me) then
+                mod.util.SleepRandom(40.0, 60.0)
+                LookFrom(standingPoint)
+                if mod.math.CoinToss(0.35) then
+                    PlayAnimation(toughAnim, true, false)
+                end
+                if CanSee(me, axe) then --Check to see if axe has returned to within view
+                    isPickingUpAxe = true 
+                end
+            else
+                LookAtEntity(standingPoint, 3.0)
+                mod.util.SleepRandom(4.0, 12.0)
+            end
+        end
+    }
+
+end
+}

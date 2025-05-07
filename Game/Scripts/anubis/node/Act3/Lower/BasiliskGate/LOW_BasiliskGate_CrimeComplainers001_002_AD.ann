@@ -1,0 +1,86 @@
+game.states.LOW_BasiliskGate_CrimeComplainers001_002_dialogAD = State { function ()
+    description = [[ basilisk gate Crime complainers. 1 NPCs switches between 3 modes. a) dialoging with another complainer b) random wait between dialogs c) occasional move to dialog with sargeanet NPC]]
+
+    modules = { "shared.dialog","shared.moveto","shared.util" }
+
+    params.maxDistanceFromDlgPartner = { type = EParamType.Number, required = false, default = 8.0, help = [[Tolerance for distance between dialog participants.]]}
+    params.pauseBetweenDlgMin = { type = EParamType.Number, required = false, default = 5.0, help = [[Min delay in between dialogAD attempts.]]}
+    params.pauseBetweenDlgRandomRange = { type = EParamType.Number, required = false, default = 10.0, help = [[Random range added to Min delay.]]}
+
+    
+    local sargeantADTrigger = Entity("S_LOW_BasiliskGate_CrimeComplainer_001_SargeantCheckADSpot_58a6770a-6f54-4b31-8a87-1ac25f973c9b")
+    local sargeantAD = Dialog("LOW_BasiliskGate_CrimeComplainer_001_CommanderAD_7a7fa3d9-06c7-00d0-34c0-bc8180c62c94")
+    local sargeantADReceiver = Entity("S_LOW_BasiliskGate_Sergeant_eadf119c-6484-4a76-994f-6702d7b18f3c")
+    local sargeantArea = Entity("S_LOW_BasiliskGate_CrimeComplainer_001_SargeantCheckADAreaTrigger_4b6d8b4c-ed0d-4f3c-815c-95248f009e45")
+
+    local wifeADTrigger = Entity("S_LOW_BasiliskGate_CrimeComplainer_001_ADpos_3e93e9a9-4ca7-4724-ac08-373698234a00")
+    local wifeAD = Dialog("LOW_BasiliskGate_CrimeComplainers001_002_AD_4f1e24fa-e12e-ed95-a551-8e7058d909fc")
+    local wifeADReceiver = Entity("S_LOW_BasiliskGate_CrimeComplainer_002_b8cf8f7d-29f2-4184-8df4-eb91572c1a46")
+    
+    local commanderNPC = Entity("S_LOW_BasiliskGate_Commander_915d074c-8f6f-4f5a-ae18-fb333ce6dc29")
+    local sargeantOrCommanderDeathKnown = false
+    local actionType = "AttemptDialog" --AttemptDialog, BetweenDialogs, CheckSargeant
+
+    --evaluating mode selection after action node is finished
+    helpers.processActionEnd = function()
+        if actionType == "CheckSargeant" then  
+            actionType = "AttemptDialog"    
+        elseif math.random() < 0.05 and not sargeantOrCommanderDeathKnown then
+            actionType = "CheckSargeant"
+        elseif actionType == "AttemptDialog" then
+            actionType = "BetweenDialogs"
+        else
+            actionType = "AttemptDialog"
+        end
+    end
+
+    helpers.action.attemptDialog = function(dest, AD, options, receiver)
+        if mod.moveto.MoveToPoint(dest, MovementSpeed.Walk, me, nil, nil) then
+            if receiver == sargeantADReceiver and IsInTrigger(receiver, sargeantArea.Trigger) then
+                SteerTo(receiver)
+                if receiver.Character.IsDead or commanderNPC.Character.IsDead then
+                    sargeantOrCommanderDeathKnown = true
+                end
+            end
+            mod.dialog.StartCheckedAutomatedDialog(AD, options, me, receiver)
+        end   
+    end
+
+    --Selector
+    nodes.actionTypes = Selector{function(nodes)
+        if actionType == "AttemptDialog" then
+            return nodes.PlayGroupDialogADFromTrigger
+        elseif actionType == "CheckSargeant" then
+            return nodes.CheckSargeant
+        else
+            return nodes.Sleep
+        end
+    end}
+
+    --Selector child nodes
+    nodes.actionTypes.PlayGroupDialogADFromTrigger = Action {function()
+        helpers.attemptDialog(wifeADTrigger, wifeAD, {waitForCompletion = true, maxDistance = params.maxDistanceFromDlgPartner}, wifeADReceiver)
+    end,
+    OnFinished = function()
+        helpers.processActionEnd()
+    end}
+
+    nodes.actionTypes.CheckSargeant = Action {function()
+        helpers.attemptDialog(sargeantADTrigger, sargeantAD, {waitForCompletion = true, maxDistance = params.maxDistanceFromDlgPartner}, sargeantADReceiver)
+        Sleep(3)
+    end,
+    OnFinished = function()
+        helpers.processActionEnd()
+    end}
+
+    nodes.actionTypes.Sleep = Action {function()
+        mod.util.SleepRandom(params.pauseBetweenDlgMin, params.pauseBetweenDlgMin + params.pauseBetweenDlgRandomRange)
+        helpers.processActionEnd()
+    end}
+
+    --root action nodes
+    nodes.Fallback = Action {function()
+        WaitForInterrupt()
+        helpers.processActionEnd()
+    end}    
+end}

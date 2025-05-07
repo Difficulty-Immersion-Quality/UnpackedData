@@ -1,0 +1,300 @@
+game.states.DEN_TieflingGuard_001 = State {function ()
+    description = [[Rikka's behavior near the front gate of the druid grove]]
+
+    modules = {"shared.moveto", "shared.dialog"}
+    -----------------------------------------
+    -- Local variables
+
+    --Entities
+    local atBodyPos = Entity("S_DEN_KanonBodyPos_01_59fc54dd-5925-4ef0-9a66-0e5e2cf793c6")
+    local partner = Entity("S_DEN_Tiefling_004_c9562174-44af-4ffa-9e5e-da58538f23d8")
+
+    --Flags
+    local mournFlag = Flag("DEN_General_State_KanonCorpseClear_2f31ab46-4850-444b-b826-c13c8ca854eb")
+    local raidFlag = Flag("DEN_RaidingParty_Quest_GoblinRaidOver_98712d90-c46b-20c4-c4df-02c0117e85a5")
+    local atBodyFlag = Flag("DEN_General_State_KanonGuardScene_0753324f-9359-45e7-8725-5b1d2d04bad8")
+
+    --Bools
+    local partneratKanon = false
+    local partnerSceneReady = false
+    local atKanon = false
+    local startedBurialScene = false
+    local canAD = true
+
+    --Dialogs
+
+    local AD = Dialog("DEN_General_AD_TieflingGuard1_0ecc90fc-89d2-41b9-b4b9-f28a01077835")
+    local kanonAD = Dialog("DEN_General_AD_CorpseMove_79e24704-46d3-2741-2ee0-fb5246b66cdd")
+
+    --Nodes
+    -----------------------------------------
+    nodes.RaidIdle = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not GetFlag(raidFlag,nil)
+        end
+    }
+    
+    nodes.doBurialAD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                kanonAD,
+                {
+                    waitForCompletion = false
+                },
+                me,
+                partner
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_General_AD_TieflingGuard1")
+            StartTimer(me,"ADTimer_DEN_General_AD_TieflingGuard1", 40 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return canAD and
+            (GetFlag(mournFlag) and atKanon and partneratKanon)
+        end
+    }
+
+    nodes.doAD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = false
+                },
+                me
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_General_AD_TieflingGuard1")
+            StartTimer(me,"ADTimer_DEN_General_AD_TieflingGuard1", 60 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return canAD and
+            (GetFlag(raidFlag) and not GetFlag(mournFlag))
+        end
+    }
+
+    nodes.ToKanon = Action{
+        OnEnter = function()
+            mod.moveto.MoveTo(atBodyPos,true,1.5,"Walk","DEN_General_ReachedKanon")
+        end,
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(mournFlag,nil) and not atKanon
+        end
+    }
+
+    nodes.WaitingAtKanon = Action{
+        function()
+            if mod.moveto.MoveToPoint(atBodyPos,MovementSpeed.Walk,me) then
+                LookFrom(atBodyPos)
+                Sleep(1.0)
+            end
+        end,
+        Valid = function()
+            return GetFlag(mournFlag,nil) and atKanon and not partnerSceneReady and not partner.Character.IsDead
+        end
+    }
+
+    nodes.MourningAtKanon = Proxy{
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_KanonBodyPos_01_59fc54dd-5925-4ef0-9a66-0e5e2cf793c6",
+            lookFromMoveTarget = true,
+            anim = "CUST_AvoidLooking_01_3d1c9356-2a8e-4ccb-a435-059a5d0d0724",
+            waitMin = 0.0,
+            waitMax = 0.0
+        },
+        Valid = function()
+            return GetFlag(mournFlag,nil) and atKanon and (partnerSceneReady or partner.Character.IsDead)
+        end
+    }
+
+    nodes.AtGate = Proxy{
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_Tiefling001Pos_04ec99ec-08ea-4fee-9c6f-9c4d3bd733da",
+            lookFromMoveTarget = true,
+            anim = "CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef",
+            waitMin = 5.0,
+            waitMax = 7.0
+        }
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me or e.TargetEntity == partner) and e.Event == "DEN_General_ReachedKanon" then
+            if e.TargetEntity == partner then
+                partneratKanon = true
+                canAD = false
+                StopTimer(me,"ADTimer_DEN_General_AD_TieflingGuard1")
+            elseif e.TargetEntity == me then
+                atKanon = true
+                canAD = false
+                StopTimer(me,"ADTimer_DEN_General_AD_TieflingGuard1")
+            end
+            if atKanon and partneratKanon then
+                StartTimer(me, "KanonBurialADStart", 1.0, 0)
+                canAD = true
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "KanonBurialADStart" and not startedBurialScene then
+            StartTimer(me, "KanonBurialADStart", 1.0, 0) --fallback in case the scene gets interrupted while starting
+            Interrupt()
+        elseif(e.TimerName == "ADTimer_DEN_General_AD_TieflingGuard1") then 
+            canAD = true
+        end
+    end
+
+    events.DialogStarted = function(e)
+        if e.Instance.DialogUUID == Guid("DEN_General_AD_CorpseMove_79e24704-46d3-2741-2ee0-fb5246b66cdd") and not startedBurialScene then
+            startedBurialScene = true
+            partnerSceneReady = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == mournFlag.Guid then
+            StopAnimation(me)
+            Interrupt()
+        end
+    end
+
+end
+}
+
+game.states.DEN_AttackOnDen_Tiefling001 = State {function ()
+    description = [[Looking around for Doni.]]
+
+    modules = {"shared.moveto"}
+
+    local searchAD = Dialog("DEN_AttackOnDen_AD_LookingForDoni_99287718-f207-6829-0923-d914331beb7d")
+    local foundAD = Dialog("DEN_AttackOnDen_AD_RikkaAndDoni_a2e68aba-ccd2-7b41-bdcc-68d38284465a")
+    local ADDelay = 20
+    local canAD = true
+    local doniFound = false
+    local doni = Entity("S_GLO_GruntingKid_0f8ef61e-cb63-49e1-a242-677173bff5e0")
+
+    --Flags
+
+    local lookingForDoniFlag = Flag("DEN_AttackOnDen_State_MissingDoni_65b22f09-459c-ebbf-1859-ddc005d067eb")
+
+    --Patrol
+    local patrolSpline = Spline("S_DEN_FindingDoniSpline_609f3bfc-8e26-41da-bb29-3d597537a7ab")
+    local canWalkOnSpline = true
+    local splineEvent = ""
+
+    helpers.ResetADDelay = function()
+        StopTimer(me, "DEN_AttackOnDen_DoniSearchTimer")
+        StartTimer(me, "DEN_AttackOnDen_DoniSearchTimer", ADDelay, 0)
+        canAD = false
+    end
+
+    nodes.DoniSceneOver = Selector{
+        Valid = function()
+            return not GetFlag(lookingForDoniFlag)
+        end
+    }
+
+    nodes.DoniSceneOver.Patrolling = Proxy{
+        game.states.DEN_GeneralGroveStates_Patrol,
+        params = {
+            lookFromNode = true,
+            spline = [[S_DEN_AttackRikkaPatrol_59084c2d-ecc1-4986-a941-333e2e82eca1]],
+            waitAtNode = true,
+            waitMax = 15,
+            waitMin = 10,
+        },
+    }
+
+    nodes.LookingForDoni = Selector{
+        Valid = function()
+            return GetFlag(lookingForDoniFlag)
+        end
+    }
+
+    nodes.LookingForDoni.GoToDoni = Action{
+        function()
+            if mod.moveto.MoveToPoint(doni,MovementSpeed.Run,me) then
+                SteerTo(doni)
+                StartAutomatedDialog(foundAD, true, me, doni)
+            end
+        end,
+        Valid = function()
+            return doniFound
+        end
+    }
+
+    nodes.LookingForDoni.Patrol = Action {
+        OnEnter = function()
+            splineEvent = ""
+        end,
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    nodes.LookingForDoni.Search = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(5)
+            if canAD then
+                StartAutomatedDialog(searchAD, false, me)
+                helpers.ResetADDelay()
+            end
+            canWalkOnSpline = true
+        end,
+        OnLeave = function()
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline and not doniFound
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_AttackOnDen_DoniSearchTimer") then canAD = true end
+    end
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_AttackOnDen_RikkaToDoni") then
+                doniFound = true
+                Interrupt()
+            end
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+end}

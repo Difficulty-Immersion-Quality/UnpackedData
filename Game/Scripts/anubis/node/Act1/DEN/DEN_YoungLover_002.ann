@@ -1,0 +1,192 @@
+game.states.DEN_YoungLover_002 = State {function ()
+    description = [[]]
+
+    modules = { "gustav.Act1.GroveRefugee", "shared.dialog"}
+
+    -----------------------------------------
+    -- Local variables
+    
+    --Tables
+    local crateItems = {
+        Entity("S_DEN_YoungLoverGoods_01_730db162-a8b9-4cc9-abf7-0e26ecea4ee3"),
+        Entity("S_DEN_YoungLoverGoods_02_82770767-69ec-4b57-a3da-c4976d192512")
+    }
+    local goodsPos = {}
+
+    --Entities
+    local youngLover01 = Entity("S_GLO_YoungLover_01_dd9178e7-1e3f-43bc-8a38-666dfcac7d0c")
+
+    --Dialog GUIDs
+    local autoDialog = Guid("DEN_AD_YoungLover1_2_1bbf53ba-7ece-4983-e120-76d683beceb5")
+    local soloAD = Dialog("DEN_YoungLover_AD_2_cd2c1d07-1ba0-802c-fdb5-3ec6c78886c6")
+
+    --Bools
+    local canAD = false
+    local blockedAD = false
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        mod.GroveRefugee.SetGoodsPos(crateItems, goodsPos) 
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.doAD = Action {
+        CanEnter = function()
+            return not mod.dialog.IsSpeakerAvailable(youngLover01) and not blockedAD
+        end,
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                soloAD,
+                {
+                    waitForCompletion = false
+                },
+                me
+            )
+            blockedAD = true
+        end,
+        OnLeave = function()
+            blockedAD = true
+            StopTimer(me,"ADTimer_DEN_YoungLover_AD_2")
+            StartTimer(me,"ADTimer_DEN_YoungLover_AD_2", 60 + math.random(0,10),0)
+        end,
+    }
+
+    nodes.Default = Selector{
+        function(nodes)
+            if canAD then
+                return nodes.stopAndTalk
+            else
+                if mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+                and mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2]) then
+                    return FindDifferentRandomSelectable(nodes)
+                else
+                    return FindRandomSelectable(nodes)
+                end
+            end
+        end
+    }
+
+    nodes.Default.stopAndTalk  = Proxy {
+        CanEnter = function()
+            return canAD
+        end,
+        OnEnter = function()
+            canAD = false
+        end,
+        game.states.DEN_GeneralGroveStates_stopAndTalk,
+            params={
+                lookTarget = "S_GLO_YoungLover_01_dd9178e7-1e3f-43bc-8a38-666dfcac7d0c",
+            }
+        }
+
+    nodes.Default.AtCrate1 = Proxy {
+        OnEnter = function()
+            canAD = false
+        end,
+        Valid = function()
+           return mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1]) --must use local variables as params cannot pass updated vector3
+        end,
+        game.states.DEN_GeneralGroveStates_WorldBehaviourAtPoint,
+        params={
+            moveTarget = "S_DEN_YoungLover02_Position1_8108060f-8a55-44dd-a741-bbdba05aa870",
+            lookTarget = "S_DEN_YoungLoverGoods_01_730db162-a8b9-4cc9-abf7-0e26ecea4ee3",
+            worldBehaviour = "BHVR_WRLD_DEN_DistractedPacking_fc215c4e-b079-991a-559f-a1bccc413e9a",
+            worldBehaviourTrigger = "BHVR_WRLD_DEN_DistractedPacking_YoungLover_02_SceneTrigger_a9d8785b-119b-43de-9fe6-19736106b5b3",
+            behaviourPartners = {"S_DEN_YoungLoverGoods_01_730db162-a8b9-4cc9-abf7-0e26ecea4ee3"},
+            waitMin = 0,
+            waitMax = 0
+        },
+    }
+
+    nodes.Default.AtCrate2 = Proxy {
+        OnEnter = function()
+            canAD = false
+        end,
+        Valid = function()
+           return mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])--must use local variables as params cannot pass updated vector3
+        end,
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_YoungLover02_Position2_31a0c351-f922-4c71-ab52-e2c84de5176c",
+            lookTarget = "S_DEN_YoungLoverGoods_02_82770767-69ec-4b57-a3da-c4976d192512",
+            anim = "CUST_Organizing_01_0e82e372-b47d-4d62-933b-068725cdfd06",
+            waitMin = 0,
+            waitMax = 0
+        }
+    }
+
+    nodes.Default.Wander = Proxy {
+        OnEnter = function()
+            canAD = false
+        end,
+        CanEnter = function()
+            return not mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+            and not mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])
+        end,
+        game.states.DEN_GeneralGroveStates_Wander,
+        params={
+            anchor = "S_DEN_YoungLover02_Position3_b88d6d25-7a20-4402-bec9-e6c798131566",
+            wanderMin = 2.0,
+            wanderMax = 3.0
+        }
+    }
+
+    nodes.Default.Rest = Action {
+        OnEnter = function()
+            canAD = false
+        end,
+        CanEnter = function()
+            return not mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+            and not mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])
+        end,
+        function()
+            Sleep(math.random(4,8))
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.DialogEnded = function(e)
+        if(e.Instance.DialogUUID == autoDialog) then
+            canAD = false
+            blockedAD = true
+            StopTimer(me,"ADTimer_DEN_YoungLover_AD_2")
+            StartTimer(me,"ADTimer_DEN_YoungLover_AD_2", 60 + math.random(0,10),0)
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == youngLover01) then
+            if(e.Event == "DEN_MovedToTalk") then
+                StartTimer(me, "DEN_GroveRefugee_DialogFailedInterrupt",3.0,0)
+                canAD = true
+                Interrupt()
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_GroveRefugee_DialogFailedInterrupt") and not IsInDialog(me, false) then
+            Interrupt()
+        elseif(e.TimerName == "ADTimer_DEN_YoungLover_AD_2") then
+            blockedAD = false
+        end
+    end
+
+end}
+
+game.states.DEN_AttackOnDen_YoungLover_002 = State {function ()
+    description = [[Chatting with Ikaron and Okta.]]
+    
+    nodes.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_AoDLoverPos_2_8bad2646-f348-4083-aa98-3de421d0ccd6]]
+        }
+    }
+end}

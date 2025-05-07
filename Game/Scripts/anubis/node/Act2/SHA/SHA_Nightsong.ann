@@ -1,0 +1,174 @@
+game.states.SHA_Nightsong = State { function ()
+    description = [[
+        Nightsong's behaviour while in Shar Temple
+    ]]
+
+    local tauntAD = Dialog("SHA_Nightsong_AD_TauntPlayer_4e2e1a1c-c1e1-2585-1d0f-5d43a537a49b")
+    local attackedAD = Dialog("SHA_Nightsong_AD_NightsongAttacked_942a223a-c5fc-5ab9-4b0b-a92797ec854d")
+    local canDoAttackedAD = true
+    local necroDefeated = Flag("SHA_Necromancer_State_PermaDefeated_c8fc43c5-f6bb-4c15-9869-8ceefc288ef2")
+
+	-- variables for the Holy Fire surface being created when Nightong walks while her moon beam is active
+    local basePosition
+    local prevDropPos
+    local spawnsTrail = false
+    local needMoveFromPuddle = false
+	local trailSpawnCooldown_Combat = 0.25
+    local trailSpawnCooldown_NonCombat = 0.5
+    local trailThresholdPos_Combat = 0.02
+    local trailThresholdPos_NonCombat = 0.1
+
+    params.TrailRadius = { type = EParamType.Number, required = false, default = 0.6, help = [[
+        Radius of the Holy trail surface.
+    ]]}
+
+    params.HolySurfaceLifetime = { type = EParamType.Number, required = false, default = 6, help = [[
+        Lifetime of the surface. Will keep adding to the same surface,
+        it will never go away, unless the surface stops. And then WHOLE surface clears itself.
+    ]]}
+
+    modules = { "shared.math" }
+    modules = {"shared.util"}
+    modules = { "shared.dialog" }
+
+    helpers.StartSpawningTrail = function()
+        if not spawnsTrail and me.Active and not me.Character.IsDead then
+            helpers.StartTrailTimer()
+            prevDropPos = me.Position
+            spawnsTrail = true
+        end
+    end
+
+	helpers.GetDiffBetweenLastPosThreshold = function()
+        local diff = 0
+        if needMoveFromPuddle then
+            -- to avoid surface lifetime refresh and start spawning new surface a little bit further from the existing one
+            diff = params.TrailRadius*2
+        else
+            -- if in combat then diff = trailThresholdPos_Combat, otherwise diff = trailThresholdPos_NonCombat
+            diff = me.IsInCombat and trailThresholdPos_Combat or trailThresholdPos_NonCombat
+        end
+        return diff
+    end
+
+    helpers.StartTrailTimer = function()
+		-- if in combat then time = trailSpawnCooldown_Combat, otherwise time = trailSpawnCooldown_NonCombat
+        local time = me.IsInCombat and trailSpawnCooldown_Combat or trailSpawnCooldown_NonCombat
+        StartRealtimeTimer(me, "Holy_SpawnTrail_Timer", time, 0)
+    end
+
+    helpers.StopSpawningTrail = function()
+        if spawnsTrail then
+            spawnsTrail = false
+            StopTimer(me, "Holy_SpawnTrail_Timer")
+        end
+    end
+
+    self.OnInit = function()
+        spawnsTrail = false
+        basePosition = me.Position
+    end
+
+    nodes.Taunting = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+            tauntAD,
+            {
+                waitForCompletion = false,
+                minDelay = 20
+            },
+            me
+        )
+            Sleep(10)
+        end,
+        Valid = function()
+            return HasActiveStatus(me, "SHA_NIGHTSONG_SOULCAGE") and GetFlag(necroDefeated)
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.Damaged = function(e)
+        if canDoAttackedAD and
+           HasActiveStatus(me, "SHA_NIGHTSONG_SOULCAGE") and
+           me.HitpointsPercentage > 0.0 and
+           e.Source ~= nil and
+           e.Source.IsCharacter and
+           e.Source.Character.IsPlayer and
+           not e.Source.IsInCombat and
+           not IsInDialog(me, false) then
+            canDoAttackedAD = false
+            StartAutomatedDialogImmediate(attackedAD, me, e.Source)
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == attackedAD.Guid) then
+            StartTimer(me, "SHA_Nightsong_AttackedADTimer", 10.0, 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "Holy_SpawnTrail_Timer" and spawnsTrail then
+            if me.Active and not me.Character.IsDead then
+                if not me.IsInCombat or me.IsInActiveTeamTurn then
+                    if not HasActiveStatus(me,"FROZEN") and HasActiveStatus(me,"MOO_NIGHTSONG_MOONBEAM") then
+                        local distDiff = helpers.GetDiffBetweenLastPosThreshold()
+                        if GetDistance2DTo(me, prevDropPos) > distDiff then
+                            CreateSurfaceAt(me.Position, SurfaceType.HOLYFIRE, params.TrailRadius, params.HolySurfaceLifetime)
+                            prevDropPos = me.Position
+                            needMoveFromPuddle = false
+                        end
+                    end
+                end
+                helpers.StartTrailTimer()
+            else
+                helpers.StopSpawningTrail()
+            end
+        elseif e.TimerName == "SHA_Nightsong_AttackedADTimer" then
+            canDoAttackedAD = true
+        end
+    end
+
+    events.StatusApplied = function(e)
+        if e.Status.StatusID == "FROZEN" then
+            helpers.StopSpawningTrail()
+        end
+    end
+
+    events.StatusRemoved = function(e)
+        if e.Status.StatusID == "FROZEN" then
+            helpers.StartSpawningTrail()
+        end
+    end
+
+    events.Dying = function(e)
+        if e.Target == me then
+            helpers.StopSpawningTrail()
+        end
+    end
+
+    events.Activated = function(e)
+        helpers.StartSpawningTrail()
+    end
+
+    events.Deactivated = function(e)
+        helpers.StopSpawningTrail()
+    end
+
+    events.TurnStarted = function(e)
+        if FindSurface(me, params.TrailRadius, params.TrailRadius*2, SurfaceType.HOLYFIRE) then
+            needMoveFromPuddle = true
+        end
+        helpers.StartSpawningTrail()
+    end
+
+    events.TurnEnded = function(e)
+        needMoveFromPuddle = false
+    end
+
+end}

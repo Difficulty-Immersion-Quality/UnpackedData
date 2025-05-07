@@ -1,0 +1,153 @@
+
+
+game.states.FOR_GnomeWorg1 = State{function ()
+
+    local speaker = nil
+    local leverTrigger
+    local repeats = 1
+    local FOR_GnomeBadger 
+    local FOR_GnomeWorg1BadgerBox
+    
+    local FOR_GnomeGoblinsPacified = Flag("FOR_GnomeGoblinsPacified_385336a9-30d7-f4f8-fa62-32dff47ff714")
+
+    local CUST_Eating_01 = Animation("CUST_Eating_01_e1bc92e7-6f50-463d-85a5-c66352c001b6")
+
+    self.OnInit = function()
+        leverTrigger = FindEntity("S_FOR_GnomeGoblins_NearLevers_ce545f6f-f2b3-4a87-9205-5d69edca93d5")
+        FOR_GnomeWorg1BadgerBox = FindEntity("S_FOR_GnomeWorg1BadgerBox_2ee28e76-ae2e-422b-a6e1-b0fcb4f4bc28")
+        FOR_GnomeBadger = FindEntity("S_FOR_GnomeBadger_cb6095ed-2795-4ffc-b89b-d1c1b13dcdbf")
+    end
+
+    events.DialogStarted = function(ev)
+        if not ev.Instance.Automated then
+            SetEntityEvent(me, "FOR_GnomeGoblin_WitnessMe")
+        end
+    end
+    
+    events.EntityEvent = function(ev)
+        if speaker == nil and
+           ev.TargetEntity ~= me and
+           ev.Event == "FOR_GnomeGoblin_WitnessMe" then
+            speaker = ev.TargetEntity
+        elseif ev.TargetEntity == speaker and 
+               ev.Event == "FOR_GnomeGoblin_DontWitnessMe" then
+            speaker = nil
+        end
+
+    end
+
+    events.DialogEnded = function(ev)
+        if not ev.Instance.Automated then
+            SetEntityEvent(me, "FOR_GnomeGoblin_DontWitnessMe")
+        end
+    end
+
+    nodes.Action_WatchConvo = Action
+    {
+        function()
+            LookAtEntity(speaker, 3.0)
+            Sleep(3.0)
+        end,
+        Valid = function()
+            if not speaker then
+                return false
+            end
+            if GetFlag(FOR_GnomeGoblinsPacified) then
+                return false
+            end
+            if (IsInTrigger(me, leverTrigger.Trigger) and
+                IsInTrigger(speaker, leverTrigger.Trigger)) or
+                (not IsInTrigger(me, leverTrigger.Trigger) and 
+                not IsInTrigger(speaker, leverTrigger.Trigger)) then
+                    return true
+            end
+            return false
+        end
+        ,
+        OnLeave = function()
+            speaker = nil
+        end
+    }
+
+    nodes.Action_NoWatchConvo = Selector{
+        function(nodes)
+            if repeats > 8 then
+                if math.random() < 0.3 then
+                    repeats = -1
+                    return nodes.WatchGnome
+                else
+                    if nodes.Feed.IsSelectable() then
+                        return nodes.Feed
+                    else
+                        repeats = -1
+                        return nodes.WatchGnome
+                    end
+                end
+            elseif repeats > 0 then
+                if nodes.Feed.IsSelectable() then
+                    repeats = repeats + 1
+                    return nodes.Feed
+                else
+                    repeats = - 1
+                    return nodes.WatchGnome
+                end
+            elseif repeats > -8 then
+                repeats = repeats - 1
+                return nodes.WatchGnome
+            else
+                if math.random() < 0.3 then
+                    if nodes.Feed.IsSelectable() then
+                        repeats = 1
+                        return nodes.Feed
+                    else
+                        return nodes.WatchGnome
+                    end
+                else
+                    return nodes.WatchGnome
+                end
+            end
+        end,
+        Valid = function()
+            if not speaker then
+                return true
+            end
+            if GetFlag(FOR_GnomeGoblinsPacified) then
+                return true
+            end
+            if (IsInTrigger(me, leverTrigger.Trigger) and
+                IsInTrigger(speaker, leverTrigger.Trigger)) or
+                (not IsInTrigger(me, leverTrigger.Trigger) and 
+                not IsInTrigger(speaker, leverTrigger.Trigger)) then
+                    return false
+            end
+            return true
+        end,
+        OnEnter = function()
+            if repeats > 0 then
+                repeats = 1
+            else
+                repeats = -1
+            end
+        end
+    }
+
+    nodes.Action_NoWatchConvo.WatchGnome = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {trigger = "S_FOR_GnomeWorg1Home_06f85344-307d-44aa-b950-5f8801a0f249"}
+    }
+
+    nodes.Action_NoWatchConvo.Feed = Action{
+        function()
+            MoveTo(FOR_GnomeBadger, MovementSpeed.Walk, false, false, 0.5, 1.0)
+            PlayAnimation(CUST_Eating_01, true)
+            SteerTo(FOR_GnomeBadger)
+            Sleep(3.0)
+        end,
+        CanEnter = function()
+            return IsInTrigger(FOR_GnomeBadger, FOR_GnomeWorg1BadgerBox.Trigger) and
+                   not IsInDangerousSurfaceFor(FOR_GnomeBadger, me.Character)
+        end        
+    }
+
+end
+}

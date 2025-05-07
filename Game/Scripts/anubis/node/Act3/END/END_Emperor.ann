@@ -1,0 +1,104 @@
+game.states.END_Emperor = State{function ()
+    description = [[END Behaviour for the Emperor (Mainly for Illithid Options)]]
+
+    modules = { "shared.moveto", "shared.dialog" }
+
+    local toAssimilationSpline = Spline("S_END_EmperorToAssimilationSpline_8b44763e-ac92-4ca5-9a14-409d883fb8ea")
+    local moveToAssimilationFlag = Flag("END_IllithidOptions_State_EmperorMovingToAssimilation_7575a81a-f7dc-43ee-b066-11b75ebbf769")
+    local exitPortalFlag = Flag("END_IllithidOptions_State_ExitPortalAvailable_b97872a1-59cc-40cd-8963-e06be614adc0")
+    local assimilationPoint = Entity("S_END_EmperorAssimilationPoint_5bad94db-14cd-4aad-bf03-cc8e3e748e7e")
+    local portalStandPoint = Entity("S_END_OpenExitPortalPoint_c6d5437e-ca42-4fa9-892f-f33a964c091c")
+    local waitingAssimilationAD = Dialog("END_IllithidOptions_AD_EmperorWaiting_9a163fd6-6161-56ea-a2b6-b137f1c8242b")
+    local wiatingPortalAD = Dialog("END_IllithidOptions_AD_EmperorReadyToLeave_1787d4eb-5db3-7f80-48ae-4fc380c94bab")
+    local reachedAssimilation = false
+    local portalADStarted = false
+    local recruitedFlag = Flag("END_IllithidOptions_State_EmperorInParty_0e7f8da7-1dce-411e-83ff-e74af6b7601e")
+
+    --fallback for post brain defeat dialogs where Emperor is not included
+    nodes.Recruited = Action{
+        CanEnter = function()
+            return GetFlag(recruitedFlag)
+        end,
+        function()
+            WaitForInterrupt()
+        end
+    }
+    
+    nodes.ExitPortalIdle = Action {
+        CanEnter = function()
+            return GetFlag(exitPortalFlag)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(portalStandPoint,  MovementSpeed.Walk, me) then
+                LookFrom(portalStandPoint)
+                if not portalADStarted then
+                    mod.dialog.StartCheckedAutomatedDialog(
+                        wiatingPortalAD,
+                        {
+                            waitForCompletion = true,
+                        },
+                        me
+                    )
+                    portalADStarted = true
+                end
+            else
+                SteerTo(portalStandPoint)
+            end
+        end
+    }
+
+    nodes.IdleAssimilation = Action {
+        CanEnter = function()
+            return reachedAssimilation
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(assimilationPoint,  MovementSpeed.Walk, me) then
+                LookFrom(assimilationPoint)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    waitingAssimilationAD,
+                    {
+                        waitForCompletion = true,
+                    },
+                    me
+                )
+                Sleep(20 + 20 * math.random())
+            else
+                SteerTo(assimilationPoint)
+            end
+            Sleep(1)
+        end
+    }
+
+
+    nodes.MoveToAssimilation = Action {
+
+        CanEnter = function()
+            return GetFlag(moveToAssimilationFlag)
+        end,
+
+        function()
+            DoPatrol(toAssimilationSpline, false, MovementSpeed.Walk)
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if e.Event == "END_IllithidOptions_ReachedAssimilation" then
+            reachedAssimilation = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.Event == "END_IllithidOptions_ArrivedAtAssimilation" then
+            reachedAssimilation = true --Osiris event
+        end
+    end
+end
+}

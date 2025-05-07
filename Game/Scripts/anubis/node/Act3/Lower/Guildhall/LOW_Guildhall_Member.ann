@@ -1,0 +1,113 @@
+game.states.LOW_Guildhall_Member = State {
+    function()
+
+        modules = { "shared.dialog" }
+
+        params.IsDrinking = {type = EParamType.Bool, help = "[[The character occasionally drinks]]", required = false, default = false }
+        params.Seat = {type = EParamType.String, help = "[[Seat for when character is sitting]]", required = false, default = nil }
+        params.DrinkingTrigger = {type = EParamType.String, help = "[[Trigger for when character is drinking]]", required = false, default = nil }
+        params.DrinkingCooldown = {type = EParamType.Number, help = "[[Seconds between drinking]]", required = false, default = 20 }
+        params.AutomatedDialog = {type = EParamType.String, help = "[[AD that gets played every so often]]", required = false, default = nil }
+        params.IsSmoking = {type = EParamType.Bool, help = "[[The character occasionally smokes a pipe.]]", required = false, default = false }
+        params.SmokingCooldown = {type = EParamType.Number, help = "[[Seconds between smoking]]", required = false, default = 10 }
+
+        params.sitAndDrinkDialog_Patched = {type = EParamType.String, help = "[[Assigned WB for sit & drink]]", required = false, default = [[BHVR_WRLD_GLO_MagicPocketsSitAndDrink_c2e8c0bf-d1d0-af01-72c3-e7c244444e2c]] }
+        params.standAndDrinkDialog_Patched = {type = EParamType.String, help = "[[Assigned WB for stand & drink]]", required = false, default = [[BHVR_WRLD_GLO_StandAndDrink_a4065598-1ea2-8866-d23f-f765b5008273]] }
+        params.smokingAnimation = {type = EParamType.String, help = "[[Assigned animation for smoking]]", required = false, default = [[CUST_Smoking_Pipe_01_84caeca5-1111-4ee5-a82f-18e2329216e3]] }
+
+        local drinkAnimation = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+        local sitAndDrinkDialog_Patched = Dialog(params.sitAndDrinkDialog_Patched)
+        local standAndDrinkDialog_Patched = Dialog(params.standAndDrinkDialog_Patched)
+        local smokingAnimation = Animation(params.smokingAnimation)
+        local seat = nil
+        local drinkingTrigger = nil
+        local canDrink = true
+        local canAD = true
+
+        self.OnInit = function()
+            if params.Seat ~= nil and params.Seat ~= "" then
+                seat = Entity(params.Seat)
+            end
+            if params.DrinkingTrigger ~= nil and params.DrinkingTrigger ~= "" then
+                drinkingTrigger = Entity(params.DrinkingTrigger)
+            end
+            if params.IsDrinking and drinkingTrigger == nil then
+                assert("Could not init drinkingTrigger for drinking char")
+            end
+        end
+
+        events.TimerFinished = function(e)
+            if e.TimerName == "DrinkingCooldown" then
+                canDrink = true
+            elseif e.TimerName == "ADCooldown" then
+                canAD = true
+            end
+        end
+
+        nodes.Idling = Selector {
+            function(nodes)
+                local node = FindDifferentRandomSelectable(nodes)
+                if node ~= nil then
+                    return node
+                else
+                    return nodes.DoNothing
+                end
+            end
+        }
+
+        nodes.Idling.Drink = Action {
+            function()
+                try
+                    if seat ~= nil then
+                        StartBehaviorDialog(sitAndDrinkDialog_Patched, drinkingTrigger.Trigger, true, me, seat)
+                    else
+                        StartBehaviorDialog(standAndDrinkDialog_Patched, drinkingTrigger.Trigger, true, me)
+                    end
+                    Sleep(params.DrinkingCooldown + math.random(0,10))
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "Failed to play".. tostring(sitAndDrinkDialog_Patched) .. "sit drink animation.")
+                end
+            end,
+            CanEnter = function()
+                return canDrink and params.IsDrinking
+            end,
+            OnLeave = function()
+                canDrink = false
+                StartTimer(me, "DrinkingCooldown", params.DrinkingCooldown, 0)
+            end
+        }
+
+        nodes.Idling.Smoking = Action {
+            function()
+                try
+                    PlayAnimation(smokingAnimation, true, false)
+                    Sleep(params.SmokingCooldown + math.random(0,5))
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "Failed to play".. tostring(smokingAnimation) .. "smoking animation.")
+                end
+            end,
+            CanEnter = function()
+                return params.IsSmoking == true
+            end
+        }
+
+        nodes.Idling.AD = Action {
+            function()
+                StartAutomatedDialog(Dialog(params.AutomatedDialog), true, me)
+            end,
+            CanEnter = function()
+                return canAD and params.AutomatedDialog ~= nil
+            end,
+            OnLeave = function()
+                canAD = false
+                StartTimer(me, "ADCooldown", math.random(10,15), 0)
+            end
+        }
+
+        nodes.Idling.DoNothing = Action {
+            function()
+                Sleep(math.random(3,8))
+            end
+        }
+    end
+}

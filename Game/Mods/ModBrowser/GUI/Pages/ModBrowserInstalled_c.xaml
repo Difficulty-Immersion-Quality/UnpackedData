@@ -1,0 +1,183 @@
+<ls:UIWidget x:Name="ModBrowserInstalled_c"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             ls:UIWidget.ContextName="ModBrowserInstalled"
+             ls:UIWidget.Focusable="True"
+             Template="{StaticResource ModBrowserBackgroundTemplate_c}"
+             d:DesignWidth="3840" d:DesignHeight="2160"
+             d:DataContext="{d:DesignInstance Type=ls:DCModBrowser, IsDesignTimeCreatable=True}"
+             FocusDown="UIDown" FocusLeft="UILeft" FocusRight="UIRight" FocusUp="UIUp">
+    <ls:UIWidget.ContentTemplate>
+        <DataTemplate>
+            <Grid HorizontalAlignment="Center" x:Name="root" Margin="0,-44,0,0" Tag="None">
+                <b:Interaction.Behaviors>
+                    <ls:CollectionSortBehavior x:Name="ModSorted" ItemsSource="{Binding Data.AvailableMods}" Comparer="{Binding SortModsComparer}"/>
+                </b:Interaction.Behaviors>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1440"/>
+                    <ColumnDefinition Width="70"/>
+                    <ColumnDefinition Width="1450"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="90"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel x:Name="modsDisabledPanel" Grid.Row="0" Grid.ColumnSpan="3" Margin="0, 10">
+                    <TextBlock x:Name="modsDisabledLabel"
+                               Text="{Binding Source='hbf3eac1fgc6b9g43bag915agf2418316d234', Converter={StaticResource TranslatedStringConverter}}"
+                               HorizontalAlignment="Center"
+                               FontSize="{StaticResource ScaledLargeFontSize}" Foreground="{StaticResource LS_extraspecialTxtColor}" FontWeight="DemiBold"
+                               Visibility="{Binding Data.IsUGCDisabled, Converter={StaticResource BoolToVisibleConverter}}"/>
+
+                    <TextBlock x:Name="modsDisabledDesc"
+                               Text="{Binding Source='hcbb5efb0gb487g4fd9g86c1g8c1bcdf173ef', Converter={StaticResource TranslatedStringConverter}}"
+                               HorizontalAlignment="Center"
+                               FontSize="{StaticResource ScaledDefaultFontSize}" Foreground="{StaticResource LS_baseTxtColor}" FontWeight="DemiBold"
+                               Visibility="{Binding Data.IsUGCDisabled, Converter={StaticResource BoolToVisibleConverter}}"/>
+                </StackPanel>
+
+                <TextBlock x:Name="availableModsLabel" Grid.Row="1" Grid.Column="0" Text="{Binding Source='h26846b3cgd238g4eb4g913ag60e5dce34ddc', Converter={StaticResource TranslatedStringConverter}}"
+                           FontSize="{StaticResource IntermediateFontSize}" Margin="160,0,0,0" Foreground="{StaticResource LS_extraspecialTxtColor}" FontWeight="DemiBold"/>
+
+                <Grid x:Name="ModListRoot" Grid.Column="0" Grid.Row="2" HorizontalAlignment="Center" IsEnabled="{Binding ShowSortAndFilterOptions, Converter={StaticResource InvertBoolConverter}}" Visibility="{Binding IsUpdatingModList, Converter={StaticResource BoolToCollapsedConverter}}" Margin="0,0,0,40">
+
+                    <!-- Tag is used to store last selected item, so we can go back to it -->
+                    <ListBox x:Name="ModList" ItemsSource="{Binding ElementName=ModSorted, Path=SortedItems}" HorizontalAlignment="Left" Height="{Binding ActualHeight, ElementName=ModListRoot}" AlternationCount="{Binding ElementName=ModSorted, Path=SortedItems.Count}" SelectedIndex="0" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel" Tag="None" ls:MoveFocus.IsMoveFocusScope="True">
+                        <b:Interaction.Behaviors>
+                            <ls:AutoScrollBehavior ScrollIntoView="{Binding SelectedIndex, ElementName=ModList}" BringSelectionIntoView="True"/>
+                        </b:Interaction.Behaviors>
+
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel Orientation="Vertical"/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.Template>
+                            <ControlTemplate>
+                                <ls:LSScrollViewer x:Name="ScrollViewer" HorizontalContentAlignment="Center" Template="{StaticResource ScrollViewerTemplate}" VerticalScrollBarVisibility="Auto" ls:ScrollViewerHelper.VerticalScrollOffsetMargin="164" HorizontalScrollBarVisibility="Hidden">
+                                    <ItemsPresenter HorizontalAlignment="Center" />
+                                </ls:LSScrollViewer>
+                            </ControlTemplate>
+                        </ListBox.Template>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                <Setter Property="Margin" Value="4,0,0,4"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Grid x:Name="modPreviewPanel" Width="1360" Height="164" Margin="72,0,0,0">
+                                                <TextBlock Text="{Binding Path=(ItemsControl.AlternationIndex), RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Converter={StaticResource AddConverter}, ConverterParameter=1}"
+                                                           FontSize="{StaticResource ScaledDefaultFontSize}" HorizontalAlignment="Left"  VerticalAlignment="Center" FontWeight="DemiBold"/>
+
+                                                <ContentControl x:Name="contentHolder" Style="{StaticResource FocusableContentControlStyleBold}" Margin="58,0,0,0" ls:MoveFocus.FocusMovementModeRight="MainAxis" ls:MoveFocus.FocusMovementModeUp="MainAxisTunnel" HorizontalAlignment="Stretch" Tag="noEdit" BorderThickness="2">
+
+                                                    <b:Interaction.Triggers>
+                                                        <b:DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=contentHolder}" Value="True">
+                                                            <b:ChangePropertyAction TargetName="root" PropertyName="Tag" Value="{Binding Path=FocusedElement, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"/>
+                                                        </b:DataTrigger>
+                                                    </b:Interaction.Triggers>
+
+                                                    <!-- Mod image and text/tag -->
+                                                    <ContentPresenter x:Name="modPreview" HorizontalAlignment="Left" ContentTemplate="{StaticResource ModPreviewTemplate}" Content="{Binding .}" Width="996" Tag=""/>
+                                                </ContentControl>
+
+                                                <!--Mod Details-->
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,40,0" HorizontalAlignment="Right"  VerticalAlignment="Center">
+                                                    <Image x:Name="updateIcon" VerticalAlignment="Center" Source="{StaticResource updateIcon_c}" Stretch="None" Visibility="Hidden"/>
+                                                    <Image x:Name="modWarning" Source="{StaticResource IconWarningSoft}" Stretch="None" Visibility="Hidden"/>
+                                                    <ls:LSCheckBox x:Name="modEnableCheckBox" IsChecked="{Binding IsEnabled, Mode=OneWay}" Margin="0,-7,0,0">
+                                                        <CheckBox.Template>
+                                                            <ControlTemplate TargetType="CheckBox">
+                                                                <Image x:Name="iconEnabled" VerticalAlignment="Center" Source="{StaticResource disabledIcon_c}" Stretch="None" />
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsChecked" Value="True">
+                                                                        <Setter TargetName="iconEnabled" Property="Source" Value="{StaticResource enabledIcon_c}"/>
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </CheckBox.Template>
+                                                    </ls:LSCheckBox>
+                                                </StackPanel>
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding Path=Tag, ElementName=ModList}" Value="EditModeOn">
+                                                    <Setter TargetName="contentHolder" Property="ls:MoveFocus.Focusable" Value="False"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsOutdated}" Value="True">
+                                                    <Setter TargetName="updateIcon" Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                                    <Setter TargetName="modPreview" Property="Tag" Value="Disabled"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsOfficial}" Value="False">
+                                                    <Setter TargetName="modWarning" Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=contentHolder}" Value="True">
+                                                    <Setter TargetName="modPreview" Property="Tag" Value="Focused"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding DataContext.Data.IsUGCDisabled, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="True">
+                                                    <Setter TargetName="updateIcon" Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="Loaded">
+                                <ls:SetMoveFocusAction TargetName="ModBrowserInstalled_c" FocusElement="{Binding ElementName=ModList}"/>
+                                <b:InvokeCommandAction Command="{Binding UpdateSelectedModDetails}" CommandParameter="{Binding Path=SelectedItem, ElementName=ModList}"/>
+                            </b:EventTrigger>
+                            <b:PropertyChangedTrigger Binding="{Binding FocusedElement, ElementName=ModBrowserInstalled_c}">
+                                <b:Interaction.Behaviors>
+                                    <b:ConditionBehavior>
+                                        <b:ConditionalExpression>
+                                            <b:ComparisonCondition LeftOperand="{Binding Path=FocusedElement.DataContext, ElementName=ModBrowserInstalled_c, Converter={StaticResource TypeConverter}}" Operator="Equal" RightOperand="ls.VMModPreview"/>
+                                        </b:ConditionalExpression>
+                                    </b:ConditionBehavior>
+                                </b:Interaction.Behaviors>
+                                <b:ChangePropertyAction PropertyName="SelectedItem" Value="{Binding FocusedElement.DataContext, ElementName=ModBrowserInstalled_c}"/>
+                            </b:PropertyChangedTrigger>
+                            <b:PropertyChangedTrigger Binding="{Binding SelectedItem, ElementName=ModList}">
+                                <b:InvokeCommandAction Command="{Binding UpdateSelectedModDetails}" CommandParameter="{Binding Path=SelectedItem, ElementName=ModList}"/>
+                            </b:PropertyChangedTrigger>
+                        </b:Interaction.Triggers>
+                    </ListBox>
+                </Grid>
+                <Control x:Name="SingleModInfoControl" Grid.Row="1" Grid.Column="2" Grid.RowSpan="2" Width="1284" HorizontalAlignment="Left" Margin="0,0,0,0"
+                         Template="{StaticResource SidePanelModTemplate}" VerticalAlignment="Top"
+                         Visibility="Collapsed"/>
+
+                <Control x:Name="ModDetailsControl" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Grid.RowSpan="4" VerticalAlignment="Top" Margin="0,50,0,0" Template="{StaticResource ModDetailsTemplate}" Visibility="Collapsed"/>
+
+                <Control x:Name="InstalledButtons" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3" Template="{StaticResource InstalledBottomButtons}" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" HorizontalContentAlignment="Stretch"/>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Path=FocusedElement.DataContext, ElementName=ModBrowserInstalled_c, Converter={StaticResource TypeConverter}}" Value="ls.VMModPreview">
+                    <Setter TargetName="SingleModInfoControl" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Path=SelectedItem, ElementName=ModList, Converter={StaticResource TypeConverter}}" Value="ls.VMModPreview">
+                    <Setter TargetName="SingleModInfoControl" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding InDetailsView}" Value="True">
+                    <Setter TargetName="ModDetailsControl" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="modsDisabledPanel" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="availableModsLabel" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ModListRoot" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="SingleModInfoControl" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="InstalledButtons" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </ls:UIWidget.ContentTemplate>
+</ls:UIWidget>

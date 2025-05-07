@@ -1,0 +1,143 @@
+game.states.END_NautiloidCannonHelper = State{function ()
+    description = [[Helper to control the Nautiloid Bombardment.]]
+
+    modules = { "shared.math" }
+--------------------------------LOCAL--------------------------------
+    local isTargeting = false
+    local isFiring = false
+    local isTurnDone = false
+    local isFiringDropPod = false
+    local isMindFlayerPodActive = false
+    local firedPod = false
+    local fireDropPodOnce = false
+    local currentlyFiringFlag = Flag("END_NautiloidStrike_State_CurrentlyFiring_dc0e8671-348f-45a9-b09f-f7627b7ceee7")
+    local waitForFireEnd = false
+    local dropPodsPausedFlag = Flag("END_HighHallInterior_State_MindFlayerPodsReady_db580a5a-b7e7-4245-8796-7c6b388c37ee")
+
+    local dropPodTargetHelper_001 = Entity("S_END_DropPodTargetHelper_001_e433abd4-015c-4cdd-a86d-a446105f7ea2")
+
+    local podLauncher = Entity("S_END_IntDevPodLauncher_001_f8a678a3-6cc5-4cfb-a781-53de0262cf94")
+
+    local targetDummy = Entity("S_END_NautiloidTargetHelper_c70db4cc-fc4f-4680-a8c7-e514f5ef766b")
+--------------------------------NODES--------------------------------
+
+
+    nodes.Firing = Action {
+        CanEnter = function()
+            return isFiring
+        end,
+        OnEnter = function()
+            SetCombatTimeout(me, 90.0)
+        end,
+        function()
+            if not firedPod then
+                Sleep(4.0) --Wait for arena camera
+                SetUnicastEntityEvent(me, "END_HighHallInterior_StartFiring")
+                waitForFireEnd = true
+                firedPod = true
+                Sleep(0.5)
+            end
+            if waitForFireEnd then
+                Sleep(0.5)
+            else
+                Sleep(1.0)
+                SetUnicastEntityEvent(me, "END_HighHallInterior_FiringDone")
+                isTargeting = true
+                isFiring = false
+            end
+        end,
+        OnLeave = function()
+            firedPod = false
+        end
+    }
+
+    nodes.DevPodStrike = Action {
+        CanEnter = function()
+            return isFiringDropPod and not GetFlag(dropPodsPausedFlag)
+        end,
+
+        function()
+            if not fireDropPodOnce then
+                SetUnicastEntityEvent(me, "END_HighHallInterior_FireDropPod")
+                fireDropPodOnce = true
+            end
+            Sleep(2.0)
+            SetUnicastEntityEvent(me, "END_HighHallInterior_DropPodsDone")
+            isFiringDropPod = false
+        end,
+        OnLeave = function()
+            fireDropPodOnce = false
+        end
+    }
+
+    nodes.Targeting = Action {
+        CanEnter = function()
+            return isTargeting and not isFiring
+        end,
+
+        function()
+            UseSpell("Target_END_Nautiloid_HighHallInterior_Targeting", targetDummy, nil, nil, nil, true, true)
+            Sleep(1)
+            isTargeting = false
+            isTurnDone = true
+        end
+    }
+
+    nodes.WaitForNextAction = Action {
+        CanEnter = function()
+            return not isTurnDone
+        end,
+
+        function()
+            Sleep(0.5)
+        end
+    }
+
+    nodes.EndTurn = Action {
+        OnEnter = function()
+            isTurnDone = false
+        end,
+        
+        function()
+            Sleep(1)
+            if me.IsInCombat then
+                EndTurn(me)
+            end
+        end
+        
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "END_HighHallInterior_EndTurn" then
+                isTurnDone = true
+            elseif e.Event == "END_HighHallInterior_Targeting" then
+                isTargeting = true
+            elseif e.Event == "END_HighHallInterior_Firing" then
+                isFiring = true
+            elseif e.Event == "END_HighHallInterior_DropPod" then
+                isFiringDropPod = true
+            elseif e.Event == "END_HighHallInterior_Reset" then
+                isTurnDone = false
+                isTargeting = false
+                isFiring = false
+                isFiringDropPod = false
+            end
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == currentlyFiringFlag.Guid then
+            waitForFireEnd = false
+        end
+    end
+
+    events.TurnEnded = function(e)
+        isTurnDone = false
+        isTargeting = false
+        isFiring = false
+        isFiringDropPod = false
+    end
+
+end
+}

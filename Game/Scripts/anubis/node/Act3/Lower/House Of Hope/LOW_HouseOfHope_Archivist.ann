@@ -1,0 +1,131 @@
+game.states.LOW_HouseOfHope_Archivist = State{function ()
+
+    -----------------------------------------
+    -- Params
+
+    -----------------------------------------
+    -- Local variables
+    local archiveTrigger = Entity("S_LOW_HouseOfHope_ArchivistOverseeingTrigger_3999e68d-bc38-4b46-92ec-1f75f1ac5625")
+    local trackedCharacter = nil
+    local korrillaSawPlayers = Flag("LOW_HouseOfHope_Event_KorrillaSawPlayers_227facda-fad3-4d8e-8342-1604c038c0ee")
+    local korrilla = Entity("S_GOB_Warlock_d432aafd-f728-4d9d-9707-732e1cdd8297")
+
+    local points = {
+        Entity("S_LOW_HouseOfHope_ArchiveGuideSpot01_3fd5b585-4316-4bd2-85a5-3ef88aa9f732"),
+        Entity("S_LOW_HouseOfHope_ArchiveGuideSpot02_b506c533-eac3-4ee1-aa1d-61c6f232c3ff"),
+        Entity("S_LOW_HouseOfHope_ArchiveGuideSpot03_e5fd9bec-2757-44de-a4d4-62a127617abd"),
+    }
+
+    local currentAction = 1
+
+
+    -----------------------------------------
+    -- State nodes
+
+    self.Valid = function()
+        return true
+    end
+
+    -----------------------------------------
+    -- Helpers
+
+    helpers.FindClosestActiveCharacter = function(anchor, distance, checkUnhiddenInParty, checkTag)
+        local fl_Hiding = Flag("GLO_State_Hiding_ad57af70-2300-4c49-b713-ba0bd8e77ea3")
+        local ch_Target = nil
+    
+        local characters = GetActiveCharacters(anchor, distance)
+
+        if #characters > 0 then
+            local ch_TempTarget = nil
+            local dist_Min = 2 * distance
+    
+            for i, character in ipairs(characters) do            
+                local dist_ToChar = GetDistanceTo(anchor, character)
+                local check = HasLineOfSight(anchor, character)
+                if dist_ToChar < dist_Min and character.OnStage and not character.Character.IsDead and
+                not (checkUnhiddenInParty and (GetFlag(fl_Hiding, character) or not character.Character.IsPartyMember or HasActiveStatus(character, "DOWNED")))
+                and (not checkTag or IsTagged(character,checkTag)) then
+                    dist_Min = dist_ToChar
+                    ch_TempTarget = character
+                end
+            end
+            if ch_TempTarget ~= nil then
+                if ls.CheckType(anchor, ls.anubis.game.Entity) then
+                    DebugText(anchor, "Found Target [1]", ch_TempTarget.Name)
+                end
+                ch_Target = ch_TempTarget
+            end
+        end
+        return ch_Target
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.TalkToKorrilla = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return korrilla.OnStage and not GetFlag(korrillaSawPlayers)
+        end
+    }
+
+
+    nodes.WaitForTarget = Action{
+        function()
+            if currentAction > 3 then currentAction = 1 end
+            if MoveTo(points[currentAction], MovementSpeed.Stroll, false, true, 1.0, 2.0, false, PathClimbingMode.Disabled) then
+                LookFrom(points[currentAction])
+                PlayAnimation(Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7"), true, false)
+                currentAction = currentAction + 1
+            end
+        end,
+        Valid = function()               
+            trackedCharacter = helpers.FindClosestActiveCharacter(me.Position,20.0,true)         
+            return trackedCharacter == nil or not IsInTrigger(trackedCharacter,archiveTrigger.Trigger)
+        end
+
+    }
+
+    nodes.Follow = Action{
+        function()
+            MoveTo(trackedCharacter, MovementSpeed.Walk, false, false, 0.5, 1.5)
+        end,
+        Valid = function()
+            if trackedCharacter ~= nil and IsInTrigger(trackedCharacter,archiveTrigger.Trigger) then
+                return GetDistanceTo(me, trackedCharacter) > 3
+            else
+                return false
+            end            
+        end
+    }
+
+    nodes.Gaze = Action{
+        function()
+            SteerTo(trackedCharacter)    
+        end,
+        Valid = function()
+            if trackedCharacter ~= nil and IsInTrigger(trackedCharacter,archiveTrigger.Trigger) then
+                return GetDistanceTo(me, trackedCharacter) <= 3
+            else
+                return false
+            end            
+        end
+    }
+
+    nodes.ClearTarget = Action {
+        function()
+            trackedCharacter = nil
+        end
+    }
+
+    
+  
+
+    -----------------------------------------
+    -- Events
+
+
+
+end}

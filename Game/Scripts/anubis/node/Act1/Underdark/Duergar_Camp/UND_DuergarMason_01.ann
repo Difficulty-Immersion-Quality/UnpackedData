@@ -1,0 +1,97 @@
+game.states.UND_DuergarMason_01 = State{function()
+
+	modules = {"shared.dialog"}
+
+    params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled.
+    ]]}
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is about to be destroyed or has been already.
+    ]]}
+
+    local char_myComrade
+    local tr_homePoint
+    local flag_CaveInCleared = Flag("UND_DuergarCamp_State_CaveInCleared_e0d8a48b-e0cf-4cc8-96bc-b637b79ce9bd")
+	local flag_PostMutiny = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+	local flag_JoinMutiny = Flag("UND_DuergarRebelReinforcement_State_JoinMutiny_1f9f867f-0b12-4013-9b6d-08736fc62356")
+
+	local d_StoneworkAD = Dialog("UND_DuergarMasons_AD_Stonework_abafbb00-98ec-b5b5-3ed7-025516abd0ec")
+
+
+	self.OnInit = function()
+        char_myComrade = FindEntity("S_UND_DuergarMason_02_6b07558b-09ef-449c-8dd2-b0c2cbe809f1")
+        
+        tr_homePoint = FindEntity("S_UND_DuergarMason_01_Point_7eb07d0f-0086-4cd2-bb8c-158888bbff6b")
+    end
+
+
+    nodes.State_PostMutiny = Proxy {
+        game.states.UND_DuergarCamp_PostMutiny,
+        params = {PostMutinyPosition = params.PostMutinyPosition},
+        Valid = function()
+            return GetFlag(flag_PostMutiny) and GetFlag(flag_JoinMutiny,me)
+        end
+    }
+
+    nodes.State_CaveInCleared = Proxy {
+        game.states.UND_DuergarCamp_CaveInCleared,
+        params = {CaveInPosition = params.CaveInPosition},
+        Valid = function()
+            return GetFlag(flag_CaveInCleared) and GetFlag(flag_JoinMutiny,me)
+        end
+    }
+	
+	nodes.State_AtStoneworks = Selector {
+		function(nodes)
+			return GetWeightedCanEnter(nodes,{[nodes.Action_SayAD] = 3,
+												[nodes.Action_Wander] = 6,
+												[nodes.Action_IdleAnim] = 10})
+		end
+	}
+
+	nodes.State_AtStoneworks.Action_SayAD = Action {
+		function()
+			if GetDistanceTo(me, tr_homePoint) > 1.0 then
+				try
+					MoveTo(tr_homePoint)
+				catch e if ls.CheckType(e, error.MovementFailed) then
+					LookAtEntity(tr_homePoint, 3.0)
+					Sleep(2.0)
+				end
+			end
+			LookFrom(tr_homePoint)
+			if mod.dialog.IsSpeakerAvailable(me) then
+                if mod.dialog.IsSpeakerAvailableAndNear(char_myComrade, me, 20.0, false) then
+					StartAutomatedDialog(d_StoneworkAD,true,me,char_myComrade)
+				end
+			end
+		end,
+		OnLeave = function()
+			DialogRequestStop(me,d_StoneworkAD)
+		end
+	}
+
+	nodes.State_AtStoneworks.Action_Wander = Action {
+		function()
+			try
+				Wander(3.0,4.0,MovementSpeed.Stroll,tr_homePoint)
+			catch e if ls.CheckType(e, error.MovementFailed) then
+				LookAtEntity(tr_homePoint, 3.0)
+				Sleep(2.0)
+			end
+			LookFrom(tr_homePoint)
+			Sleep(5.0)
+		end
+	}
+
+	nodes.State_AtStoneworks.Action_IdleAnim = Action {
+		function()
+			Sleep(5.0)
+		end
+    }
+    
+    nodes.Fallback = function()
+        Sleep(5.0)
+    end
+
+end}

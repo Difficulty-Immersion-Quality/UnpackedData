@@ -1,0 +1,70 @@
+game.states.UND_KethericCity_LostMerregon = State{
+    function ()
+
+        local currentAction = nil
+        local point = nil
+        local maskBox = Entity("S_UND_KethericCity_LostMerregon_MaskBox_0a6aa9d3-b9a1-4977-8443-1176ede64a44")
+        local lordMask = Entity("S_UND_KethericCity_LostMerregon_OfficerMask_7010450b-24d6-4c0c-a592-e6e2701a4e88")
+        local spline = Spline("S_UND_KethericCity_LostMerregon_Patrol_1fa69c3f-740b-4140-8185-df91aad119f5")
+        local salute = Animation("CUST_Salute_01_02dd1135-7d31-463f-812b-d378f728f702")
+
+
+        events.SplineControlPointReached = function(ev)
+            if ev.Event == "UND_KethericCity_LostMerregon_AtShrine" then
+                currentAction = "AtShrine"
+            else
+                currentAction = "PatrolWait"
+            end
+        end
+
+        events.LeftCombat = function(ev)
+            SetWeaponUnsheathed(me, true, true)
+        end
+
+        self.OnEnter = function()
+            SetWeaponUnsheathed(me, true, true)
+        end
+
+        nodes.AtShrine = Action {
+            function()
+                if IsInTrigger(lordMask, maskBox.Trigger) then
+                    SteerTo(lordMask)
+                    Sleep(0.5)
+                    PlayAnimation(salute)
+                    Sleep(0.5)
+                    currentAction = nil
+                elseif CanSee(me, lordMask) then
+                    MoveItem(lordMask, maskBox, -1, 1, 1, 1)
+                else
+                    currentAction = nil
+                end
+            end,
+            OnLeave = function()
+                currentAction = nil
+            end,
+            Valid = function()
+                return currentAction == "AtShrine"
+            end
+        }
+
+
+        nodes.PatrolWait = Action {
+            function()
+                LookFrom(spline)
+                Sleep(4.0)
+                currentAction = nil
+            end,
+            OnLeave = function()
+                currentAction = nil
+            end,
+            Valid = function()
+                return currentAction == "PatrolWait"
+            end
+        }
+
+        self.Valid = function()
+            return currentAction ~= nil
+        end
+
+    end
+}

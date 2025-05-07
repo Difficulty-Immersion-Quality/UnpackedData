@@ -1,0 +1,91 @@
+game.states.HAV_Monitor = State { function()
+
+    description = [[ 
+        Behaviour for Raphael while he's in Haven (with or without Mol)
+    ]]
+
+    modules = { "shared.moveto", "shared.math" }
+
+    local aloneTrigger = Entity("S_HAV_MolsDeal_Monitor_AloneSpot_435383f8-3d51-407d-8e0a-55c9cd8f6e41")
+    local raphaelSoloFlag = Flag("HAV_MolsDeal_RaphaelSolo_62228f75-2a30-485d-98d9-13b95f3677cf")
+    local atGraveyard = Flag("SHA_AFamiliarFace_State_RaphaelAtGraveyard_3b3a1869-54e0-45c9-bdc7-b548febbe291")
+
+    local waitingStart = Animation("CUST_Raphael_Waiting_01_Start_4e447a20-b578-4185-aab1-1b24c2365a46")
+    local waitingLoop = { Animation("CUST_Raphael_Waiting_01_Loop_0fea226c-09f5-4007-9e83-1be2829ccafd") }
+    local waitingEnd = Animation("CUST_Raphael_Waiting_01_End_da53147a-5bb5-41de-9716-002a0b1d9eeb")
+
+    local lanceboardAnimStart = Animation("CUST_PlayLanceBoard_01_Start_fcc00260-4b6c-45cc-ba51-638c8ee21959")
+    local lanceboardAnimLoop = Animation("CUST_PlayLanceBoard_01_Loop_7811e4d3-7fb6-4217-aec2-4710c3fe6552")
+    local lanceboardAnimEnd = Animation("CUST_PlayLanceBoard_01_End_c17e8e76-947f-4b93-82ec-32a5f6932693")
+
+    self.Valid = function()
+        return not GetFlag(atGraveyard)
+    end
+
+    nodes.PlayingGame_Sitting = Action{
+        Valid = function()
+            return not GetFlag(raphaelSoloFlag) and me.IsReposedSitting
+        end,
+        function()
+            --DebugText(me,"Play animation")
+            try
+                PlayLoopingAnimation(lanceboardAnimStart,{lanceboardAnimLoop},lanceboardAnimEnd,false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed")
+            end
+            Sleep(2.0)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.PlayingGame = Proxy{
+        game.states.Sit,
+        params = {
+            seat = "S_HAV_MolsDeal_LanceboardChair_2_940559d0-8c46-428a-bcd1-eba27565d3d1",
+            sitIdle = StateRef{game.states.HAV_Monitor_WhileSitting},
+            nonSitIdle = StateRef{game.states.HAV_MolsDeal_CantSitFallback},
+        },
+        Valid = function()
+            return not GetFlag(raphaelSoloFlag)
+        end
+    }
+
+    nodes.Alone = Action {
+        function()
+            Sleep(1)
+            if mod.moveto.MoveToPoint(aloneTrigger, MovementSpeed.Walk, me, 0.5) then
+                LookFrom(aloneTrigger)
+                PlayLoopingAnimation(waitingStart, waitingLoop, waitingEnd, false)
+            end 
+        end,
+        Valid = function()
+            return GetFlag(raphaelSoloFlag)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+end}
+
+game.states.HAV_Monitor_WhileSitting = State { function()
+
+
+    local boardLoop = { Animation("CUST_PlayLanceBoard_01_Loop_7811e4d3-7fb6-4217-aec2-4710c3fe6552") }
+    local monitorReadyToTalk = Flag("HAV_MolsDeal_State_RaphaelReadyForDialog_55a4441d-28cf-4c9c-a612-6fbf76d6d53b")
+
+    nodes.PlayingGame = Action {
+        function()
+            Sleep(2.0)
+            if not GetFlag(monitorReadyToTalk, me) then
+                PlayLoopingAnimation(nil, boardLoop, nil, false)
+            end
+            SetFlag(monitorReadyToTalk, me)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+end}

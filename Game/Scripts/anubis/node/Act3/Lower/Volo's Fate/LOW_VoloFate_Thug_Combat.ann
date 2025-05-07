@@ -1,0 +1,58 @@
+game.states.LOW_VoloFate_Thug_Combat = State{function()
+
+    local cartOnFireFlag = Flag("LOW_VoloFate_State_CartOnFire_ed9159f7-e71b-4698-8e5e-05bc2d6c5173")
+    local torchTemplate
+    local trySettingVolosCartOnFire = false
+    local volosCart = Entity("S_LOW_VoloFate_ExecutionCart_f1ceb8d9-0122-8051-4345-e45bb5fa7664")
+
+    self.Valid = function()
+        return me.IsInCombat
+    end
+
+    self.OnInit = function()
+        torchTemplate = FindTemplate("WPN_HUM_Torch_A_50c43f27-a12e-412c-88f0-56e15eba692a")        
+    end    
+    
+    nodes.SetVolosCartOnFire = Action{
+        
+        CanEnter = function()
+            return  me.CanActInCombatTeamTurn
+        end,
+
+        function()
+            local torch = GetFirstItemByTemplateInInventory(me, torchTemplate)
+            if(torch ~= nil and IsInSurface(volosCart,SurfaceType.ALCOHOL, 1.0)) then
+                local throwPos = FindSurface(volosCart, 1.0, 2.0, SurfaceType.ALCOHOL)
+                ApplyStatus(torch,"BURNING",true,-1.0)
+                DebugText(me,"Found this throwPos: [1]", tostring(throwPos))
+                if(throwPos ~= nil) then
+                    try
+                        UseSpell("Throw_Throw", throwPos, torch)
+                        DebugText(me,"Tried throwing the torch")
+                    catch e if ls.CheckType(e, error.UseSpellFailed) then
+                        DebugText(me,"Failed at throwing the torch")
+                    end
+                end
+            end
+            trySettingVolosCartOnFire = false
+        end,        
+
+        Valid = function()
+            return not GetFlag(cartOnFireFlag) and trySettingVolosCartOnFire ~= false
+        end,
+
+        OnLeave = function()
+            trySettingVolosCartOnFire = false
+        end
+    }
+    
+    nodes.DefaultCombat = Proxy{
+        game.states.DefaultCombat    
+    }
+
+    events.TurnStarted = function()
+        if not GetFlag(cartOnFireFlag) then
+            trySettingVolosCartOnFire = true
+        end
+    end
+end}

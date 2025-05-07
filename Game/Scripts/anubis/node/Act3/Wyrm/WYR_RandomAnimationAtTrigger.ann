@@ -1,0 +1,70 @@
+game.states.WYR_RandomAnimationAtTrigger = State { function ()
+
+    description = [[ 
+        Generic state to use for playing random animations while staying in a trigger.
+        Both the animations and the trigger are optional.
+    ]]
+
+    modules = { "shared.math", "shared.params", "shared.moveto" }
+
+    params.randomAnims = {type = EParamType.String, arrayRange = "0..", required = false, help=[[
+        Random animations to play.
+    ]]}
+
+    params.pauseBetweenAnimations = { type = EParamType.Number, required = false, default = 2.0, help = [[
+        Time between animations play.
+    ]]}
+
+    params.randomPauseBetweenAnimation = { type = EParamType.Number, required = false, default = 2.0, help = [[
+        Adds to the pauseBetweenAnimations from 0 to the value.
+    ]]}
+
+    params.pauseBeforeFirstPlay = { type = EParamType.Number, required = false, default = 2.0, help = [[
+        From 1 to the value.
+    ]]}
+
+    params.trigger = {type = EParamType.String, required = false, help=[[
+        The trigger at which the character stands.
+    ]]}
+
+    local randomAnims = {}
+    local trigger = nil
+    local firstTimePausePlayed = false
+
+    self.OnInit = function()
+        if params.randomAnims ~= nill and #params.randomAnims > 0 then
+            randomAnims = mod.params.ParamArrayToAnimationsList(params.randomAnims)
+        end
+        if params.trigger ~= nil then
+            trigger = Entity(params.trigger)
+        end
+    end
+
+    nodes.PlayAnimation = Action{
+        function()
+            if trigger ~= nil then
+                if mod.moveto.MoveToPoint(trigger, MovementSpeed.Walk, me) then
+                    LookFrom(trigger)
+                end
+            end
+            if #randomAnims > 0 then
+                if not firstTimePausePlayed then
+                    Sleep(mod.math.random(1, params.pauseBeforeFirstPlay))
+                    firstTimePausePlayed = true
+                end
+                local randomAnim = randomAnims[math.random(1,#randomAnims)]
+                try
+                    PlayAnimation(randomAnim)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (randomAnim)")
+                    Sleep(5)
+                end
+                Sleep(params.pauseBetweenAnimations+mod.math.random(0, params.randomPauseBetweenAnimation))
+            end
+        end,
+        OnLeave = function()
+            firstTimePausePlayed = false
+            StopAnimation(me)
+        end
+    }
+end}

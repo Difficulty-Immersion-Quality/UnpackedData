@@ -1,0 +1,55 @@
+game.states.GOB_Quatermaster = State{function()
+    modules = { "shared.util" }
+
+    description = [[Anubis behaviour for Quatermaster in Goblin camp]]
+
+    local spl_PatrolRoute = Spline("S_GOB_QuartermasterFlimsy_PatrolSpline_24d5c5bc-8eb8-422b-9c07-5d92a3f5274a")
+    local b_PausePatrol = false
+    local i_LastSplinePoint = -999
+    local animationStart = Animation("CUST_SurveyStore_01_Start_ad340a7d-3a60-4891-b331-d227dae8c1d3")
+    local animationLoop = Animation("CUST_SurveyStore_01_Loop_acf0b680-3785-4b72-8e2e-8aadcde0fa75")
+    local animationEnd = Animation("CUST_SurveyStore_01_End_f5ffb4fb-b343-4cd9-80e0-54778d21f6c4")
+
+    events.SplineControlPointReached = function(ev)
+        if ev.Index ~= i_LastSplinePoint then
+            b_PausePatrol = true
+        end
+        i_LastSplinePoint = ev.Index
+    end
+
+    nodes.Patrol = Action{
+        function()
+            DoPatrol(spl_PatrolRoute, false, MovementSpeed.Stroll)
+        end,
+
+        CanEnter = function()
+            return spl_PatrolRoute ~= nil
+        end,
+
+        Valid = function()
+            return not b_PausePatrol
+        end
+    }
+
+    nodes.PausePatrol = Action{
+        function()
+            ShortPatrolInterrupt()
+            LookFrom(spl_PatrolRoute)
+            mod.util.SleepRandom(2.5, 5.0)
+            PlayLoopingAnimation(animationStart, {animationLoop}, animationEnd, false)
+            Sleep(25 + 10 * math.random())
+            StopAnimation(me, false)
+            b_PausePatrol = false
+        end,
+
+        Valid = function()
+            return b_PausePatrol
+        end
+    }
+
+    nodes.Default = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

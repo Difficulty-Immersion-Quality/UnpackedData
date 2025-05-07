@@ -1,0 +1,83 @@
+game.states.END_Netherbrain_Combat = State {function()
+
+    modules = { "shared.dialog" }
+
+    local brainBattleFlag = Flag("END_BrainBattle_Event_Started_3cd63c2e-7343-45dd-9137-4cabca2179a6")
+    local wallOfForce = Entity("S_END_WallOfForce_96e24e50-b107-4c42-8f2e-188c02aac042")
+    local turnCounter = 1
+    local customCast = false
+
+    self.Valid = function()
+        return customCast
+            and GetFlag(brainBattleFlag) 
+            and me.CanActInCombatTeamTurn
+            and ((not wallOfForce.Item.IsDestroyed and (turnCounter >= 3))
+                or (wallOfForce.Item.IsDestroyed))
+    end
+
+    nodes.BrainBattle_FirstPhase = Action{
+        CanEnter = function()
+            return not wallOfForce.Item.IsDestroyed
+        end,
+        function()
+            Sleep(1)
+            if(turnCounter % 4 == 3) then
+                DebugLog("Netherbrain uses Grasp From Below, spawns tentacles.")
+                UseSpell("Shout_END_Netherbrain_GraspFromBelow", me, nil, nil, nil, true, true, true)
+            end
+            if(turnCounter % 4 == 1) then
+                DebugLog("Netherbrain uses Illithid Horde, spawns illithid creatures.")
+                UseSpell("Shout_END_Netherbrain_IllithidHorde", me, nil, nil, nil, true, true, true)
+            end
+            Sleep(1)
+            customCast = false
+        end
+    }
+    
+    nodes.BrainBattle_SecondPhase = Action{
+        CanEnter = function()
+            return wallOfForce.Item.IsDestroyed
+        end,
+        function()
+            Sleep(1)
+            if(turnCounter % 4 == 1) then
+                DebugLog("Netherbrain adds Nautiloid to combat.")
+                UseSpell("Shout_END_Netherbrain_HellFromAbove", me, nil, nil, nil, true, true, true)
+            elseif(turnCounter % 4 == 2) then
+                SetEntityEvent(me, "END_BrainBattle_MoveBrain")
+                Sleep(3)
+            elseif(turnCounter % 4 == 3) then
+                DebugLog("Netherbrain adds dragon to combat.")
+                UseSpell("Shout_END_Netherbrain_DraconicDomination", me, nil, nil, nil, true, true, true)
+            end
+            Sleep(1)
+            customCast = false
+        end
+    }
+
+-----------------------------------------------------------------------
+
+    events.Destroyed = function(e)
+        if(e.Entity == wallOfForce) then
+            turnCounter = 1
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "END_BrainBattle_NetherbrainStartedTurn" then
+            customCast = true
+            DebugLog(tostring(turnCounter))
+            DebugLog(tostring(customCast))
+        end
+        if e.TargetEntity == me and e.Event == "END_BrainBattle_NetherbrainEndedTurn" then
+            if GetFlag(brainBattleFlag) then
+                turnCounter = turnCounter + 1
+                DebugLog(tostring(turnCounter))
+            end
+        end
+    end
+
+
+
+end   
+}

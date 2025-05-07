@@ -1,0 +1,50 @@
+game.states.GOB_RaiderBold = State{function()
+    description = [[Behaviour of Raider Bold in the Goblin Camp]]
+    modules = {"shared.util"}
+
+    local raidFlag = Flag("GOB_DrowCommander_Event_RaidersSortie_26816b01-2d64-b50c-3bf6-bffd7dc5f0b9")
+    local homeTrigger
+    local sharpenAnimation = Animation("CUST_SharpeningSpearhead_01_1a63b1f0-a30f-4373-9acc-9b5d0048e43d")
+    local sharpenSpearhead = false
+
+    self.OnInit = function()
+        homeTrigger = FindEntity("S_GOB_RaiderBold_HomeTrigger_0264c2e4-3521-465d-b3e6-8096b18eaf30")
+    end
+
+    nodes.Action_SharpenSpearhead = Action{
+        function()
+            if not IsInDangerousSurfaceFor(homeTrigger, me.Character) then
+                if GetDistanceTo(me, homeTrigger) > 0.2 then
+                    try
+                        MoveTo(homeTrigger)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me,"Move Exception")
+                        Sleep(2.0)
+                        sharpenSpearhead = false
+
+                    end
+                end
+            end
+            if GetDistanceTo(me, homeTrigger) < 0.5 then
+                LookFrom(homeTrigger)
+                try
+                    PlayAnimation(sharpenAnimation)
+                catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                    DebugText(me, "Failed to PlayAnimation SharpeningSpearhead_01")
+                end
+            end
+            mod.util.SleepRandom(4.0,8.0)
+            sharpenSpearhead = false
+        end,
+        Valid = function()
+          return sharpenSpearhead
+        end
+    }
+
+    nodes.Action_Wait = Action{
+        function()
+            mod.util.SleepRandom(6.0,10.0)
+            sharpenSpearhead = true
+        end
+    }
+end}

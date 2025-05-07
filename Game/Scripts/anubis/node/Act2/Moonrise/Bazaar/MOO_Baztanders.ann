@@ -1,0 +1,136 @@
+game.states.MOO_BazaarStander_003 = State {function ()
+    description = [[Simple idle behaviour to show how lost the pilgrim's mind is]]
+
+    modules = {"shared.moveto"}
+--------------------------------LOCAL--------------------------------
+    local scaredAnim = Animation("CUST_HidingBehindSomeoneScared_01_Loop_c9dedf9f-6df1-41f7-9886-d4b6c6c38205")
+    local isAnimPlaying = false
+    local standingPoint = Entity("S_MOO_BaztanderStandPoint_9b655ac2-0569-4a1a-8144-fbf256b23968")
+
+--------------------------------NODES--------------------------------
+    nodes.IdleScared = Action {
+        function()
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Walk, me) then
+                if not isAnimPlaying then
+                    PlayAnimation(scaredAnim, false, true)
+                    isAnimPlaying = true
+                    WaitForInterrupt()
+                end
+                isAnimPlaying = false
+            else
+                LookAtEntity(standingPoint, 3.0)
+                Sleep(4.0 + 6.0 * math.random())
+            end
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+            isAnimPlaying = false
+        end
+    }
+
+end
+}
+
+game.states.MOO_BazaarStander_004 = State {function ()
+    description = [[Simple behaviour to display the pilgrims impatience to meet the Absolute]]
+
+    modules = {"shared.moveto"}
+
+--------------------------------LOCAL--------------------------------
+    local waitOverFlag = Flag("MOO_Bazaar_State_PilgrimWaitOver_3b47815e-8e30-4d1e-8dd9-b661c8a923a9")
+    local standPoint =  Entity("S_MOO_BazaarPilgrimPoint_002_49bdf4fa-b596-4f1f-aec9-99e026a98512")
+    local walkPoint1 = Entity("S_MOO_BaztanderWalkPoint_001_a4c7048d-33df-4b84-8351-833c47c3ac09")
+    local walkPoint2 = Entity("S_MOO_BaztanderWalkPoint_002_5e215488-e446-4497-8173-f9a00f30ad27")
+    local doorPoint = Entity("S_MOO_ExecutionDoorPoint_eed9f278-f4b5-4af7-96f0-aa982e1d9329")
+    local isWalkingToPoint1 = true
+
+    helpers.action.IdleAction = function()
+        LookAtEntity(doorPoint, 3.0)
+        Sleep(24.0 + 8.0 * math.random())
+        isWalkingToPoint1 = not isWalkingToPoint1
+    end
+
+--------------------------------NODES--------------------------------
+    nodes.IdleWait = Action {
+        function()
+            if mod.moveto.MoveToPoint(standPoint,  MovementSpeed.Walk, me) then
+                LookFrom(standPoint)
+                Sleep(2)
+            else
+                SteerTo(standPoint)
+            end
+            Sleep(1)
+        end,
+
+        Valid = function()
+            return not GetFlag(waitOverFlag)
+        end
+    }
+
+    nodes.Impatient = Action {
+        function()
+            if isWalkingToPoint1 then
+                if mod.moveto.MoveToPoint(walkPoint1, MovementSpeed.Stroll, me) then
+                    helpers.IdleAction()
+                else
+                    helpers.IdleAction()
+                    Sleep(4.0 + 6.0 * math.random())
+                end
+            else
+                if mod.moveto.MoveToPoint(walkPoint2, MovementSpeed.Stroll, me) then
+                    helpers.IdleAction()
+                else
+                    helpers.IdleAction()
+                    Sleep(4.0 + 6.0 * math.random())
+                end
+            end
+        end
+    }
+
+end
+}
+
+game.states.MOO_BazaarStander_Idle = State{function ()
+    description = [[Simple idle behaviour for the pilgrims while they are in the Bazaar]]
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    params.BazaarPoint = {type = EParamType.String, required=true, help=[[
+        Standing Point Trigger before execution
+    ]]}
+
+    local standPoint = Entity(params.BazaarPoint)
+    local AD = Dialog("MOO_Bazaar_AD_Pilgrims_4aa1ebb3-6b47-96f1-462a-126a38d83cc6")
+    local bazaarStander4 = Entity("S_MOO_BazaarStander_004_a6211285-d412-42c5-8c1c-ffe7feca2e09")
+    local bazaarStander5 = Entity("S_MOO_BazaarStander_005_c31c6739-c991-490e-9857-2a3367042727")
+    local bazaarStander6 = Entity("S_MOO_BazaarStander_006_5e4c22f4-1122-4822-bc16-ba49d3cb701e")
+    local bazaarStander7 = Entity("S_MOO_BazaarStander_007_f152d3c1-fe32-403f-9d7f-2f1049912e0f")
+
+    nodes.Idle = Action {
+        function()
+            if mod.moveto.MoveToPoint(standPoint,  MovementSpeed.Walk, me) then
+                LookFrom(standPoint)
+                if me == bazaarStander6 then
+                    mod.dialog.StartCheckedAutomatedDialog(
+                        AD,
+                        {
+                            waitForCompletion = true
+                        },
+                        bazaarStander6,
+                        bazaarStander4,
+                        bazaarStander5,
+                        bazaarStander7
+                    )
+                    Sleep(20 + 10 * math.random())
+                end
+                Sleep(2)
+            else
+                SteerTo(standPoint)
+            end
+            Sleep(1)
+        end
+    }
+
+end
+}

@@ -1,0 +1,141 @@
+game.states.SHA_Necromancer_Chosen = State {function()
+    description = [[Behaviour for the Kethric's Necromancer]]
+
+    modules = {"shared.moveto", "shared.util", "shared.dialog"}
+
+    local readingAnim = Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716")
+    local browsingAnim = Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+    local thinkingAnim = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+    local kickingAnim = Animation("CUST_GroundKicking_01_cd29166e-3971-421a-b5d3-31b678c44277")
+    local ritualCastingStartAnim = Animation("CUST_TheRiteOfThorns_01_Cast_fa47feb5-294f-4dcd-88be-b7254b743fd6")
+    local ritualCastingLoopAnim = Animation("CUST_TheRiteOfThornsStill_01_Loop_bf6be5eb-5bf8-428b-a855-b054f476ef20")
+    local gloatingAnim = Animation("CUST_Angry_02_Loop_ecfb527c-591d-4501-9d81-0ef25a59ae10")
+
+    local SHA_NightsongPrison_State_PlayerEnteredPrison = Flag("SHA_NightsongPrison_State_PlayerEnteredPrison_f2cbe7cf-5223-4522-a649-879d08638282")
+    local SHA_Necromancer_State_WaitingForPlayers = Flag("SHA_Necromancer_State_WaitingForPlayers_1ad01a51-4bd3-42e6-a1de-02696bc9da67")
+
+
+    local nightsong = Entity("S_SHA_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b")
+
+    local tr_sharTempleSub = Entity("S_SHA_Temple_SUB_348b76ee-33d8-471b-a95d-7ded0d6cdfd5")
+
+    local tr_nightsongPrisonWaitPos = Entity("S_SHA_NightsongPrison_AllyWaitPos_1e24dd14-5b75-48b8-b68d-d092aa05081c")
+
+    local tr_shadowfellSub = Entity("S_SHA_NightsongPrison_SUB_0a302268-dd92-4462-99e5-ca7491815ec0")
+    local tr_shadowfellPrisonArea = Entity("S_SHA_NightsongPrison_SUB_0a302268-dd92-4462-99e5-ca7491815ec0")
+    local tr_shadowfellArrivalPos = Entity("S_SHA_NightsongPrison_AllyArrivalPos_9c8d8a87-840d-41cb-8c8c-e76f43266bd1")
+    local tr_shadowfellEntrancePos = Entity("S_SHA_NightsongPrison_AllyEntranceDestination_82ccff76-0145-4e16-a5c5-5c19562af25c")
+    local tr_shadowfellNightsongArea = Entity("S_SHA_NightsongPrison_PrisonArea_3673ff64-5760-40fb-8b43-ce4f7731c562")
+    local necroSharTempleLair = Entity("S_SHA_Necromancer_Lair_186344d1-746d-424e-8822-2c29179ab34c")
+    local atColony = Flag("COL_State_InColony_d9869d23-bc7d-49f0-9bea-66a24f65e98a")
+    local browsingLocations = {
+        Entity("S_SHA_Necromancer_Shelf_TriggerPoint_ad346bd8-5bcf-4350-b6e9-a29f3b666964"),
+        Entity("S_SHA_Necromancer_Desk_TriggerPoint_a51de8ed-7e4e-40a4-acf1-abd15005c68c"),
+        Entity("S_SHA_Necromancer_Shelf_TriggerPoint_3_d354104c-9c08-4c9e-96f7-e5b7fab7d677")
+    }
+    local ghouls = {
+        Entity("S_SHA_Necromancer_Ghoul_001_1ffb5583-7595-42d1-a985-903b2717be6a"),
+        Entity("S_SHA_Necromancer_Ghoul_000_b8584c3f-2ed8-44ff-9831-7d6fb2115516")
+    }
+    local giveOrdersAD = Dialog("SHA_Necromancer_AD_OrderingGhouls_33c9d099-9793-54b6-bfb8-b304285c833c")
+
+    local necromancerChair = Entity("S_SHA_Necromancer_Chair_5b23971a-2de9-42d8-beae-c713f15ed196")
+
+    local fx_teleportEffect = nil
+
+    local ad_mockNightsong = Dialog("SHA_NightsongPrison_AD_NecroAndNightsong_90112712-2f72-9a6e-ace5-87e380dd87a6")
+
+    self.OnInit = function()
+        fx_teleportEffect = PrepareEffect("VFX_Script_Stub_Poof_01_f0cf792a-0f74-d17e-ad0d-6052a6131416")
+    end
+
+    self.Valid = function()
+        return not GetFlag(atColony, me)
+    end
+
+    nodes.SharTemple = ImmediateSelector {
+        Valid = function(node)
+            return (IsInTrigger(me, tr_sharTempleSub.Trigger) or IsInTrigger(me, tr_shadowfellSub.Trigger)) and CheckAnySelectable(node)
+        end
+    }
+
+    nodes.NecroLair = Selector{
+        function(nodes)
+            return FindWeightedRandomSelectable(nodes, {
+                [nodes.WaitingForPlayers] = 1,
+                [nodes.GivingOrders] = 2,
+            })
+        end,
+
+        Valid = function()
+            return IsInTrigger(me, necroSharTempleLair.Trigger)
+        end
+
+    }
+
+    nodes.SharTemple.AtNightsong = Action{
+        function()    
+            PlayAnimation(gloatingAnim, false, true)
+            
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                ad_mockNightsong,
+                {
+                    waitForCompletion = false,
+                    minDelay = 40.0,
+                },
+                me,
+                nightsong
+            )
+        end,
+
+        CanEnter = function()
+            return IsInTrigger(me, tr_shadowfellNightsongArea.Trigger)
+        end
+    }
+
+    nodes.NecroLair.WaitingForPlayers = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_SHA_Necromancer_WaitingForPlayersPoint_d1c64cb0-d3f2-435b-bf33-0986a03016c7"
+        },
+        CanEnter = function()
+            return IsInTrigger(me,necroSharTempleLair.Trigger) and GetFlag(SHA_Necromancer_State_WaitingForPlayers, nil)
+        end
+    }
+    nodes.NecroLair.GivingOrders = Action{
+        function()
+            local selectedGhoul = ghouls[math.random(#ghouls)]
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                giveOrdersAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 8.0,
+                    },
+                    me,
+                    selectedGhoul
+                )
+
+        end,
+        CanEnter = function()
+            return IsInTrigger(me,necroSharTempleLair.Trigger) and not GetFlag(SHA_Necromancer_State_WaitingForPlayers, nil)
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.FlagSet = function(e)
+        if SHA_Necromancer_State_WaitingForPlayers.Guid == e.Flag then
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if SHA_Necromancer_State_WaitingForPlayers.Guid == e.Flag then
+            Interrupt()
+        end
+    end
+end}

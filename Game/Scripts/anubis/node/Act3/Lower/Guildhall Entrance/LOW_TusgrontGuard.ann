@@ -1,0 +1,55 @@
+game.states.LOW_TusgrontGuard = State{function ()
+    
+    modules = { "shared.dialog" }
+
+    local OpeningDoor = Flag("LOW_Tusgront_State_AllowedAccess_fb3bb79c-82b6-4580-93b5-18e7839bad6c")
+    local TryingDoor = Flag("LOW_Tusgront_Event_OpenDoor_b2214990-752c-4987-803b-e287108fa536")
+    local DoorIsOpen = Flag("LOW_UndercellarEntrance_State_DoorOpened_01f0035a-55fd-49d1-907e-6d7565301dec")
+
+    local DoorOpenPosition = Entity("S_LOW_TusgrontOpenDoor_06825c53-7497-40c7-8c11-675c5ef39160")
+    local GuardPosition = Entity("S_LOW_TusgrontGuardTrigger_77c1b99a-2c18-42ea-b971-e41aa8988cf2")
+
+    local RingSlot = Entity("S_LOW_GuildhallRingLock_0ac1e359-0580-44ad-bdab-ab42beb2b5ac")
+
+
+    nodes.State_OpeningDoor = Action {
+        function()
+            if not IsInDangerousSurfaceFor(DoorOpenPosition, me.Character) and GetDistanceTo(me,DoorOpenPosition) > 0.5 then
+                local moveResult = MoveTo(DoorOpenPosition, MovementSpeed.Walk, false, true, 2.0, 3.0, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    SteerTo()
+                    Sleep(3.0)
+                else
+                    UseItem(RingSlot.Item) 
+                end
+            end
+            Sleep(4.0)
+        end,
+        Valid = function()
+            return GetFlag(TryingDoor)
+        end
+        
+    }
+
+    nodes.State_ResumingGuard = Action {
+        function()
+            if not IsInDangerousSurfaceFor(GuardPosition, me.Character) and GetDistanceTo(me,GuardPosition) > 0.5 then
+                local moveResult = MoveTo(GuardPosition, MovementSpeed.Walk, false, true, 2.0, 3.0, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    SteerTo()
+                    Sleep(3.0)
+                        
+                else
+                    LookFrom(GuardPosition)
+                    WaitForInterrupt()
+                end
+            end
+            Sleep(4.0)
+        end,
+    }
+
+
+    
+end}

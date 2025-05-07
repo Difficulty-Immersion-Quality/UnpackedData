@@ -1,0 +1,50 @@
+game.states.UND_KethericCity_LostMerregon_Boar = State{
+    function ()
+
+        params.restTrigger = {type=EParamType.String, required = false}
+        params.eatTrigger = {type=EParamType.String, required = false}
+
+        local triggers
+        local animations
+        local index = 1
+
+        self.OnInit = function()
+            triggers = {FindEntity(params.restTrigger), FindEntity(params.eatTrigger)}
+            animations = {Animation("CUST_Sleeping_01_04fd3356-bf41-4d17-ae8c-a1eeb1667c27"), Animation("CUST_Eating_01_e1bc92e7-6f50-463d-85a5-c66352c001b6")}
+        end
+
+        nodes.AtTrigger = Action{
+            function()
+                if not IsInDangerousSurfaceFor(triggers[index], me.Character) then
+                    if GetDistanceTo(me, triggers[index]) > 2.5 then
+                        try
+                            MoveTo(triggers[index])
+                            LookFrom(triggers[index])
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            LookAtEntity(triggers[index], 3.0)
+                            Sleep(2.0)
+                            if index == 1 then
+                                index = 2
+                            else
+                                index = 1
+                            end
+                        end
+                    else
+                        LookFrom(triggers[index])
+                        DebugText(me, "Animation Play")
+                        PlayAnimation(animations[index], false, true)
+                        Sleep(4.0+1.0*math.random())
+                        if math.random(5) == 1 then
+                            index = 2
+                        else
+                            index = 1
+                        end
+                    end
+                else
+                    LookAtEntity(triggers[index], 3.0)
+                end
+            end
+        }
+
+    end
+}

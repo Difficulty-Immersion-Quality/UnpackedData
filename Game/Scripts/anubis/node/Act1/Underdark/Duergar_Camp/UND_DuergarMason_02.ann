@@ -1,0 +1,75 @@
+game.states.UND_DuergarMason_02 = State{function()
+
+    params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled.
+    ]]}
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is about to be destroyed or has been already.
+    ]]}
+	
+    local flag_CaveInCleared = Flag("UND_DuergarCamp_State_CaveInCleared_e0d8a48b-e0cf-4cc8-96bc-b637b79ce9bd")
+	local flag_PostMutiny = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+	local flag_JoinMutiny = Flag("UND_DuergarRebelReinforcement_State_JoinMutiny_1f9f867f-0b12-4013-9b6d-08736fc62356")
+
+    local char_myComrade
+    local tr_homePoint
+
+
+	self.OnInit = function()
+        char_myComrade = FindEntity("S_UND_DuergarMason_01_d09aecce-fad1-4aa8-9c40-c370a0ac8835")
+        
+        tr_homePoint = FindEntity("S_UND_DuergarMason_02_Point_d49f5ddc-4c02-4a63-ba0c-2f44e08feca6")
+    end
+
+
+	nodes.State_PostMutiny = Proxy {
+        game.states.UND_DuergarCamp_PostMutiny,
+        params = {PostMutinyPosition = params.PostMutinyPosition},
+        Valid = function()
+            return GetFlag(flag_PostMutiny) and GetFlag(flag_JoinMutiny,me)
+        end
+    }
+
+    nodes.State_CaveInCleared = Proxy {
+        game.states.UND_DuergarCamp_CaveInCleared,
+        params = {CaveInPosition = params.CaveInPosition},
+        Valid = function()
+            return GetFlag(flag_CaveInCleared) and GetFlag(flag_JoinMutiny,me)
+        end
+    }
+	
+	nodes.State_AtStoneworks = Selector {
+		function(nodes)
+			return GetWeightedCanEnter(nodes,{[nodes.Action_Wander] = 10,
+												[nodes.Action_IdleAnim] = 8})
+		end
+	}
+
+	nodes.State_AtStoneworks.Action_Wander = Action {
+		function()
+			try
+				Wander(4.0,6.0,MovementSpeed.Stroll,tr_homePoint)
+			catch e if ls.CheckType(e, error.MovementFailed) then
+				LookAtEntity(tr_homePoint, 3.0)
+				Sleep(2.0)
+			end
+			LookFrom(tr_homePoint)
+			Sleep(5.0)
+        end,
+        Valid = function()
+            return not IsInDialog(me,false)
+        end
+	}
+
+	nodes.State_AtStoneworks.Action_IdleAnim = Action {
+		function()
+			MoveTo(tr_homePoint)
+            LookFrom(tr_homePoint)
+			Sleep(5.0)
+		end
+    }
+    
+    nodes.Fallback = function()
+        Sleep(5.0)
+    end
+end}

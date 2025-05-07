@@ -1,0 +1,44 @@
+game.states.COL_Showdown_Ketheric = State { function ()
+
+    local showdownFlag = Flag("COL_KethericShowdown_State_Started_33489af3-23b7-4340-bbf6-19033c9dae03")
+    local doSleep = false
+    local sleepTimeMin = 8.0
+    local sleepTimeMax = 12.0
+
+    self.CanEnter = function()
+        return GetFlag(showdownFlag)
+    end
+
+    nodes.Sleep = Action {
+        function()
+            Sleep(math.random()*(sleepTimeMax-sleepTimeMin)+sleepTimeMin)
+
+            doSleep = false
+        end,
+        CanEnter = function()
+            return doSleep
+        end
+    }     
+
+    -- One leader will be chosen among the intellect devourers
+    -- The leader will do the patrol and the followers will follow through Osiris
+    -- Following will interrupt this idle behaviour
+    nodes.ShowdownPatrol = Proxy{
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = "S_COL_KethericShowdown_Ketheric_Patrol_e62ceb7a-47d1-4294-b41b-dd6e0328cc1e",
+            patrolReverse = false,
+            patrolSpeed = "Stroll",
+            startSplineIndex = -1,
+        }
+    }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Sleep" then
+            doSleep = true
+        end
+    end
+
+end}

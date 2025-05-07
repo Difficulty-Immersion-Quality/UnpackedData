@@ -1,0 +1,99 @@
+game.states.PLA_GithKnight = State { function ()
+
+    description = [[Kith'rak Voss, the dragon-riding githyanki knight in the gith chokepoint]]
+
+    modules = { "shared.dialog" }
+
+    -----------------------------------------
+    -- Local variables
+    local standPoint = Entity([[S_DEN_GithKnightPoint_e70d4e05-e83c-4d4f-a380-74c5aaf1d740]])
+    local anim = Animation([[CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71]])
+    local laezel = Entity("S_Player_Laezel_58a69333-40bf-8358-1d17-fff240d7fb12")
+    local withLazelFlag = Flag("PLA_GithChokepoint_State_TalkingToLaezel_12b26742-cb8e-48cb-8249-75c62902c75f")
+    local withLaezelAD = Dialog("PLA_GithChokepoint_AD_LaezelWithKnight_0e22046f-072f-aae7-1908-c3efdab68e28")
+    local lookAtPoint = Entity("S_PLA_GithWanderAnchor_4b1b348c-5c53-4ba3-ba1e-a632f6e6c92f")
+    local canAD = true
+    local confrontationFlag = Flag("PLA_GithChokepoint_Event_ConfrontationStarted_81a6ce09-a457-4eb8-aacc-676778a6d9e7")
+
+    -----------------------------------------
+    -- helper functions
+    helpers.CanTalkToLaezel = function()
+        return  canAD
+                and not laezel.Character.IsDead
+                and not laezel.Character.IsPlayer
+                and GetFlag(withLazelFlag, me)
+                and mod.dialog.IsSpeakerAvailableAndNear(laezel, me, 14.0, true)
+    end
+
+    -----------------------------------------
+    -- State nodes
+
+    -----------------------------------------
+    -- Nodes
+    nodes.GithChokepoint = Selector {
+        CanEnter = function()
+            return (CheckCurrentGameLevel("WLD_Main_A"))
+        end
+    }
+
+    nodes.GithChokepoint.Confrontation = Action {
+        CanEnter = function()
+            return GetFlag(confrontationFlag)
+        end,
+        function()
+            WaitForInterrupt()
+        end,
+    }
+
+    nodes.GithChokepoint.BeforeConfrontation = Action {
+        function()
+            try
+                MoveTo(standPoint,MovementSpeed.Walk)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(2)
+            end
+            SteerTo(lookAtPoint,false,5)
+            PlayAnimation(anim,false,true)
+            while true do
+                if helpers.CanTalkToLaezel() and not IsInDialog(me, false) then
+                    StartAutomatedDialog(withLaezelAD, true, me, laezel)
+                end
+                Sleep(2.0)
+            end
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+    }
+
+    nodes.Sleep = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+    events.DialogStarted = function(e)
+        if (e.Instance.DialogUUID == withLaezelAD.Guid) then
+            canAD = false
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == withLaezelAD.Guid) then
+            StopTimer(me, "PLA_GithChokepoint_KnightADTimer")
+            StartTimer(me, "PLA_GithChokepoint_KnightADTimer", math.random(30,40), 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "PLA_GithChokepoint_KnightADTimer" then
+            canAD = true
+        end
+    end
+
+end}

@@ -1,0 +1,95 @@
+game.states.IRN_IronThrone_Hostage = State 
+{
+    function()
+    description = [[Hostages escaping behaviour]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.InSubmersibleState = {type = EParamType.State, required = true, help=[[
+        State which the character is while they are in the submersible
+    ]]}
+
+    params.BeforeRescueState = {type = EParamType.State, required = true, help=[[
+        State which the character is while they are still in their cells
+    ]]}
+
+    params.NearbyAD = {type = EParamType.String, required = false, default = nil, help=[[
+        AD that the character plays once players get near them, optional
+    ]]}
+    
+    params.FreedAD = {type = EParamType.String, required = false, default = nil, help=[[
+        AD that the character plays once they are freed, optional
+    ]]}
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local freedFlag = Flag("IRN_IronThrone_State_IndividualPrisonerFree_4c120f58-ad6c-438a-b35b-1bb3d4ed5e87")
+    local reachedSubFlag = Flag("IRN_IronThrone_State_IndividualPrisonerReachedSubmersible_7b066fa3-0aa3-44f0-86a3-40b38df48774")
+    local nearbyAD = Dialog(params.NearbyAD)
+    local freedAD = Dialog(params.FreedAD)
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    
+    -- Either sitting on chairs or looping animations ir sitting on ground
+    nodes.Action_InSubmersibleDuringIronThrone = Proxy {
+        params.InSubmersibleState,
+        Valid = function()
+            return GetFlag(reachedSubFlag, me)
+        end
+    }
+
+    -- Combat takes over during the escape
+    nodes.Action_DuringEscape = Proxy {
+        game.states.Dummy,
+        Valid = function()
+            return GetFlag(freedFlag, me) and not GetFlag(reachedSubFlag, me)
+        end
+    }
+    
+    -- Hostages either play an animation in their cell, or are strapped on torture beds or world behaviour
+    nodes.Action_BeforeRescue = Proxy {
+        params.BeforeRescueState,
+        Valid = function() 
+            return not GetFlag(freedFlag, me)
+        end
+    }
+
+    nodes.Action_Fallback = Proxy {
+        game.states.Dummy,
+        Valid = function()
+            return true
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if (e.Event == "IRN_IronThrone_FreedADPlayed") then
+                if freedAD ~= nil and freedAD ~= "" then
+                    StartAutomatedDialogImmediate(freedAD, me)
+                end
+            elseif (e.Event == "IRN_IronThrone_NearbyADPlayed") then
+                if nearbyAD ~= nil and nearbyAD ~= "" then
+                    StartAutomatedDialogImmediate(nearbyAD, me)
+                end
+            end
+        end
+    end
+    ------
+    --------------------------------
+end
+}

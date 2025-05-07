@@ -1,0 +1,72 @@
+game.states.MOO_Execution_Guards = State{ function ()
+    description = [[Shared state used to select states before and after execution]]
+
+    modules = { "shared.moveto" }
+--------------------------------PARAMS--------------------------------
+    params.executionTrigger = {type = EParamType.String, help=[[
+        The trigger at which the character stands during the execution.
+    ]]}
+    params.escortTrigger = {type = EParamType.String, help=[[
+        The trigger at which the character walks to during escort.
+    ]]}
+    params.isPatrolling = {type = EParamType.Bool, help=[[
+        Will patrol after execution
+    ]]}
+    params.patrolSpline = {type = EParamType.String, help=[[
+        Spline behaviour after the execution scene has completed (if nil, will idle)
+    ]]}
+    params.patrolSpeed = {type = EParamType.String, help=[[
+        Spline movement speed
+    ]]}
+    params.idlePoint = {type = EParamType.String, help=[[
+        Idle point after execution
+    ]]}
+--------------------------------LOCAL--------------------------------
+    local escortArrivedFlag = Flag("MOO_Execution_EscorteeArrived_e17c558d-550d-4b78-9f4e-540882ea4961")
+    local characterEscortFlag = Flag("MOO_Execution_CharactersToEscort_370a4842-4739-4903-b58a-215e6dc6ff92")
+    local executionOverFlag = Flag("MOO_GroundFloor_State_ExecutionOver_1560c0ae-5fec-4e7c-a6e7-35e9c33bbbeb")
+
+    local executionTrigger = Entity(params.executionTrigger)
+--------------------------------NODES--------------------------------
+    nodes.DuringExecution = Action{
+        function()
+            if mod.moveto.MoveToPoint(executionTrigger,  MovementSpeed.Walk, me) then
+                LookFrom(executionTrigger)
+            else
+                SteerTo(executionTrigger)
+            end
+            Sleep(4)
+        end,
+
+        Valid = function()
+            return not GetFlag(characterEscortFlag, me) and not GetFlag(executionOverFlag)
+        end
+    }
+    nodes.EscortAfterExecution = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params={trigger = params.escortTrigger},
+        Valid = function()
+            return GetFlag(characterEscortFlag, me)
+        end
+    }
+    nodes.AfterExecution_Patrol = Proxy{
+        game.states.ExecutionGuard_Patrol,
+        params = {
+            patrolSpline = params.patrolSpline,
+            patrolSpeed = params.patrolSpeed,
+            idlePoint = params.idlePoint
+        },
+        Valid = function()
+            return GetFlag(executionOverFlag) and params.isPatrolling
+        end
+    }
+    nodes.AfterExecution_Idle = Proxy{
+        game.states.ExecutionGuard_Idle,
+        params = {idlePoint = params.idlePoint},
+        Valid = function()
+            return GetFlag(executionOverFlag)
+        end
+    }
+
+end
+}

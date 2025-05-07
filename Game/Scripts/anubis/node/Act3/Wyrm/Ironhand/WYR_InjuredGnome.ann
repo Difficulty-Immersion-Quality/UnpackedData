@@ -1,0 +1,204 @@
+game.states.WYR_ChemistryGnome = State{function()
+    description = [[Common state for GLO_InjuredGnome in act3 or a substituation gnome if GLO_InjuredGnome is not available]]
+
+    modules = { "shared.dialog", "shared.math" }
+
+    local restAt = "S_WYR_Ironhand_InitPos_Injured_d4207fa3-c6c3-4723-92cc-df53003f4024"
+    local restAtPos = Entity("S_WYR_Ironhand_InitPos_Injured_d4207fa3-c6c3-4723-92cc-df53003f4024")
+    local shelfAt = "S_WYR_Ironhand_Chemistry_AtShelf_e1d261a3-d7a6-4084-afaf-9faba12921b6"
+    local shelfAtPos = Entity("S_WYR_Ironhand_Chemistry_AtShelf_e1d261a3-d7a6-4084-afaf-9faba12921b6")
+    local barrelAt = "S_WYR_Ironhand_Chemistry_AtBarrel_2b672b1a-4843-43b7-8976-a67568abfc3c"
+    local barrelAtPos = Entity("S_WYR_Ironhand_Chemistry_AtBarrel_2b672b1a-4843-43b7-8976-a67568abfc3c")
+    local mainAt = "S_WYR_Ironhand_Chemistry_AtTable2_f9cdc781-51f5-40b4-8303-851c55c4577e"
+    local mainAtPos = Entity("S_WYR_Ironhand_Chemistry_AtTable2_f9cdc781-51f5-40b4-8303-851c55c4577e")
+    local scaleAt = "S_WYR_Ironhand_Chemistry_AtTable1_71b59fb7-2613-437c-a57a-32a29e0c51ff"
+    local scaleAtPos = Entity("S_WYR_Ironhand_Chemistry_AtTable1_71b59fb7-2613-437c-a57a-32a29e0c51ff")
+
+    local barrel = Entity("S_WYR_Ironhand_Runepowder_Barrel_1_c429ef74-30f3-456d-9176-4c614b6c36d9")
+    local barrelZone = Entity("S_WYR_Ironhand_BarrelZone_47aee27c-f386-474c-9f37-600eea2fcd75")
+    local inspect = Animation("CUST_InspectingPotion_01_b5842c3c-b6f8-4e71-8e38-7cb6a495e5c2")
+
+    local chemDialog = Dialog("WYR_Ironhand_AD_ChemistryGnome_e8006925-4320-dd00-d20a-50c5962832c1")
+
+    local mixDialog = Dialog("WYR_Ironhand_WB_Mix_11061614-4bbd-1bb2-efdc-89ab5eaa55e4")
+    local mixSceneTrigger = Entity("WYR_Ironhand_WB_Mix_SceneTrigger_65270a64-e73b-4ec0-b59d-4764b115341a")
+
+    local scaleDialog = Dialog("WYR_Ironhand_WB_Scales_2c6eb68d-d7d9-84c7-96db-939e732996c3")
+    local scaleSceneTrigger = Entity("WYR_Ironhand_WB_UseScales_SceneTrigger_d2d6021e-fb1e-46eb-817d-b2c99b6a25d7")
+
+    local takeDialog = Dialog("WYR_Ironhand_WB_TakeShelf_6ecad7c1-3095-1888-0fc5-5723cdd421b9")
+    local takeSceneTrigger = Entity("WYR_Ironhand_WB_TakeShelf_SceneTrigger_f2816196-fa08-4bef-9ac1-1822a4842230")
+
+    local weights = {
+        rest = 0,
+        ingredients = 0,
+        main = 100,
+        scale = 0,
+    }
+
+    helpers.ResetTo = function(weight)
+        for k,v in pairs(weights) do
+            if k ~= "rest" then
+                weights[k] = 0
+            end
+        end
+        weights[weight] = 100
+    end
+
+    nodes = Selector {
+        function(nodes)
+            return FindWeightedRandomSelectable(nodes,
+            {
+                [nodes.Rest] = weights.rest,
+                [nodes.Ingredients] = weights.ingredients,
+                [nodes.AtTableMain] = weights.main,
+                [nodes.AtTableScales] = weights.scale,
+            })
+        end
+    }
+
+
+    nodes.Rest = Selector {
+        OnEnter = function()
+            helpers.ResetTo("rest")
+        end
+    }
+
+    nodes.Rest.MoveTo = Proxy {
+        game.states.GLO_StandAtTriggerSplit,
+        params = {
+            trigger = restAt,
+            speed = "Walk",
+            --animation = Stretch animation
+        },
+        CanEnter = function()
+            return GetDistanceTo(me, restAtPos) > 1.0
+        end
+    }
+
+    nodes.Rest.Chill = Action {
+        function()
+            DebugText(me, "Rest")
+            Sleep(5.0)
+            weights.main = 50
+            weights.scale = 50
+        end,
+        OnLeave = function()
+            weights.rest = 0
+        end
+    }
+
+
+    nodes.Ingredients = Selector {
+        OnEnter = function()
+            helpers.ResetTo("ingredients")
+        end
+    }
+
+    nodes.Ingredients.Shelf = Selector {}
+
+    nodes.Ingredients.Shelf.Gather = Action {
+        function()
+            --LookFrom(shelfAtPos)
+            DebugText(me, "Take from shelf")
+            StartBehaviorDialog(takeDialog, takeSceneTrigger.Trigger, true, me)
+            weights.ingredients = 0
+            weights.main = 50
+            weights.scale = 50
+            Sleep(0.5)
+        end
+    }
+
+    nodes.Ingredients.Barrel = Selector {
+        Valid = function()
+            return IsInTrigger(barrel, barrelZone)
+        end
+    }
+
+    nodes.Ingredients.Barrel.MoveTo = Proxy {
+        game.states.GLO_StandAtTriggerSplit,
+        params = {
+            trigger = barrelAt,
+            speed = "Walk",
+        },
+        CanEnter = function()
+            return GetDistanceTo(me, barrelAtPos) > 0.5
+        end
+    }
+
+    nodes.Ingredients.Barrel.Gather = Action {
+        function()
+            --SteerTo(shelfAtPos)
+            DebugText(me, "Ingredients")
+            Sleep(3.0)
+            weights.main = weights.main + 10
+            weights.scale = weights.scale + 5
+        end
+    }
+
+
+    nodes.AtTableMain = Selector {
+        OnEnter = function()
+            helpers.ResetTo("main")
+        end
+    }
+
+    nodes.AtTableMain.Work = Action {
+        function()
+            --SteerTo(mainAtPos)
+            -- mod.dialog.StartCheckedAutomatedDialogRateLimited(chemDialog, {
+            --     minDelay = 60.0
+            -- }, me)
+            DebugText(me, "Mixing")
+            StartTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog", mod.math.random(15.0,25.0), 1)
+            StartBehaviorDialog(mixDialog, mixSceneTrigger.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+            weights.main = 0
+            weights.ingredients = 50
+            weights.scale = 30
+            weights.rest = 10
+            Sleep(0.5)
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+        end
+    }
+
+
+    nodes.AtTableScales = Selector {
+        OnEnter = function()
+            helpers.ResetTo("scale")
+        end
+    }
+
+    nodes.AtTableScales.Scale = Action {
+        function()
+            --SteerTo(scaleAtPos)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(chemDialog, {
+                minDelay = 60.0
+            }, me)
+            DebugText(me, "Scaling")
+            StartTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog", mod.math.random(15.0,25.0), 1)
+            StartBehaviorDialog(scaleDialog, scaleSceneTrigger.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+            weights.scale = 0
+            weights.main = 50
+            weights.ingredients = 20
+            weights.rest = 0
+            Sleep(0.5)
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+        end
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_Ironhand_StopBehaviorDialog" then
+            DebugText(me, "Graceful Stop")
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    end
+end}

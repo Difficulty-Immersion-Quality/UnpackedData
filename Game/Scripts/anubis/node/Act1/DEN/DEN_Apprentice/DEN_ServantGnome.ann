@@ -1,0 +1,56 @@
+game.states.DEN_ServantGnome = State { function ()
+
+    params.chair = {type=EParamType.String, required=false, default=nil, help=[[Place where druid sits while talking to the Intolerant Druid.]]}
+    params.missingChairIdle = {type = EParamType.State, required = false, default = StateRef{game.states.Dummy},
+        help = [[See description of nonSitIdle in Sit.ann]]
+    }
+
+    description = [[Loic's script (previously known as Orran the gnome)]]
+
+    local canAD = false
+
+    helpers.BlockAD = function()
+        StartTimer(me, "DEN_GnomeServant_ADTimer", 45.0, 0)
+        canAD = false
+    end
+
+    self.OnEnter = function()
+        if canAD == false then
+            StopTimer(me, "DEN_GnomeServant_ADTimer")
+            StartTimer(me, "DEN_GnomeServant_ADTimer", 45.0, 0)
+        end
+    end
+
+    nodes.ADWith = Proxy {
+        CanEnter = function()
+            return canAD
+        end,
+        OnEnter = function()
+            helpers.BlockAD()
+        end,
+        game.states.GLO_ADManager,
+        params = {
+            AD = [[DEN_DruidServant_AD_Debate_e4eed069-ce61-63a5-ee83-d6003462ddfc]],
+            partners = {[[S_DEN_ServantIntolerant_002_6f36c7a1-edfd-4e99-bd90-6d874f68c9b8]]},
+        }
+    }
+    nodes.Sit = Proxy {
+        game.states.Sit,
+        params = {
+            seat = params.chair,
+            nonSitIdle = params.missingChairIdle,
+        }
+    }
+    nodes.DoNothing = Action {
+        function()
+            Sleep(1)
+        end,
+    }
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_GnomeServant_ADTimer" then
+            canAD = true
+        end
+    end
+
+end}

@@ -1,0 +1,110 @@
+game.states.LOW_HouseOfGrief_GriefAttendant = State {function ()
+ 
+    modules = { "shared.dialog" }
+
+    local MovedToDestination = false
+    
+    local ChamberPoint = Entity("S_LOW_AttendantChamberPoint_5e231b4e-f885-4d8d-a556-79125869ebcc")
+    local AttendantDeskPoint = Entity("S_LOW_AttendantDeskPoint_66d90f35-e77a-4efc-9b63-efe446cdf36e")
+    local attendantSeat = Entity("S_LOW_AttendantChair_7b879362-1cf8-4891-93fb-d90e9f6f8ac2")
+
+    local MoveToChamber = Flag("LOW_HouseOfGrief_Event_AttendantShowToRoom_bcadad71-c096-4e8d-8d96-0c80139bd4fc")
+    local SlackingOff = Flag("LOW_HouseOfGrief_State_SlackingOff_6f92282c-1622-4e9f-85a2-4855411f421d")
+    local StopSlacking = Flag("LOW_HouseOfGrief_State_ToldToStopSlacking_5eef599d-2b3d-49b6-bfb1-29dfa89a1c93")
+    local FetchDocument = Flag("LOW_HouseOfGrief_State_FetchDocument_77eb7534-385e-4369-a0c3-1456c3171018")
+    local ReadyToFetch = Flag ("LOW_HouseOfGrief_State_ReadyToFetch_a06f6027-f469-4c7f-a0fb-40869db06f72")
+
+    local AttendantChamberAD = Dialog("LOW_HouseOfGrief_AD_AttendantChamber_7f3e9a68-ee1e-971e-9b15-cf6936f5a766")
+    local sentryChideAD = Dialog("LOW_HouseOfGrief_AD_ChideSentry_0453a7bd-2f17-deeb-bc42-637d9e8bc946")
+    local fetchDocumentAD = Dialog("LOW_HouseOfGrief_AD_FetchDocument_03a903df-3ce7-06bb-9599-1cd0d3afacfe")
+
+    local griefGuard = Entity("S_LOW_GriefGuard_001_1442d4e5-7c3d-4509-b72a-422788b4545c")
+    local sentry = Entity("S_LOW_DoorSentry_616de0b4-c76d-4ef4-a3f9-4e0803371a6c")
+   
+
+    events.FlagCleared = function(e)
+        if e.Flag == FetchDocument.Guid then
+            Interrupt()
+        end
+    end
+
+    helpers.action.AttendantMoveTo = function(pos)
+        if not IsInDangerousSurfaceFor(pos, me.Character) and GetDistanceTo(me, pos) > 2 then
+            local moveResult = MoveTo(pos, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+            if moveResult ~= error.MovementError.None then
+                DebugText(me, "Error: MoveTo failed")
+                Sleep(3.0)
+            else
+                MovedToDestination = true
+            end
+        end
+    end
+
+    nodes.MoveToChamber = Action {
+        function()
+            SetHasOsirisDialog(me, false)
+            helpers.AttendantMoveTo(ChamberPoint)
+                if mod.dialog.IsSpeakerAvailable(me) and MovedToDestination then
+                    StartAutomatedDialog(AttendantChamberAD , true, me)
+                    Sleep(3.0)
+                end
+
+                if MovedToDestination then
+                    helpers.AttendantMoveTo(AttendantDeskPoint)
+                end
+                ClearFlag(MoveToChamber)
+        
+        end,
+        OnLeave = function()
+            SetHasOsirisDialog(me, true)
+        end,
+        Valid = function()
+            return GetFlag(MoveToChamber)
+        end
+    }
+
+    nodes.Default = Selector{
+        function(nodes)
+            return GetWeightedCanEnter(nodes, {
+                [nodes.AtDesk] = 10,
+                [nodes.FetchDocument] = 1,
+                [nodes.ChideSentry] = 1
+            })
+        end
+    }
+
+    nodes.Default.AtDesk = Proxy{
+        game.states.Sit,
+        params = {
+            seat = "S_LOW_AttendantChair_7b879362-1cf8-4891-93fb-d90e9f6f8ac2"
+        }
+    }
+
+    nodes.Default.FetchDocument = Action {
+        function()
+            if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailable(griefGuard) and GetFlag(ReadyToFetch) then
+                SetFlag(FetchDocument)
+                StartAutomatedDialog(fetchDocumentAD , true, me, griefGuard)
+                WaitForInterrupt() 
+            end
+        end
+    }
+
+    nodes.Default.ChideSentry = Action {
+        function()
+            if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailable(sentry) and GetFlag(SlackingOff) then
+                StartAutomatedDialog(sentryChideAD , true, me, sentry)
+                SetFlag(StopSlacking)
+                Sleep(3.0)
+            end
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+    
+end
+}

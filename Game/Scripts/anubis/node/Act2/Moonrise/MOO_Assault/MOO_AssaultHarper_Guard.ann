@@ -1,0 +1,39 @@
+game.states.MOO_AssaultHarper_Guard = State { function()
+
+    modules = { "shared.moveto" }
+
+    params.GuardPoint = { type = EParamType.String, required = true, help = [[Where the harper will stand guard.]] }
+
+    local orderFlag = Flag("MOO_Assault_Event_JaheiraGaveOrders_f7e185fe-a85a-40e9-a9a6-fcff1fe156d8")
+    local guardPoint = Entity(params.GuardPoint)
+    local combatReadyAnim = Animation("CUST_Idle_Still_Combat_01_590ea7e8-ae43-4307-916b-b1133ef47dfa")
+
+    nodes.OrderedToGuard = Action {
+        CanEnter = function()
+            return GetFlag(orderFlag)
+        end,
+
+        OnEnter = function()
+            SetWeaponUnsheathed(me, true)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(guardPoint,  MovementSpeed.Run, me) then
+                PlayAnimation(combatReadyAnim, false, true)
+                Sleep(2)
+            else
+                SteerTo(guardPoint)
+            end
+        end,
+
+        OnLeave = function()
+            SetWeaponUnsheathed(me, false, false)
+            StopAnimation(me)
+        end
+    }
+
+    nodes.AssaultIdle = Proxy {
+        game.states.MOO_Assault_CombatReadyIdle,
+    }
+
+end}

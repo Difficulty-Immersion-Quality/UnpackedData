@@ -1,0 +1,57 @@
+-- luacheck: globals socket Input EType Output
+game.states.Trap_RC_Standard = State{function()
+
+    params.repetitions = {type = EParamType.Number, required = false, default = -1, help =[[
+        How many times to repeat the action; Negative for forever.
+    ]]} 
+
+    params.action = {type = EParamType.State, required=false, default=nil, help=[[
+        What the trap does every time it activates. Leave as nil to do nothing.
+    ]]}
+
+    local repetitionsLeft
+    local finished = false
+
+    self.OnInit = function()
+            repetitionsLeft = params.repetitions
+    end
+
+    nodes.repetition = Selector{
+        function(nodes)
+            if repetitionsLeft == 0 then 
+                finished = true
+                return nodes.done
+            else
+                if repetitionsLeft > 0 then
+                    repetitionsLeft = repetitionsLeft - 1
+                end
+                return nodes.functionComponent
+            end
+        end
+    }
+ 
+    nodes.repetition.functionComponent = Proxy{
+        params.action,
+        CanEnter = function()
+            return repetitionsLeft ~= 0
+        end
+    }
+
+    nodes.repetition.done = Action{
+        function()
+            WaitForInterrupt()
+        end   
+    }
+
+    self.Valid = function()
+        return not finished
+    end
+
+    self.OnLeave = function()
+        finished = false
+        repetitionsLeft = params.repetitions
+        --TODO: Attach a socket to the function component so we can reset it when you leave.
+    end
+    
+end
+}

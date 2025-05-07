@@ -1,0 +1,71 @@
+game.actions.combat.WYR_DRAGONFALLBACK = Action
+{
+    function(state)
+        local target = nil
+        if me.CanActInCombatTeamTurn then
+            for _, PM in ipairs(GetCombatEntities(me)) do
+                if PM.IsCharacter and
+                   PM.Character.IsPartyMember and
+                   GetRelation(me.Faction, PM.Faction) == FactionRelation.Enemy and
+                   not PM.Character.IsDead
+                then
+                    if target == nil or
+                       GetDistance(me, target) > GetDistance(me, PM) then
+                    target = PM
+                    end                    
+                end
+            end
+            try
+                UseSpell("Projectile_LightningBreath_Dragon_Skeletal", target)
+            catch e then
+                target = nil
+            end
+        end
+        if target == nil then
+            local fallbackAD = state.DefaultCombat.GetFallbackAD()
+            if state.DefaultCombat.IsSpeakerAvailableForCombatAD(me) then
+                StartAutomatedDialog(fallbackAD, true, me)
+            end
+        end
+        DebugText(me,"[Combat Ai: Fallback ended]")
+        AIFinishAction()
+        EndTurn(me)
+    end
+}
+
+game.states.WYR_SkeletalDragon_Combat = State{
+    function ()
+--[[ Not currently used, as there's no way, outside of DefaultCombat, to know what spell is going to be taken. - 
+    PeekTopAiCommand doesn't communicate it, and FetchTopAiCommand also pops it, thus canceling the action.]]
+    local readyForSpell = false
+    local didAD1 = false
+    local AD = Dialog("WYR_SkeletalDragon_AD_LightningBreath_dfd050f1-1b18-2a18-c4f2-18a26e57ee3a")
+
+    events.TurnStarted = function()
+        readyForSpell = false
+    end
+
+    events.AICalculationDone = function()
+        local cmd = PeekTopAiCommand()
+        if cmd.name == "SPELL" and
+           cmd.SpellID == "Projectile_FrightfulPresence_Dragon_Skeletal" then
+            readyForSpell = true
+        end
+    end
+
+    nodes.CombatActions = Action{
+        function()
+            StartAutomatedDialog(AD, true, me)
+            didAD = true
+        end
+    }
+
+    self.Valid = function()
+        return (not didAD1 and
+                 readyForSpell) and
+               (not me.IsCombatPaused or
+                me.IsInInterruptZone)
+    end
+ 
+end
+}

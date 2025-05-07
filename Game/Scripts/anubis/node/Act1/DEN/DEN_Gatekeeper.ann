@@ -1,0 +1,165 @@
+game.states.DEN_Gatekeeper = State{function()
+
+    description = [[Behaviour for closing and opening the gates of the DEN, with some Idle behaviour.]]
+
+    modules = {"shared.dialog"}
+
+    --Flags
+    local raidStartedFlag = Flag("DEN_RaidingParty_Event_UnsheatheForFight_520b53e9-b8a3-27b5-7a67-cd63f6d23411")
+    local raidOverFlag = Flag("DEN_RaidingParty_Quest_GoblinRaidOver_98712d90-c46b-20c4-c4df-02c0117e85a5")
+    local denVictoryFlag = Flag("DEN_AttackOnDen_State_DenVictory_71c7f23e-3ff1-c9b8-3ef5-d75fa1b42c8d")
+    local noCharactersOutsideFlag = Flag("DEN_RaidingParty_State_AllEntered_6fd21011-7a8e-48b9-9bd7-711356f3b44b")
+
+    --Bools
+    local canAD = true
+    local gateRequest = false
+    local isOpeningGate = false
+
+    --Items
+    local gateLever = Entity("S_DEN_GateMechanism_5564d21c-9033-4958-8cc8-cd3f497bb51b")
+    local gateLeverPos = Entity("S_DEN_GateMechanismPos_6184a99b-7a63-4928-a9eb-bcc8b2119dcb")
+    local gate = Entity("S_DEN_Gate_567055bf-ffeb-4236-8a61-e53877397fde")
+
+    --Characters
+
+    local tieflingGatekeeper = Entity("S_DEN_Gatekeeper_847717b3-82eb-45a7-b875-78665c12ce9a")
+
+    --Animations
+    local cowerAnim = Animation("CUST_Cower_01_14b0f924-b823-4c0a-b497-ff32f1da7c35")
+
+    --Dialogs
+    local idleAD = Dialog("DEN_General_AD_Gatekeeper_92acbc47-b602-f018-6946-e71c5a19c870")
+
+    nodes.Start = Selector{
+        Valid = function()
+            return not GetFlag(raidOverFlag)
+        end
+    }
+
+    nodes.Start.BeforeRaid = Action{
+        function()
+            Sleep(2)
+        end,
+        Valid = function()
+            return not GetFlag(raidStartedFlag)
+        end
+    }
+
+    nodes.Start.DuringRaid = Action{
+        function()
+            PlayAnimation(cowerAnim, false, true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return GetFlag(raidStartedFlag)
+        end
+    }
+
+    nodes.WaitForCharacters = Action{
+        function()
+            Sleep(2)
+        end,
+        Valid = function()
+            return GetFlag(raidOverFlag) and not GetFlag(noCharactersOutsideFlag)
+        end
+    }
+
+    nodes.AfterRaid = Selector{
+        Valid = function()
+            return GetFlag(raidOverFlag) and GetFlag(noCharactersOutsideFlag)
+        end
+    }
+
+    nodes.AfterRaid.GateRequest = ImmediateSelector {
+        Valid = function()
+            return gateRequest
+        end
+    }
+
+    nodes.AfterRaid.GateRequest.UseGate = Action {
+        function()
+            MoveTo(gateLeverPos, MovementSpeed.Run)
+            LookFrom(gateLeverPos)
+            if(isOpeningGate and gate.Item.IsOpened) then
+                gateRequest = false
+            elseif(not isOpeningGate and not gate.Item.IsOpened) then
+                gateRequest = false
+            end
+            try
+                UseItem(gateLever.Item)
+            catch e if ls.CheckType(e, error.UseItemFailed) then
+                gateRequest = false
+            end
+        end,
+        OnLeave = function()
+            SetForceUpdate(me, false)
+        end
+    }
+
+    nodes.AfterRaid.Idle = Selector{
+        Valid = function()
+            return not gateRequest
+        end
+    }
+
+    nodes.AfterRaid.Idle.AD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                idleAD,
+                {
+                    waitForCompletion = false,
+                },
+                me
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_General_AD_Gatekeeper")
+            StartTimer(me,"ADTimer_DEN_General_AD_Gatekeeper", 100 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return me == tieflingGatekeeper and not GetFlag(denVictoryFlag) and canAD
+        end
+    }
+
+    nodes.AfterRaid.Idle.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_GatekeeperPos_12e49637-70dc-4b9f-b1a5-942a2c534314]]
+        }
+    }
+
+    events.UseStarted = function(e)
+        if(e.Object == gateLever and e.User == me) then
+            gateRequest = false
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if((e.Event == "DEN_OpenGate" or e.Event == "DEN_CloseGate") and not me.Character.IsDead) then
+                if(e.Event == "DEN_OpenGate") then
+                    isOpeningGate = true
+                else
+                    isOpeningGate = false
+                end
+                if(me.ForceUpdate == false) then
+                    SetForceUpdate(me, true)
+                end
+                gateRequest = true
+                Interrupt()
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_General_AD_Gatekeeper") then
+            canAD = true
+        end
+    end
+
+end}

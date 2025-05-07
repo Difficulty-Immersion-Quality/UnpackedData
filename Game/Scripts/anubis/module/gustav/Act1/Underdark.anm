@@ -1,0 +1,66 @@
+local m = AnubisModule()
+
+m.FindClosestActiveCharacter = function(anchor, distance, checkUnhiddenInParty, checkTag)
+    local fl_Hiding = Flag("GLO_State_Hiding_ad57af70-2300-4c49-b713-ba0bd8e77ea3")
+    local ch_Target = nil
+
+    local characters = GetActiveCharacters(anchor, distance)
+
+    if #characters > 0 then
+        local ch_TempTarget = nil
+        local dist_Min = 2 * distance
+
+        for i, character in ipairs(characters) do
+            local dist_ToChar = GetDistanceTo(anchor, character)
+            if dist_ToChar < dist_Min and character.OnStage and not character.Character.IsDead and HasLineOfSight(anchor, character) and
+            not (checkUnhiddenInParty and (GetFlag(fl_Hiding, character) or not character.Character.IsPartyMember or HasActiveStatus(character, "DOWNED")))
+            and (not checkTag or IsTagged(character,checkTag)) then
+                dist_Min = dist_ToChar
+                ch_TempTarget = character
+            end
+        end
+
+        if ch_TempTarget ~= nil then
+            if ls.CheckType(anchor, ls.anubis.game.Entity) then
+                DebugText(anchor, "Found Target [1]", ch_TempTarget.Name)
+            end
+            ch_Target = ch_TempTarget
+        end
+    end
+    return ch_Target
+end
+
+m.action.SporesResurrection = function(entity, corpse, movementSpeed, resurrectAreaTrigger, useFakeSpell)
+    if not corpse.Character.IsDead then
+        return false
+    end
+
+    if not IsInTrigger(corpse, resurrectAreaTrigger.Trigger) then
+        return false
+    end
+
+    if IsInDangerousSurfaceFor(corpse, entity.Character) then
+        SteerTo(corpse)
+        Sleep(2.0)
+        return false
+    end
+
+    local moveResult = MoveTo(corpse, movementSpeed, true, false, 2, 3.5, false)
+    if moveResult ~= error.MovementError.None then
+        SteerTo(corpse)
+        Sleep(2.0)
+        return false
+    end
+
+    local spell = useFakeSpell and "Target_UND_MyconidSovereign_FakeAnimatingSpores" or "Target_AnimatingSpores"
+    try
+        UseSpell(spell, corpse, nil, nil, nil, true, true, true, false)
+    catch e if ls.CheckType(e, error.UseSpellFailed) then
+        Sleep(2.0)
+        return false
+    end
+
+    return true
+end
+
+return m

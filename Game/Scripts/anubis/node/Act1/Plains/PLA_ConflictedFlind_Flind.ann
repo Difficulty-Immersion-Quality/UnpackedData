@@ -1,0 +1,356 @@
+game.states.PLA_ConflictedFlind_Flind = State { function ()
+
+    description = [[Behaviour tree for Flind. He plays animation of drawing symbol of Absolute.]]
+
+    modules = { "shared.math", "shared.params", "shared.dialog"}
+
+    -----------------------------------------
+    -- params section
+    params.absoluteSymbolBehavior = {type = EParamType.String, required = true, help=[[
+        Drawing the Abosulte symbol behavior dialog to play in idle
+    ]]}
+
+    params.absoluteSymbolTrigger = {type = EParamType.String, required = false, default = nil, help=[[
+        Drawing the Abosulte symbol behavior trigger
+    ]]}
+
+    params.basePositionTrigger = { type = EParamType.String, required = true, help = [[
+        Base position trigger to look from
+    ]]}
+
+    params.eatingAnims = {type = EParamType.String, arrayRange = "1..", required = true, help=[[
+        Animation to play when eating dead gnoll bodies (after turning against them)
+    ]]}
+
+    -- grunt ADs
+    params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+        The idle repeating AD to play.
+    ]]}
+
+    params.regionBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks the ADs for the entire group of characters (prevents overlap)
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks this specific AD from happening (prevents repetition)
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local absoluteSymbolBehavior = nil
+    local absoluteSymbolTrigger = nil
+    local inspireAnim = nil
+    local flindAfterKilledGnollsArea = nil
+    local gnollToInspire = nil
+    local basePositionTrigger = nil
+    local groupSyncedAD
+    local eatingAnims = {}
+    local deadBody = nil
+    local isHungry = false
+    local isDrawing = false
+    local angryAnim = Animation("IDLE_Random_Combat_01_6dd3d472-9e11-47bf-8f7a-04e75ffe6c26")
+    -- flags
+    local killedGnollsFlag = Flag("PLA_ConflictedFlind_State_AfterKilledRegularGnolls_51320d12-ea6d-4948-99dd-5cf372577fb2")
+    local dialogBlockFlag
+    local regionBlockFlag
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        if params.AD then
+            groupSyncedAD = Dialog(params.AD)
+        end
+        if params.regionBlockFlag then
+            regionBlockFlag = Flag(params.regionBlockFlag)
+        end
+        if params.dialogBlockFlag then
+            dialogBlockFlag = Flag(params.dialogBlockFlag)
+        end
+        absoluteSymbolBehavior = Dialog(params.absoluteSymbolBehavior)
+        if params.absoluteSymbolTrigger ~= nil and params.absoluteSymbolTrigger ~= "" then
+            absoluteSymbolTrigger = Entity(params.absoluteSymbolTrigger)
+        end
+        flindAfterKilledGnollsArea = FindEntity("S_PLA_ConflictedFlind_FlindAfterKilledGnollsArea_c67a5e8d-baf5-4bdf-a98c-7acc4fd77cfd")
+        inspireAnim = Animation("IDLE_Random_Combat_01_6dd3d472-9e11-47bf-8f7a-04e75ffe6c26")
+        basePositionTrigger = FindEntity(params.basePositionTrigger)
+        eatingAnims = mod.params.ParamArrayToAnimationsList(params.eatingAnims)
+    end
+
+    self.OnLeave = function()
+        gnollToInspire = nil
+    end
+
+    -----------------------------------------
+    -- node section
+
+    nodes.AfterKilledGnolls = Selector
+    {
+        Valid = function()
+            return GetFlag(killedGnollsFlag)
+        end
+    }
+
+    nodes.AfterKilledGnolls.MoveToAfterKilledGnollsPos = Action {
+        function()
+            local randomPos = TriggerGetRandomPosition(flindAfterKilledGnollsArea.Trigger)
+            local validPos = FindValidPosition(randomPos, 5, me)
+            if validPos ~= nil and not IsInDangerousSurfaceFor(validPos, me.Character) then
+                try
+                    MoveTo(validPos, MovementSpeed.Run)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "MovementFailed")
+                    Sleep(mod.math.random(1, 3))
+                end
+            end
+        end,
+        Valid = function()
+            return not IsInTrigger(me, flindAfterKilledGnollsArea.Trigger)
+        end
+    }
+
+    nodes.AfterKilledGnolls.MoveToBody = Proxy{
+        game.states.PLA_ZhentShipment_MoveToDeadGnoll,
+        params = {
+            isCycled = true,
+            areaTrigger = "S_PLA_ConflictedFlind_FlindAfterKilledGnollsArea_c67a5e8d-baf5-4bdf-a98c-7acc4fd77cfd",
+        },
+        Valid = function()
+            return deadBody == nil and isHungry and IsInTrigger(me, flindAfterKilledGnollsArea.Trigger)
+        end
+    }
+
+    nodes.AfterKilledGnolls.Eating = Action{
+        function()
+            SteerTo(deadBody)
+            local randomAnim = eatingAnims[math.random(1,#eatingAnims)]
+            try
+                PlayAnimation(randomAnim)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (eatingAnims)")
+            end
+            isHungry = false
+            deadBody = nil
+        end,
+        Valid = function()
+            return deadBody ~= nil and isHungry
+        end
+    }
+
+    nodes.AfterKilledGnolls.Idle = Action {
+        function()
+            try
+                Wander(flindAfterKilledGnollsArea, mod.math.random(2, 3), MovementSpeed.Walk)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Wander failed")
+            end
+            Sleep(mod.math.random(1, 2))
+            try
+                PlayAnimation(angryAnim, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (angryAnim)")
+            end
+            if not GetFlag(regionBlockFlag) and not GetFlag(dialogBlockFlag) and
+                mod.dialog.IsSpeakerAvailable(me)
+            then
+                StartAutomatedDialog(groupSyncedAD, false, me)
+            end
+            Sleep(mod.math.random(2, 3))
+            isHungry = true
+        end,
+        Valid = function()
+            return not isHungry and IsInTrigger(me, flindAfterKilledGnollsArea.Trigger)
+        end
+    }
+
+    nodes.Idle = Selector
+    {
+        Valid = function()
+            return not GetFlag(killedGnollsFlag)
+        end
+    }
+
+    nodes.Idle.MoveToBasePos = Action {
+        function()
+            try
+                MoveTo(basePositionTrigger, MovementSpeed.Walk, true, false, 0.1, 0.5)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+                Sleep(mod.math.random(1, 3))
+            end
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, basePositionTrigger) >= 1
+        end
+    }
+
+    nodes.Idle.InspireAnim = Action {
+        function()            
+            Sleep(mod.math.random(0.5, 1.0))
+            LookAtEntity(gnollToInspire, 1.5)
+            if not GetFlag(regionBlockFlag) and not GetFlag(dialogBlockFlag) and
+                mod.dialog.IsSpeakerAvailable(me)
+            then
+                StartAutomatedDialog(groupSyncedAD, false, me)
+            end
+            PlayAnimation(inspireAnim)
+            Sleep(mod.math.random(1, 2))
+            gnollToInspire = nil           
+        end,
+        Valid = function()
+            return gnollToInspire ~= nil
+        end
+    }
+
+    nodes.Idle.DrawingAnim = Action {
+        function()
+            isDrawing = true          
+            StartBehaviorDialog(absoluteSymbolBehavior, absoluteSymbolTrigger.Trigger, true, me)
+            isDrawing = false
+            if not GetFlag(regionBlockFlag) and not GetFlag(dialogBlockFlag) and
+                mod.dialog.IsSpeakerAvailable(me)
+            then
+                StartAutomatedDialog(groupSyncedAD, false, me)
+            end
+            if math.random() > 0.6 then                
+                PlayAnimation(angryAnim)
+            end
+        end,
+        Valid = function()
+            return (isDrawing or gnollToInspire == nil) and GetDistance2DTo(me, basePositionTrigger) < 1
+        end
+    }
+
+    nodes.PackTacticsAuraEvents = Proxy{
+        game.states.PLA_ConflictedFlind_CombatAura,
+        params = {
+            combatAuraStatus = "GNOLL_AURABLOODTHIRST_AURA"
+        }
+    }
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.Event == "PLA_ConflictedFlind_Event_GnollAfterBeingBurned" then
+            if (e.TargetEntity ~= nil and math.random() > 0.33) then
+                gnollToInspire = e.TargetEntity
+            end
+        end
+
+        if e.TargetEntity == me then
+            if e.Event == "PLA_ZhentShipment_Event_MoveToDeadBodyFinished" then
+                deadBody = e.Params[1]
+            elseif e.Event == "PLA_ZhentShipment_Event_CancelWaitingForDeadBody" then
+                isHungry = false
+            end
+        end
+    end
+end}
+
+game.states.PLA_ConflictedFlind_Flind_PerformingSpeech = State { function ()
+    description = [[
+        State for behaviour while performing speech
+        before rushing at Zhents (by Instigate)
+    ]]
+
+    modules = { "shared.dialog" }
+
+    params.lookAtObject = { type = EParamType.String, required = true, help = [[
+        Trigger to look at
+    ]]}
+
+    params.angryAnim = { type = EParamType.String, required = true, help = [[
+        Anim to play while inspiring
+    ]]}
+
+    params.howlingAD = { type = EParamType.String, required = true, help = [[
+        AD to play
+    ]]}
+
+    local lookAtObject = nil
+    local angryAnim = Animation(params.angryAnim)
+    local howlingAD = Dialog(params.howlingAD)
+
+    self.OnInit = function()
+        lookAtObject = FindEntity(params.lookAtObject)
+    end
+
+    nodes.Roar = Action {
+        function()
+            if me.Visible then
+                LookAtEntity(lookAtObject, 0)
+            end
+            Sleep(0.1)
+            if mod.dialog.IsSpeakerAvailable(me) then
+                StartAutomatedDialog(howlingAD, false, me)
+            end
+            try
+                PlayAnimation(angryAnim)
+                Sleep(3)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (angryAnim)")
+                Sleep(3)
+            end
+        end
+    }
+end}
+
+game.states.PLA_ConflictedFlind_Flind_Combat = State { function ()
+    description = [[
+        Custom combat behaviour for Flind for playing custom anims and ADs
+    ]]
+
+    modules = { "gustav.Act1.ZhentShipment"}
+
+    params.reactionAD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play.
+    ]]}
+
+    params.angryAnim = { type = EParamType.String, required = true, help = [[
+        Anim to play while inspiring
+    ]]}
+
+    local reactionPlayed = false
+    local reactionStarted = false
+    local lookAtTarget = nil
+    local angryAnim = Animation(params.angryAnim)
+    local reactionAD = Dialog(params.reactionAD)
+    local hostileFlag = Flag("PLA_ConflictedFlind_State_Hostile_4ba98bb7-f66b-a105-b5fd-0569dd61b030")
+
+    self.Valid = function()
+        return not me.IsCombatPaused and me.CanActInCombatTeamTurn
+    end
+
+    nodes = Selector{
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.AngryReaction = Action {
+        function()
+            if lookAtTarget ~= nil then
+                SteerTo(lookAtTarget)
+            end
+            Sleep(0.25)
+            mod.ZhentShipment.LookADAnim(me, lookAtTarget, reactionAD, angryAnim, false, 0.2)
+            Sleep(1.25)
+            reactionPlayed = true
+        end,
+        CanEnter = function()
+           return not reactionPlayed and reactionStarted
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if not reactionStarted and e.Event == "PLA_ConflictedFlind_Event_PlayAngryAnim" then
+                reactionStarted = true
+                reactionPlayed = false
+                if e.Params[1] ~= nil then
+                    lookAtTarget = e.Params[1]
+                end
+            end
+        end
+    end
+
+end}

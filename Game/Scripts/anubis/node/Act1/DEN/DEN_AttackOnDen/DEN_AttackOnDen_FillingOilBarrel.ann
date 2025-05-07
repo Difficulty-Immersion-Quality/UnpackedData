@@ -1,0 +1,121 @@
+game.states.DEN_AttackOnDen_GuexFillingOilBarrel = State { function ()
+
+    description = [[Guex is filling oil barrels during Attack on Den with Pandirna.]]
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+
+    local moveTarget = Entity("S_DEN_OilPos_001_e4288a7b-6cb2-419b-8e96-9046a754c2ea")
+    local AD = Dialog("DEN_AttackOnDen_AD_FillingOilBarrel_fd49d10a-a7f7-c03f-c1c6-0035628f3476")
+    local barrel = Entity("S_DEN_EmptyBarrel_001_8e905c1f-5575-4f32-a1fa-5feacb4abfae")
+    local barrelBox = Entity("S_DEN_OilFillingBox_5488eeb0-a2e3-4ee9-a97a-f3a69df79e23")
+    local pandirna = Entity("S_DEN_Tiefling_005_e5319db6-ea86-43cc-9fd0-5ec1e0eab492")
+    local raidersAtDenFlag = Flag("DEN_AttackOnDen_State_RaidersAtDen_29f372ac-f9f1-4d54-bc9e-7eb493fa09d8")
+    local worldBehaviour = Dialog("BHVR_WRLD_DEN_HoldingBarrel_20ee51b6-842a-2382-61bd-1eff59ce87b2")
+    local worldBehaviourTrigger = Entity("BHVR_WRLD_DEN_HoldingBarrel_SceneTrigger_8333429a-30d2-4366-96e3-560878748637")
+
+    nodes.FillingOilBarrel = Action {
+        OnEnter = function()
+            SetDoNotFace(me, true)
+        end,
+        function()
+            Sleep(math.random(1, 3))
+            if mod.moveto.MoveToPoint(moveTarget,MovementSpeed.Stroll,me) then
+                LookFrom(moveTarget)
+                Sleep(2)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 40,
+                    },
+                    me, pandirna
+                )
+                StartBehaviorDialog(worldBehaviour, worldBehaviourTrigger.Trigger, false, me, barrel)
+                while IsPerformingWorldBehaviour(me) do
+                    Sleep(1)
+                end
+            else
+                SteerTo(moveTarget)
+            end
+        end,
+        Valid = function()
+            return not GetFlag(raidersAtDenFlag) and IsInTrigger(barrel, barrelBox.Trigger) and not barrel.Item.IsDestroyed
+        end,
+        OnLeave = function()
+            SetDoNotFace(me, false)
+            BehaviorDialogRequestGracefulStop(me, false)
+        end
+    }
+
+    nodes.LeftBarrels = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_DEN_SafeIrritatedPos_c3c4afb5-bda2-4cd7-831b-25085c0ac728"
+        }
+    }
+
+end}
+
+game.states.DEN_AttackOnDen_PandirmaFillingOilBarrel = State { function ()
+
+    description = [[Pandirma is filling oil barrels during Attack on Den with Pandirna.]]
+
+    local raidersAtDenFlag = Flag("DEN_AttackOnDen_State_RaidersAtDen_29f372ac-f9f1-4d54-bc9e-7eb493fa09d8")
+    local barrel = Entity("S_DEN_EmptyBarrel_001_8e905c1f-5575-4f32-a1fa-5feacb4abfae")
+    local barrelBox = Entity("S_DEN_OilFillingBox_5488eeb0-a2e3-4ee9-a97a-f3a69df79e23")
+
+    nodes.FillingOilBarrel = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_OilPos_000_9b487d72-8e03-45c0-9223-1eaf89d4ff94",
+            anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0,
+            loopingAnim = true,aw
+        },
+        Valid = function()
+            return not GetFlag(raidersAtDenFlag) and IsInTrigger(barrel, barrelBox.Trigger) and not barrel.Item.IsDestroyed
+        end
+    }
+
+    nodes.LeftBarrels = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_DEN_SafePandirnaPos_cef87a5a-39d7-4633-a327-a62c28096770"
+        }
+    }
+
+end}
+
+game.states.DEN_AttackOnDen_BuildingBarricades = State { function ()
+
+    description = [[Kaldani is building barricades]]
+
+    local raidersAtDenFlag = Flag("DEN_AttackOnDen_State_RaidersAtDen_29f372ac-f9f1-4d54-bc9e-7eb493fa09d8")
+
+    nodes.BuildingBarricades = Proxy {
+        game.states.DEN_GeneralGroveStates_LoopAnimateAtPointWithStartEnd,
+        params={
+            moveTarget = "S_DEN_BuildPos_001_109009cb-d836-4c6b-98cb-ea1118f27fce",
+            animLoop = "CUST_HammeringPlankOnFloor_01_Loop_cf3ff4bc-e629-4658-b886-9e5253e9766f",
+            animStart = "CUST_HammeringPlankOnFloor_01_Start_57c6618f-032d-4ba4-9f8d-abe8ce457ff9",
+            animEnd = "CUST_HammeringPlankOnFloor_01_End_48f32dc5-fae7-4e7d-8725-e5b10fd94099",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0,
+        },
+        Valid = function()
+            return not GetFlag(raidersAtDenFlag)
+        end
+    }
+
+    nodes.LeftBarricades = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_DEN_AttackLakrissaPos_ed043a81-03fd-4e0c-bcf0-8d920b5f432e"
+        }
+    }
+
+end}

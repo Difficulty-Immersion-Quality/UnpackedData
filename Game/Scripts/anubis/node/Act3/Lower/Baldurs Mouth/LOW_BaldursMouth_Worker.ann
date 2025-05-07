@@ -1,0 +1,54 @@
+game.states.LOW_BaldursMouth_Worker = State{
+    function()
+        params.waitTime = {type = EParamType.Number, required = false, default = 6.0, help = [[Wait time.]]}
+        params.patrolSpline = {type = EParamType.String, required = true, help = [[Patrol spline.]]}
+        params.idleAnim1 = {type = EParamType.String, required = false, help = [[Optional animation override]]}
+        params.idleAnim2 = {type = EParamType.String, required = false, help = [[Optional animation override]]}
+        params.idleAnim3 = {type = EParamType.String, required = false, help = [[Optional animation override]]}
+
+        local bWait = false
+        local spPatrol = Spline(params.patrolSpline)
+        local idleAnim1 = Animation(params.idleAnim1)
+        local idleAnim2 = Animation(params.idleAnim2)
+        local idleAnim3 = Animation(params.idleAnim3)
+        local queuedAnim = nil
+
+        self.OnInit = function()
+            SetWeaponUnsheathed(me,false)
+        end
+
+        self.Valid = function()
+            return bWait
+        end
+
+        self.OnLeave = function()
+            bWait = false
+        end
+
+        nodes.Action_Wait = Action{
+            function()
+                LookFrom(spPatrol)
+                if queuedAnim ~= nil then
+                    PlayAnimation(queuedAnim)
+                end
+                    Sleep(params.waitTime)
+                    bWait = false
+            end
+        }
+
+        events.SplineControlPointReached = function(e)
+            if e.Event == "IdleAnim1" then 
+                queuedAnim = idleAnim1
+                bWait = true
+            end
+            if e.Event == "IdleAnim2" then
+                queuedAnim = idleAnim2
+                bWait = true
+            end
+            if e.Event == "IdleAnim3" then
+                queuedAnim = idleAnim3
+                bWait = true
+            end 
+        end
+    end
+}

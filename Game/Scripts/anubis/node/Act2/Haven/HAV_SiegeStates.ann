@@ -1,0 +1,97 @@
+game.states.HAV_Siege_Combat = State{function()
+
+    modules = { "shared.character", "shared.items", "shared.util" }
+
+    description = [[Generic state for fighters during Siege.
+    If NPC falls out of combat, it searches for enemies in Haven region and runs towards it.
+    If there's no enemies, stays at predefined trigger]]
+
+    params.DefaultPosition = { type = EParamType.String,
+        default = "S_HAV_Siege_TPAfterCinematic_Outside_f97737ec-0984-4663-862d-ba2a6ab70c55",
+        help = [[Default position for the NPC]]
+    }
+
+    local tr_SearchForEnemiesTrigger = Entity("S_HAV_SiegeStateObject_c4524ae3-32cd-4c7a-bfb5-b682785c6b88")
+    local tr_Position = Entity(params.DefaultPosition)
+    local fl_SiegeEnded = Flag("HAV_Siege_Event_SiegeEnd_1939fc49-17fd-49f8-9030-8c3d627a05df")
+    local anim_LookAround = { Animation("HUM_F_Rig_DFLT_CUST_Investigating_LookingAround_01_16125ef6-c9af-0370-2dbd-efba3786477e"),
+        Animation("HUM_F_Rig_DFLT_CUST_Investigating_LookingAround_02_7e9b0293-8941-c2d5-a234-72cc3455cc39"),
+        Animation("HUM_F_Rig_DFLT_CUST_Investigating_LookingAround_03_e1c79d44-d520-bc15-2ec8-dca788886fb1") }
+    local fac_Enemies = nil
+
+    local ent_Enemy = nil
+
+    self.OnInit = function()
+        fac_Enemies = FindFaction("ACT2_HAV_ShadowCreatures_b0b8d20c-89f8-4433-bd62-5cbcbae2e9bc")
+    end
+
+    events.EnteredCombat = function(ev)
+        ent_Enemy = nil
+    end
+
+    events.LeftCombat = function(ev)
+        ent_Enemy = nil
+    end
+
+    nodes.EnemiesNearby = Selector{
+        Valid = function()
+            return not GetFlag(fl_SiegeEnded)
+        end
+    }
+
+    nodes.EnemiesNearby.FindEnemy = Action{
+        function()
+            local chars = GetActiveCharacters(tr_SearchForEnemiesTrigger, 50.0)
+            if #chars > 0 then
+                for _, char in ipairs(chars) do
+                    if not mod.character.IsDefeated(char, true) and char.Faction == fac_Enemies then
+                        ent_Enemy = char
+                    end
+                end
+            end
+            if ent_Enemy == nil then
+                local items = GetActiveItems(tr_SearchForEnemiesTrigger, 50.0)
+                if #items > 0 then
+                    for _, item in ipairs(items) do
+                        -- TODO: remove this try-catch when .Faction would return nil instead of an exception
+                        try
+                            if not mod.items.SafeIsDestroyed(item) and item.Faction == fac_Enemies then
+                                ent_Enemy = item
+                            end
+                        catch ex if ls.CheckType(ex, error.FactionNotSet) then
+                            -- do nothing, but don't catch all cause we don't want to suppress any important error
+                        end
+                    end
+                end
+            end
+        end,
+
+        Valid = function()
+            return ent_Enemy == nil
+        end
+    }
+
+    nodes.EnemiesNearby.RunToEnemy = Action{
+        function()
+            try
+                MoveTo(ent_Enemy, MovementSpeed.Run, true)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed")
+            end
+        end
+    }
+
+    nodes.EnemiesDefeated = Action{
+        function()
+            try
+                MoveTo(tr_Position, MovementSpeed.Run)
+                LookFrom(tr_Position)
+
+                PlayAnimation(mod.util.RandomFrom(anim_LookAround), true, false)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed")
+            end
+            mod.util.SleepRandom(3.0, 10.0)
+        end
+    }
+end}

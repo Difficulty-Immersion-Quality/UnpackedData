@@ -1,0 +1,292 @@
+game.states.PLA_ZhentShipment_Agent_Combat = State { function()
+    description = [[
+    ]]
+
+    modules = { "shared.math", "shared.dialog", "gustav.Act1.ZhentShipment" }
+
+    params.otherAgent = { type = EParamType.String, required = true, help = [[
+        Other Zhent agent
+    ]]}
+
+    params.coverPositionTrigger = { type = EParamType.String, required = true, help = [[
+        Trigger to run and hide in cover (close to the entrance)
+    ]]}
+
+    params.defensePositionTrigger = { type = EParamType.String, required = true, help = [[
+        Trigger to run and defend (further in the cave)
+    ]]}
+
+    params.retreatAD = { type = EParamType.String, required = false, help = [[
+        AD to play when retreating
+    ]]}
+
+    params.joiningAD = { type = EParamType.String, required = false, help = [[
+        AD to play when joining the combat to help players fight gnolls
+    ]]}
+
+    params.attackedByPlayerAD = { type = EParamType.String, required = false, help = [[
+        AD to play during 1st combat turn after being attacked by player
+    ]]}
+
+    params.alchFireThrowTarget = {type = EParamType.String, required = false, default = nil, help=[[
+        Target at which Zhents will throw alchemist fire
+    ]]}
+
+    params.alchFireThrowTargetFar = {type = EParamType.String, required = false, default = nil, help=[[
+        Target at which Zhents will throw alchemist fire after being attacked
+    ]]}
+
+    -- objects vars
+    local otherAgent = nil
+    local retreatAD = nil
+    local attackedByPlayerAD = nil
+    local joiningAD = nil
+    local coverPositionTrigger = nil
+    local defensePositionTrigger= nil
+    local alchFireThrowTarget = nil
+    local alchFireThrowTargetFar = nil
+    -- state vars
+    local retreatADplayed = false
+    local flaskThrownOnTakingCover = false
+    local retreated = false
+    local instigateADplayed = false
+    local attackedADplayed = false
+    local joiningADplayed = false
+    local inited = false
+    -- flag vars
+    local coverPositionsFlag = Flag("PLA_ZhentShipment_State_OnCoverPositions_4b302512-e44f-4960-b13b-03b0afc5b8ff")
+    local instigateFlag = Flag("PLA_ConflictedFlind_State_Instigate_273fb05a-4c2c-4816-8458-7af837d919a2")
+    local bothAgentsAliveFlag = Flag("PLA_ZhentShipment_State_BothAgentsAreAlive_d7404f8a-8101-90c1-3105-0b49cddf7e1f")
+    local defendPositionsFlag = Flag("PLA_ZhentShipment_State_OnDefensePositions_7ffc9c16-cffd-4fa1-8d76-32ceedbe3cc4")
+    local gnollsGoneStateFlag = Flag("PLA_ConflictedFlind_State_Gone_4152beef-e7d1-e10f-7b06-62584d3571f2")
+    local agentsAttackedFlag = Flag("PLA_ZhentShipment_Quest_AttackedAgents_9efe32a4-5418-91b3-3674-6bfb15b2dda1")
+    local agreedToHelpFlag = Flag("PLA_ZhentShipment_State_AgreedToHelpInBattle_185140b4-9dec-49d7-abad-e6e628cdf4cd")
+    local joinedCombatWithGnollsFlag = Flag("PLA_ZhentShipment_State_JoinedFightWithGnolls_834c500f-8718-47b5-b320-8d37b2ad9b92")
+    local hasmetFlag = Flag("PLA_ZhentShipment_Quest_HasMet_5359e72b-f8ca-d2d6-4c3a-8fc00efe5c2c")
+
+    helpers.MeOrOtherAgentIsTakingTurn = function()
+        helpers.Init()
+        return me.CanActInCombatTeamTurn or (otherAgent.IsInCombat and otherAgent.CanActInCombatTeamTurn)
+    end
+
+    helpers.OtherAgentIsBusy = function()
+        return otherAgent ~= nil and
+            otherAgent.IsInCombat and
+            not otherAgent.Character.IsDead and
+            IsInDialog(otherAgent, false)
+    end
+
+    helpers.Init = function()
+        if not inited then
+            inited = true
+            coverPositionTrigger = FindEntity(params.coverPositionTrigger)
+            defensePositionTrigger = FindEntity(params.defensePositionTrigger)
+            otherAgent = FindEntity(params.otherAgent)
+            if params.alchFireThrowTarget then
+                alchFireThrowTarget = FindEntity(params.alchFireThrowTarget)
+            end
+            if params.alchFireThrowTargetFar then
+                alchFireThrowTargetFar = FindEntity(params.alchFireThrowTargetFar)
+            end
+            if params.retreatAD then
+                retreatAD = Dialog(params.retreatAD)
+            end
+            if params.attackedByPlayerAD then
+                attackedByPlayerAD = Dialog(params.attackedByPlayerAD)
+            end
+            if params.joiningAD then
+                joiningAD = Dialog(params.joiningAD)
+            end
+        end
+    end
+
+    self.Valid = function()
+        return me.IsInCombat and not me.IsCombatPaused and not GetFlag(gnollsGoneStateFlag)
+    end
+
+    self.OnInit = function()
+        helpers.Init()
+    end
+
+    nodes = Selector{
+        CanEnter = function(node)
+            helpers.Init()
+            return CheckAnySelectable(node)
+        end
+    }
+
+    -- Rugan only
+    nodes.AttackedByPlayerReactionRugan = Action {
+        function()
+            if not IsInDialog(me, false) and me.Visible then
+                StartAutomatedDialog(attackedByPlayerAD, true, me)
+            end
+            if alchFireThrowTargetFar ~= nil then
+                mod.ZhentShipment.ThrowFireFlask(me, alchFireThrowTargetFar)
+            end
+            Sleep(1.5)
+            local moveResult = MoveTo(defensePositionTrigger, MovementSpeed.Run, false, true, 2, 3, false)
+            if moveResult ~= error.MovementError.NoResources and moveResult ~= error.MovementError.None then
+                LookFrom(defensePositionTrigger)
+            end
+            attackedADplayed = true
+            EndTurn(me)
+        end,
+        CanEnter = function()
+            return attackedByPlayerAD ~= nil and
+                not GetFlag(instigateFlag) and
+                GetFlag(agentsAttackedFlag) and
+                not GetFlag(joinedCombatWithGnollsFlag)
+                and not attackedADplayed
+        end,
+        Valid = function()
+            return me.CanActInCombatTeamTurn
+        end
+    }
+
+    -- Olly only
+    nodes.AttackedByPlayerReactionOlly = Action {
+        function()
+            local moveResult = MoveTo(defensePositionTrigger, MovementSpeed.Run, false, true, 2, 3, false)
+            if moveResult ~= error.MovementError.NoResources and moveResult ~= error.MovementError.None then
+                LookFrom(defensePositionTrigger)
+            end
+            attackedADplayed = true
+        end,
+        CanEnter = function()
+            return attackedByPlayerAD == nil and
+                not GetFlag(instigateFlag) and
+                GetFlag(agentsAttackedFlag) and
+                not GetFlag(joinedCombatWithGnollsFlag)
+        end,
+        Valid = function()
+            return me.CanActInCombatTeamTurn and not attackedADplayed
+        end
+    }
+
+    -- Rugan only
+    nodes.JoiningFightReaction = Action {
+        function()
+            if not IsInDialog(me, false) and me.Visible then
+                StartAutomatedDialog(joiningAD, true, me)
+            end
+            Sleep(1.5)
+            joiningADplayed = true
+        end,
+        CanEnter = function()
+            return joiningAD ~= nil and
+                GetFlag(agreedToHelpFlag) and
+                not GetFlag(instigateFlag) and
+                not GetFlag(agentsAttackedFlag)
+        end,
+        Valid = function()
+            return me.CanActInCombatTeamTurn and not joiningADplayed
+        end
+    }
+
+    -- Both agents
+    nodes.CombatInstigateReaction = Action {
+        function()
+            if alchFireThrowTarget ~= nil then
+                mod.ZhentShipment.ThrowFireFlask(me, TriggerGetRandomPosition(alchFireThrowTarget.Trigger))
+            end
+            Sleep(1.5)
+            instigateADplayed = true
+            EndTurn(me)
+        end,
+        CanEnter = function()
+            return GetFlag(instigateFlag) and
+                not GetFlag(defendPositionsFlag) and
+                not GetFlag(agentsAttackedFlag) and
+                not GetFlag(coverPositionsFlag)
+        end,
+        Valid = function()
+            return me.CanActInCombatTeamTurn and not instigateADplayed
+        end
+    }
+
+    nodes.CombatWithGnollsReaction = Selector {
+        CanEnter = function()
+            return GetFlag(coverPositionsFlag) and
+                not GetFlag(instigateFlag) and
+                not GetFlag(defendPositionsFlag) and
+                not GetFlag(hasmetFlag)
+        end,
+        Valid = function(node)
+            return CheckAnySelectable(node) and helpers.MeOrOtherAgentIsTakingTurn() and not retreated
+        end
+    }
+
+    -- Rugan only
+    nodes.CombatWithGnollsReaction.ThrowingBeforeTalking = Action {
+        function()
+            mod.ZhentShipment.ThrowFireFlask(me, TriggerGetRandomPosition(alchFireThrowTarget.Trigger))
+            flaskThrownOnTakingCover = true
+        end,
+        Valid = function()
+            return retreatAD ~= nil and alchFireThrowTarget ~= nil and not retreatADplayed and not flaskThrownOnTakingCover
+        end
+    }
+
+    -- Rugan only
+    nodes.CombatWithGnollsReaction.Talking = Action {
+        function()
+            if alchFireThrowTarget ~= nil and not flaskThrownOnTakingCover then
+                mod.ZhentShipment.ThrowFireFlask(me, TriggerGetRandomPosition(alchFireThrowTarget.Trigger))
+                flaskThrownOnTakingCover = true
+            end
+            if not IsInDialog(me, false) and me.Visible then
+                if GetFlag(bothAgentsAliveFlag) and
+                    not IsInDialog(otherAgent, false) and
+                    otherAgent.Visible and
+                    GetDistance2DTo(me, otherAgent) < 15.0
+                then
+                    StartAutomatedDialog(retreatAD, true, me, otherAgent)
+                else
+                    StartAutomatedDialog(retreatAD, true, me)
+                end
+            else
+                Sleep(2)
+            end
+            retreatADplayed = true
+        end,
+        Valid = function()
+            return retreatAD ~= nil and not retreatADplayed
+        end
+    }
+
+    -- Olly only
+    nodes.CombatWithGnollsReaction.ThrowingAndWaiting = Action {
+        function()
+            Sleep(8)
+            if alchFireThrowTarget ~= nil and not flaskThrownOnTakingCover then
+                mod.ZhentShipment.ThrowFireFlask(me, TriggerGetRandomPosition(alchFireThrowTarget.Trigger))
+                flaskThrownOnTakingCover = true
+            end
+            retreatADplayed = true
+        end,
+        CanEnter = function()
+            return retreatAD == nil
+        end,
+        Valid = function()
+            return not retreatADplayed or helpers.OtherAgentIsBusy()
+        end
+    }
+
+    -- Both agents
+    nodes.CombatWithGnollsReaction.Retreating = Action {
+        function()
+            try
+                MoveTo(coverPositionTrigger, MovementSpeed.Run)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+            end
+            LookFrom(coverPositionTrigger)
+            retreated = true
+            EndTurn(me)
+        end,
+        CanEnter = function()
+            return retreatADplayed
+        end,
+    }
+end}

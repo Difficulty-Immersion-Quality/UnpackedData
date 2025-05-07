@@ -1,0 +1,159 @@
+game.states.DEN_CapturedGoblin_GrieflingFriend = State {function ()
+
+    modules = { "shared.moveto", "shared.dialog" }
+
+    description = [[Behaviour of the friend of the grieving tiefling who will try to kill the captured goblin]]
+
+    local Griefling = Entity("S_DEN_Griefling_7ce0afc2-e8f2-4f2e-82d8-27df98acc3d8")
+    local GriefPoint = Entity("S_DEN_GriefFriendPoint_0df355f1-a006-4331-bcad-7354023626d8")
+    local avengePoint = Entity("S_DEN_AvengeFriendPoint_c9016542-c6ce-484c-a837-23241555589d")
+    local resolvedIdlePoint = Entity("S_DEN_IdleFriendPoint_c7f916f2-3a7a-43b1-9f0a-b729e33a7161")
+    local GriefFlag = Flag("DEN_CapturedGoblin_State_Grieve_93f4f48a-6edd-93a1-2704-b13691df0bb4")
+    local TransitFlag = Flag("DEN_CapturedGoblin_State_InTransit_94643524-4461-c684-049c-b38cc2f5670a")
+    local isLeavingFlag = Flag("DEN_CapturedGoblin_Event_GuardsLeft_b79734e0-8efc-228f-9a44-50641da7c55a")
+    local GuardsStayedFlag = Flag("DEN_CapturedGoblin_Event_GuardsStayed_288ac3b0-3f5b-5c15-b0fb-def5c4f0b308")
+    local avengeFlag = Flag("DEN_CapturedGoblin_State_Avenge_0b50db9b-3055-a749-a58b-472d904faa72")
+    local postAvengeIdleFlag = Flag("DEN_CapturedGoblin_State_Idle_1a0543f0-ae86-d30b-1d74-cc45b065aaa5")
+    local ResolvedFlag = Flag("DEN_CapturedGoblin_State_Resolved_df392d3d-95e0-7009-2942-d0418a3e344b")
+
+    self.OnInit = function()
+        SetWeaponUnsheathed(me,true)
+    end
+
+    nodes.Follow = Action {
+        function()
+            try
+                if(GetDistance2DTo(me,Griefling) > 2.0) then
+                    MoveTo(Griefling,MovementSpeed.Run)
+                end
+                SteerTo(Griefling, 3.0)
+                Sleep(1.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception") --DOS2 ignored all exceptions
+            end
+        end,
+        Valid = function()
+            return (not Griefling.Character.IsDead) and GetFlag(TransitFlag) or GetFlag(isLeavingFlag)
+        end
+    }
+
+    nodes.Resolved = Action {
+        function()
+            if mod.moveto.MoveToPoint(resolvedIdlePoint,  MovementSpeed.Walk, me) then
+                LookFrom(resolvedIdlePoint)
+            else
+                SteerTo(resolvedIdlePoint)
+            end
+            Sleep(1)
+        end,
+
+        Valid = function()
+            return GetFlag(ResolvedFlag)
+        end
+    }
+
+    nodes.Avenge = Action {
+        function()
+            if mod.moveto.MoveToPoint(avengePoint,  MovementSpeed.Run, me) then
+                if(GetDistance2DTo(me,Griefling) < 5.0) and not Griefling.Character.IsDead then
+                    SteerTo(Griefling, 3.0)
+                end
+            else
+                SteerTo(avengePoint)
+            end
+            Sleep(1)
+        end,
+
+        Valid = function()
+            return GetFlag(avengeFlag) and not Griefling.Character.IsDead
+        end
+    }
+
+    nodes.Grieve = Action {
+        function()
+            if mod.moveto.MoveToPoint(GriefPoint,  MovementSpeed.Run, me) then
+                SteerTo(Griefling)
+            else
+                SteerTo(GriefPoint)
+            end
+            Sleep(1.0)
+        end,
+
+        Valid = function()
+            return GetFlag(GriefFlag,nil)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            Sleep(1)
+        end
+    }
+end}
+
+game.states.DEN_AttackOnDen_GrieflingFriend = State {function ()
+
+    modules = { "shared.dialog" }
+
+    description = [[Praying close to the pond before the incoming attack.]]
+
+    local defenderFlag = Flag("DEN_AttackOnDen_Event_GrieflingFriendFights_e614acaf-3696-4ec4-903b-178d11076148")
+    local AD = Dialog([[DEN_AttackOnDen_AD_GrieflingFriend_d81824e6-4d47-5005-3bbc-779d848674ad]])
+    local canAD = true
+
+    nodes.AtPond = Selector{
+        Valid = function()
+            return not GetFlag(defenderFlag)
+        end
+    }
+
+    nodes.AtPond.AD = Action{
+        CanEnter = function()
+            return canAD
+        end,
+
+        OnEnter = function()
+            canAD = false
+        end,
+
+        function()
+            Sleep(4)
+            StartAutomatedDialog(AD, false, me)
+        end,
+
+        OnLeave = function()
+            StartTimer(me, "DEN_AttackOnDen_GrieflingFriend_ADTimer", 56, 0)
+        end
+    }
+
+    nodes.AtPond.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_AttackFriendPos_1836a376-6fda-482f-9a2f-168d15ab2879]]
+        }
+    }
+
+    nodes.AtCave = Selector{
+        Valid = function()
+            return GetFlag(defenderFlag)
+        end
+    }
+
+    nodes.AtCave.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_AttackFriendCavePos_67a8fa52-c949-44a4-aa1b-0bb17170c102]]
+        }
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName =="DEN_AttackOnDen_GrieflingFriend_ADTimer") then
+            canAD = true
+        end
+    end
+
+end}

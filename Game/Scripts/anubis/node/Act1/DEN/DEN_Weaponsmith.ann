@@ -1,0 +1,107 @@
+game.states.DEN_Weaponsmith = State { function ()
+
+    description = [[The weaponsmith in the Grove works the tools at his basic forge]]
+
+    modules = {"shared.dialog", "shared.math"}
+
+    local canAD = true
+    local soloAD = Dialog("DEN_Weaponsmith_AD_53c7f85f-a96f-2929-f8ae-487ad8d5c306")
+    local guardsAD = Dialog("DEN_DruidAttack_AD_WeaponsmithAndGuardsAfterAttack_825d9ae9-0083-dbb0-6e7a-61bb20cc4aa2")
+    local guard1 = Entity("S_DEN_Tiefling_001_82f8662d-76da-4352-b37e-01ba433b5d43")
+    local guard2 = Entity("S_DEN_Tiefling_010_23129d6c-8d39-4a4c-a4f6-cfc6637b597c")
+    local grindStoneDialog = Dialog([[BHVR_WRLD_DEN_WeaponSmith_Whetstone_2eadef89-54de-ac11-839a-b3218d632f43]])
+    local grindStoneTrigger = Entity([[S_BHVR_WRLD_DEN_WeaponSmith_Whetstone_SceneTrigger_ea6cfa7f-4da4-4ea4-a96a-80a03025cc1f]])
+    local grindStone = Entity([[S_DEN_Weaponsmith_Whetstone_7260e9e5-02c3-4591-82ac-825b57a266a9]])
+    local anvilDialog = Dialog([[BHVR_WRLD_DEN_WeaponSmith_Anvil_76b162f7-e424-4ac7-e028-4241b7ff1599]])
+    local anvilTrigger = Entity([[S_BHVR_WRLD_DEN_WeaponSmith_Anvil_SceneTrigger_47a30310-aee3-4fdd-b58c-262f6d2df80a]])
+    local anvil = Entity([[S_DEN_Weaponsmith_Anvil_5dc1391a-323d-4123-8b7c-3858d7aa36cd]])
+    -----------------------------------------
+    -- Nodes
+    nodes.Default = Selector {
+        function(nodes)
+            if nodes.doAD.IsSelectable() then
+                return nodes.doAD
+            else
+                return FindDifferentRandomSelectable(nodes)
+            end
+        end
+    }
+
+    nodes.Default.doAD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                guardsAD,
+                {
+                    waitForCompletion = true,
+                    fallbackSoloDialog = soloAD,
+                },
+                me,
+                guard1,
+                guard2
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_Weaponsmith_AD")
+            StartTimer(me,"ADTimer_DEN_Weaponsmith_AD", 40 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return canAD
+        end
+    }
+
+    nodes.Default.Anvil = Action {
+        function()
+            Sleep(1.0)
+            StartBehaviorDialog(anvilDialog, anvilTrigger.Trigger, false, me, anvil)
+            Sleep(math.random(30, 40))
+            BehaviorDialogRequestGracefulStop(me, false, nil)
+            while IsPerformingWorldBehaviour(me) do
+                Sleep(1.0)
+            end
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    nodes.Default.Whetstone = Action {
+        function()
+            SetWeaponUnsheathed(me, true, false)
+            Sleep(2.0)
+            StartBehaviorDialog(grindStoneDialog, grindStoneTrigger.Trigger, false, me, grindStone)
+            Sleep(math.random(20, 30))
+            BehaviorDialogRequestGracefulStop(me, false, nil)
+            while IsPerformingWorldBehaviour(me) do
+                Sleep(1.0)
+            end
+            SetWeaponUnsheathed(me, false, false)
+            Sleep(2.0)
+        end,
+        OnLeave = function()
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    nodes.Default.Coals = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_Weaponsmith_CoalPoint_39e5bf25-8fba-42d1-972a-653997929478",
+            lookFromMoveTarget = true,
+            anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+            waitMin = 0,
+            waitMax = 0
+        },
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_Weaponsmith_AD") then 
+            canAD = true
+        end
+    end
+
+end}

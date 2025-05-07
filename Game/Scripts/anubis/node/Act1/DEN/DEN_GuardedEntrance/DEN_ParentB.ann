@@ -1,0 +1,210 @@
+game.states.DEN_ParentB = State { function ()
+
+    description = [[Second parent of the kid that is imprisoned by druids.]]
+
+    modules = { "shared.moveto", "shared.dialog" }
+
+    local sceneDoneFlag = Flag("DEN_GuardedEntrance_Event_SceneDone_1e021614-e219-4a5d-b4dc-15bb78d345dd")
+
+    local kidBackFlag = Flag("DEN_GuardedEntrance_State_KidIsBack_9da2a326-fc9f-f67c-d839-adc2122a2485")
+    local worryAnim = Animation("CUST_Worried_01_a4616816-be6d-4fa1-a65a-2da057196af4")
+    local waitPoint = Entity("S_DEN_ParentWaitPointB_98c11967-ec80-46e9-9e38-547557202247")
+    local father = Entity([[S_DEN_ParentA_d6d88c8b-6ba7-4350-b3b3-d60565a44e90]])
+
+    local mourningFlag =  Flag("DEN_GuardedEntrance_State_ParentsKnowDeath_f22fc759-6072-4c9a-13a9-9b80ff5e384d")
+    local mourningAnimLoop = Animation("CUST_GrievingHoldingItTogether_01_Loop_d7f60e79-3c1b-40ef-98d0-c977a5f9974f")
+    local mourningAnimStart = Animation("CUST_GrievingHoldingItTogether_01_Start_23a329a6-bdd7-45eb-95da-6925884155f9")
+    local mourningAnimEnd = Animation("CUST_GrievingHoldingItTogether_01_End_3c22bdbf-f048-4b1a-9f24-3729b43d7338")
+    local mourningBehavior = Dialog("BHVR_WRLD_DEN_Parents_Mourning_39064ac2-09c9-90fa-92b8-7abb61d6e9b8")
+    local mourningTrigger = Entity("S_WRLD_BHVR_DEN_Parents_Mourning_f0bc1b59-e02f-4dfb-86bf-4f94e06a385b")
+
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+
+    nodes.ParentsScene = Action {
+        CanEnter = function()
+            return not GetFlag(sceneDoneFlag)
+        end,
+        function()
+            WaitForInterrupt()
+        end,
+    }
+
+    nodes.Mourning = Action {
+        Valid = function()
+            return GetFlag(mourningFlag)
+        end,
+        function()
+            if not father.Character.IsDead and GetDistance2DTo(me, father) < 5.0 then
+                StartBehaviorDialog(mourningBehavior, nil, true, father, me)
+                Sleep(3.0)
+            else
+                PlayLoopingAnimation(mourningAnimStart, {mourningAnimLoop}, mourningAnimEnd)
+                Sleep(3.0)
+            end
+            WaitForInterrupt()
+        end,
+        OnEnter = function()
+            StopAnimation(me, true)
+        end
+    }
+
+    nodes.Waiting = Action {
+        function()
+            if mod.moveto.MoveToPoint(waitPoint,MovementSpeed.Stroll,me) then
+                LookFrom(waitPoint)
+                Sleep(1.0)
+                if (not GetFlag(kidBackFlag,nil)) then
+                    try
+                        PlayAnimation(worryAnim,false,true)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "Animation Failed")
+                    end
+                end
+            else
+                LookAtEntity(waitPoint, 3.0)
+            end
+            Sleep(1.0)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.FlagSet = function(e)
+        if e.Flag == kidBackFlag.Guid then
+            StopAnimation(me)
+        end
+    end
+end}
+
+game.states.DEN_ParentB_AfterAttack = State {function ()
+
+    description = [[Parents are packing and talking to each other about their child.]]
+
+    -----------------------------------------
+    -- Local variables
+
+    local parentA = Entity("S_DEN_ParentA_d6d88c8b-6ba7-4350-b3b3-d60565a44e90")
+    local autoDialog = Guid("DEN_DruidAttack_AD_ParentsAfterAttack_4bcaf296-9c51-1e33-a2f2-a0c0ecd165f1")
+    local canAD = false
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Default = Selector{
+        function(nodes)
+            if canAD then
+                return nodes.stopAndTalk
+            else
+                return FindDifferentRandomSelectable(nodes)
+            end
+        end
+    }
+
+    nodes.Default.stopAndTalk  = Proxy {
+        CanEnter = function()
+            return canAD
+        end,
+        OnEnter = function()
+            canAD = false
+        end,
+        game.states.DEN_GeneralGroveStates_stopAndTalk,
+            params={
+                lookTarget = "S_DEN_ParentA_d6d88c8b-6ba7-4350-b3b3-d60565a44e90",
+            }
+        }
+
+        nodes.Default.Packing = Proxy {
+            game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+            params={
+                moveTarget = "S_DEN_PostDruidAttack_ParentBPos1_c0d581c1-adc4-448f-aab7-dd881fc058fe",
+                anim = "CUST_DistractedPackingGoods_01_13c725bc-dc9d-4679-aedb-4cef01d0c9ae",
+                lookFromMoveTarget = true,
+                waitMin = 1.0,
+                waitMax = 2.0
+            }
+        }
+
+        nodes.Default.Thinking = Proxy {
+            game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+            params={
+                moveTarget = "S_DEN_PostDruidAttack_ParentBPos1_c0d581c1-adc4-448f-aab7-dd881fc058fe",
+                anim = "CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba",
+                lookFromMoveTarget = true,
+                waitMin = 1.0,
+                waitMax = 2.0
+            }
+        }
+
+    -----------------------------------------
+    -- event section
+
+    events.DialogEnded = function(e)
+        if(e.Instance.DialogUUID == autoDialog) then
+            canAD = false
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == parentA) then
+            if(e.Event == "DEN_MovedToTalk") then
+                StartTimer(me, "DEN_GroveRefugee_DialogFailedInterrupt",3.0,0)
+                canAD = true
+                Interrupt()
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_GroveRefugee_DialogFailedInterrupt") and not IsInDialog(me, false) then
+            Interrupt()
+        end
+    end
+
+end}
+
+game.states.CAMP_GoblinHuntCelebration_ParentB = State {function ()
+    description = [[Parent is avenging their dead daughter in the scene with druid leader.]]
+
+    local deadDruidFlag = Flag("CAMP_GoblinHuntCelebration_Event_DruidLeaderKilled_b9fa0384-79c8-ab10-aae3-8ecefd8472c9")
+    local goneDruidFlag = Flag("CAMP_GoblinHuntCelebration_Event_SavedKagha_06dc65df-495c-882f-bda3-1d96434e01a4")
+
+    nodes.AfterTalkWithLeader = Selector{
+        Valid = function()
+            return GetFlag(deadDruidFlag) or GetFlag(goneDruidFlag)
+        end
+    }
+    nodes.AfterTalkWithLeader.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_CAMP_ParentBPos2_f47c3843-f929-4000-8ba4-dd73713ec456]]
+        }
+    }
+
+    nodes.AfterTalkWithLeader.Waiting = Action{
+        function()
+            Sleep(6)
+            canAD = true
+        end,
+        Valid = function()
+            return not canAD
+        end
+    }
+
+
+    nodes.BeforeTalkWithLeader = Selector{
+        Valid = function()
+            return not GetFlag(deadDruidFlag) and not GetFlag(goneDruidFlag)
+        end
+    }
+
+    nodes.BeforeTalkWithLeader.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_CAMP_ParentBPos_32bf903d-3040-4831-b6a2-544ffbd0e202]]
+        },
+    }
+
+end}

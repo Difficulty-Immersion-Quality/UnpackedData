@@ -1,0 +1,76 @@
+game.states.LOW_HouseOfGrief_ViconiaIllusion = State {function ()
+ 
+    local WasInvisible = false
+    
+    local GriefBrench = Entity("S_LOW_GriefBench_a282c6af-9767-4022-8a20-7cd3f6ac4754")  
+    
+    local BenchPoint = Entity("S_LOW_BenchPoint_ea12fd12-47eb-45b9-a425-41019af1879c")
+    local GrottoPoint = Entity("S_LOW_GrottoPoint_b4b08d06-2f49-4688-8282-bf6a4f99c8d1")
+
+    local ViconiaVisible = Flag("LOW_HouseOfGrief_State_ViconiaVisible_6c747323-9285-4c78-b947-78c2eade8669")
+    local ViconiaSeated = Flag("LOW_HouseOfGrief_State_ViconiaSeated_8980029c-e4c7-4415-a55e-54f277032c5d")
+    local MappingDone = Flag("LOW_HouseOfGrief_State_MappingDone_f5fb65be-8b37-4f9e-8108-fbab86428cce")
+    local SHRefused = Flag("LOW_HouseOfGrief_State_RefusedSHMeeting_708c8c0e-b370-4ce8-9b04-a2e35334deb2")
+
+    nodes.MoveToBench = Action {
+        function()
+            if not WasInvisible then
+                WasInvisible = true
+                Sleep (1.0)
+            end
+
+            if not IsInDangerousSurfaceFor(BenchPoint, me.Character) and GetDistanceTo(me,BenchPoint) > 2 then
+                local moveResult = MoveTo(BenchPoint, MovementSpeed.Walk, false, true, 2.0, 3.0, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                else
+                    UseItem(GriefBrench.Item)
+                end
+            end
+            Sleep(4.0)
+        end,
+        Valid = function()
+            return GetFlag(ViconiaVisible)
+        end
+    }
+
+    nodes.Seated = Action {
+        function()
+            Sleep(4.0)
+        end,
+        Valid = function()
+            return GetFlag(ViconiaSeated)
+        end
+    }
+
+    nodes.MoveToGrotto = Action {
+        function()
+            if not IsInDangerousSurfaceFor(GrottoPoint, me.Character) and GetDistanceTo(me,GrottoPoint) > 2 then
+                local moveResult = MoveTo(GrottoPoint, MovementSpeed.Walk, false, true, 2.0, 3.0, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                else
+                    WasInvisible = false
+                    DebugText(me, "Invisible")
+                    ApplyStatus(me, "INVISIBILITY", true, 6.0)
+                    Sleep(0.5)
+                    SetOnStage(me, false)
+                end
+            end
+            Sleep(4.0)
+        end,
+        Valid = function()
+            return GetFlag(MappingDone) and not GetFlag(SHRefused)
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+    
+end
+}

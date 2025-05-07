@@ -1,0 +1,39 @@
+game.states.COL_MindFlayerPatroller = State{ function()
+    --------------------------------MODULE--------------------------------
+    --------------------------------PARAMS--------------------------------
+    params.patrolSpline = {type = EParamType.String, required = false, help = "Possible routes from where it will appear."}
+    --------------------------------LOCAL---------------------------------
+    local spline = Spline(params.patrolSpline)
+    local isPatrolling = true
+    --------------------------------NODES---------------------------------
+    nodes.Patrol = Action{ 
+    function()
+        try
+            DoPatrol(spline, false, MovementSpeed.Walk)
+        catch e if ls.CheckType(e, error.StartPatrolFailed) then
+            DebugText(me, "StartPatrolFailed")
+            splineIsBorked = true
+        end
+    end,
+    Valid = function()
+        return isPatrolling
+    end}
+
+    nodes.Idle = Action {
+    function()
+        Sleep(1.0)
+    end,
+    Valid = function()
+        return not isPatrolling
+    end
+    }
+
+    --------------------------------EVENTS---------------------------------
+    events.Deactivated = function()
+        isPatrolling = false
+    end
+
+    events.Activated = function()
+        isPatrolling = true
+    end
+end}

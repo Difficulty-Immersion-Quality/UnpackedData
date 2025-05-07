@@ -1,0 +1,88 @@
+game.states.LOW_HagSurvivors_HagSpy = State{function()
+
+    modules = {"shared.dialog","shared.character",}
+
+    local canAD = true
+    local initialHagSurvivorsGroupAD = Dialog("LOW_HagSurvivors_AD_AmbientGroupConversation_61c05f63-0544-4d16-39f2-89545365cfb8")
+    local postFirstSurvivorsMeeting = Flag("LOW_HagSurvivors_State_MetSurvivors_e60750e6-26bc-4b80-a782-32dcc7d1e397")
+    local voodooDollDestroyed = Flag("LOW_HagSurvivors_State_DollDestroyed_e99c5e75-57c4-4a7a-be5c-0ce8e3724e60")
+    local hagSpyAggroedFlag = Flag("LOW_HagSurvivors_State_HagSpyAggroed_74eca7c7-e83b-4f07-ac32-beac7cd5eff7")
+    
+    local writingWorldBehavior = Dialog("BHVR_WRLD_LOW_HagSurvivors_HagSpyWriting_9334ae43-5d97-b84e-c6b9-9dd544e92482")
+    local sceneTrigger = Entity("S_LOW_HagSpy_Writing_TimelineSceneTrigger_e1f5c7fe-4bde-4ba1-82e2-6869e09c3bfb")
+
+    local adrielle = Entity("S_LOW_HagSurvivors_Adrielle_aa38af5c-9c75-4b2e-89e3-0cc1b995dbd6")
+    local kleidunn = Entity("S_LOW_HagSurvivors_Kleidunn_54acca8b-2dab-4132-883e-6948bd11b8f0")
+    local maskOfRegret = Entity("S_HAG_Hag_MaskedVictim1_d2832662-4a12-4565-bfe2-094b93ae8af8")
+
+    nodes.initialHagSurvivorsGroupAD = Action {
+        CanEnter = function()
+            return canAD and not GetFlag(postFirstSurvivorsMeeting) and not GetFlag(hagSpyAggroedFlag)
+        end,
+
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                    initialHagSurvivorsGroupAD,
+                    {
+                        waitForCompletion = false,
+                        allowNilSpeakers = true
+                    },
+                    me,
+                    adrielle,                
+                    kleidunn,
+                    mod.dialog.IsSpeakerAvailable(maskOfRegret) and maskOfRegret or nil
+                )
+        end,
+
+        OnLeave = function()
+            StartTimer(me, "LOW_HagSurvivors_InitialConversationADTimer", math.random(40, 60), 0)
+        end
+    }
+
+    nodes.IntroPosition = Proxy {
+        OnEnter = function()
+            StartTimer(me, "LOW_HagSurvivors_InitialConversationADTimer", 2, -1)
+        end,
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_HagSurvivors_HagSpySpot_fb54b8c1-9697-4edc-9f4a-dba4414d2028"
+        },
+        Valid = function()
+            return not GetFlag(postFirstSurvivorsMeeting) and not GetFlag(hagSpyAggroedFlag)
+        end
+    }
+
+    nodes.TakingNotes = Action {
+
+        function()
+            StartBehaviorDialog(writingWorldBehavior, sceneTrigger.Trigger, true, me)
+            Sleep(math.random(2.0,4.0))
+        end,
+
+        Valid = function()
+            return not GetFlag(voodooDollDestroyed) and not GetFlag(hagSpyAggroedFlag)
+        end,
+
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true, writingWorldBehavior)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(5.0)
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_HagSurvivors_InitialConversationADTimer") then
+            canAD = true
+        end
+    end
+
+    events.DialogStarted = function(e)
+        if(e.Instance.DialogUUID == initialHagSurvivorsGroupAD.Guid) then
+            canAD = false
+        end
+    end
+end}

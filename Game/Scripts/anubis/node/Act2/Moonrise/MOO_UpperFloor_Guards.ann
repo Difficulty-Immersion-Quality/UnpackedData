@@ -1,0 +1,224 @@
+game.states.UpperFloorGuard000_Patrol = State{ function ()
+    description = [[Patrol around the UpperFloor till triggering Sit, leading to PlayCards]]
+
+    modules = { "shared.dialog", "shared.util" }
+
+    --------------------------------FLAG--------------------------------
+    local sittingFlag = Flag("MOO_UpperFloor_State_SittingGuard000_573718a4-bc2d-44e9-8794-a28d3356c0b2")
+
+    --------------------------------BOOLS--------------------------------
+    local isLooking = false
+    local doPointBehaviour = false
+    local isSitting = false
+    local isPlayingCards = false
+
+    --------------------------------INT--------------------------------
+    local patrolCount = 0
+
+    --------------------------------NODES--------------------------------
+    self.Valid = function()
+        return doPointBehaviour
+    end
+
+
+    nodes.Sit = Proxy {
+        game.states.Sit,
+        params = {
+            seat = "S_MOO_UpperGuardChair_000_7d693e73-cc2a-4461-ae3c-507e52824770",
+            reactToDangerousSurface = true,
+            sitIdle = StateRef{game.states.PlayCards,
+                OtherGuard = [[S_MOO_UpperGuard_001_3b5ad058-c872-4b1c-933b-2d8767b28aed]],
+                IsADLead = true
+            }
+        },
+
+        Valid = function()
+            return GetFlag(sittingFlag)
+        end,
+    }
+
+    nodes.LookAround = Action {
+        CanEnter = function()
+            return isLooking
+        end,
+        
+        OnEnter = function()
+            isLooking = false    
+        end,
+
+        function()
+            mod.util.SleepRandom(10.0, 20.0)
+            SetFlag(sittingFlag)
+        end,
+
+        OnLeave = function()
+            SetFlag(sittingFlag)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            mod.util.SleepRandom(2.0, 6.0)
+            doPointBehaviour = false
+        end,
+
+        OnLeave = function()
+            doPointBehaviour = false
+        end
+    }
+
+    --------------------------------EVENTS--------------------------------
+
+    events.SplineControlPointReached = function(e)
+        if e.Event == "MOO_UpperFloorGuard_Overlook" then
+            patrolCount = patrolCount + 1
+            if patrolCount >= 3 then
+                patrolCount = 0
+                isLooking = true
+                doPointBehaviour = true
+            end
+        end
+    end
+
+end
+}
+
+game.states.UpperFloorGuard001_Patrol = State{ function ()
+    description = [[Patrol around the UpperFloor till other guard triggers Sit, leading to PlayCards]]
+
+    modules = { "shared.util" }
+    --------------------------------ENTITY--------------------------------
+    local chair = Entity("S_MOO_UpperGuardChair_001_89f1b607-b564-42a4-9970-d4a495272d5c")
+
+    --------------------------------FLAG--------------------------------
+    local sittingFlag = Flag("MOO_UpperFloor_State_SittingGuard000_573718a4-bc2d-44e9-8794-a28d3356c0b2")
+
+    --------------------------------BOOLS--------------------------------
+    local isLooking = false
+    local doPointBehaviour = false
+    local isSitting = false
+    local isPlayingCards = false
+
+    --------------------------------INT--------------------------------
+    local patrolCount = 0
+
+    --------------------------------NODES--------------------------------
+    self.Valid = function()
+        return doPointBehaviour
+    end
+
+
+    nodes.Sit = Proxy {
+        game.states.Sit,
+        params = {
+            seat = "S_MOO_UpperGuardChair_001_89f1b607-b564-42a4-9970-d4a495272d5c",
+            reactToDangerousSurface = true,
+            sitIdle = StateRef{game.states.PlayCards,
+                OtherGuard = [[S_MOO_UpperGuard_000_556cec90-5ea1-4054-9874-abd8ee042703]],
+                IsADLead = false
+            }
+        },
+
+        Valid = function()
+            return GetFlag(sittingFlag)
+        end,
+    }
+
+    nodes.Fallback = Action{
+        function()
+            mod.util.SleepRandom(2.0, 6.0)
+            doPointBehaviour = false
+        end,
+
+        OnLeave = function()
+            doPointBehaviour = false
+        end
+    }
+
+    --------------------------------EVENTS--------------------------------
+
+    events.SplineControlPointReached = function(e)
+        patrolCount = patrolCount + 1
+        if GetFlag(sittingFlag) then
+            doPointBehaviour = true
+            patrolCount = 0
+        elseif patrolCount >= 20 then
+            doPointBehaviour = true
+            SetFlag(sittingFlag)
+        end
+        
+    end
+
+end
+}
+
+game.states.PlayCards = State{function ()
+    description = [[State plays during Sit, in which an AD and anims will play when the other guard is in sight]]
+
+    modules = { "shared.dialog", "shared.util" }
+
+    --------------------------------PARAMS--------------------------------
+    params.OtherGuard = {type = EParamType.String}
+    params.IsADLead = {type = EParamType.Bool}
+
+    --------------------------------ENTITY--------------------------------
+    local otherGuard = Entity(params.OtherGuard)
+    
+    --------------------------------FLAG--------------------------------
+    local sittingFlag = Flag("MOO_UpperFloor_State_SittingGuard000_573718a4-bc2d-44e9-8794-a28d3356c0b2")
+
+    --------------------------------ANIMATIONS--------------------------------
+    local cardAnims = {
+        Animation("CUST_PlayingCard_DrawCard_01_368a805d-511d-44a7-b841-d4c4b4310a97"),
+        Animation("CUST_PlayingCard_LookAround_01_53347c45-2c57-4dde-9c94-9fff8700b4d5"),
+        Animation("CUST_PlayingCard_LookCard_01_ae1a23f6-4a1f-4683-8c13-a6e027fe782e"),
+        Animation("CUST_PlayingCard_PlayCard_01_f9d98858-3818-433d-8181-4d00771f0978"),
+        Animation("CUST_PlayingCard_ScratchHead_01_d75b488a-c242-43d6-aafb-65935751f321"),
+        Animation("CUST_PlayingCard_Still_01_7c545f90-53dc-4eb6-a123-7ec919bc820e"),
+        Animation("CUST_PlayingCard_ThrowCard_01_bd35dafd-3e36-421d-a3ce-6f20ea6e6693")
+    }
+    local randomAnim 
+    --------------------------------INT--------------------------------
+    local waitCount = 0
+
+    --------------------------------DIALOG--------------------------------
+    local AD = Dialog("MOO_UpperFloor_AD_ImpatientGuards_bf33d8fe-0e34-cbe5-5164-201a6164f228")
+
+    --------------------------------NODES--------------------------------
+    nodes.PlayCards = Action {
+        function()
+            if CanSee(me, otherGuard) and not otherGuard.Character.IsDead then
+                if params.IsADLead then
+                    mod.dialog.StartCheckedAutomatedDialog(
+                        AD,
+                        {
+                            waitForCompletion = false
+                        },
+                        me,
+                        otherGuard
+                    )
+                end
+                for i = 1, 4, 1 do
+                    randomAnim = math.random(1, #cardAnims)
+                    PlayAnimation(cardAnims[randomAnim], true, false)
+                end
+                mod.util.SleepRandom(10.0, 20.0)
+                ClearFlag(sittingFlag)
+            else
+                Sleep(15)
+                waitCount = waitCount + 1 
+                if waitCount >= 4 then
+                    DebugText(me, "Other guard did not arrive")
+                    ClearFlag(sittingFlag)
+                end
+            end
+        end,
+
+        OnLeave = function()
+            ClearFlag(sittingFlag)
+            waitCount = 0
+        end
+    }
+
+end
+}

@@ -1,0 +1,95 @@
+game.states.HAV_Inspector = State{function()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    description = [[Stand guard until prisoners are in position, then inspects them one by one.]]
+
+    local inspectorPos = Entity("S_HAV_InspectorPos_f1d24ba4-0f89-499e-9210-1b90b7dee8b4")
+    local inspectAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local lineupReadyFlag = Flag("HAV_SavingPrisoners_Event_InspectionReady_71a80c02-6254-48b8-bab0-a5e0b5022120")
+    local inspectSpline = Spline("S_HAV_InspectionSpline_799aa5f6-4c4b-4be3-a7fb-433215fd5b7d")
+    local inspectionFinishedFlag = Flag("HAV_SavingPrisoners_Event_InspectionFinished_4cc39f58-ad6d-e898-0a20-953e2cd61abc")
+    local inspectionCounter = 0
+    local inspectionTotal = 0
+    local readyForInspectionCounter = 0
+    local inspectionPositions = {
+        "S_HAV_ArrivalInspectionPos_001_7253799d-b02d-46e9-b295-e15a3df2e8a7",
+        "S_HAV_ArrivalInspectionPos_002_0b25c9fe-b4f6-4286-91c2-ec23ed923c3b",
+        "S_HAV_ArrivalInspectionPos_003_16f6f450-6a95-4370-9e2c-2902dc33349d",
+        "S_HAV_ArrivalInspectionPos_004_d8a7604b-9eb2-41e5-a744-20c93271baac",
+        "S_HAV_ArrivalInspectionPos_005_93fcd05e-7797-4736-8501-039ea3f0dc67",
+        "S_HAV_ArrivalInspectionPos_006_f13b536d-8b98-40c4-be1c-d6fcddfffd8e",
+        "S_HAV_ArrivalInspectionPos_007_c84ccc58-d996-4de4-a4a0-224b37d710a5"
+    }
+    local doPatrol = true
+
+    nodes.WaitForLineup = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params={trigger = "S_HAV_InspectorPos_f1d24ba4-0f89-499e-9210-1b90b7dee8b4"},
+        Valid = function()
+            return not GetFlag(lineupReadyFlag)
+        end      
+    }
+
+    nodes.InspectionOver = Action{
+        function()
+            SteerTo(inspectorPos)
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return GetFlag(inspectionFinishedFlag)
+        end
+    }
+
+    nodes.InspectionPatrol = Action {
+        function()
+            DoPatrol(inspectSpline, false, MovementSpeed.Stroll)
+        end,
+        Valid = function()
+            return doPatrol
+        end
+    }
+
+    nodes.Inspect = Action {
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+        function()
+            LookFrom(inspectSpline)
+            PlayAnimation(inspectAnim, true, false)
+            doPatrol = true
+        end,
+        OnLeave = function()
+            doPatrol = true
+        end
+    }
+
+    --Inspection spots get assigned left to right. Count them to know when to stop.
+    events.EntityEvent = function(e)
+        if(e.Event == "HAV_SavingPrisoners_SetInspectionPos") then
+            inspectionTotal = inspectionTotal + 1
+        elseif(e.Event == "HAV_SavingPrisoners_AtInspectionPos") then
+            readyForInspectionCounter = readyForInspectionCounter + 1
+            if(readyForInspectionCounter == inspectionTotal) then
+                SetFlag(lineupReadyFlag)
+            end
+        end
+    end
+
+    events.CaretSplineControlPointReached = function(e)
+        SetFlag(inspectionFinishedFlag)
+    end
+
+    events.SplineControlPointReached = function(e)
+        DebugText(me, "Reached inspection point!")
+        if(inspectionCounter < inspectionTotal) then
+            doPatrol = false    --TODO Check if someone is actually there and only make the guard stop if there is.
+            inspectionCounter = inspectionCounter + 1
+        else
+            doPatrol = false
+            SetFlag(inspectionFinishedFlag)
+        end
+    end
+
+    
+end}

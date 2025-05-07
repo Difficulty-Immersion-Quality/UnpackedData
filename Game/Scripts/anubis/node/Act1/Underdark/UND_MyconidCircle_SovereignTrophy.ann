@@ -1,0 +1,83 @@
+game.states.UND_MyconidCircle_SovereignTrophy = State{function()
+    description = [[
+        Special state for both Brodding Myconid and Sovereign to place the Drow Nere's head
+        on a trophy place.
+    ]]
+
+    local nereHeadItem = Entity("S_UND_MyconidRevenge_NereHead_ac566f0d-9a24-4b91-a703-af913494ef0b")
+    local nereTrophyPosTrigger = Entity("S_UND_MyconidRevenge_NereHeadTrophyTrigger_65166556-36ba-4f21-a2df-2865010d5fc2")
+    local nereTrophySovereignTrigger = Entity("S_UND_MyconidRevenge_SovereignTrophyPosition_dcfceed9-2ae0-4e55-aa1d-7be3569a3ee8")
+    local nereHeadTrophyTrigger = Entity("S_UND_MyconidRevenge_NereHeadTrophyTrigger_65166556-36ba-4f21-a2df-2865010d5fc2")
+    local placingHeadAnim = Animation("CUST_PlacingHead_01_edcdcd63-7417-4cb8-b439-0416a5e0e79e")
+    local hasNereHeadFlag = Flag("UND_MyconidRevenge_State_HasNereHead_2eacf3d4-e7ce-4f76-8228-954ff5bfd6a4")
+
+    local placingTrophy = false
+    local needTransformation = false
+
+    modules = {"shared.moveto"}
+
+    self.Valid = function()
+        return placingTrophy
+    end
+
+    nodes.MoveToTrophyPlace = Action {
+        function()
+            if not mod.moveto.MoveToPoint(nereTrophySovereignTrigger, MovementSpeed.Stroll, me) then
+                Sleep(3)
+            else
+                LookFrom(nereTrophySovereignTrigger)
+            end
+        end,
+        CanEnter = function()
+            return GetDistance2DTo(me, nereTrophySovereignTrigger) >= 1
+        end
+    }
+
+    nodes.DropTrophy = Action {
+        function()
+            SetEntityEvent(me, "UND_MyconidRevenge_Event_PrepareHeadTrophy")
+            SteerTo(nereHeadTrophyTrigger)
+            PlayAnimation(placingHeadAnim, false, false)
+            Sleep(0.55)
+            SetEntityEvent(me, "UND_MyconidRevenge_Event_PlaceNereHeadTrophy") -- Anubis lacks some of the calls, so we'll do placement in Osiris
+            Sleep(5.0)
+            needTransformation = true
+        end,
+        CanEnter = function()
+            return GetDistance2DTo(me, nereTrophySovereignTrigger) < 1
+        end,
+        Valid = function()
+            return not needTransformation
+        end
+    }
+
+    nodes.TransformHead = Action {
+        function()
+            if GetDistance2DTo(nereHeadItem, nereTrophyPosTrigger) < 2 then
+                Sleep(1)
+                try
+                    UseSpell("Target_UND_MyconidSovereign_FakeAnimatingSpores", nereHeadItem, nil, nil, nil, true, true, true, false)
+                    Sleep(5)
+                    placingTrophy = false
+                catch e if ls.CheckType(e, error.UseSpellFailed) then
+                    DebugText(me, "Failed to cast: UND_MyconidSovereign_FakeAnimatingSpores")
+                    Sleep(5.0)
+                end
+            else
+                needTransformation = false
+                placingTrophy = false                
+            end
+        end,
+        CanEnter = function()
+            return needTransformation and GetDistance2DTo(me, nereTrophySovereignTrigger) < 1
+        end
+    }
+
+    -- Events
+    events.FlagSet = function(e)
+        if e.Flag == hasNereHeadFlag.Guid and e.Entity == me then
+            placingTrophy = true
+        end
+    end
+end
+}

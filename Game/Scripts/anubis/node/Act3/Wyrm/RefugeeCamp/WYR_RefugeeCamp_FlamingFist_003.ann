@@ -1,0 +1,114 @@
+game.states.WYR_RefugeeCamp_FlamingFist_003 = State { function ()
+
+    description = [[ 
+        Simple patroling behaviour for the flaming fist inside the big barn.
+    ]]
+    
+    modules = { "shared.math", "shared.items" }
+
+    -----------------------------------------
+    -- local state section
+    local patrolSpline = Spline("S_WYR_RefugeeCamp_FlamingFist_003_PatrolSpline_6530a703-f563-4334-acdf-433fd2f19ce8")
+    local cratesCheckingAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local restAnim = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+
+    local targetSplineIndex = -1
+    local canWalkOnSpline = true
+    local splineEvent = ""
+
+    -----------------------------------------
+    -- node section
+    nodes.Patroling = Action {
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Stroll, targetSplineIndex, false)
+        end,
+        OnLeave = function()
+            if canWalkOnSpline then
+                ShortPatrolInterrupt()
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end
+    }
+
+    nodes.PatrolPointIdle = Selector{
+        function(nodes)
+            if splineEvent == "WYR_BigBarn_SplineEvent_CheckCrates" then
+                return nodes.CheckCrates
+            elseif splineEvent == "WYR_BigBarn_SplineEvent_Rest" then
+                return nodes.Rest
+            elseif splineEvent == "WYR_BigBarn_SplineEvent_CheckPig" then
+                return nodes.CheckPig
+            elseif splineEvent == "WYR_BigBarn_SplineEvent_LookFar" then
+                return nodes.Waiting -- todo
+            else
+                return nodes.Waiting
+            end
+        end,
+        Valid = function()
+            return not canWalkOnSpline and splineEvent ~= ""
+        end,
+        OnLeave = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end,
+        OnInterrupt = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.CheckCrates = Action {
+        function()
+            LookFrom(patrolSpline)
+            PlayAnimation(cratesCheckingAnim)
+            if math.random() > 0.5 then
+                LookFrom(patrolSpline)
+                PlayAnimation(cratesCheckingAnim)
+            end
+            Sleep(mod.math.random(0.5, 1.2))
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.Rest = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(1)
+            PlayAnimation(restAnim)
+            Sleep(mod.math.random(1.2, 2.5))
+            canWalkOnSpline = true
+        end,
+    }
+
+    -- todo
+    nodes.PatrolPointIdle.CheckPig = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(mod.math.random(4, 6))
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.Waiting = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(mod.math.random(5, 7))
+            canWalkOnSpline = true
+        end
+    }
+
+   -----------------------------------------
+    -- event section
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        if e.Event ~= nil and e.Event ~= "" then
+            canWalkOnSpline = false
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+end}

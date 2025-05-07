@@ -1,0 +1,45 @@
+game.states.WYR_WyrmRock_FFOfficeGuard_004 = State{function ()
+    description = [[Behavior of a guard in Wyrm Rock office. Patrols along a spline, sleeps at one point.]]
+
+    modules = { "shared.math" }
+
+    local patrolSpline = Spline("S_WYR_WyrmRock_FFOfficeGuard_004_Patrol_0d819736-ced8-426a-8f90-15b866ca6d45")
+    local sleep = false
+
+    nodes.Patrol = Action{
+        CanEnter = function()
+            return not sleep
+        end,
+
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+        end
+    }
+
+    nodes.Sleep = Action{
+        CanEnter = function()
+            return sleep
+        end,
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+
+        function()
+            Sleep(1.0)
+        end
+    }
+
+
+    events.SplineControlPointReached = function(ev)
+        if ev.Event == "Sleep" then
+            sleep = true
+            StartTimer(me, "WYR_WyrmRock_FFOfficeGuard_ContinuePatrol", mod.math.random(5.0, 15.0), 0)
+        end
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "WYR_WyrmRock_FFOfficeGuard_ContinuePatrol" then
+            sleep = false
+        end
+    end
+end}

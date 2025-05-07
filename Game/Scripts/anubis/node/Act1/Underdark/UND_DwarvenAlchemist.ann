@@ -1,0 +1,157 @@
+game.states.UND_DwarvenAlchemist = State
+{
+    function ()
+
+        modules = { "gustav.Act1.Underdark", "shared.dialog" }
+
+        local dlg_AloneAD = Dialog("UND_DwarvenAlchemist_AD_8bd0d4b0-d756-4f27-f0a9-da65db552cda")
+        local dlg_FumingAD = Dialog("UND_MushroomHunter_AD_NoblestalkEatenReaction_aff295b5-783c-bea3-dd6c-81732b66a548")
+        local dlg_ReportToWifeAD = Dialog("UND_MushroomHunter_AD_HunterReturned_cf3e60aa-fd3d-d1b1-04be-9e8aa1911c21")
+
+        local fl_MushroomEaten = Flag("UND_MushroomHunter_Event_EatingMushroomDialogEnded_0bcc675e-bf2d-deef-37f0-45375980bf4e")
+        local fl_ReactedOnMushroomBeingEaten = Flag("UND_DwarvenAlchemist_State_ReactedOnMushroomBeingEaten_5f3d9ca8-b7bb-e0d3-f3a8-c6cab3f775ac")
+        local fl_ReportingToWife = Flag("UND_MushroomHunter_State_ReportingToWife_3160b3f2-409f-4a79-a3ae-0cc698e91ef6")
+        local fl_WifeIsFuming = Flag("UND_DwarvenAlchemist_State_Fuming_2689c0e0-4335-4578-9ff0-3080f913dc12")
+        local fl_PlayerCanSeeReunion = Flag("UND_MushroomHunter_State_PlayerCanSeeReunion_b1fa1184-5570-4feb-b32a-2fdb7c4977b8")
+        local fl_KnowsBaelenDead = Flag("UND_MyconidCircle_DwarvenAlchemist_KnowsBaelenDead_0f433f88-52c0-5d11-f9b9-9974251b4c2a")
+        local fl_MushroomDelivered = Flag("UND_MushroomHunter_State_MushroomDelivered_323718a9-231f-4787-b4f5-8ce2fa30af52")
+        local fl_AteMushroom = Flag("UND_MushroomHunter_Event_AteMushroom_617a7a68-9ce9-26e8-883d-7cb98665540c")
+
+        local anim_InspectingPotion = Animation("CUST_InspectingPotion_01_b5842c3c-b6f8-4e71-8e38-7cb6a495e5c2")
+        local anim_InspectingMushroomOnGround = Animation("CUST_InspectingBasket_01_6b69a357-9f1d-448e-91b8-b2c26b2309e0")
+        local anim_InspectingMushroom = Animation("CUST_InspectingMushroom_01_b2995e79-175c-4f0d-9e0d-f166a45ada1b")
+
+        local ch_hunter = Entity("S_GLO_Baelen_711bd763-780d-4132-9662-3a8a06da6b1b")
+        local tr_InspectPotionPosition = Entity("S_UND_MushroomHunter_Alchemist_InspectPotionPosition_7c63e4b3-6bf8-4d3f-8161-641ce7453c14")
+        local tr_InspectMushroomPosition = Entity("S_UND_MushroomHunter_Alchemist_InspectMushroomPosition_94b6a552-41ac-4167-87df-7664f0dd263b")
+        local tr_InspectMushroomOnGroundPosition = Entity("S_UND_MushroomHunter_Alchemist_InspectingMushroomOnGroundPosition_47aa1fe2-ec1b-49f9-a781-a6459edda2b9")
+        local tr_WanderArea = Entity("S_UND_MushroomHunter_AlchemistWanderArea_7c83c52e-abfa-443f-b4d3-37a84bb5696c")
+        local tr_StoreMushroomsPosition = Entity("S_UND_MushroomHunter_Alchemist_StoreMushroomsPosition_218b4084-315a-4477-a7ea-cc4f7abec37e")
+        local tr_LootMushroomsPosition = Entity("S_UND_MushroomHunter_Alchemist_LootMushroomsPosition_47977952-1fa4-4471-b46e-406e936b8a80")
+
+        local tr_WifeFumingArea = Entity("S_UND_MushroomHunter_FumingTrigger_8d24ab86-9c8f-468a-aec2-fd4acc0bc37b")
+        local tr_HusbandWanderArea = Entity("S_UND_MushroomHunter_HunterWanderArea_fbbeb4ff-982d-4df7-b320-9128c00910ca")
+
+        local potionBehaviorTrigger = Entity("BHVR_WRLD_UND_Derryth_InspectingPotion_SceneTrigger_1d991b0d-e8e1-4b37-a197-619d83f82cb5")
+        local potionBehaviorDialog = Dialog("BHVR_WRLD_UND_Derryth_InspectingPotion_177cf967-763e-3575-bdb3-aa8c2c6ea405")
+        local potion = Entity("S_UND_MyconidCircle_DerrythPotion_f1f05c04-a947-4e76-a61d-fd083ddca5ff")
+
+        local mushroomBehaviorTrigger = Entity("BHVR_WRLD_UND_Derryth_InspectingMushroom_SceneTrigger_090dcc93-1bf2-444c-b6a5-f4bfd877911b")
+        local mushroomBehaviorDialog = Dialog("BHVR_WRLD_UND_Derryth_InspectingMushroom_0d3f9b0c-1aed-87a1-20fd-7c4bfefae153")
+        local mushroom = Entity("S_UND_MyconidCircle_AlchemistDwarf_Mushroom_a76c5e4a-5c75-44ae-b816-0feb9904f230")
+
+        helpers.action.TryStartAloneAD = function()
+            if  not GetFlag(fl_KnowsBaelenDead) or GetFlag(fl_MushroomDelivered) or GetFlag(fl_AteMushroom) then
+
+                DebugText(me, "TALKING")
+                local adResult = mod.dialog.StartCheckedAutomatedDialogRateLimited(dlg_AloneAD, {minDelay = 16.0}, me)
+                if adResult ~= error.RateLimitedAutomatedDialogError.None then
+                    DebugText(me, "Failed StartCheckedAutomatedDialogRateLimited")
+                    Sleep(2.0)
+                end
+
+            end
+        end
+
+        nodes = ImmediateSelector {}
+
+        nodes.State_ListeningToReport_Silent = Action{
+            function()
+                SteerTo(ch_hunter)
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return GetFlag(fl_ReportingToWife) and not GetFlag(fl_PlayerCanSeeReunion)
+            end
+        }
+
+        nodes.State_ListeningToReport = Action{
+            function()
+                SteerTo(ch_hunter)
+                if not IsInDialog(ch_hunter, false) and not IsInDialog(me, false) then
+                    StartAutomatedDialog(dlg_ReportToWifeAD, true, ch_hunter, me)
+                end
+                Sleep(4.0)
+            end,
+            Valid = function()
+                return GetFlag(fl_ReportingToWife) and GetFlag(fl_PlayerCanSeeReunion)
+            end
+        }
+
+        nodes.State_Fuming = Action{
+            function()
+                if not IsInDialog(ch_hunter, false) and not IsInDialog(me, false) then
+                    MoveTo(ch_hunter, MovementSpeed.Stroll, true, false, 2.0, 4.0)
+                    SteerTo(ch_hunter)
+                    StartAutomatedDialog(dlg_FumingAD, true, me, ch_hunter)
+                    Sleep(4.0)
+                else
+                    Sleep(4.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(fl_WifeIsFuming)
+            end
+        }
+
+        nodes.State_HangingAround = Selector{
+            function(nodes)
+                return FindDifferentRandomSelectable(nodes)
+            end
+        }
+
+        --
+        nodes.State_HangingAround.InspectingPotions = Action{
+            function()
+                try
+                    helpers.TryStartAloneAD()
+                    DebugText(me, "Inspecting a potion")
+                    MoveTo(potionBehaviorTrigger, MovementSpeed.Stroll, false, false, 0.1, 0.4)
+                    StartBehaviorDialog(potionBehaviorDialog, potionBehaviorTrigger.Trigger, true, me, potion)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo failed")
+                end
+                Sleep(4.0)
+            end
+        }
+
+        nodes.State_HangingAround.LootMushrooms = Action{
+            function()
+                try
+                    helpers.TryStartAloneAD()
+                    DebugText(me, "Looting mushrooms")
+                    MoveTo(tr_LootMushroomsPosition, MovementSpeed.Stroll)
+                    LookFrom(tr_LootMushroomsPosition)
+                    MoveTo(tr_StoreMushroomsPosition, MovementSpeed.Stroll, false, false, 0.1, 0.4)
+                    LookFrom(tr_StoreMushroomsPosition)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo failed")
+                end
+                Sleep(4.0)
+            end
+        }
+
+        nodes.State_HangingAround.Wander = Action{
+            function()
+                helpers.TryStartAloneAD()
+                DebugText(me, "Wandering")
+                Wander(tr_WanderArea, 4.0)
+                Sleep(4.0)
+            end
+        }
+
+        nodes.State_HangingAround.InspectingMushroom = Action{
+            function()
+                try
+                    helpers.TryStartAloneAD()
+                    DebugText(me, "Inspecting a mushroom")
+                    MoveTo(mushroomBehaviorTrigger, MovementSpeed.Stroll, false, false, 0.1, 0.4)
+                    StartBehaviorDialog(mushroomBehaviorDialog, mushroomBehaviorTrigger.Trigger, true, me, mushroom)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo failed")
+                end
+                Sleep(4.0)
+            end
+        }
+    end
+}

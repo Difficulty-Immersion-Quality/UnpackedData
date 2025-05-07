@@ -1,0 +1,93 @@
+game.states.WYR_WyrmRock_Bodyguard = State{function()
+
+    description = [[Bodyguards of patriars in Wyrmrock sit in Mess hall waiting for their hirers]]
+
+    modules = { "shared.util" }
+
+    params.chair = { type = EParamType.String, required = true, help = [[Sitting object for bodyguard]] }
+    params.seatTrigger = { type = EParamType.String, required = true, help = [[Trigger for chair]] }
+    params.sitIdle = {type = EParamType.State, required = false, default = StateRef{game.states.Dummy},
+        help = [[Behaviour to perform while sitting]]
+    }
+    params.nonSitIdle = {type = EParamType.State, required = false, default = StateRef{game.states.Dummy},
+        help = [[Behaviour to perform while seat is removed/destroyed]]
+    }
+
+    local weAreReinforments = Flag("WYR_KillDirectorGortash_State_ReinforcementsEngaged_d91b5175-9518-490e-85f8-f2365a5f2980")
+    local audienceHall = Entity("S_WYR_WyrmRock_AudienceHallArea_a078f420-9f5e-452b-9391-e96e754b61c8")
+    local lookAround = {
+        Animation("CUST_Investigating_LookingAround_01_dfbe749c-d0c2-4f4f-91cf-f1caaec3f3bf"),
+        Animation("CUST_Investigating_LookingAround_02_ab739447-e85f-4fca-b1d4-fb783d61fa9c"),
+        Animation("CUST_Investigating_LookingAround_03_41d0a2ea-f16e-435c-bbf3-a8499b873fd5"),
+    }
+
+    nodes.Sit = Proxy {
+        Valid = function()
+            return not GetFlag(weAreReinforments, me)
+        end,
+
+        game.states.Sit,
+        params = {
+            seat = params.chair,
+            seatTrigger = params.seatTrigger,
+            sitOnGroundAsFallback = false,
+            sitIdle = params.sitIdle,
+            nonSitIdle = params.nonSitIdle,
+        }
+    }
+
+    nodes.Reinforcements = Action{
+        function()
+            local pos = TriggerGetRandomPosition(audienceHall.Trigger)
+            pos = FindValidPosition(pos, 10.0, me, true)
+            MoveTo(pos, MovementSpeed.Walk, false, false, 0.0, 1.0, false)
+            --Wander(audienceHall, math.random(10, 20), MovementSpeed.Walk, nil, false)
+            local _, anim = mod.util.RandomFrom(lookAround)
+            try
+                PlayAnimation(anim, true, false)
+            catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                mod.util.SleepRandom(1.0, 5.0)
+            end
+        end
+    }
+
+end}
+
+game.states.WYR_WyrmRock_Bodyguard_Chat = State{function()
+
+    description = [[Chatting while sitting for bodyguards of patriars in Wyrmrock Mess hall]]
+
+    modules = { "shared.dialog", "shared.util" }
+
+    params.AD = { type = EParamType.String, required=false, default=nil, help=[[The AD to play.]] }
+
+    params.partners = {type = EParamType.String, arrayRange = "..", required = false, default = nil, help = [[
+        Dialog Partner list
+    ]]}
+
+    local dialog = Dialog(params.AD)
+    local partners = {}
+
+    self.OnInit = function()
+        if params.partners then
+            for _, partner in ipairs(params.partners) do
+                table.insert(partners, Entity(partner))
+            end
+        end
+    end
+
+    nodes.Chat = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                dialog,
+                {
+                    waitForCompletion = true,
+                    minDelay = 30.0,
+                },
+                me,
+                partners
+            )
+            mod.util.SleepRandom(5.0, 15.0)
+        end
+    }
+end}

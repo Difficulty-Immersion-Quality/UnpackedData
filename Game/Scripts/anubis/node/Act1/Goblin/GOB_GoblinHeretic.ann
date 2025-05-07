@@ -1,0 +1,64 @@
+game.states.GOB_GoblinHeretic = State{function()
+    description = [[Anubis state for S_GOB_GoblinHeretic]]
+
+    local inPrisonFlag = Flag("GOB_GoblinHeretic_InPrison_200696a2-d520-bc2c-a7e4-42c354672a07")
+    local jumpTrigger = Entity("S_GOB_GoblinHeretic_OutOfCageTrigger_85665c4f-da0f-49f1-8af5-0ea1b35f9914")
+    local saved = false
+    local animationThinking = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+
+    nodes.OutOfTheCage = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_GOB_GoblinHeretic_OutOfCageTrigger_85665c4f-da0f-49f1-8af5-0ea1b35f9914"
+        },
+        Valid = function()
+            return not GetFlag(inPrisonFlag, me)
+        end
+    }
+
+    nodes.PlayAnimation = Action {
+        function()
+            try
+                PlayAnimation(animationThinking, true, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed ) then
+                DebugText(me, "Animation failed")
+            end
+            Sleep(10 + 5 * math.random())
+
+        end,
+        Valid = function()
+            return not saved and GetFlag(inPrisonFlag, me)
+        end,
+    }
+
+    nodes.InCage = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_GOB_GoblinHeretic_InCagePos_bee940fb-9d2a-4f07-b9c4-1b9e04034e88"
+        },
+        Valid = function()
+            return not saved and GetFlag(inPrisonFlag, me)
+        end
+    }
+
+    nodes.Jump = Action {
+        function()
+            try
+                UseSpell("Projectile_Jump", jumpTrigger,  nil, nil, nil, true, true)
+                Sleep(3)
+            catch e if ls.CheckType(e, error.UseSpellFailed) then
+                DebugLog(me.Name.." UseSpellFailed: "..tostring(e))
+                Sleep(5.0)
+            end
+        end,
+        Valid = function()
+            return saved and GetFlag(inPrisonFlag, me)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "GOB_GoblinHeretic_Saved" then
+            saved = true
+        end
+    end
+end}

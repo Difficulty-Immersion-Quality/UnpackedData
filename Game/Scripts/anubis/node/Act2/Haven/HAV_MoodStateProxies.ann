@@ -1,0 +1,126 @@
+game.states.HAV_MoodStateProxies = State{
+    function()
+        modules = { "shared.util" }
+
+        params.CareForTorches = { type = EParamType.Bool, required = false, default = true,
+            help = [[Allows switching torches behavior off for those who shouldn't care]]}
+
+        -- Mood states
+        local fl_Mood_Protected = Flag("HAV_Mood_State_Protected_2ba16a80-e4f8-40b5-aaf5-37791bd76542")
+        local fl_Mood_GhoulAttack = Flag("HAV_Mood_State_GhoulAttack_ffe29cf4-8ad3-4b8e-881b-e1c9be99c6c4")
+        local fl_Mood_Siege = Flag("HAV_Mood_State_Siege_b509af8b-a331-47ac-8230-3b8c5ef9956b")
+        local fl_Mood_Alert = Flag("HAV_Mood_State_Alert_b073eeb9-1d29-449f-baf5-74307e63d085")
+        local fl_Mood_Unprotected = Flag("HAV_Mood_State_Unprotected_7ac5d939-2c81-4871-81a5-fd5c6a0adba1")
+        local liftedCurse = Flag("GLO_LiftingTheCurse_State_BreathHasBeenRestored_2113b54e-a140-4aa0-97ac-219fa7b7d038")
+        local humanoid = Tag("HUMANOID_7fbed0d4-cabc-4a9d-804e-12ca6088a0a8")
+
+        description = [[Contains a proxy for each Mood state in Haven. To be used on all NPCs in Haven.]]
+
+        params.ProtectedState = { type = EParamType.State,
+            required = true,
+            help = [[Behavior of the character in Protected state]]
+        }
+        params.GhoulAttackState = { type = EParamType.State,
+            required = false, default = nil,
+            help = [[Behavior of the character in Ghoul Attack state]]
+        }
+        params.AlertState = { type = EParamType.State,
+            required = false, default = nil,
+            help = [[Behavior of the character in Alert state]]
+        }
+        params.SiegeState = { type = EParamType.State,
+            required = false, default = nil,
+            help = [[Behavior of the character in Siege state]]
+        }
+        params.UnprotectedState = { type = EParamType.State,
+            required = false, default = nil,
+            help = [[Behavior of the character in Unprotected state]]
+        }
+
+        nodes.GhoulAttack = Proxy{
+            Valid = function()
+                return GetFlag(fl_Mood_GhoulAttack)
+            end,
+            params.GhoulAttackState
+        }
+
+        nodes.LightUp = Action {
+            function()
+                local dousedTorch = me.Blackboard.GetFact("HAV_Torches_TakeCareOf")
+                if HasAppliedStatus(dousedTorch, "BURNING") then
+                    me.Blackboard.ClearFact("HAV_Torches_TakeCareOf")
+                    return
+                end
+
+                if MoveTo(dousedTorch, MovementSpeed.Walk, false, false, 0.2, 1.5, false) == error.MovementError.None then
+                    SteerTo(dousedTorch)
+                    if not HasAppliedStatus(dousedTorch, "BURNING") then
+                        ApplyStatus(dousedTorch, "BURNING")
+                        mod.util.SleepRandom(0.5, 1.5)
+                        me.Blackboard.ClearFact("HAV_Torches_TakeCareOf")
+                    end
+                end
+            end,
+
+            CanEnter = function()
+                return params.CareForTorches and IsTagged(me, humanoid) and not GetFlag(liftedCurse)
+                    -- if someone decides to enable this behavior only for these states, disable HAV_DouseTorch crime for other states
+                    -- and GetFlag(fl_Mood_Siege) or GetFlag(fl_Mood_Unprotected)
+            end,
+
+            Valid = function()
+                return me.Blackboard.GetFact("HAV_Torches_TakeCareOf") ~= nil
+            end,
+
+            OnEnter = function()
+                me.Blackboard.SetFact("HAV_Torches_CareInProgress", 1)
+            end,
+            OnLeave = function()
+                me.Blackboard.ClearFact("HAV_Torches_CareInProgress")
+            end,
+            OnInterrupt = function()
+                me.Blackboard.ClearFact("HAV_Torches_CareInProgress")
+            end
+        }
+
+        nodes.Alert = Proxy{
+            Valid = function()
+                return GetFlag(fl_Mood_Alert)
+            end,
+            params.AlertState
+        }
+
+        nodes.Siege = Proxy{
+            Valid = function()
+                return GetFlag(fl_Mood_Siege)
+            end,
+            params.SiegeState
+        }
+
+        nodes.Unprotected = Proxy{
+            Valid = function()
+                return GetFlag(fl_Mood_Unprotected)
+            end,
+            params.UnprotectedState
+        }     
+
+        nodes.Protected = Proxy{
+            Valid = function()
+                return GetFlag(fl_Mood_Protected)
+            end,
+            params.ProtectedState
+        }
+
+        nodes.Fallback = Proxy{
+            params.ProtectedState
+        }
+
+        events.LevelLoaded = function(e)
+            if params.CareForTorches then
+                me.Blackboard.SetFact("HAV_Torches_CareForTorches", 1)
+            else
+                me.Blackboard.SetFact("HAV_Torches_CareForTorches", 0)
+            end
+        end
+    end
+}

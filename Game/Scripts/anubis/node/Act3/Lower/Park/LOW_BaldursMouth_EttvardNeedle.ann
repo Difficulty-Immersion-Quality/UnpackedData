@@ -1,0 +1,57 @@
+game.states.LOW_BaldursMouth_EttvardNeedle = State{
+    function()
+        modules = {"shared.util"}
+        params.waitTime = {type = EParamType.Number, required = false, default = 6.0, help = [[Wait time.]]}
+        params.patrolSpline = {type = EParamType.String, required = true, help = [[Patrol spline.]]}
+
+        local bWait = false
+        local spPatrol = Spline(params.patrolSpline)
+        local animation = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+        local hasMetFlag = Flag("LOW_BaldursMouth_HasMet_Ettvard_1497e00d-3087-471d-ab01-acdd21497199")
+        local mySeat = Entity("FUR_GEN_House_Chair_Rich_A_014_b963247c-5e38-4e94-a190-875c165c59d9")
+        local timelineDialog = Dialog("BHVR_WRLD_LOW_Elfsong_SitReadPaper_834445e1-2f51-d60b-0b63-9c131a41488a")
+        local sceneTrigger = Entity("BHVR_WRLD_LOW_BaldursMouth_Ettvard_ReadPaper_TimelineSceneTrigger_4d4b036f-5702-4ff8-b917-20c8f65517c2")
+        local AD = Dialog("LOW_BaldursMouth_AD_EttvardMuttering_39a1cc29-379f-6161-fc01-9511544c39cc")
+
+        self.Valid = function()
+            return bWait or GetFlag(hasMetFlag)
+        end
+
+        self.OnLeave = function()
+            bWait = false
+        end
+        
+        nodes.Action_AfterMet = Action{
+            function()
+                if not me.IsReposed then
+                UseItem(mySeat.Item)
+                end
+                StartBehaviorDialog(timelineDialog, sceneTrigger.Trigger, true, me, mySeat)
+                mod.util.SleepRandom(2.5, 7.5)
+                end,
+            Valid = function()
+                return GetFlag(hasMetFlag) 
+            end
+        }
+
+        nodes.Action_Wait = Action{
+            function()
+                LookFrom(spPatrol)
+                PlayAnimation(animation, true, false)
+                bWait = false
+            end,
+            Valid = function()
+                return not GetFlag(hasMetFlag)
+            end
+        }
+
+
+        events.SplineControlPointReached = function(e)
+            if e.Event == "Wait" then
+                bWait = true
+                
+                StartAutomatedDialogRateLimitedImmediate(AD,50.0,12.0,me)
+            end
+        end
+    end
+}

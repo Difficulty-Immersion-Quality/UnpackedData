@@ -1,0 +1,56 @@
+game.states.FOR_SchoolOgre = State{function()
+
+    modules = {"shared.dialog", "shared.util"}
+
+    params.EatingAnimation = {type = EParamType.String, required=false, default=nil, help=[[
+        Eating animation for the ogre
+    ]]}
+
+    local Trig_FOR_SchoolOgre_LookAt
+    local Char_FOR_SchoolOgre1
+    local Char_FOR_SchoolOgre2
+    local Char_FOR_SchoolOgre3
+    local Flag_FOR_SchoolOgres_Event_AggroOnPlayer = Flag("FOR_SchoolOgres_Event_AggroOnPlayer_e87b2a42-1470-d04a-621b-7c6e5f54b000")
+    local Flag_FOR_SchoolOgres_State_Hired = Flag("FOR_SchoolOgres_State_Hired_77d67f5b-540e-92b9-90ab-fa4849ff3901")
+    local Diag_IdleOgres = Dialog("FOR_SchoolOgres_AD_fe8eac12-06e0-3a15-e9e4-c99927d72265")
+    local eatingAnim
+
+    self.OnInit = function()
+        Trig_FOR_SchoolOgre_LookAt = FindEntity("S_FOR_SchoolOgre_LookAt_cb2c39fb-c511-49e5-85f3-fb47b47181d7")
+        Char_FOR_SchoolOgre1 = FindEntity("S_FOR_SchoolOgre1_848b6f10-3ae5-41f6-b1a1-98c34a19ba3f")
+        Char_FOR_SchoolOgre2 = FindEntity("S_FOR_SchoolOgre2_b847c9ba-1b52-4afa-be10-accd07134245")
+        Char_FOR_SchoolOgre3 = FindEntity("S_FOR_SchoolOgre3_62c5741f-061b-4dbc-afe6-5fd2368485ce")
+        eatingAnim = Animation(params.EatingAnimation)
+    end
+
+    nodes.School=Action{
+        function()
+             if (GetDistanceTo(me,Trig_FOR_SchoolOgre_LookAt) > 7.0) then
+                MoveTo(Trig_FOR_SchoolOgre_LookAt)
+            end
+            SteerTo(Trig_FOR_SchoolOgre_LookAt)
+
+            if eatingAnim ~= nil then
+                mod.util.SleepRandom(1.0, 3.0) -- Stagger animation starting so ogres aren't in sync with each other
+                PlayAnimation(eatingAnim, false, true)
+            end
+
+            Sleep(5.0)
+            if (me == Char_FOR_SchoolOgre1 and mod.dialog.AreSpeakersAvailableAndNear(me,7.0,false,false,me,Char_FOR_SchoolOgre2,Char_FOR_SchoolOgre3)) then
+                StartAutomatedDialog(Diag_IdleOgres, true, me, Char_FOR_SchoolOgre2,Char_FOR_SchoolOgre3)
+                Sleep(20.0)
+            end
+        end
+        ,
+        Valid = function()
+            return not GetFlag(Flag_FOR_SchoolOgres_Event_AggroOnPlayer) and not GetFlag(Flag_FOR_SchoolOgres_State_Hired)
+        end
+   }
+
+    nodes.Hired=Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end
+}

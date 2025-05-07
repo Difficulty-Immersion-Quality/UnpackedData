@@ -1,0 +1,131 @@
+game.states.WYR_HiddenGnome = State{function()
+    description = [[A behavior for gnome at workbench]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local atFire = "S_WYR_Ironhand_InitPos_HiddenGnome_e850b71b-9dba-4677-8b87-48020f3bedbd"
+    local atFirePos = Entity("S_WYR_Ironhand_InitPos_HiddenGnome_e850b71b-9dba-4677-8b87-48020f3bedbd")
+    local atRack1 = "S_WYR_HiddenGnome_AtRack1_81c84bbc-86eb-48f8-8291-0e5cf960b3a3"
+    local atRack1Pos = Entity("S_WYR_HiddenGnome_AtRack1_81c84bbc-86eb-48f8-8291-0e5cf960b3a3")
+    local atRack2 = "S_WYR_HiddenGnome_AtRack2_d205cdad-5bfa-46f7-9d10-43a8cc7f7257"
+    local atRack2Pos = Entity("S_WYR_HiddenGnome_AtRack2_d205cdad-5bfa-46f7-9d10-43a8cc7f7257")
+    local atWorkbench = "S_WYR_HiddenGnome_AtWorkbench_602aaf7c-f88e-4749-8206-8ff6839669e2"
+    local atWorkbenchPos = Entity("S_WYR_HiddenGnome_AtWorkbench_602aaf7c-f88e-4749-8206-8ff6839669e2")
+
+    local takeDialog = Dialog("WYR_Ironhand_WB_TakeFromRack_01_f64e2a31-d26d-3f3e-5784-03773550c8c0")
+    local takeSceneTrigger = Entity("WYR_Ironhand_WB_TakeFromRack_01_SceneTrigger_0f866e7b-7aae-468e-b308-7c59d690706a")
+    local tweakDialog = Dialog("WYR_Ironhand_WB_TweakBench_02_e9544949-a4ab-3cea-5ef7-78e53f5fb90c")
+    local tweakSceneTrigger = Entity("WYR_Ironhand_WB_TweakBench_02_SceneTrigger_ae1d4500-1334-4acc-8116-1d9749091d7f")
+    local putDialog = Dialog("WYR_Ironhand_WB_PutOnRack_02_afb1dc1a-505f-204f-e72c-48224066f6a0")
+    local putSceneTrigger = Entity("WYR_Ironhand_WB_PutOnRack_02_SceneTrigger_cc17da85-9566-4c9d-b5e2-ff245e38d0e0")
+
+
+    local choice = {
+        Grab = 1,
+        Work = 2,
+        Drop = 3,
+    }
+    local currentChoice = 1
+    local currentWork = 1
+
+    local probToFire = 0.3
+    local probToDrop = 0.3
+
+
+    nodes.Grab = Selector {
+        CanEnter = function()
+            return choice.Grab == currentChoice
+        end
+    }
+
+    nodes.Grab.Pickup = Action {
+        function()
+            --LookFrom(atRack1Pos)
+            StartBehaviorDialog(takeDialog, takeSceneTrigger.Trigger, true, me)
+            Sleep(0.5)
+            currentChoice = choice.Work
+            currentWork = 1
+        end
+    }
+
+
+    nodes.Work = Selector {
+        CanEnter = function()
+            return choice.Work == currentChoice
+        end
+    }
+
+    nodes.Work.Workbench = Selector{
+        CanEnter = function()
+            return 1 == currentWork
+        end
+    }
+    nodes.Work.Fire = Selector{
+        CanEnter = function()
+            return 2 == currentWork
+        end
+    }
+
+    nodes.Work.Workbench.Work = Action {
+        function()
+            --LookFrom(atWorkbenchPos)
+            StartTimer(me, "Timer_WYR_Ironhand_HiddenGnome_StopBehaviorDialog", mod.math.random(15.0,30.0), 1)
+            StartBehaviorDialog(tweakDialog, tweakSceneTrigger.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_HiddenGnome_StopBehaviorDialog")
+            Sleep(0.5)
+            --if mod.math.CoinToss(probToFire) then
+            --    currentWork = 2
+            --else
+                currentChoice = choice.Drop
+            --end
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_HiddenGnome_StopBehaviorDialog")
+        end
+    }
+
+    nodes.Work.Fire.MoveTo = Proxy {
+        game.states.GLO_StandAtTriggerSplit,
+        params = {
+            trigger = atFire,
+            speed = "Walk",
+        },
+        CanEnter = function()
+            return GetDistanceTo(me, atFirePos) > 0.5
+        end
+    }
+
+    nodes.Work.Fire.Work = Action {
+        function()
+            --LookFrom(atFirePos)
+            DebugText(me, "Warming")
+            Sleep(5.0)
+            currentWork = 1
+        end
+    }
+
+
+    nodes.Drop = Selector {
+        Valid = function()
+            return choice.Drop == currentChoice
+        end
+    }
+
+    nodes.Drop.Drop = Action {
+        function()
+            --LookFrom(atRack2Pos)
+            StartBehaviorDialog(putDialog, putSceneTrigger.Trigger, true, me)
+            Sleep(0.5)
+            currentChoice = choice.Grab
+        end
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_Ironhand_HiddenGnome_StopBehaviorDialog" then
+            DebugText(me, "Graceful Stop")
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    end
+end}

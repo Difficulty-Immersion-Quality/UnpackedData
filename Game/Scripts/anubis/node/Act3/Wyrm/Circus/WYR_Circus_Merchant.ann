@@ -1,0 +1,70 @@
+game.states.WYR_Circus_Merchant = State { function ()
+    description = [[ Behaviour for the kobold merchant. ]]
+
+    modules = { "shared.util", "shared.moveto", "shared.math", "shared.dialog" }
+
+    local advertiseTrigger = Entity("S_WYR_Circus_Merchant_HomePos_52353004-9431-4409-b3c4-25b756e72daa")
+    local nearTableTrigger = Entity("S_WYR_Circus_Merchant_TablePos_ca6ba870-2232-4151-98ba-7ded8c7d8df0")
+    local nearHandTrigger = Entity("S_WYR_Circus_Merchant_DinnerPos_d5249441-f864-4ac2-96cf-7ec7a903d834")
+    local advertiseAD = Dialog("WYR_Circus_AD_Merchant_f2f81ab1-2c6d-b439-1dce-a73e364bb99b")
+    local lookAroundAnim = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7")
+
+    local advertising = true
+    local checkHand = false
+
+    nodes.PonderTable = Action {
+        function()
+            Sleep(mod.math.random(0.5, 1.5))
+            if mod.moveto.MoveToPoint(nearTableTrigger, MovementSpeed.Stroll, me) then
+                LookFrom(nearTableTrigger)
+                PlayAnimation(lookAroundAnim)
+            end
+            Sleep(mod.math.random(0.5, 1.0))
+            checkHand = true
+            advertising = true
+        end,
+        Valid = function()
+            return not advertising and not checkHand
+        end
+    }
+
+    nodes.PonderHand = Action {
+        function()
+            Sleep(mod.math.random(0.5, 1.5))
+            if mod.moveto.MoveToPoint(nearHandTrigger, MovementSpeed.Stroll, me) then
+                LookFrom(nearHandTrigger)
+                PlayAnimation(lookAroundAnim)
+            end
+            Sleep(mod.math.random(0.5, 1.0))
+            checkHand = false
+            advertising = true
+        end,
+        Valid = function()
+            return not advertising and checkHand
+        end
+    }
+
+    nodes.Advertise = Action {
+        function()
+            Sleep(mod.math.random(1.0, 2.0))
+            if mod.moveto.MoveToPoint(advertiseTrigger, MovementSpeed.Stroll, me) then
+                LookFrom(advertiseTrigger)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    advertiseAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                Sleep(mod.math.random(5.0, 7.0))
+                if math.random() > 0.5 then
+                    advertising = false
+                end
+            end
+        end,
+        Valid = function()
+            return advertising
+        end
+    }
+
+end}

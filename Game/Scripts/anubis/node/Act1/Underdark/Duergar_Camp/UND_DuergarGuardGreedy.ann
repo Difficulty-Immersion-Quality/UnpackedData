@@ -1,0 +1,90 @@
+game.states.UND_DuergarGuardGreedy = State{function ()
+
+	modules = {"shared.dialog"}
+
+    params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled.
+    ]]}
+
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is destroyed.
+    ]]}
+
+    local char_myComrade
+    local tr_homePoint
+    
+    local flag_CaveInCleared = Flag("UND_DuergarCamp_State_CaveInCleared_e0d8a48b-e0cf-4cc8-96bc-b637b79ce9bd")
+	local flag_PostMutiny = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+    local d_AD = Dialog("UND_DuergarMutineers_AD_2eac6a04-8e58-1eaf-9ba5-4e8b1e7fa390")
+
+
+	self.OnInit = function()
+        char_myComrade = FindEntity("S_UND_DuergarGuardBored_30fb7e6e-40d2-4e77-b5ea-887f8eb345c9")
+        
+        tr_homePoint = FindEntity("S_UND_DuergarGuardGreedy_HomeTrigger_c1c7a2cd-d87c-4f43-b37c-22f6d07d34d4")
+    end
+
+
+	nodes.State_PostMutiny = Proxy {
+        game.states.UND_DuergarCamp_PostMutiny,
+        params = {PostMutinyPosition = params.PostMutinyPosition},
+        Valid = function()
+            return GetFlag(flag_PostMutiny)
+        end
+    }
+
+    nodes.State_CaveInCleared = Proxy {
+        game.states.UND_DuergarCamp_CaveInCleared,
+        params = {CaveInPosition = params.CaveInPosition},
+        Valid = function()
+            return GetFlag(flag_CaveInCleared)
+        end
+    }
+
+	nodes.State_AtPost = Selector {
+		function(nodes)
+			return GetWeightedCanEnter(nodes,{[nodes.Action_SayAD] = 3,
+												[nodes.Action_IdleAnim] = 10})
+		end
+    }
+    
+    nodes.State_AtPost.Action_SayAD = Action {
+		function()
+			if GetDistanceTo(me, tr_homePoint) > 1.0 then
+				try
+					MoveTo(tr_homePoint)
+				catch e if ls.CheckType(e, error.MovementFailed) then
+					LookAtEntity(tr_homePoint, 3.0)
+					Sleep(2.0)
+				end
+			end
+            LookFrom(tr_homePoint)
+            if mod.dialog.IsSpeakerAvailable(me) then
+                if mod.dialog.IsSpeakerAvailableAndNear(char_myComrade, me, 20.0, false) then
+                    StartAutomatedDialog(d_AD,true,me,char_myComrade)
+				end
+			end
+		end,
+		OnLeave = function()
+			DialogRequestStop(me,d_AD)
+		end
+    }
+
+	nodes.State_AtPost.Action_IdleAnim = Action {
+        function()
+            if GetDistanceTo(me, tr_homePoint) > 1.0 then
+				try
+					MoveTo(tr_homePoint)
+				catch e if ls.CheckType(e, error.MovementFailed) then
+					LookAtEntity(tr_homePoint, 3.0)
+					Sleep(2.0)
+				end
+			end
+			Sleep(10.0)
+		end
+    }
+    
+    nodes.Action_Fallback = function()
+        Sleep(5.0)
+    end
+end}

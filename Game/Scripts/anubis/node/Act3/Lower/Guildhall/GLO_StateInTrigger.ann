@@ -1,0 +1,65 @@
+game.states.GLO_StateInTrigger = State{function ()
+    description = [[ Character adopts state when it is in trigger ]]
+
+    modules = { "shared.math", "shared.params", "shared.util" }
+
+    params.Trigger = {type = EParamType.String, required = true, help=[[
+        The trigger at which the character stands.
+    ]]}
+
+    params.DistanceToTrigger = {type = EParamType.Number, default = 0.5, help=[[
+        Maximum distance to target trigger
+    ]]}
+
+    params.MovementSpeed = {type = EParamType.String, default = "Walk", help=[[
+        Speed to use to move to the trigger
+    ]]}
+
+    params.InTriggerState = {type = EParamType.State, default = StateRef{game.states.Dummy}, help=[[
+        State which the character adopts once in range of the trigger
+    ]]}
+
+    local trigger = nil
+    local speed = nil
+    local ignoreDangerousSurfacesTag = Tag("IGNORE_DANGEROUS_SURFACES_bbf62461-4af4-4631-807a-eb0bd988d9a6")
+
+    self.OnInit = function()
+        trigger = Entity(params.Trigger)
+        speed = MovementSpeed[params.MovementSpeed]
+        if speed == nil then
+            DebugLogCritical("GLO_StateInTrigger: params.speed is malformed: [1]",
+                tostring(params.MovementSpeed))
+            speed = MovementSpeed.Walk
+        end
+    end
+
+    nodes.LookAtDestination = Action{
+        CanEnter = function()
+            return IsInDangerousSurfaceFor(trigger, me.Character)
+                and not IsTagged(me, ignoreDangerousSurfacesTag)
+        end,
+        function()
+            SteerTo(trigger)
+            Sleep(2.0)
+        end
+    }
+
+    nodes.WalkToTrigger = Action{
+        CanEnter = function()
+            return GetDistanceTo(me, trigger) > params.DistanceToTrigger
+        end,
+        function()
+            local moveResult = MoveTo(trigger, speed, false, false, 0.1, 1.0, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(trigger)
+                Sleep(2.0)
+            end
+            LookFrom(trigger)
+        end
+    }
+
+    nodes.StateAtTrigger = Proxy{
+        params.InTriggerState
+    }
+end
+}

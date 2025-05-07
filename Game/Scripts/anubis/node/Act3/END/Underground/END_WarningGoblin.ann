@@ -1,0 +1,74 @@
+game.states.END_WarningGoblin = State{function()
+
+    modules = { "shared.util" }
+
+    local undergroundRegion = Entity("S_END_Underground_SUB_07f16e8a-fc85-4130-a908-1ae0972c3502")
+    local focalPoint = Entity("S_END_DoomedGobboMoveToPoint_f8547291-c4d8-41bb-b940-263ecab0ee92")
+    local facingFocalPoint = false
+    local idleComplete = false
+
+    
+
+    self.Valid = function()
+        return IsInTrigger(me, undergroundRegion.Trigger)
+    end
+
+    nodes.State_Idle = Action{
+        function()
+            facingFocalPoint = true
+            SteerTo(focalPoint)
+        end,
+        Valid = function()
+            return not me.IsInCombat
+        end
+    }
+end
+}
+
+game.states.END_WarningGoblin_Combat = State{function()
+
+    local revertToDefaultCombat = Flag("END_Underground_GoblinCalledForAid_efd1a259-a1e8-4972-8e48-02c00308de97")
+    local helpPosition = Entity("S_END_Underground_GoblinHelpPoint_94b6be6d-ccd1-4123-a47f-479e3b957575")
+
+    nodes.State_SummonAllies = Action{
+        function()
+
+            while not GetFlag(revertToDefaultCombat) and me.CanActInCombatTeamTurn do
+                if not HasActiveStatus(me, "DISENGAGE") then
+                    DebugText(me, "State_InUndergorundCombat")
+                    UseSpell("Shout_Disengage_BonusAction", me, nil, nil, nil, true, true, true)
+                end
+                Sleep(1.0)
+                if not HasActiveStatus(me, "DASH") then
+                    UseSpell("Shout_Dash", me, nil, nil, nil, true, true, true)
+                end
+
+                if me.Character.CanMove then
+                    local moveResult = MoveTo(helpPosition, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+                    if moveResult == error.MovementError.None then
+                        DebugText(me, "Movement Complete")
+                        EndTurn(me)
+                    else
+                        DebugText(me, "Movement to the point failed")
+                        Sleep(1.0)
+                        EndTurn(me)
+                    end
+                else
+                    EndTurn(me)
+                end
+            end
+
+        end,
+        Valid = function()
+            return (GetDistance2DTo(me, helpPosition) > 0.1) and not GetFlag(revertToDefaultCombat)
+        end            
+    }
+
+    nodes.DefaultCombat = Proxy {
+        CanEnter = function()
+            return GetFlag(revertToDefaultCombat)
+        end,
+        game.states.DefaultCombat,
+    }   
+end
+}

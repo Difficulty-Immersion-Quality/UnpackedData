@@ -1,0 +1,350 @@
+game.states.PLA_ZhentDungeon_DoubtingArtist = State{function ()
+
+    params.AD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play.
+    ]]}
+
+    params.regionBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks the ADs for the entire group of characters (prevents overlap)
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks this specific AD from happening (prevents repetition)
+    ]]}
+
+    params.home = {type = EParamType.String,  required = false, default=nil, help=[[
+        Home trigger.
+    ]]}
+
+    params.homeB = {type = EParamType.String,  required=false, default=nil, help=[[
+        Other home trigger while packing
+    ]]}
+
+    modules = {"shared.items"}
+
+    local PLA_DoubtingArtist_State_Leaving = Flag("PLA_DoubtingArtist_State_Leaving_201c1ed0-ecc3-4c25-8f68-8716bd5ca7ae")
+    local PLA_DoubtingArtist_State_FreeBribe = Flag("PLA_DoubtingArtist_State_FreeBribe_4b48199b-dfa4-49f9-8612-79d197e7e3fb")
+    local PLA_NoMoreZhentAround = Flag("PLA_DoubtingArtist_State_FreeNoMoreZhent_31e7355f-9904-47e4-af13-e790a3efcde8")
+    local PLA_ZhentDungeon_State_FallBack = Flag("PLA_ZhentDungeon_State_FallBack_7a94f079-2bc8-495e-99f2-5b04b03a7d1d")
+    local PLA_ZhentDungeon_Door1
+    local exit
+    local noMoreExplosive = false
+    local violentFreedom = false
+
+    local CowerAnim
+    local PaintingPosition
+    local DoorPosition
+
+    local hasInit = false
+
+    local artistFled
+    local madeHostile = false
+
+
+    events.EntityEvent=function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_DoubtingArtist_ExplosiveThreatOver" then
+                noMoreExplosive=true
+            end
+        end
+    end
+
+    -- NoMoreZhentAround before Fallback means the player removed Zhent from the area. The artist has been freed by a violent player which yield FreeViolence state.
+    -- Fallback before NoMoreZhentAround means the fallback happened and Zhent have run away (hence NoMoreZhentAround). The artist has been freed by the fallback, which yield FreeFallback state.
+    events.FlagSet = function(e)
+        if PLA_NoMoreZhentAround ~= nil and e.Flag == PLA_NoMoreZhentAround.Guid then
+            if not GetFlag(PLA_ZhentDungeon_State_FallBack,nil) then
+                violentFreedom = true
+            end
+        end
+        artistFled = FindQuestUpdate(FindQuest("GLO_DoubtingArtist"), "ArtistFled")
+    end
+
+
+    self.OnInit = function()
+        exit = FindEntity("S_PLA_ZhentDungeon_LadderUp_46b911d0-321f-431e-9936-33c793943b78")
+        CowerAnim = Animation("CUST_DebugAsset_CustomAnim_01_Loop_50635108-0b10-4232-820a-aac14df09a75")
+        PaintingPosition = FindEntity("S_PLA_ZhentDungeon_EscapeTrigger3_1_8e5a3a17-cb44-499b-8964-74c14175e676")
+        DoorPosition = FindEntity("S_PLA_ZhentDungeon_WelcomeTrigger_fadb42a8-ae41-4185-bb9b-2d09bfc44701")
+        PLA_ZhentDungeon_Door1 = FindEntity("S_PLA_ZhentDungeon_Door1_b7d96e68-cd39-4048-9e98-86967f6f5d88")
+
+    end
+
+    nodes.Action_Leaving = Action{
+        function()
+            DebugText(me,"Debug : Free to leave")
+            StopAnimation(me)
+            if not mod.items.SafeIsDestroyed(PLA_ZhentDungeon_Door1) and
+               PLA_ZhentDungeon_Door1.Item.IsLocked then
+                if not madeHostile and
+                   QuestUpdateIsUnlocked(artistFled) then
+                    SetEntityEvent(me, "PLA_ZhentDungeon_DoubtingArtist_Hostile")
+                    madeHostile = true
+                end
+                MoveTo(PLA_ZhentDungeon_Door1, MovementSpeed.Sprint, true, false)
+                Sleep(5.0)
+            else
+                try
+                    MoveTo(exit, MovementSpeed.Sprint, true, true)
+                    UseItem(exit.Item)
+                catch e then
+                    DebugText(me,"Debug : MoveTo/UseItem failed")
+                    Sleep(1.0)
+                    return
+                end
+            end
+        end,
+        Valid = function()
+            return GetFlag(PLA_DoubtingArtist_State_Leaving, nil)
+        end
+    }
+
+    -- The three free state are state where the artist is waiting for confirmation from the player that they are free.
+    -- They are pretty barebone for now, and should probably have something like a position where the artist move to.
+    -- However, I would like to wait for a first pass from writer before deciding on that, to have a behavior that makes sense for each of the three cases.
+    nodes.Action_FreeViolence = Action{
+        function()
+            DebugText(me,"DEBUG : Freed by great violence")
+            PlayAnimation(CowerAnim,false, true)
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return violentFreedom
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Action_FreeFallback = Action{
+        function()
+            DebugText(me,"DEBUG : Freed by cowardice")
+            LookAtEntity(DoorPosition, 3.0)
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return
+                GetFlag(PLA_ZhentDungeon_State_FallBack,nil) and
+                (   noMoreExplosive or
+                    GetFlag(PLA_NoMoreZhentAround,nil)
+                )
+        end
+    }
+
+    nodes.Action_FreeBribe = Action{
+        function()
+            DebugText(me,"DEBUG : Freed by bribery")
+            LookAtEntity(PaintingPosition, 3.0)
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return GetFlag(PLA_DoubtingArtist_State_FreeBribe,nil)
+        end
+    }
+
+    nodes.Action_Packing = Proxy{
+        game.states.PLA_ZhentDungeon_ZhentsPacking,
+        params = {AD = params.AD,
+                  regionBlockFlag = params.regionBlockFlag,
+                  dialogBlockFlag = params.dialogBlockFlag,
+                  home = params.home,
+                  homeB = params.homeB,
+                  trapNegotiationBehaviour = nil
+                 }
+    }
+
+end
+}
+
+game.states.PLA_ZhentDungeon_DoubtingArtist_CowerState = State{function ()
+
+    local PLA_ZhentDungeon_State_FallBack = Flag("PLA_ZhentDungeon_State_FallBack_7a94f079-2bc8-495e-99f2-5b04b03a7d1d")
+    local PLA_DoubtingArtist_State_Leaving = Flag("PLA_DoubtingArtist_State_Leaving_201c1ed0-ecc3-4c25-8f68-8716bd5ca7ae")
+    local PLA_DoubtingArtist_State_Free = Flag("PLA_DoubtingArtist_State_FreeNoMoreZhent_31e7355f-9904-47e4-af13-e790a3efcde8")
+    local PLA_DoubtingArtist_State_Cowering = Flag("PLA_DoubtingArtist_State_Cowering_c6a3f02f-af54-4448-9617-0aaf4c99c429")
+
+    local CowerAnim
+    local warnAD
+
+    local playerHostile = false
+    local validCower = false
+
+    local spottedCombatAround
+    local spottedExplosiveAround
+    local noMoreExplosive = false
+
+    local TEMP_startedCombatTimer = false
+
+    local hasWarnPlayerAboutExplosives
+
+    helpers.StartCombatCheckTimer = function()
+        if not TEMP_startedCombatTimer then
+            StartTimer(me, "ScanForCombat", 1.0,-1)
+            TEMP_startedCombatTimer = true
+        end
+    end
+
+    helpers.CheckValidCower = function()
+        validCower =
+            spottedCombatAround or
+            playerHostile or
+            spottedExplosiveAround or
+            (   GetFlag(PLA_ZhentDungeon_State_FallBack,nil) and
+                (not noMoreExplosive) and
+                (not GetFlag(PLA_DoubtingArtist_State_Free,nil))
+            )
+    end
+
+    self.Valid = function()
+        return validCower
+    end
+
+    self.OnEnter = function()
+        SetFlag(PLA_DoubtingArtist_State_Cowering,nil)
+    end
+
+    self.OnLeave = function()
+        StopAnimation(me)
+        ClearFlag(PLA_DoubtingArtist_State_Cowering,nil)
+    end
+
+    -- Events
+
+    events.TimerFinished  = function(e)
+        if e.TimerName == "ScanForCombat" then
+            local myChar = me.Character
+            local actives = GetActiveItems(me,myChar.SightRange)
+            if FindSurface(me, 0.0, 15.0, SurfaceType.FIRE) then
+                spottedExplosiveAround = true
+                noMoreExplosive = false
+                helpers.CheckValidCower()
+                return
+            end
+            if spottedExplosiveAround or 
+               GetFlag(PLA_ZhentDungeon_State_FallBack,nil) then
+                SetEntityEvent(me,"PLA_DoubtingArtist_ExplosiveThreatOver")
+                spottedExplosiveAround = false
+            end
+            actives = GetActiveCharacters(me, myChar.SightRange)
+            for _,char in pairs(actives) do
+                if char ~= me then
+                    if char.IsInCombat then
+                        spottedCombatAround = true
+                        helpers.CheckValidCower()
+                        return
+                    end
+                end
+            end
+            spottedCombatAround = false
+            helpers.CheckValidCower()
+        end
+        if e.TimerName == "PlayerWasHostile" then
+            playerHostile = false
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_GettingAttacked" then
+                playerHostile = true
+                StopTimer(me,"PlayerWasHostile")
+                StartTimer(me,"PlayerWasHostile",8.0,0)
+            end
+            if e.Event == "PLA_DoubtingArtist_ExplosiveThreatOver" then
+                noMoreExplosive = true
+            end
+        end
+    end
+
+    events.Activated  = function(_)
+        helpers.StartCombatCheckTimer()
+        spottedCombatAround = false
+        spottedExplosiveAround = false
+        validCower = false
+    end
+
+    events.Deactivated  = function(_)
+        StopTimer(me, "ScanForCombat")
+        spottedCombatAround = false
+        spottedExplosiveAround = false
+        TEMP_startedCombatTimer = false
+    end
+
+    params.backPosition = {type = EParamType.String, required = false, default=nil, help=[[
+        Trigger to which the character falls back.
+    ]]}
+
+    local backPosition
+
+    self.OnInit = function()
+        helpers.StartCombatCheckTimer()
+
+        spottedExplosiveAround = false
+
+        backPosition = FindEntity(params.backPosition)
+        CowerAnim = Animation("CUST_DebugAsset_CustomAnim_01_Loop_50635108-0b10-4232-820a-aac14df09a75")
+        warnAD = Dialog("PLA_ZhentDungeon_DoubtingArtist_AD_WarnAboutExplosives_dd2cb457-12b7-0c21-330f-bccb2d322323")
+        hasWarnPlayerAboutExplosives = false
+    end
+
+
+
+    nodes.Action_RunAway = Action{
+        Valid = function()
+            return validCower and GetDistanceTo(backPosition, me) > 1.5 and not GetFlag(PLA_DoubtingArtist_State_Leaving,nil)
+        end,
+        function()
+            if not IsInDangerousSurfaceFor(backPosition, me.Character) then
+                try
+                    MoveTo(backPosition, MovementSpeed.Run)
+                    LookFrom(backPosition)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(1.0)
+                    return
+                end
+            else
+                LookAtEntity(backPosition, 3.0)
+            end
+
+        end
+    }
+
+    nodes.Action_WarnPlayer = Action{
+        CanEnter = function()
+            return validCower and
+            GetFlag(PLA_ZhentDungeon_State_FallBack,nil) and
+            not hasWarnPlayerAboutExplosives and
+            not me.Character.IsDead and
+            not me.IsInCombat and
+            not IsInDialog(me, false) and
+            not me.Character.IsInteractionDisabled
+        end,
+        Valid = function()
+            return validCower and
+            GetFlag(PLA_ZhentDungeon_State_FallBack,nil) and
+            not hasWarnPlayerAboutExplosives and
+            not me.Character.IsDead and
+            not me.IsInCombat and
+            not me.Character.IsInteractionDisabled
+        end,
+        function()
+            StartAutomatedDialog(warnAD,false, me)
+            hasWarnPlayerAboutExplosives = true
+        end
+    }
+    nodes.Action_Cower= Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return validCower
+        end,
+        OnEnter = function()
+            ApplyStatus(me, "ANIM_COWER")
+        end,
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+        end
+    }
+end
+}

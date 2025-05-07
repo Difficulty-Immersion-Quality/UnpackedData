@@ -1,0 +1,99 @@
+game.states.LOW_HagSurvivors_Kleidunn = State{function()
+
+    modules = {"shared.dialog"}
+
+    params.patrolSpline = {type=EParamType.String, required = false, default=nil, help=[[Patrol spline]]}
+    params.patrolPauseSleepDuration = { type = EParamType.Number, default = 9.0, help = [[Adds additional sleep time when patrol is interrupted with Sleep call]]}
+    local patrolPauseSleepDuration = params.patrolPauseSleepDuration
+
+    local anxiousAD = Dialog("LOW_HagSurvivors_AD_General_Kleidunn_565cc225-70a7-1cea-de8d-bfc0dff4cb0b")
+    local hagSpyBetrayalAD = Dialog("LOW_HagSurvivors_AD_Klediunn_HagSpyBetrayal_99dccdba-c426-36e9-0621-484e49d1562f")
+    local relievedAD = Dialog("LOW_HagSurvivors_AD_Klediunn_Relieved_f04892da-fb7d-e276-2649-878a10d3d76b")
+
+    local postFirstSurvivorsMeeting = Flag("LOW_HagSurvivors_State_MetSurvivors_e60750e6-26bc-4b80-a782-32dcc7d1e397")
+    local hagSpyAggroedFlag = Flag("LOW_HagSurvivors_State_HagSpyAggroed_74eca7c7-e83b-4f07-ac32-beac7cd5eff7")
+    local hagTrulyDeadFlag = Flag("LOW_BlushingMermaid_State_HagIsTrulyDead_c7c3e64d-dcfc-431b-a224-535a0c4a8e9c")
+
+    local worriedAnim = Animation("CUST_Worried_01_a4616816-be6d-4fa1-a65a-2da057196af4")
+    local patrolSpline = Spline(params.patrolSpline)
+    local stopPatrol = false
+    local patrolAD = false
+
+    nodes.DefaultPosition = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_HagSurvivors_KleidunnSpot_5174fcce-3c22-4934-83ad-839e62522e64"
+        },
+        Valid = function()
+            return not GetFlag(postFirstSurvivorsMeeting)
+        end
+    }
+
+    nodes.Patrol = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = params.patrolSpline,
+            patrolSpeed = "Stroll"         
+        },
+
+        Valid = function()
+            return not stopPatrol
+        end
+    }
+
+    nodes.PatrolStop = Action {
+        CanEnter = function()
+            return stopPatrol
+        end,
+        function()
+            local AD
+            if(patrolAD) then
+                patrolAD = false                
+                if(not GetFlag(hagSpyAggroedFlag) and not GetFlag(hagTrulyDeadFlag)) then
+                    AD = anxiousAD
+                elseif(GetFlag(hagSpyAggroedFlag) and not GetFlag(hagTrulyDeadFlag)) then
+                    AD = hagSpyBetrayalAD
+                elseif(GetFlag(hagTrulyDeadFlag)) then
+                    AD = relievedAD
+                end
+                
+                if(AD ~= nil) then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 10
+                    },
+                    me
+                )
+                end
+            end
+            stopPatrol = false
+
+            if(AD == anxiousAD) then
+                PlayAnimation(worriedAnim, false)
+            end
+
+            LookFrom(patrolSpline)
+            Sleep(math.random(1,5)+patrolPauseSleepDuration)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(5.0)
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        ShortPatrolInterrupt()
+        stopPatrol = true
+        if math.random() > 0.5 then
+            patrolAD = true
+        end
+    end
+end}

@@ -1,0 +1,451 @@
+<ls:UIWidget x:Name="JournalDialogues"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+             mc:Ignorable="d"
+             d:DesignHeight="2160" d:DesignWidth="3840"
+             ls:UIWidget.ContextName="JournalDialogues"
+             d:DataContext="{d:DesignInstance {x:Type ls:DCJournalDialogues}, IsDesignTimeCreatable=True}"
+             FontWeight="Medium">
+
+    <ls:UIWidget.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Core;component/Library/JournalTemplates.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <BitmapImage x:Key="IconDialogue" UriSource="pack://application:,,,/Core;component/Assets/Shared/ico_dialogues_active.png"/>
+
+            <!-- Group Day and Group Map text block style -->
+            <Style x:Key="DialoguesGroupNodesTextBlockStyle" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource LS_baseTxtColor}"/>
+                <Setter Property="FontSize" Value="{StaticResource ScaledLargeFontSize}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Margin" Value="0,4"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Textblock style handling the selection state of a dialogue -->
+            <Style x:Key="DialogueTimeHighlightTextStyle" TargetType="TextBlock" BasedOn="{StaticResource DialoguesGroupNodesTextBlockStyle}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True">
+                        <Setter Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True">
+                        <Setter Property="Foreground" Value="{StaticResource LS_tint100}"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="ParticipantsNamesStyle" TargetType="ItemsControl">
+                <Setter Property="ItemsPanel">
+                    <Setter.Value>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="ItemTemplate">
+                    <Setter.Value>
+                        <DataTemplate DataType="{x:Type ls:DialogueParticipant}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="Name" Text="{Binding Name}" Style="{DynamicResource ParticipantsTextStyle}"/>
+                                <TextBlock x:Name="Separator" Text="{Binding Source=h2519408dg5fd7g4cbcg840cg14370239edf8, Converter={StaticResource TranslatedStringConverter}}" Style="{DynamicResource ParticipantsTextStyle}"/>
+                            </StackPanel>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Value="False">
+                                    <DataTrigger.Binding>
+                                        <MultiBinding Converter="{StaticResource LessThanOrEqualMultiConverter}">
+                                            <Binding Path="(ItemsControl.AlternationIndex)" RelativeSource="{RelativeSource Mode=Self}" Converter="{StaticResource AddConverter}" ConverterParameter="2"/>
+                                            <Binding Path="(ItemsControl.AlternationCount)" RelativeSource="{RelativeSource AncestorType={x:Type ItemsControl}}"/>
+                                        </MultiBinding>
+                                    </DataTrigger.Binding>
+                                    <Setter TargetName="Separator" Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Day group top treeview node -->
+            <DataTemplate DataType="ls:JournalDialogueDayGroup">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" >
+                    
+                    <ToggleButton x:Name="Expander" ClickMode="Press" Style="{StaticResource ExpandCollapseToggleStyle}"
+                                  IsChecked="{Binding AreDialoguesShown, Mode=TwoWay}"
+                                  Command="{Binding DataContext.ToggleDateGroup, ElementName=JournalDialogues}"/>
+
+                    <TextBlock x:Name="DialogueGroupName" Style="{StaticResource DialoguesGroupNodesTextBlockStyle}">
+                        <TextBlock.Text>
+                            <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                <Binding Source="had1bcc36gaedcg4cd0gbd2cgb9568ddce937"/>
+                                <Binding Path="DayOfMonth"/>
+                                <Binding Path="MonthName"/>
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                </StackPanel>
+            </DataTemplate>
+
+            <!-- Map group top treeview node -->
+            <DataTemplate DataType="ls:JournalDialogueMapGroup">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" >
+                    <ToggleButton x:Name="Expander" ClickMode="Press" Style="{StaticResource ExpandCollapseToggleStyle}"
+                                  IsChecked="{Binding AreDialoguesShown, Mode=TwoWay}"
+                                  Command="{Binding DataContext.ToggleMapGroup, ElementName=JournalDialogues}"/>
+                    <TextBlock Text="{Binding Map}" Style="{StaticResource DialoguesGroupNodesTextBlockStyle}"/>
+                </StackPanel>
+            </DataTemplate>
+
+            <ControlTemplate x:Key="SelectedDialogueParticipantNameTemplate">
+                <StackPanel Orientation="Horizontal" Visibility="{Binding DataContext.SelectedDialogue, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}, Converter={StaticResource NullToHiddenConverter}}">
+                    <b:Interaction.Behaviors>
+                        <ls:CollectionFilterBehavior x:Name="NoNarratorParticipants" ItemsSource="{Binding Participants}" Predicate="{Binding DataContext.Data.DialogueParticipantNoNarratorPredicate, ElementName=JournalDialogues}"/>
+                    </b:Interaction.Behaviors>
+                    <Image Source="{StaticResource IconDialogue}" Stretch="None" Margin="0,0,0,10"/>
+                    <ItemsControl x:Name="Names" ItemsSource="{Binding FilteredItems, ElementName=NoNarratorParticipants}" AlternationCount="{Binding FilteredItems.Count, ElementName=NoNarratorParticipants}" Style="{StaticResource ParticipantsNamesStyle}"
+                                      MaxHeight="138" Margin="16,0,0,0" MaxWidth="1700">
+                        <ItemsControl.Resources>
+                            <Style x:Key="ParticipantsTextStyle" TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource LS_extraspecialTxtColor}"/>
+                                <Setter Property="FontSize" Value="{StaticResource ScaledHugeFontSize}"/>
+                            </Style>
+                        </ItemsControl.Resources>
+                    </ItemsControl>
+                </StackPanel>
+                <ControlTemplate.Triggers>
+                    <DataTrigger Binding="{Binding Participants.Count}" Value="1">
+                        <Setter TargetName="Names" Property="ItemsSource" Value="{Binding Participants}"/>
+                        <Setter TargetName="Names" Property="AlternationCount" Value="1"/>
+                    </DataTrigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <!-- Dialogue treeview node in the map group -->
+            <ControlTemplate x:Key="JournalDialogueGroupedByMapTemplate">
+                <ItemsControl x:Name="Names" d:DataContext="{d:DesignInstance {x:Type ls:JournalDialogue}, IsDesignTimeCreatable=True}"
+                              ItemsSource="{Binding FilteredItems, ElementName=NoNarratorParticipants}" AlternationCount="{Binding FilteredItems.Count, ElementName=NoNarratorParticipants}" HorizontalAlignment="Stretch"
+                              Style="{StaticResource ParticipantsNamesStyle}" Margin="0,0,0,20">
+                    <ItemsControl.Resources>
+                        <Style x:Key="ParticipantsTextStyle" TargetType="TextBlock" BasedOn="{StaticResource DialogueTimeHighlightTextStyle}"/>
+                    </ItemsControl.Resources>
+                    <b:Interaction.Behaviors>
+                        <ls:CollectionFilterBehavior x:Name="NoNarratorParticipants" ItemsSource="{Binding Participants}" Predicate="{Binding DataContext.Data.DialogueParticipantNoNarratorPredicate, ElementName=JournalDialogues}"/>
+                    </b:Interaction.Behaviors>
+                </ItemsControl>
+                <ControlTemplate.Triggers>
+                    <DataTrigger Binding="{Binding Participants.Count}" Value="1">
+                        <Setter TargetName="Names" Property="ItemsSource" Value="{Binding Participants}"/>
+                        <Setter TargetName="Names" Property="AlternationCount" Value="1"/>
+                    </DataTrigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <!-- Dialogue treeview node in the day group -->
+            <ControlTemplate x:Key="JournalDialogueGroupedByDateTemplate">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch" Margin="0,0,0,10"
+                            d:DataContext="{d:DesignInstance {x:Type ls:JournalDialogue}, IsDesignTimeCreatable=True}">
+                    <b:Interaction.Behaviors>
+                        <ls:CollectionFilterBehavior x:Name="NoNarratorParticipants" ItemsSource="{Binding Participants}" Predicate="{Binding DataContext.Data.DialogueParticipantNoNarratorPredicate, ElementName=JournalDialogues}"/>
+                    </b:Interaction.Behaviors>
+                    <TextBlock VerticalAlignment="Top" Text="{Binding TimeInDay, StringFormat='{}{0} - '}" Style="{StaticResource DialogueTimeHighlightTextStyle}"/>
+                    <ItemsControl x:Name="Names" ItemsSource="{Binding FilteredItems, ElementName=NoNarratorParticipants}" AlternationCount="{Binding FilteredItems.Count, ElementName=NoNarratorParticipants}" HorizontalAlignment="Stretch"
+                                  Style="{StaticResource ParticipantsNamesStyle}" MaxWidth="1000">
+                        <ItemsControl.Resources>
+                            <Style x:Key="ParticipantsTextStyle" TargetType="TextBlock" BasedOn="{StaticResource DialogueTimeHighlightTextStyle}"/>
+                        </ItemsControl.Resources>
+                    </ItemsControl>
+                </StackPanel>
+                <ControlTemplate.Triggers>
+                    <DataTrigger Binding="{Binding Participants.Count}" Value="1">
+                        <Setter TargetName="Names" Property="ItemsSource" Value="{Binding Participants}"/>
+                        <Setter TargetName="Names" Property="AlternationCount" Value="1"/>
+                    </DataTrigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <!-- Actual Dialogue treeview node -->
+            <DataTemplate DataType="ls:JournalDialogue">
+                <Control x:Name="Content" Margin="84,0,0,0"/>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding DataContext.GroupingTab, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="ByMap">
+                        <Setter TargetName="Content" Property="Template" Value="{StaticResource JournalDialogueGroupedByMapTemplate}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding DataContext.GroupingTab, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="ByDate">
+                        <Setter TargetName="Content" Property="Template" Value="{StaticResource JournalDialogueGroupedByDateTemplate}"/>
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+        </ResourceDictionary>
+    </ls:UIWidget.Resources>
+
+    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ls:TooltipExtender.Owner="{Binding CurrentPlayer.SelectedCharacter}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Image x:Name="PageBackground" Grid.Row="0" Grid.RowSpan="4" Source="{StaticResource OptionsBackground}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="UniformToFill"/>
+
+        <Control x:Name="JournalHeader" Grid.Row="0" HorizontalAlignment="Center" Template="{StaticResource JournalHeader}"/>
+
+        <ls:LSButton x:Name="CloseButtonX" Grid.Row="0" BoundEvent="UICancel" Style="{StaticResource SmallCloseButton}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="{StaticResource Journal.CloseButtonMargin}"
+                     Command="{Binding CustomEvent}" CommandParameter="CloseWidget" SoundID="UI_HUD_Panel_Close"/>
+
+        <TextBlock x:Name="PageTitle" Grid.Row="1" Text="{Binding Source='hc610c4aeg0285g4e2agbc31g4bb458c1c7b3',Converter={StaticResource TranslatedStringConverter}}" Foreground="{StaticResource LS_tint100}" FontWeight="DemiBold"
+                   FontSize="{StaticResource ScaledGiganticFontSize}" HorizontalAlignment="Left" Margin="{StaticResource Journal.TitleMargin}"/>
+
+        <Grid Grid.Row="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="{StaticResource Journal.ContentMargin}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <b:Interaction.Behaviors>
+                <ls:CollectionFilterBehavior x:Name="ExpandedDialoguesByDate" ItemsSource="{Binding DialoguesGroupedByDate}" Predicate="{Binding DataContext.ExpandedDialogueByDatePredicate, ElementName=JournalDialogues}"/>
+                <ls:CollectionFilterBehavior x:Name="ExpandedDialoguesByMap" ItemsSource="{Binding DialoguesGroupedByMap}" Predicate="{Binding DataContext.ExpandedDialogueByMapPredicate, ElementName=JournalDialogues}"/>
+            </b:Interaction.Behaviors>
+
+            <!-- Dialogues treeview grouped by date or by map, faked with a listbox to optimize performance (for virtualization) -->
+            <ListBox x:Name="DialoguesTree" Grid.Column="0" BorderBrush="Transparent" Background="Transparent" Width="1440" VerticalAlignment="Stretch" Margin="0,100,0,0"
+                     VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" VirtualizingStackPanel.ScrollUnit="Pixel">
+                <ListBox.Style>
+                    <Style TargetType="ListBox" BasedOn="{StaticResource {x:Type ListBox}}">
+                        <Setter Property="ItemsSource" Value="{x:Null}"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding GroupingTab}" Value="ByMap">
+                                <Setter Property="ItemsSource" Value="{Binding FilteredItems, ElementName=ExpandedDialoguesByMap}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding GroupingTab}" Value="ByDate">
+                                <Setter Property="ItemsSource" Value="{Binding FilteredItems, ElementName=ExpandedDialoguesByDate}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListBox.Style>
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel IsVirtualizing="True" IsItemsHost="True" VirtualizationMode="Recycling"/>
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.Template>
+                    <ControlTemplate>
+                        <ScrollViewer Template="{StaticResource ScrollViewerTemplate}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="{StaticResource Journal.LeftSideScrollViewerMargin}"
+                                      CanContentScroll="True" Background="Transparent">
+                            <ScrollViewer.Resources>
+                                <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource BaseScrollBar}"/>
+                                <GridLength x:Key="Top">6</GridLength>
+                                <GridLength x:Key="Bottom">150</GridLength>
+                            </ScrollViewer.Resources>
+                            <ItemsPresenter HorizontalAlignment="Stretch" Margin="{StaticResource Journal.LeftSideItemsPresenterMargin}"/>
+                        </ScrollViewer>
+                    </ControlTemplate>
+                </ListBox.Template>
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="{x:Type ListBoxItem}">
+                        <Setter Property="BorderBrush" Value="Transparent" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="FontSize" Value="{StaticResource ScaledLargeFontSize}"/>
+                        <Setter Property="Template" Value="{StaticResource Journal.SidePanelListBoxItemTemplate}"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="BorderBrush" Value="Transparent" />
+                                <Setter Property="Background" Value="Transparent" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="BorderBrush" Value="Transparent" />
+                                <Setter Property="Background" Value="Transparent" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+
+                <b:Interaction.Triggers>
+                    <b:EventTrigger EventName="SelectionChanged">
+                        <b:InvokeCommandAction Command="{Binding DialoguesSelectionChanged.ActionCommand}" CommandParameter="{Binding ElementName=DialoguesTree, Path=SelectedItem}"/>
+                    </b:EventTrigger>
+                </b:Interaction.Triggers>
+            </ListBox>
+
+            <!-- Details pane for the selected Dialogue in the treeview -->
+            <ScrollViewer Grid.Column="1" DataContext="{Binding SelectedDialogue}" HorizontalAlignment="Stretch" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" VerticalAlignment="Stretch"
+                          Template="{StaticResource ScrollViewerTemplate}" Background="Transparent" Margin="{StaticResource Journal.RightSideContentMargin}">
+                <ScrollViewer.Resources>
+                    <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource BaseScrollBar}"/>
+                    <GridLength x:Key="Top">76</GridLength>
+                    <GridLength x:Key="Bottom">56</GridLength>
+                </ScrollViewer.Resources>
+                <StackPanel Orientation="Vertical" HorizontalAlignment="Stretch">
+                    <TextBlock VerticalAlignment="Top" Margin="0,0,130,0"
+                               HorizontalAlignment="Left" TextAlignment="Left"
+                               Foreground="{StaticResource LS_bar50TxtColor}" FontSize="{StaticResource ScaledTitleFontSize}"
+                               Text="{Binding DialogFileName}"
+                               Visibility="{Binding ., Converter={StaticResource NullToCollapsedConverter}}" />
+                    
+                    <!--Speaker portraits-->
+                    <ItemsControl x:Name="Portraits" Style="{StaticResource DialogueParticipantPortraitStyle}" ItemsSource="{Binding FilteredItems, ElementName=NoNarratorParticipants}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,0,0,20" Visibility="{Binding FilteredItems.Count, ElementName=NoNarratorParticipants, Converter={StaticResource CountToVisibilityConverter}}">
+                        <b:Interaction.Behaviors>
+                            <ls:CollectionFilterBehavior x:Name="NoNarratorParticipants" ItemsSource="{Binding Participants}" Predicate="{Binding DataContext.Data.DialogueParticipantNoNarratorPredicate, ElementName=JournalDialogues}"/>
+                        </b:Interaction.Behaviors>
+                    </ItemsControl>
+
+                    <Control x:Name="ParticipantNames" Margin="0,0,130,0" HorizontalAlignment="Left" Template="{StaticResource SelectedDialogueParticipantNameTemplate}"/>
+                    <ItemsControl ItemsSource="{Binding DialogueLines}" Margin="10,52,250,0" HorizontalAlignment="Stretch">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type ls:JournalDialogueLine}">
+                                <Control x:Name="Root" Margin="0,0,0,24">
+                                    <Control.Template>
+                                        <ControlTemplate>
+                                            <ControlTemplate.Resources>
+                                                <BitmapImage x:Key="RollIconBG" UriSource="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/passiveRollIndicator_bg.png"/>
+                                                <BitmapImage x:Key="RollIconBorder" UriSource="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/passiveRollIndicator_Failed.png"/>
+                                                <BitmapImage x:Key="RollIcon" UriSource="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/passiveRollIndicator_d20.png"/>
+                                            </ControlTemplate.Resources>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Grid x:Name="IconContainer" HorizontalAlignment="Left" Margin="0,0,20,0">
+                                                    <Image x:Name="IconBG" Source="{StaticResource RollIconBG}" Stretch="None" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                    <Image x:Name="IconBorder" Stretch="None" Source="{StaticResource RollIconBorder}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                    <Image x:Name="Icon"  Source="{StaticResource RollIcon}" Stretch="None" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                </Grid>
+
+                                                <TextBlock x:Name="Ability" Text="{Binding RollAbilityValue, Converter={StaticResource EnumTranslatedStringConverter}, ConverterParameter='hec30ce0dgb76bg45cagaf40gad771ff7902b'}" Foreground="{StaticResource DiceColor.Failure}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <TextBlock x:Name="Skill" Text="{Binding RollSkillValue, Converter={StaticResource EnumTranslatedStringConverter}, ConverterParameter='h65e11968gf9b6g4c47g9efcg03fb60fb923c', StringFormat='{}({0})'}" Foreground="{StaticResource DiceColor.Failure}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <TextBlock x:Name="Result" Text="{Binding Source='ha81a7198g8adag4775g8bceg7376da401478', Converter={StaticResource TranslatedStringConverter}, StringFormat='{}{0}:'}"
+                                                       Foreground="{StaticResource DiceColor.Failure}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <TextBlock x:Name="Name" Text="{Binding Speaker.Name}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <ControlTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding RollIsSuccess}" Value="True">
+                                                    <Setter TargetName="IconBorder" Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/passiveRollIndicator_Success.png"/>
+                                                    <Setter TargetName="Result" Property="Text" Value="{Binding Source='hd147c95ag5acbg4389g9411g9f9dbbbb2f3a', Converter={StaticResource TranslatedStringConverter}, StringFormat='{}{0}:'}"/>
+                                                    <Setter TargetName="Ability" Property="Foreground" Value="{StaticResource DiceColor.Success}"/>
+                                                    <Setter TargetName="Skill" Property="Foreground" Value="{StaticResource DiceColor.Success}"/>
+                                                    <Setter TargetName="Result" Property="Foreground" Value="{StaticResource DiceColor.Success}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding RollSkill}" Value="None">
+                                                    <Setter TargetName="Skill" Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding RollSkill}" Value="Max">
+                                                    <Setter TargetName="Skill" Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding RollSkill}" Value="CONNone">
+                                                    <Setter TargetName="Skill" Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Control.Template>
+                                </Control>
+
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding RollAbility}" Value="None">
+                                        <Setter TargetName="Root" Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock x:Name="SpeakerName" Grid.Column="0" HorizontalAlignment="Stretch" TextAlignment="Left" LineHeight="48" LineStackingStrategy="BlockLineHeight" FontSize="{StaticResource ScaledLargeFontSize}" Visibility="Collapsed">
+                                                        <Run Text="{Binding SpeakerName}" Foreground="{StaticResource LS_extraspecialTxtColor}"/><Run Text="{Binding Source='hb897c56egaa6fg460bg8676g8ebfa0340954', Converter={StaticResource TranslatedStringConverter}, StringFormat='{}{0} '}" Foreground="{StaticResource LS_extraspecialTxtColor}"/>
+                                                        </TextBlock>
+                                                        <TextBlock Grid.Column="1" HorizontalAlignment="Stretch" TextAlignment="Left" LineHeight="48" LineStackingStrategy="BlockLineHeight" Foreground="{StaticResource LS_baseTxtColor}"
+                                                               FontSize="{StaticResource ScaledLargeFontSize}" ls:TextBlockFormatter.SourceText="{Binding Text}" TextWrapping="Wrap" />
+                                                    </Grid>
+
+                                                    <ControlTemplate.Triggers>
+                                                        <DataTrigger Binding="{Binding Speaker.IsNarrator}" Value="False">
+                                                            <Setter TargetName="SpeakerName" Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Vertical"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <ls:LSToggleButton Grid.Row="2" Margin="0,0,0,20" VerticalAlignment="Bottom" HorizontalAlignment="Center" Command="{Binding SetGroupingTab}">
+            <ls:LSToggleButton.Template>
+                <ControlTemplate TargetType="ls:LSToggleButton">
+                    <ControlTemplate.Resources>
+                        <BitmapImage x:Key="ToggleBg" UriSource="pack://application:,,,/Core;component/Assets/Shared/toggle_bg.png"/>
+                        <BitmapImage x:Key="ToggleNob" UriSource="pack://application:,,,/Core;component/Assets/Shared/toggle_nob.png"/>
+                    </ControlTemplate.Resources>
+                    <Grid HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock x:Name="off" Text="{Binding Source='hb6976931gfe2ag4d25g9693ge2ec4c35059c', Converter={StaticResource TranslatedStringConverter}}" VerticalAlignment="Center" Foreground="{StaticResource LS_accent75TxtColor}"/>
+                            <Grid Margin="8,0,8,0">
+                                <Image x:Name="bg" Source="{StaticResource ToggleBg}" Stretch="None"/>
+                                <Image x:Name="btn" Source="{StaticResource ToggleNob}" Stretch="None" HorizontalAlignment="Left" Margin="4,0,0,0"/>
+                            </Grid>
+                            <TextBlock x:Name="on" Text="{Binding Source='h2ea0e387gcaaag45bbg876bg39bf417decdc', Converter={StaticResource TranslatedStringConverter}}" VerticalAlignment="Center" Foreground="{StaticResource LS_baseTxtColor}"/>
+                        </StackPanel>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding GroupingTab}" Value="ByMap">
+                            <Setter Property="IsChecked" Value="True"/>
+                            <Setter Property="CommandParameter" Value="ByDate"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding GroupingTab}" Value="ByDate">
+                            <Setter Property="CommandParameter" Value="ByMap"/>
+                        </DataTrigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource LS_accent75TxtColor}" TargetName="on"/>
+                            <Setter Property="Foreground" Value="{StaticResource LS_InactivePanelFontColor}" TargetName="off"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ThicknessAnimation Duration="0:0:0.1" Storyboard.TargetName="btn" Storyboard.TargetProperty="Margin" To="40,0,0,0"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ThicknessAnimation Duration="0:0:0.1" Storyboard.TargetName="btn" Storyboard.TargetProperty="Margin" To="4,0,0,0"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </ls:LSToggleButton.Template>
+        </ls:LSToggleButton>
+
+        <Image Grid.Row="3" Source="{StaticResource Journal.DecorButtonCenter}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Stretch="None" Margin="{StaticResource Journal.DecorButtonCenterMargin}"/>
+    </Grid>
+
+    <b:Interaction.Triggers>
+        <b:EventTrigger EventName="Loaded">
+            <ls:LSPlaySound Sound="UI_HUD_JournalSelection_Open"/>
+        </b:EventTrigger>
+        <b:EventTrigger EventName="Unloaded">
+            <ls:LSPlaySound Sound="UI_HUD_Journal_Close"/>
+        </b:EventTrigger>
+    </b:Interaction.Triggers>
+</ls:UIWidget>

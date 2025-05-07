@@ -1,0 +1,176 @@
+game.states.CAMP_Astarion = State {function()
+    description = [[Behaviour of Astarion at camp]]
+
+    -- Flags
+    local campNight = Flag("GLO_CAMP_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+
+    -- State logic
+    local selectedBehaviour = nil
+    local ignoreReselectionUponInterrupt = false
+
+    self.OnEnter = function()
+        selectedBehaviour = nil
+        ignoreReselectionUponInterrupt = false
+    end
+
+    -- Daisy dream 1: Astarion is feeling sick
+    nodes.CAMP_DaisyDream1 = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS"},
+
+        Valid = function()
+            return HasActiveStatus(me, "CAMP_DAISY_SICK")
+        end
+    }
+
+    nodes.CAMP_Astarion = Selector {
+        function(nodes)
+            -- Check if the behaviour was interrupted and enter it again if still valid
+            if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                --DebugText(me, "Return same node due to interruption: [1]", selectedBehaviour)
+                ignoreReselectionUponInterrupt = false
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+
+            -- Always clear this, in case it was interrupted but was not able to select a node
+            ignoreReselectionUponInterrupt = false
+
+            local selectedNode = nil
+            -- just started his camp behaviours - a small delay
+            if selectedBehaviour == nil or (selectedBehaviour ~= nil and not nodes.TryGetChild(selectedBehaviour).IsSelectable()) then
+                selectedNode = nodes.InitIdle
+            -- after any Idle behaviour - any non-idle behaviour
+            elseif selectedBehaviour == "InitIdle" or selectedBehaviour == "Idle" then
+                selectedNode = FindWeightedRandomSelectable(nodes, {
+                    [nodes.Reading] = 1,
+                    [nodes.DustSelf] = 1,
+                    [nodes.KnifeTricks] = 1,
+                    [nodes.CombHair] = 1,
+                    [nodes.Thinking] = 1,
+                    [nodes.Bored] = 1,
+                })
+            -- after any non-idle behaviour - any behaviour except for InitIdle
+            else
+                selectedNode = FindWeightedRandomSelectable(nodes, {
+                    [nodes.Idle] = 1,
+                    [nodes.Reading] = 1,
+                    [nodes.DustSelf] = 1,
+                    [nodes.KnifeTricks] = 1,
+                    [nodes.CombHair] = 1,
+                    [nodes.Thinking] = 1,
+                    [nodes.Bored] = 1,
+                })
+            end
+            selectedBehaviour = selectedNode.Name
+            return nodes.TryGetChild(selectedBehaviour)
+        end
+    }
+
+    nodes.CAMP_Astarion.InitIdle = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    sleepDurationMin = 0.5,
+                    sleepDurationMax = 3.5}
+    }
+
+    nodes.CAMP_Astarion.Idle = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    sleepDurationMin = 12.0,
+                    sleepDurationMax = 24.0}
+    }
+
+    nodes.CAMP_Astarion.Reading = Proxy {
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnim = "CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716",
+		    -- for Astarion CUST_Reading_Book_01 is actually override with a non-looping animation (that includes start, middle and end)
+		    -- so we should call it as non-looping animation
+            loopIdleAnim = false,
+            sleepDurationMin = 9.0,
+            sleepDurationMax = 18.0,
+        }
+    }
+
+    nodes.CAMP_Astarion.DustSelf = Proxy {
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnim = "CUST_EPI_Astarion_DustSelf_01_9b8f3897-bb74-4a83-ac5e-d95bd0b0e9f4",
+            loopIdleAnim = false,
+            sleepDurationMin = 9.0,
+            sleepDurationMax = 18.0,
+        }
+    }
+
+    nodes.CAMP_Astarion.KnifeTricks = Proxy {
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnim = "CUST_EPI_Astarion_KnifeTricks_01_3946137b-d703-492b-a916-09912d3bf867",
+            loopIdleAnim = false,
+            sleepDurationMin = 9.0,
+            sleepDurationMax = 18.0,
+        }
+    }
+
+    nodes.CAMP_Astarion.CombHair = Proxy {
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnim = "CUST_EPI_Astarion_CombHair_01_b9a9cc36-4159-441e-bc9c-a85b3ae09873",
+            loopIdleAnim = false,
+            sleepDurationMin = 9.0,
+            sleepDurationMax = 18.0,
+        }
+    }
+
+    nodes.CAMP_Astarion.Thinking = Proxy {
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnim = "CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba",
+            loopIdleAnim = false,
+            sleepDurationMin = 9.0,
+            sleepDurationMax = 18.0,
+        }
+    }
+
+    nodes.CAMP_Astarion.Bored = Proxy {
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnim = "CUST_Bored_02_7892cb3b-2935-4aa3-b65c-64d9664cbe75",
+            loopIdleAnim = false,
+            sleepDurationMin = 9.0,
+            sleepDurationMax = 18.0,
+        }
+    }
+
+    -- Clear current behaviour on day<->night transition
+    events.FlagSet = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if e.Event == "InterruptCampBehaviour" then
+                selectedBehaviour = nil
+                Interrupt()
+            elseif e.Event == "InterruptCampBehaviour_WithoutReselection" then
+                Interrupt()
+            end
+        end
+    end
+end}

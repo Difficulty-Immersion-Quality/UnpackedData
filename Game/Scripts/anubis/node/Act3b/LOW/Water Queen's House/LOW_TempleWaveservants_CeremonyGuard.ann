@@ -1,0 +1,102 @@
+game.states.LOW_TempleWaveservants_CeremonyGuard = State 
+{
+    function()
+    description = [[Ceremony guard behaviour]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.DefaultPos = {
+        type = EParamType.String,
+        required = true,
+        help=[[Default position for the character to be in]]
+    }
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local defaultPos = Entity(params.DefaultPos)
+    local ambushFlag = Flag("LOW_BellyOfTheBeast_State_WaveservantsInAmbush_b5d448d1-36c9-4deb-8426-45c0fa67f9d1")
+
+    local returnFlag = Flag("LOW_WaterQueensHouse_State_ReturnedFromIronThrone_e20263a4-359c-4454-aa07-76823cdbfe5e")
+
+    
+    local anim = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7")
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    nodes.Action_BackToPosition = Action 
+    {
+        function ()        
+            mod.util.SleepRandom (1.0,2.0)
+            if IsInDangerousSurfaceFor(defaultPos, me.Character) then
+                SteerTo(defaultPos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(defaultPos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(defaultPos)
+                Sleep(2.0)
+                return false
+            end
+
+            LookFrom(defaultPos)
+
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, defaultPos) > 1.0 and (not GetFlag(ambushFlag) or GetFlag(returnFlag))
+        end
+    }
+
+    -- Action
+    nodes.Action_StandingGuard = Action
+    {
+        function ()
+            PlayAnimation(anim, false, true)
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, defaultPos) <= 1.0 and (not GetFlag(ambushFlag) or GetFlag(returnFlag))
+        end
+    }
+
+    nodes.Action_Ambush = Action {
+        function ()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(ambushFlag)
+        end
+    }
+
+    nodes.Fallback = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end
+    }
+
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

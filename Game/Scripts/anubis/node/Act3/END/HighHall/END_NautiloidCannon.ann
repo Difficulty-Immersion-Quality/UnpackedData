@@ -1,0 +1,55 @@
+game.states.END_NautiloidCannon = State{
+    function()
+        description = [[Using DefaultItem because technically it's one, but they do nothing.]]
+        modules = {"shared.util"}
+
+        local attackAnim = Animation("CUST_Fire_Angled_01_2d493d5e-7220-4644-a120-b0227aa550d0")
+        local isFiring = false
+        local isTurnEnd = false
+
+        nodes.Fire = Action {
+            CanEnter = function()
+                return isFiring
+            end,
+
+            function()
+                PlayAnimation(attackAnim, true, false)
+                isFiring = false
+            end
+        }
+
+        nodes.ForceStopTurn = Action{
+            function()
+                if me.CanActInCombatTeamTurn and me.IsInCombat then
+                    EndTurn(me)
+                end
+                isTurnEnd = false
+            end,
+
+            Valid = function()
+                return isTurnEnd
+            end
+        }
+
+        nodes.Idle = Action{
+            function()
+                WaitForInterrupt()         
+            end
+        }
+
+
+        events.EntityEvent = function(e)
+            if e.TargetEntity == me then
+                if e.Event == "END_NautiloidCannonFire" then
+                    Interrupt()
+                    isFiring = true
+                end
+
+                if e.Event == "END_ForceEndTurn" then
+                    Interrupt()
+                    isTurnEnd = true
+                end
+            end
+        end
+    end
+}

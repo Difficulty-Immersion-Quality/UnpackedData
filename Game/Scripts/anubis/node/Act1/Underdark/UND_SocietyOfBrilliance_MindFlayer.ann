@@ -1,0 +1,48 @@
+game.states.UND_SocietyOfBrilliance_MindFlayer = State { function ()
+    description = [[
+        Behaviour for the Omeluum. He's just idling.
+    ]]
+
+    params.baseTrigger = { type = EParamType.String, required = false, help = [[
+        Base trigger for the idling
+    ]]}
+
+    modules = { "shared.math" }
+
+    local movedToBase = false
+    local baseTrigger = Entity(params.baseTrigger)
+    local incantationsAnim = Animation("CUST_ArcaneIncantations_01_a9f3f5c6-2ab5-410d-b5c2-be409aea0458")
+
+    self.OnLeave = function()
+        movedToBase = false
+    end
+
+    nodes.ReturningToBasePos = Action {
+        function()
+            try
+                MoveTo(baseTrigger, MovementSpeed.Walk)
+                LookFrom(baseTrigger)
+                movedToBase = true
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+                Sleep(5)
+            end
+        end,
+        CanEnter = function()
+            return GetDistance2DTo(me, baseTrigger) > 2.0
+        end,
+        Valid = function()
+            return not movedToBase
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            LookFrom(baseTrigger)
+            Sleep(mod.math.random(3, 13))
+            if not IsInDialog(me, false) then
+                PlayAnimation(incantationsAnim)
+            end
+        end
+    }
+end}

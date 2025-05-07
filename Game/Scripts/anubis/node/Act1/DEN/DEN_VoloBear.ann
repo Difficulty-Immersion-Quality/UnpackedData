@@ -1,0 +1,51 @@
+game.states.DEN_VoloBear = State {function ()
+    description = [[Behaviour of Volothamp Geddarm]]
+    local Volo = Entity("S_GLO_Volo_2af25a85-5b9a-4794-85d3-0bd4c4d262fa")
+    local SleepPos = Entity("S_DEN_VoloBearPoint_377e8691-7811-4b0f-a6b5-9d0ac94b5832")
+    local DenFlag = Flag("GLO_Volo_State_AtDen_c1bb44ab-c358-46d1-a261-34356bf1d071")
+    local tellStoryAnimStart = Animation("CUST_TellStory_01_Start_50e94e00-fa55-431d-9d8b-e3d97a37c0b0")
+    local tellStoryAnimLoop = Animation("CUST_TellStory_01_Loop_cc763951-1ae0-4b04-9c27-0261d8eef3fd")
+    local tellStoryAnimEnd = Animation("CUST_TellStory_01_End_21293a06-b892-4c13-b119-1e2dfcf5d581")
+
+    events.FlagSet = function(e)
+        if e.Flag == Guid("DEN_TieflingRefugees_State_LeftDen_003b304b-f058-4f8a-b9fa-a097e1b6b395") then
+            SleepPos = Entity("S_DEN_VoloBearPoint_TieflingsGone_475024e4-3744-485b-bdde-4db83bcff9e4")
+        end
+    end
+
+    nodes.Idle = Action {
+        function()
+            if GetDistance2DTo(me, SleepPos) > 2 then
+                if HasActiveStatus(me, "SLEEPING") then
+                    RemoveStatus(me, "SLEEPING")
+                end
+                if not IsInDangerousSurfaceFor(SleepPos, me.Character, 3.0) then
+                    try
+                        MoveTo(SleepPos)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        SetEntityEvent(me, "gen_anubismoveto", SleepPos, true, 1.5, nil, "", 2.5, true, true)
+                        DebugText(me, "Movement Failed!")
+                        Sleep(6.0)
+                    end
+                else
+                    SteerTo(SleepPos)
+                end
+            else
+                if not HasActiveStatus(me, "SLEEPING") then
+                    ApplyStatus(me, "SLEEPING", false, -1)
+                end
+                Sleep(30.0)
+            end        
+        end,
+        Valid = function()
+            return not (CheckCurrentGameLevel("WLD_Main_A") and GetFlag(DenFlag,nil) and not Volo.Character.IsDead and GetDistance2DTo(me,Volo) <= 15.0)
+        end    
+    }
+    nodes.DENidle = Action {
+        function()
+            SteerTo(Volo)
+            PlayLoopingAnimation(tellStoryAnimStart, {tellStoryAnimLoop}, tellStoryAnimEnd)
+            WaitForInterrupt()
+        end
+    }
+end}

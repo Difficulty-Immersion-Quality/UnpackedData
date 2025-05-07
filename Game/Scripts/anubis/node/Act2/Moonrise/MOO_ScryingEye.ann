@@ -1,0 +1,174 @@
+game.actions.generics.EyeCallsGuardWithReinforcements = Action
+{
+    function(state)
+        me.Blackboard.SetFact("GuardSummonFailedReaction", "Flee")
+        state.CrimesHumanoid.CallGuardsToArrest("CRIME_StoryCallGuardsArrest_WithReinforcements")
+        Sleep(60.0)
+    end,
+    OnEnter = function()
+        BlockNewDisturbanceReactions(me, true)
+    end,
+    OnLeave = function()
+        BlockNewDisturbanceReactions(me, false)
+    end
+}
+
+game.actions.generics.EyeCallsGuard = Action
+{
+    function(state)
+        me.Blackboard.SetFact("GuardSummonFailedReaction", "Flee")
+        state.CrimesHumanoid.CallGuardsToArrest("CRIME_StoryCallGuardsArrest")
+        Sleep(60.0)
+    end,
+    OnEnter = function()
+        BlockNewDisturbanceReactions(me, true)
+    end,
+    OnLeave = function()
+        BlockNewDisturbanceReactions(me, false)
+    end
+}
+
+game.actions.generics.EyeScreams = Action
+{
+    function(state)
+        local criminal = me.Blackboard.GetFact("Criminal1")
+        DebugText(me, "Eye freaks out and goes hostile!")
+        state.CrimesHumanoid.CrimeSetTemporaryHostileRelation(criminal)
+    end
+}
+
+game.actions.generics.EyeWaitsForGuard = Action
+{
+    function(state)
+        DebugText(me, "Waiting for called guards")
+        local criminal = me.Blackboard.GetFact("Criminal1")
+        local initialCriminalDistance = GetDistanceTo(me, criminal)
+        Sleep(3.0)
+        -- Osiris will normally break us out of this loop by stopping the crime when the guard arrives/dies/...
+        -- Still, safety fallback to stop in case there's a bug -> don't do this longer than +- a minute
+        local loopCount = 1
+        local tauntedDisappear = false
+        while loopCount <= 6 do
+            if IsInDangerousSurfaceFor(me) then
+                FleeFromDangerousSurface()
+            end
+            if CanSee(me, criminal) then
+                LookAtEntity(criminal, 3.0)
+                local newDistance = GetDistanceTo(me, criminal)
+                if newDistance > (initialCriminalDistance + 2.0) then
+                    StartAutomatedDialog(tauntingAD, true, me, criminal)
+                    initialCriminalDistance = newDistance
+                end
+            else
+                if not tauntedDisappear then
+                    -- don't keep talking after the other person disappeared out of sight
+                    tauntedDisappear = true
+                    DebugText(me, "Eye freaks out and goes hostile!")
+                    state.CrimesHumanoid.CrimeSetTemporaryHostileRelation(criminal)
+                end
+            end
+            Sleep(8.0 + math.random() * 5.0)
+            loopCount = loopCount + 1
+        end
+        DebugText(me, "Eye freaks out and goes hostile!")
+        state.CrimesHumanoid.CrimeSetTemporaryHostileRelation(criminal)
+        SetUnicastEntityEvent(me, "CRIME_CallGuardsFailed")
+    end
+}
+
+game.states.MOO_UpperFloor_Eye = State { function()
+
+    modules = {"shared.moveto"}
+
+    params.position1 = {type = EParamType.String, required=false, default="", help=[[
+        One position the eye can be at.
+    ]]}
+
+    params.position2 = {type = EParamType.String, required=false, default="", help=[[
+        One position the eye can be at.
+    ]]}
+
+    params.position3 = {type = EParamType.String, required=false, default="", help=[[
+        One position the eye can be at.
+    ]]}
+
+    params.position4 = {type = EParamType.String, required=false, default="", help=[[
+        One position the eye can be at.
+    ]]}
+
+    params.position5 = {type = EParamType.String, required=false, default="", help=[[
+        One position the eye can be at.
+    ]]}
+
+    local position1 = Entity(params.position1)
+    local position2 = Entity(params.position2)
+    local position3 = Entity(params.position3)
+    local position4 = Entity(params.position4)
+    local position5 = Entity(params.position5)
+
+    nodes.SelectDestination = Selector {
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end
+    }
+
+    nodes.SelectDestination.Position1 = Action {
+        function()
+            if mod.moveto.MoveToPoint(position1,MovementSpeed.Walk,me) then
+                LookFrom(position1)
+                Sleep(4)
+            end
+        end,
+        CanEnter = function()
+            return params.position1 ~= ""
+        end
+    }
+
+    nodes.SelectDestination.Position2 = Action {
+        function()
+            if mod.moveto.MoveToPoint(position2,MovementSpeed.Walk,me) then
+                LookFrom(position2)
+                Sleep(4)
+            end
+        end,
+        CanEnter = function()
+            return params.position2 ~= ""
+        end
+    }
+
+    nodes.SelectDestination.Position3 = Action {
+        function()
+            if mod.moveto.MoveToPoint(position3,MovementSpeed.Walk,me) then
+                LookFrom(position3)
+                Sleep(4)
+            end
+        end,
+        CanEnter = function()
+            return params.position3 ~= ""
+        end
+    }
+    nodes.SelectDestination.Position4 = Action {
+        function()
+            if mod.moveto.MoveToPoint(position4,MovementSpeed.Walk,me) then
+                LookFrom(position4)
+                Sleep(4)
+            end
+        end,
+        CanEnter = function()
+            return params.position4 ~= ""
+        end
+    }
+    nodes.SelectDestination.Position5 = Action {
+        function()
+            if mod.moveto.MoveToPoint(position5,MovementSpeed.Walk,me) then
+                LookFrom(position5)
+                Sleep(4)
+            end
+        end,
+        CanEnter = function()
+            return params.position5 ~= ""
+        end
+    }
+
+end
+}

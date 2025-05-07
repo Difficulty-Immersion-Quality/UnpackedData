@@ -1,0 +1,73 @@
+game.states.GOB_PitVictim = State{function()
+
+    modules = {"shared.moveto"}
+
+    -----------------------------
+    -- Local variables
+    local victim = nil
+    local door = Entity("S_GOB_SpiderNest_CageDoor_5c819af6-4db1-459f-8f83-ce9bf2bae07b")
+    local lever = Entity("S_GOB_SpiderNest_Lever_Inside_1465d82c-6979-4e9b-8026-c3100916b4f3")
+    local lever2 = Entity("S_GOB_SpiderNest_Lever_Outside_0c21d309-f308-4174-9bef-b42fcf11fc07")
+    local outTrigger = Entity("S_GOB_SpiderNest_OutPoint_681b5a9c-3c59-4c61-b1f1-e4652be57e0b")
+    local thePit = Entity("TRIGGERGUID_S_GOB_SpiderNest_ThePit_0f3188b4-5cfe-4353-8bf0-d528cda0a446")
+
+    local leftCage = false
+    local cageIsOpen = false
+    -----------------------------
+    -- State nodes
+
+    -----------------------------
+    -- Nodes
+
+    nodes.leaveCage = Action{
+        function()
+            Sleep(5)
+            if mod.moveto.MoveToPoint(outTrigger, MovementSpeed.Run, me, 0.5) then
+                leftCage = true                
+            else
+                Sleep(3)
+                cageIsOpen = false
+            end            
+        end,
+        CanEnter = function()
+            return (door.Item.IsOpened or cageIsOpen) and not leftCage
+        end
+    }
+
+    nodes.closeCage = Action{
+        function()
+            if not door.Item.IsDestroyed and door.Item.IsOpened then          
+                UseItem(lever2.Item)
+            end
+            Sleep(6)
+            if (not door.Item.IsOpened) then
+                SetEntityEvent(me, "GOB_SpiderNest_VictimLeft")     
+            end      
+        end,
+        CanEnter = function()
+            return leftCage
+        end
+    }
+
+    nodes.openCage = Action{
+        function()
+            if mod.moveto.MoveToPoint(lever, MovementSpeed.Run, me, 0.5) then
+                UseItem(lever.Item)
+                Sleep(6)
+                cageIsOpen = true
+            end         
+        end,
+        CanEnter = function()
+            return not door.Item.IsOpened or not cageIsOpen
+        end
+    }
+
+    nodes.idle = Action{
+        function()
+            WaitForInterrupt()            
+        end
+    }
+
+
+end
+}

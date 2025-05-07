@@ -1,0 +1,56 @@
+game.states.WYR_Jungle_AlioramusIntro = State { function ()
+    
+    description = [[ 
+        Behaviour for the dino in the jungle to play a short intro - following a non-looping spline.
+    ]]
+
+    modules = { "shared.util" }
+
+    params.introSpline = { type = EParamType.String, required = true, help = [[
+        Patrol spline to use for the intro movement.
+    ]]}
+
+    params.movementSpeed = { type = EParamType.String, required = false, default = "Walk", help = [[
+        Movement speed for patrol spline (Stroll, Walk, Run or Sprint)
+    ]]}
+
+    local targetSplineIndex = -1
+    local introSpline = nil
+    local finished = false
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        introSpline = Spline(params.introSpline)
+    end
+
+    self.Valid = function()
+        return not finished
+    end
+
+    self.OnLeave = function()
+        LookFrom(patrolSpline)
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.Intro = Action {
+        function()
+            try
+                DoPatrol(introSpline, false, MovementSpeed[params.movementSpeed], targetSplineIndex, false)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                DebugText(me, "DoPatrol failed: "..tostring(e))
+                Sleep(3)
+            end            
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        if e.EndReached then
+            finished = true
+        end        
+    end 
+end}

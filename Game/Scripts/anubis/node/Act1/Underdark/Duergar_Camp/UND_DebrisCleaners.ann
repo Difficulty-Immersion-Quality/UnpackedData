@@ -1,0 +1,103 @@
+game.states.UND_DebrisCleaners = State{function ()
+
+    params.homeTrigger = {type = EParamType.String, required = false, default=nil, help=[[
+        home trigger
+        ]]}
+    
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is about to be destroyed or has been already.
+    ]]}
+
+    params.CaveInEvacuationBox = {type = EParamType.String, help=[[
+        The trigger to which the characters will run if the Rothe is going to crash the cave in or explosives are set.
+    ]]}
+
+    modules = { "shared.util","shared.math" }
+
+    local bool_gettingWhipped = false
+    local tr_homeTrigger
+    local tr_caveInLookAt
+    local anim_mine = Animation("CUST_Mine_01_d70c8332-7968-4a81-96c3-0bf09a1830dc")
+
+    local flag_ExplosivesSet = Flag("UND_DuergarCamp_State_ExplosivesAtCaveIn_41633d28-12de-4fad-989f-863f411132c4")
+    local flag_CaveInCleared = Flag("UND_DuergarCamp_State_CaveInCleared_e0d8a48b-e0cf-4cc8-96bc-b637b79ce9bd")
+    
+    self.OnInit = function()
+        tr_homeTrigger = FindEntity(params.homeTrigger)
+        tr_caveInLookAt = FindEntity("S_UND_DuergarCamp_CaveIn_LookAt_1b97fad4-456b-4a5a-ac43-10841fca2711")
+
+    end
+
+
+    nodes.State_CaveInCleared = Proxy {
+        game.states.UND_DuergarCamp_CaveInCleared,
+        params = {CaveInPosition = params.CaveInPosition},
+        Valid = function()
+            return GetFlag(flag_CaveInCleared)
+        end
+    }
+
+	nodes.State_CaveInEvacuation = Proxy {
+		game.states.UND_DuergarCamp_CaveInEvacuation,
+		params = {CaveInEvacuationBox = params.CaveInEvacuationBox},
+		Valid = function()
+            return not GetFlag(flag_CaveInCleared)
+            and (GetFlag(flag_ExplosivesSet) or IsInSurface(tr_homeTrigger,SurfaceType.BLACKPOWDER,5.0)
+                or IsInDangerousSurfaceFor(tr_homeTrigger,me.Character,0.5,true))
+		end
+	}
+
+    nodes.Action_Digging = Action {
+        function()
+            mod.util.SleepRandom(0.5,2.5)
+            if not IsInDangerousSurfaceFor(tr_homeTrigger, me.Character,0.5,true) then
+				if GetDistanceTo(me, tr_homeTrigger) > 1.0 then
+					MoveTo(tr_homeTrigger)
+                end
+            end
+            SteerTo(tr_caveInLookAt)
+            LookAtEntity(tr_caveInLookAt, 3.0)
+            Sleep(0.5)
+            if anim_mine ~= nil then
+                SetWeaponUnsheathed(me,true)
+                Sleep(0.5)
+                PlayAnimation(anim_mine,true,false)
+            end
+            mod.util.SleepRandom(0.5,2.5)
+         end,
+         Valid = function(node)
+            return not (GetFlag(flag_CaveInCleared) or GetFlag(flag_ExplosivesSet))
+            and not IsInDangerousSurfaceFor(tr_homeTrigger,me.Character,0.5,true)
+            and not bool_gettingWhipped
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+            SetWeaponUnsheathed(me,false)
+        end
+    }
+
+    nodes.Action_GettingWhipped = Action{
+        function()
+            ApplyStatus(me, "ANIM_COWER", true, -1.0)
+            WaitForInterrupt() -- Interrupted by UND_DuergarGuardWry
+        end,
+        Valid = function(node)
+            return not (GetFlag(flag_CaveInCleared) or GetFlag(flag_ExplosivesSet))
+            and not IsInDangerousSurfaceFor(tr_homeTrigger,me.Character,0.5,true)
+            and bool_gettingWhipped
+        end,
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+        end
+    }
+    
+    events.EntityEvent = function(e)
+        if e.Event == "GettingWhipped" and e.TargetEntity == me then
+            Interrupt()
+            bool_gettingWhipped = true
+        elseif e.Event == "StoppedWhipping" and e.TargetEntity == me then
+            bool_gettingWhipped = false
+        end
+    end
+end
+}

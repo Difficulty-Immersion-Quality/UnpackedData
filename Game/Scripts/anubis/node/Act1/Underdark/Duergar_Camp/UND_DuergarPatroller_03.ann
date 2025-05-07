@@ -1,0 +1,90 @@
+game.states.UND_DuergarPatroller_03 = State{function()
+
+    params.patrolSpline = {type=EParamType.String, help="Patrol spline"}
+
+    modules = {"shared.moveto", "shared.util", "shared.dialog", "shared.math"}
+
+    local patrolSpline
+    local lookFromSpline = false
+    local currentSplinePoint = 0
+    -- entities
+    local tr_distractedLocation = Entity("S_UND_SpiderMaster_DistractionSpot_7bbab335-f479-4b3c-92b0-1fab37a9c8c6")
+    local prisoner = Entity("S_UND_HangedDrow_02_8a79ab3c-1b49-485c-8359-5d2b7f01ec6a")
+    --Flags
+    local UND_SpiderFight_Started = Flag("UND_DuergarCamp_SpiderEvangelical_DialogStarted_faec86b6-4e8d-4ae1-abd8-52a0a9ee2a72")
+    local UND_SpiderFight_Ended = Flag("UND_DuergarCamp_SpiderEvangelical_DialogEnded_bd3de02e-b9a1-46ae-8efa-8c1877598711")
+    --Animations
+    local anim_tauntingPrisoner = Animation("CUST_BanditLookingAtHole_01_5aa2427f-b8ab-4213-ae48-57c10a619239")
+    --ADs
+    local ad_TauntingPrisoner = Dialog("UND_DuergarLoyalPatroller_01_AD_TauntingPrisoner_7f90db23-cd86-4772-06f4-2a8245ab38f5")
+    --bools
+    local BackTurned_canEnter = false
+
+    self.OnInit = function()
+        patrolSpline = Spline(params.patrolSpline)
+    end
+
+    --nodes
+
+    nodes.Action_BackTurned = Action{
+        function()
+            local moveResult = MoveTo(tr_distractedLocation, MovementSpeed.Walk, true, true, 1.0, 2.0, false)
+            if moveResult ~= error.MovementError.None then
+                DebugText(me, "Movement to wait position failed")
+                Sleep(2.0)
+            end
+            LookAtEntity(prisoner, 3.0)
+
+            if GetFlag(UND_SpiderFight_Ended) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        ad_TauntingPrisoner,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 3.0,
+                        },
+                        me
+                    )
+                    BackTurned_canEnter = false
+            end
+            PlayAnimation(anim_tauntingPrisoner,true,false)
+            mod.util.SleepRandom(1.0,3.0)
+        end,
+        Valid = function()
+            return GetFlag(UND_SpiderFight_Started) and BackTurned_canEnter
+        end
+
+    }
+
+    nodes.Action_LookFromSpline = Action{
+        function()
+           LookFrom(patrolSpline)
+           mod.util.SleepRandom(2.0,6.0)
+           lookFromSpline = false
+           if mod.math.CoinToss(0.25) then
+            BackTurned_canEnter = true
+           end
+        end,
+        Valid = function()
+            return lookFromSpline
+        end
+    }
+
+    nodes.Action_Patrol = Action{
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Walk)
+        end,
+        Valid = function()
+            return patrolSpline ~= nil and not lookFromSpline
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            Sleep(5.0)
+        end
+    }
+
+    events.SplineControlPointReached = function(ev)
+        lookFromSpline = true
+    end
+end}

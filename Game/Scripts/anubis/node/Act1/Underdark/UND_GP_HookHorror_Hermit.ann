@@ -1,0 +1,108 @@
+game.states.UND_GP_HookHorror_Hermit = State{
+    function()
+        modules = {"shared.items", "shared.dialog"}
+
+        ------------------------------------------------
+        -- Local variables
+        local previouslySitting = false
+
+        local AD = Dialog("UND_GP_HookHorror_AD_HermitIdle_e7bf3daf-3688-6024-7caa-e277a43aec53")
+
+        local sittingPos = Entity("S_UND_GP_HookHorror_HermitSittingPos_eb583dd6-c597-44d2-8e5a-6603fef6d92b")
+        local sittingOnFloor = Animation("CUST_SittingGround_01_84a7c4b0-e558-4dde-9408-01afe3b24a72")
+
+        local lookFarPos = Entity("S_UND_GP_HookHorror_HermitLookFar_a969f9f6-9961-45b4-92bd-4ed8006c4765")
+
+        local crate = Entity("S_UND_GP_HookHorror_HermitCrate_b0201329-271e-4a97-8638-d22a2d06a046")
+        local inspectAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+        ------------------------------------------------
+
+
+        ------------------------------------------------
+        -- Nodes selector
+        nodes = Selector{
+            function(nodes)
+
+                local newAction = GetWeightedCanEnter(nodes, {[nodes.Action_SittingOnBedroll] = 1,
+                                                              [nodes.Action_LookFarAway] = 2,
+                                                              [nodes.Action_InspectCrate] = 2})
+
+                previouslySitting = false
+                return newAction
+            end
+        }
+        ------------------------------------------------
+
+
+        ------------------------------------------------
+        -- Actions
+        nodes.Action_SittingOnBedroll = Action{
+            function()
+                if not IsInDangerousSurfaceFor(sittingPos, me.Character, 1.0) then
+                    try
+                        MoveTo(sittingPos)
+                        LookFrom(sittingPos)
+
+                        -- Start AD while he does his things
+                        if mod.dialog.IsSpeakerAvailable(me) then
+                            StartAutomatedDialogImmediate(AD, me)
+                        end
+
+                        SitOnGround(me)
+                        previouslySitting = true
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) or ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me, "Error: MovementFailed/PlayAnimationFailed")
+                    end
+                end
+                Sleep(9.0)
+            end,
+            OnLeave = function()
+                if me.IsReposed then
+                    EndRepose(me)
+                end
+            end,
+            CanEnter = function()
+                return not previouslySitting
+            end
+        }
+
+        nodes.Action_LookFarAway = Action{
+            function()
+                if not IsInDangerousSurfaceFor(lookFarPos, me.Character, 1.0) then
+                    try
+                        MoveTo(lookFarPos)
+                        LookFrom(lookFarPos)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me, "Error: MovementFailed")
+                    end
+                end
+                Sleep(9.0)
+            end
+        }
+
+        nodes.Action_InspectCrate = Action{
+            function()
+                if not IsInDangerousSurfaceFor(crate, me.Character, 1.0) then
+                    try
+                        MoveInRange(crate, 0.0, 0.5)
+                        SteerTo(crate)
+
+                        -- Start AD while he does his things
+                        if mod.dialog.IsSpeakerAvailable(me) then
+                            StartAutomatedDialogImmediate(AD, me)
+                        end
+
+                        PlayAnimation(inspectAnim)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) or ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me, "Error: MovementFailed/PlayAnimationFailed")
+                    end
+                end
+                Sleep(3.0)
+            end,
+            Valid = function()
+                return not mod.items.SafeIsDestroyed(crate)
+            end
+        }
+        ------------------------------------------------
+    end
+}

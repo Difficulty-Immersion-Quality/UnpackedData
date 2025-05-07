@@ -1,0 +1,70 @@
+game.states.WYR_Axe_DoppelgangerAssassin_004 = State{function()
+    description = [[Danthelon Axe doppelganger behavior]]
+
+    local trigger = Entity("S_WYR_Axe_Doppelganger_Pos_004_91ee0b81-64ba-43ea-9122-4529f1fee98b")
+    local lookAt = Entity("S_WYR_Axe_Doppelganger_LookAt_aa639603-a791-45fa-8f13-6d6ad5c26b14")
+    local leanDialog = Dialog("WYR_Axe_WB_DoppelgangerLeaning_8d71c432-d9f7-ebf7-79b6-ff3255343ca0")
+    local timelineTrigger = Entity("WYR_Axe_WB_DoppelgangerLeaning_SceneTrigger_2690b922-5bf8-435d-aef9-4850cd71b298")
+    local impatient = Animation("CUST_CombatReadyImpatient_01_Loop_5d1167c5-e6db-41f7-9851-5ff7407d5ba5")
+    local ignoreDangerousSurfacesTag = Tag("IGNORE_DANGEROUS_SURFACES_bbf62461-4af4-4631-807a-eb0bd988d9a6")
+
+
+    local afterFight = Flag("WYR_Axe_State_DoppelgangersFight_4e94de74-bb48-44c5-ac00-0d453a5ac32b")
+
+    nodes.AfterFight = Action{
+        CanEnter = function()
+            return GetFlag(afterFight)
+        end,
+
+        function()
+            Wander(15.0, 3.0, MovementSpeed.Walk, trigger, false)
+            for i = 1, math.random(1, math.random(1, 5)) do
+                try
+                    PlayAnimation(impatient, true, false)
+                catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                end
+            end
+            --mod.util.SleepRandom(5.0, 15.0)
+        end
+    }
+
+    nodes.LookAtDestination = Action{
+        CanEnter = function()
+            return IsInDangerousSurfaceFor(trigger, me.Character)
+                and not IsTagged(me, ignoreDangerousSurfacesTag)
+        end,
+
+        function()
+            SteerTo(lookAt)
+            PlayAnimation(animation, false, true)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.WalkToTrigger = Action{
+        CanEnter = function()
+            return GetDistanceTo(me, trigger) > 0.7
+        end,
+        function()
+            local moveResult = MoveTo(trigger, MovementSpeed.Walk, false, false, 0.5, 0.7, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(trigger)
+                Sleep(0.5)
+            end
+        end
+    }
+
+    nodes.StandAtTrigger = Action{
+        function()
+            LookFrom(trigger)
+            StartBehaviorDialog(leanDialog, timelineTrigger.Trigger, true, me)
+        end,
+
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true, leanDialog)
+        end
+    }
+end}

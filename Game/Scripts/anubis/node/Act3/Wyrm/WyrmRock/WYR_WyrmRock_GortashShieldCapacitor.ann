@@ -1,0 +1,45 @@
+game.states.WYR_WyrmRock_GortashShieldCapacitor = State{function()
+    description = [[]]
+
+    params.range = { type = EParamType.Number, required = true,
+        help = [[Range in which the shield capacitor can buff Gortash]]}
+
+    params.spell = {type = EParamType.String, required = true,
+        help = [[Spell of the shield capacitor]]}
+
+    local gortash = Entity("S_GLO_Gortash_b878a854-f790-4999-95c4-3f20f00f65ac")
+
+    local shootingBlocked = false
+
+    nodes.Shooting = Action{
+        function()
+            Sleep(1.0)
+            UseSpellImmediate(me, params.spell, gortash, nil, nil, nil, true, true, nil)
+            shootingBlocked = true
+            ApplyStatus(me, "WYR_GORTASH_TURRET_RECHARGING", true, 6.0)
+            Sleep(2.0)
+        end,
+        CanEnter = function()
+            return not shootingBlocked and me.IsInCombat
+                and (gortash ~= nil
+                    and not gortash.Character.IsDead
+                    and not HasActiveStatus(gortash, "WYR_GORTASH_SHIELD_BUFF")
+                    and gortash.IsInCombat
+                    and GetDistanceTo(me, gortash) <= params.range
+                    and HasLineOfSight(gortash, me))
+        end,
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+
+    events.StatusRemoved = function(e)
+        if e.Status.StatusID == "WYR_GORTASH_TURRET_RECHARGING" then
+            shootingBlocked = false
+        end
+    end
+
+end}

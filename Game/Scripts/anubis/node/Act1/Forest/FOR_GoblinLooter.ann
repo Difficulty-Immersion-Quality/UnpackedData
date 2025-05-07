@@ -1,0 +1,189 @@
+game.states.FOR_GoblinLooter_Patrol = State{
+    function()
+        ------------------------------------------------
+        -- Behaviour params
+        params.customBehaviour = {type = EParamType.State, required = false, default = nil,
+            help = [[Goblin custom behaviour.]]}
+
+        params.customBehaviourFrequency= { type = EParamType.Number, required = false, default = 1,
+        help = [[Custom behaviour frequency.]]}
+
+        params.patrolSpline = {type = EParamType.String, required = true,
+            help = [[Patrol spline]]}
+
+        params.waitTime = {type = EParamType.Number, required = false, default = 0,
+            help = [[Wait between control points]]}
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Local variables
+        local inspectAnimStart = Animation("CUST_LookingForValuables_01_Start_c85aad6d-91a1-4de7-883b-559b49c316b2")
+        local inspectAnimLoop = Animation("CUST_LookingForValuables_01_Loop_eab8704c-97f7-4124-bab1-55deeadff528")
+        local inspectAnimEnd = Animation("CUST_LookingForValuables_01_End_48899f01-057a-48a1-88db-602cabe6e7fc")
+        local wait = false
+
+        local patrolSpline = Spline(params.patrolSpline)
+        local patrolSplineIndex = -1
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Nodes
+        nodes = Selector{
+            function(nodes)
+                if params.customBehaviour ~= nil then
+                    return GetWeightedCanEnter(nodes, {
+                        [nodes.PatrolBehaviour] = 5,
+                        [nodes.Proxy_CustomBehaviour] = params.customBehaviourFrequency})
+                else
+                    return nodes.PatrolBehaviour
+                end
+            end,
+            Valid = function(nodes)
+                return CheckAnySelectable(nodes)
+            end
+        }
+
+        nodes.Proxy_CustomBehaviour = Proxy{
+            params.customBehaviour,
+            OnLeave = function()
+                wait = false
+            end
+        }
+
+        nodes.PatrolBehaviour = ImmediateSelector{
+            Valid = function(nodes)
+                return CheckAnySelectable(nodes)
+            end
+        }
+
+        nodes.PatrolBehaviour.Action_Patrol = Action{
+            function()
+                try
+                    DoPatrol(patrolSpline, false, MovementSpeed.Walk, patrolSplineIndex)
+                catch e if ls.CheckType(e, error.MissingComponent) then
+                    DebugText(me, "Error: MissingComponent on DoPatrol()")
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return not wait
+            end
+        }
+
+        nodes.PatrolBehaviour.Action_Wait = Action{
+            OnEnter = function()
+                ShortPatrolInterrupt()
+            end,
+            function()
+                LookFrom(patrolSpline)
+                DebugText(me,"Inspecting start")
+                PlayLoopingAnimation(inspectAnimStart,{inspectAnimLoop},inspectAnimEnd,false)
+                Sleep(42.0)
+                StopAnimation(me)
+                DebugText(me,"Inspecting end")
+                Sleep(2.0) --TODO: hard-coded animation sleep fix
+                Sleep(params.waitTime)
+                wait = false
+            end,
+            CanEnter = function()
+                return wait
+            end
+        }
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Events
+        events.SplineControlPointReached = function(e)
+            patrolSplineIndex = e.NewIndex
+
+            if me.Active then
+                wait = true
+            end
+        end
+        ------------------------------------------------
+    end
+}
+
+game.states.FOR_GoblinLooter_Boss = State{
+    function()
+
+        modules = { "shared.dialog" }
+
+        ------------------------------------------------
+        -- Local variables
+        local idlePos = Entity("S_FOR_ApothecaryGoblin_LookFromPos_620054ac-970f-48c5-9389-ec9a33ae6fce")
+        local AD = Dialog("FOR_ApothecaryGoblins_AD_Boss_ae434ae8-7e06-78a0-6374-22d4baa073e1")
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Helpers
+        helpers.action.PlayAD = function()
+            try
+                if mod.dialog.IsSpeakerAvailable(me, false) then
+                    StartAutomatedDialog(AD, true, me)
+                else
+                    Sleep(3.0)
+                end
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me,"Debug : AD failed")
+                Sleep(3.0)
+            end
+        end
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Nodes
+        nodes = Selector{
+            function(nodes)
+                return GetWeightedCanEnter(nodes, {
+                    [nodes.Action_StandAtTrigger] = 8,
+                    [nodes.Action_PlayAD] = 1})
+            end,
+            Valid = function(nodes)
+                return CheckAnySelectable(nodes)
+            end
+        }
+
+        nodes.Action_PlayAD = Action{
+            function()
+                if not IsInDangerousSurfaceFor(idlePos, me.Character) then
+                    local moveToResult = MoveTo(idlePos, MovementSpeed.Walk, true, false, 0.2, 1.0, false)
+
+                    if moveToResult ~= error.MovementError.None then
+                        LookFrom(idlePos)
+                        helpers.PlayAD()
+                    else
+                        SteerTo(idlePos)
+                        helpers.PlayAD()
+                    end
+                else
+                    SteerTo(idlePos)
+                    helpers.PlayAD()
+                end
+            end,
+            CanEnter = function()
+                return mod.dialog.IsSpeakerAvailable(me, false)
+            end
+        }
+
+        nodes.Action_StandAtTrigger = Action{
+            function()
+                if not IsInDangerousSurfaceFor(idlePos, me.Character) then
+                    local moveToResult = MoveTo(idlePos, MovementSpeed.Walk, true, false, 0.2, 1.0, false)
+
+                    if moveToResult ~= error.MovementError.None then
+                        SteerTo(idlePos)
+                        Sleep(3.0)
+                    else
+                        LookFrom(idlePos)
+                        Sleep(6.0)
+                    end
+                else
+                    SteerTo(idlePos)
+                    Sleep(3.0)
+                end
+            end
+        }
+        ------------------------------------------------
+    end
+}

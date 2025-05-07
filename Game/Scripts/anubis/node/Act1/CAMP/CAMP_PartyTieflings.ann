@@ -1,0 +1,584 @@
+game.states.CAMP_FlirtyTiefling = State {function ()
+    description = [[Patrolling the camp and talking with Bard.]]
+
+    modules = {"shared.dialog", "shared.math", "shared.util"}
+
+    params.AD = {type=EParamType.String, required=false, default=nil, help=[[AD played with bard.]]}
+    params.backupAD = {type=EParamType.String, required=false, default=nil, help=[[AD played with backup bard.]]}
+
+    local bard = Entity("S_DEN_Bard_4a405fba-3000-4c63-97e5-a8001ebb883c")
+    local bardBackup = Entity("S_CAMP_TieflingBackup_001_39feb630-73d6-414c-a5cd-d02366ff26d7")
+    local standAndDrinkDialog = Dialog("BHVR_WRLD_GLO_StandAndDrink_a4065598-1ea2-8866-d23f-f765b5008273")
+    local AD = Dialog(params.AD)
+    local backupAD = Dialog(params.backupAD)
+    local canAD = true
+
+    --Patrol
+    local patrolSpline = Spline("S_CAMP_FlirtySpline_9c52ff82-3b15-483e-8546-ba907baad2a0")
+    local canWalkOnSpline = true
+    local splineEvent = ""
+    local tieflingPetsDogFlag = Flag("CAMP_GoblinHuntCelebration_State_PettingDog_cc8b4a4d-99ca-41a1-b38a-57686feb7070")
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me and ev.Event == "StartPetTheDog" and GetFlag(tieflingPetsDogFlag, me) then
+            EndRepose(me)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    end
+
+    nodes.WaitingForDog = Action {
+        function() 
+            Sleep(1.0)
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, false)
+        end,
+        Valid = function()
+            return GetFlag(tieflingPetsDogFlag, me)
+        end
+    }
+
+    nodes.ADBard = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true,
+                },
+                me,
+                bard
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_CAMP_GoblinHuntCelebration_AD_Bard")
+            StartTimer(me,"ADTimer_CAMP_GoblinHuntCelebration_AD_Bard", 20.0 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return splineEvent == "CAMP_GoblinHuntCelebration_WithBard" and canAD and not bard.Character.IsDead and params.AD ~= nil
+        end
+    }
+
+    nodes.ADBackup = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                backupAD,
+                {
+                    waitForCompletion = true,
+                },
+                me,
+                bardBackup
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_CAMP_GoblinHuntCelebration_AD_Bard")
+            StartTimer(me,"ADTimer_CAMP_GoblinHuntCelebration_AD_Bard", 20.0 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return splineEvent == "CAMP_GoblinHuntCelebration_WithBard" and canAD and bard.Character.IsDead and params.backupAD ~= nil
+        end
+    }
+
+    nodes.AtLocation = Action {
+        function()
+            LookFrom(patrolSpline)
+            mod.util.SleepRandom(3.0, 10.0)
+            StartBehaviorDialog(standAndDrinkDialog, nil, true, me)
+            mod.util.SleepRandom(1.0, 5.0)
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnInterrupt = function()
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.Patrolling = Action {
+        OnEnter = function()
+            splineEvent = ""
+        end,
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.Automated then
+            canWalkOnSpline = true
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_CAMP_GoblinHuntCelebration_AD_Bard") then 
+            canAD = true
+        end
+    end
+end}
+
+game.states.CAMP_IrritatedTiefling = State {function ()
+    description = [[Patrolling the camp and talking with Ikaron.]]
+
+    modules = {"shared.dialog", "shared.math", "shared.util"}
+
+    params.AD = {type=EParamType.String, required=false, default=nil, help=[[AD played with Ikaron.]]}
+    params.backupAD = {type=EParamType.String, required=false, default=nil, help=[[AD played with backup Ikaron.]]}
+
+    local ikaron = Entity("S_DEN_Tiefling_008_03b6fae4-d250-4ce9-9a01-19cb427deb17")
+    local ikaronBackup = Entity("S_CAMP_TieflingBackup_006_9ad714f0-83a4-40a5-bc5e-06b82aadcca5")
+    local standAndDrinkDialog = Dialog("BHVR_WRLD_GLO_StandAndDrink_a4065598-1ea2-8866-d23f-f765b5008273")
+    local AD = Dialog(params.AD)
+    local backupAD = Dialog(params.backupAD)
+    local canAD = true
+
+    --Patrol
+    local patrolSpline = Spline("S_CAMP_IrritatedSpline_6284418b-3582-43bd-b33b-43d84312bbe7")
+    local canWalkOnSpline = true
+    local splineEvent = ""
+    local tieflingPetsDogFlag = Flag("CAMP_GoblinHuntCelebration_State_PettingDog_cc8b4a4d-99ca-41a1-b38a-57686feb7070")
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me and ev.Event == "StartPetTheDog" and GetFlag(tieflingPetsDogFlag, me) then
+            EndRepose(me)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    end
+
+    nodes.WaitingForDog = Action {
+        function() 
+            Sleep(1.0)
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, false)
+        end,
+        Valid = function()
+            return GetFlag(tieflingPetsDogFlag, me)
+        end
+    }
+
+    nodes.ADIkaron = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true,
+                },
+                me,
+                ikaron
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_CAMP_GoblinHuntCelebration_AD_Ikaron")
+            StartTimer(me,"ADTimer_CAMP_GoblinHuntCelebration_AD_Ikaron", 20.0+ math.random(0,10),0)
+        end,
+        Valid = function()
+            return splineEvent == "CAMP_GoblinHuntCelebration_WithIkaron" and canAD and not ikaron.Character.IsDead and params.AD ~= nil
+        end
+    }
+
+    nodes.ADBackup = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                backupAD,
+                {
+                    waitForCompletion = true,
+                },
+                me,
+                ikaronBackup
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_CAMP_GoblinHuntCelebration_AD_Ikaron")
+            StartTimer(me,"ADTimer_CAMP_GoblinHuntCelebration_AD_Ikaron", 20.0 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return splineEvent == "CAMP_GoblinHuntCelebration_WithIkaron" and canAD and ikaron.Character.IsDead and params.backupAD ~= nil
+        end
+    }
+
+    nodes.AtLocation = Action {
+        function()
+            LookFrom(patrolSpline)
+            mod.util.SleepRandom(3.0, 10.0)
+            StartBehaviorDialog(standAndDrinkDialog, nil, true, me)
+            mod.util.SleepRandom(1.0, 5.0)
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnInterrupt = function()
+            canWalkOnSpline = true
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    nodes.Patrolling = Action {
+        OnEnter = function()
+            splineEvent = ""
+        end,
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.Automated then
+            canWalkOnSpline = true
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_CAMP_GoblinHuntCelebration_AD_Ikaron") then 
+            canAD = true
+        end
+    end
+end}
+
+game.states.CAMP_SitAndDrink = State {function ()
+    description = [[Sitting and having a drink, to be used with Sit state]]
+
+    modules = {"shared.math", "shared.util"}
+
+    params.willDrink = {type=EParamType.Bool, required=false, default=true, help=[[Whether this character will drink while sitting.]]}
+    params.seat = {type=EParamType.String, required=true, help=[[Seat used while drinking.]]}
+
+    local sonOfChef = Entity("S_DEN_Tiefling_008_03b6fae4-d250-4ce9-9a01-19cb427deb17")
+    local willDrink = params.willDrink
+    local sitAndDrinkDialog = Dialog("BHVR_WRLD_GLO_MagicPocketsSitAndDrink_c2e8c0bf-d1d0-af01-72c3-e7c244444e2c")
+    local seat = nil
+
+    self.OnInit = function()
+        seat = FindEntity(params.seat)
+    end
+
+    nodes.Drink = Action {
+        function()
+            mod.util.SleepRandom(3.0, 10.0)
+            if(willDrink == true) and seat ~= nil then
+                try
+                    StartBehaviorDialog(sitAndDrinkDialog, nil, true, me, seat)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    Sleep(0.5)
+                end
+            end
+            mod.util.SleepRandom(1.0, 5.0)
+        end
+    }
+
+    events.FlagSet = function(e)
+        if(e.Flag == Guid("CAMP_GoblinHuntCelebration_Event_SonOfChefGotDrink_2efa26d8-a841-74d1-c176-0a0314f9d8a2") and me == sonOfChef) then
+            willDrink = true
+        end
+    end
+end}
+
+game.states.CAMP_LeaderStandsAndDrinks = State {function ()
+    description = [[Standing and having a drink.]]
+
+    modules = {"shared.math", "shared.util", "shared.dialog"}
+
+    local leaderAD = Dialog("CAMP_GoblinHuntCelebration_AD_ZevlorReflections_bfbebf7c-8d6c-b732-a60d-3c1ff43a5a57")
+    local position = Entity("S_CAMP_TieflingLeaderPos_7001b288-8eb3-46e6-bc21-fd4b0c2ec33c")
+    local standAndDrinkDialog = Dialog("BHVR_WRLD_GLO_StandAndDrink_a4065598-1ea2-8866-d23f-f765b5008273")
+    local tieflingLeader = Entity("S_DEN_TieflingLeader_475200ee-cc3c-4dbe-84b1-1820c02ea26a")
+    local tieflingPetsDogFlag = Flag("CAMP_GoblinHuntCelebration_State_PettingDog_cc8b4a4d-99ca-41a1-b38a-57686feb7070")
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me and ev.Event == "StartPetTheDog" and GetFlag(tieflingPetsDogFlag, me) then
+            EndRepose(me)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    end
+
+    nodes.WaitingForDog = Action {
+        function() 
+            Sleep(1.0)
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, false)
+        end,
+        Valid = function()
+            return GetFlag(tieflingPetsDogFlag, me)
+        end
+    }
+
+    nodes.StandAndDrink  = Action {
+        function()
+            if not IsInDangerousSurfaceFor(position, me.Character)
+                and (GetDistanceTo(me, position) > 2.0) then
+                    try
+                        MoveTo(position, MovementSpeed.Stroll, false, false, 0.5, 1.5)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(6.0)
+                    end
+            else
+                Sleep(6.0)
+            end
+            LookFrom(position)
+            mod.util.SleepRandom(3.0, 10.0)
+            StartBehaviorDialog(standAndDrinkDialog, nil, true, me)
+            if(me == tieflingLeader) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    leaderAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0
+                    },
+                    me
+                )
+            end
+            mod.util.SleepRandom(3.0, 10.0)
+        end
+    }
+end}
+
+game.states.CAMP_StandDrinkAndTalk = State {function ()
+    description = [[Standing and having a drink.]]
+
+    modules = {"shared.math", "shared.util", "shared.dialog"}
+
+    local lover1 = Entity("S_GLO_YoungLover_01_dd9178e7-1e3f-43bc-8a38-666dfcac7d0c")
+    local lover2 = Entity("S_GLO_YoungLover_02_dcf597c0-36c5-4c81-957a-6fe9fca50a68")
+
+    local position = Entity("S_CAMP_TieflingPos_004_a85634ac-3b61-40f1-9580-0d8481f88d1c")
+    local standAndDrinkAnim = Animation("CUST_Drinking_01_Drink_Wine_Glass_A_3f6ab5b5-6c83-456d-932e-23a260378b6b")
+
+    local AD = Dialog("CAMP_GoblinHuntCelebration_AD_Lover1_Lover2_091c7b26-63e7-bf50-250f-aea3978429d0")
+    local canAD = true
+    local tieflingPetsDogFlag = Flag("CAMP_GoblinHuntCelebration_State_PettingDog_cc8b4a4d-99ca-41a1-b38a-57686feb7070")
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me and ev.Event == "StartPetTheDog" and GetFlag(tieflingPetsDogFlag, me) then
+            EndRepose(me)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    end
+
+    nodes.WaitingForDog = Action {
+        function() 
+            Sleep(1.0)
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, false)
+        end,
+        Valid = function()
+            return GetFlag(tieflingPetsDogFlag, me)
+        end
+    }
+
+    nodes.ADLover = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true,
+                },
+                me,
+                lover2
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_CAMP_GoblinHuntCelebration_AD_Lover")
+            StartTimer(me,"ADTimer_CAMP_GoblinHuntCelebration_AD_Lover", 25.0 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return canAD and not lover1.Character.IsDead and not lover2.Character.IsDead
+        end
+    }
+
+    nodes.StandAndDrink  = Action {
+        function()
+            if not IsInDangerousSurfaceFor(position, me.Character)
+                and (GetDistanceTo(me, position) > 2.0) then
+                    try
+                        MoveTo(position, MovementSpeed.Stroll, false, false, 0.5, 1.5)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(6.0)
+                    end
+            else
+                Sleep(6.0)
+            end
+            LookFrom(position)
+            mod.util.SleepRandom(3.0, 10.0)
+            PlayAnimation(standAndDrinkAnim, true, false)
+            mod.util.SleepRandom(1.0, 5.0)
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_CAMP_GoblinHuntCelebration_AD_Lover") then 
+            canAD = true
+        end
+    end
+
+end}
+
+game.states.CAMP_StandAndDrink = State {function ()
+    description = [[Standing and having a drink.]]
+
+    modules = {"shared.math", "shared.util"}
+
+    params.position = {type=EParamType.String, required=false, default=nil, help=[[Position at camp.]]}
+
+    local position = Entity(params.position)
+    local standAndDrinkAnim = Animation("CUST_Drinking_01_Drink_Wine_Glass_A_3f6ab5b5-6c83-456d-932e-23a260378b6b")
+
+    local tieflingPetsDogFlag = Flag("CAMP_GoblinHuntCelebration_State_PettingDog_cc8b4a4d-99ca-41a1-b38a-57686feb7070")
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me and ev.Event == "StartPetTheDog" and GetFlag(tieflingPetsDogFlag, me) then
+            EndRepose(me)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    end
+
+    nodes.WaitingForDog = Action {
+        function() 
+            Sleep(1.0)
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, false)
+        end,
+        Valid = function()
+            return GetFlag(tieflingPetsDogFlag, me)
+        end
+    }
+
+    nodes.StandAndDrink  = Action {
+        function()
+            if not IsInDangerousSurfaceFor(position, me.Character)
+                and (GetDistanceTo(me, position) > 2.0) then
+                    try
+                        MoveTo(position, MovementSpeed.Stroll, false, false, 0.5, 1.5)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(6.0)
+                    end
+            else
+                Sleep(6.0)
+            end
+            LookFrom(position)
+            mod.util.SleepRandom(3.0, 10.0)
+            PlayAnimation(standAndDrinkAnim, true, false)
+            mod.util.SleepRandom(1.0, 5.0)
+        end
+    }
+end}
+
+game.states.CAMP_SitAndDrinkAndPetDog = State {function() 
+    description = [[Sitting and waiting for Scratch to pass by]]
+
+    params.seat = {type=EParamType.String, required=true, help=[[seat the character will sit on.]]}
+    params.sitIdle = {type = EParamType.State, required = true,
+        help = [[
+            Workaround for not being able to pass params to staterefs in .ann files. Add CAMP_SitAndDrink State here with willDrink and seat params.
+        ]]
+    }
+
+    local tieflingPetsDogFlag = Flag("CAMP_GoblinHuntCelebration_State_PettingDog_cc8b4a4d-99ca-41a1-b38a-57686feb7070")
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me and ev.Event == "StartPetTheDog" and GetFlag(tieflingPetsDogFlag, me) then
+            EndRepose(me)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    end
+
+    nodes.WaitingForDog = Action {
+        function() 
+            Sleep(1.0)
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, false)
+        end,
+        Valid = function()
+            return GetFlag(tieflingPetsDogFlag, me)
+        end
+    }
+
+    nodes.SitAndDrink = Proxy {
+        game.states.Sit,
+        params = {
+            seat = params.seat,
+            sitIdle = params.sitIdle,
+        },
+    }
+    
+end}
+
+game.states.CAMP_WaitAndPetDog = State {function() 
+    description = [[Standing and waiting for Scratch to pass by]]
+
+    local tieflingPetsDogFlag = Flag("CAMP_GoblinHuntCelebration_State_PettingDog_cc8b4a4d-99ca-41a1-b38a-57686feb7070")
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me and ev.Event == "StartPetTheDog" and GetFlag(tieflingPetsDogFlag, me) then
+            EndRepose(me)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    end
+
+    nodes.WaitingForDog = Action {
+        function() 
+            Sleep(1.0)
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, false)
+        end,
+        Valid = function()
+            return GetFlag(tieflingPetsDogFlag, me)
+        end
+    }
+
+    nodes.Wait = Proxy {
+        game.states.Dummy
+    }
+end}

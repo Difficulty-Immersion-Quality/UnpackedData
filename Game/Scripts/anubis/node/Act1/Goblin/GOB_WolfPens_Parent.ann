@@ -1,0 +1,113 @@
+game.states.GOB_WolfPens_Parent = State{function()
+
+    local kid001 = Entity("S_GOB_WolfPens_Kid_001_dff4432a-85b4-4d5c-95b5-6d1179dbabf4")
+    local kid002 = Entity("S_GOB_WolfPens_Kid_002_fc3116bd-4ed0-4246-a7db-64b3a0fd48d1")
+    local canDoAD = true
+    local talk = false
+    local parentAD = Dialog("GOB_WolfPens_AD_Parent_5f729957-7c97-f242-21e1-3ed55f76cb2d")
+
+    local debugMessage = "Who did something"
+
+    local kid001SaidSomethingFlag = Flag("GOB_WolfPens_Event_Kid001SaidSomething_4e52cdd0-b8d7-f661-fd09-7ee973c9b49f")
+    local kid002SaidSomethingFlag = Flag("GOB_WolfPens_Event_Kid002SaidSomething_fd1d19bb-6d12-eae9-28f9-2a04cddf410a")
+    local kid001ThrewARockFlag = Flag("GOB_WolfPens_Event_Kid001ThrewARock_72fa0051-dc79-13d5-017f-5c414bac94bd")
+    local kid002ThrewARockFlag = Flag("GOB_WolfPens_Event_Kid002ThrewARock_dc9ca453-7d64-33ba-8ba9-a5c01be73cc9")
+    local flagPrisonerDied = Flag("GOB_WolfPens_State_PrisonerDied_a1bd5b3f-c4fe-4fac-b3b6-52367e97b545")
+    local persuadedToReleasePrisonerFlag = Flag("GOB_WolfPens_Event_PersuadedToReleasePrisoner_e49112a6-09e1-4a0a-95cc-0e6c8097b2be")
+    local prisoner = Entity("S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323")
+    local cage = Entity("S_GOB_WolfPens_Cage_002_59104718-66ff-418a-b7ac-46696a1e2fc3")
+    local defaultPosition = Entity("S_GOB_WolfPens_Parent_DefaultPosition_c462f5a1-d9a6-4aa5-a3e3-fa5fdff68052")
+
+    nodes.Action_DoNothing = Action{
+        function()
+            Sleep(8.0)
+        end,
+        CanEnter = function()
+            return GetFlag(persuadedToReleasePrisonerFlag) and not GetFlag(flagPrisonerDied)
+        end
+    }
+
+    nodes.Action_ComeCloserToPrisonerInCage = Action{
+        function()
+            MoveTo(defaultPosition, MovementSpeed.Walk)
+            LookFrom(defaultPosition)
+        end,
+        CanEnter = function()
+            return GetFlag(flagPrisonerDied) and IsInTrigger(prisoner, cage.Trigger) and GetDistance2DTo(me, defaultPosition) > 2.0
+        end
+    }
+
+    nodes.Action_ComeCloserToPrisonerOutsideCage = Action{
+        function()
+            MoveInRange(prisoner, 5, 7, MovementSpeed.Walk)
+            LookFrom(prisoner)
+        end,
+        CanEnter = function()
+            return GetFlag(flagPrisonerDied) and not IsInTrigger(prisoner, cage.Trigger) and GetDistance2DTo(me, prisoner) > 7
+        end
+    }
+
+    -- Start AD
+    nodes.Action_Talk = Action{
+        function()
+            talk = false
+            if canDoAD and not IsInDialog(me, false) then
+                canDoAD = false
+                DebugText(me, debugMessage .. ", commenting about it")
+                StartTimer(me, "PreventADFromPlaying", 18, 0)
+                StartAutomatedDialog(parentAD, true, me)
+            end
+            Sleep(1.0)
+        end,
+        CanEnter = function()
+            return talk or GetFlag(flagPrisonerDied)
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            Sleep(1.0)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and canDoAD then
+            local kid = e.Params[1]
+
+            ClearFlag(kid001SaidSomethingFlag, me)
+            ClearFlag(kid002SaidSomethingFlag, me)
+            ClearFlag(kid001ThrewARockFlag, me)
+            ClearFlag(kid002ThrewARockFlag, me)
+
+            if e.Event == "GOB_WolfPens_Event_KidThrewARock" then
+                if kid == kid001 then
+                    debugMessage = "One threw a rock"
+                    SetFlag(kid001ThrewARockFlag, me)
+                    talk = true
+                elseif kid == kid002 then
+                    debugMessage = "Three threw a rock"
+                    SetFlag(kid002ThrewARockFlag, me)
+                    talk = true
+                end
+            elseif e.Event == "GOB_WolfPens_Event_KidSaidSomething" then
+                if kid == kid001 then
+                    debugMessage = "One talked"
+                    SetFlag(kid001SaidSomethingFlag, me)
+                    talk = true
+                elseif kid == kid002 then
+                    debugMessage = "Three talked"
+                    SetFlag(kid002SaidSomethingFlag, me)
+                    talk = true
+                end
+            end
+        end
+    end
+
+    -- Timers
+    events.TimerFinished = function(e)
+        if e.TimerName == "PreventADFromPlaying" then
+            canDoAD = true
+        end
+    end
+end
+}

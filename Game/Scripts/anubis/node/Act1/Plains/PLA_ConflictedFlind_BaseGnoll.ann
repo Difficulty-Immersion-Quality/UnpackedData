@@ -1,0 +1,156 @@
+game.states.PLA_ConflictedFlind_BaseGnoll = State { function()
+    description = [[
+        Base behaviour for Conflicted Flind's gnolls.
+    ]]
+
+    -----------------------------------------
+    -- params section
+
+    params.idleBehaviour = {type = EParamType.State, required = true, help = [[
+        State for idle behaviour while gnolls in the "camp" (before confronting Zhentarims)
+    ]]}
+
+    params.zhentsDeadBehaviour = {type = EParamType.State, required = true, help = [[
+        State for behaviour when Zhents are dead
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local instigateFlag = Flag("PLA_ConflictedFlind_State_Instigate_273fb05a-4c2c-4816-8458-7af837d919a2")
+    local zhentsDeadFlag = Flag("PLA_ZhentShipment_State_SurvivorsAreDead_bb54af09-b0c2-46c2-84e8-642280ccec6a")
+
+    -----------------------------------------
+    -- node section
+
+    -- State: zhents killed or about to be
+    nodes.WanderAtZhents = Proxy {
+        params.zhentsDeadBehaviour,
+        Valid = function()
+            return GetFlag(instigateFlag) or GetFlag(zhentsDeadFlag)
+        end
+    }
+
+    -- State: near cave
+    nodes.NearCave = Proxy {
+        params.idleBehaviour,
+        Valid = function()
+            return not GetFlag(instigateFlag) and not GetFlag(zhentsDeadFlag)
+        end
+    }
+
+    nodes.Action_Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+end}
+
+game.states.PLA_ConflictedFlind_BaseGnoll_ListeningFlindsSpeech = State { function ()
+    description = [[
+        State for behaviour while listening Flind's speech before rushing at Zhents (by Instigate)
+    ]]
+
+    modules = {"shared.math", "gustav.Act1.ZhentShipment"}
+
+    params.listeningAnim = {type = EParamType.String, required = true, help=[[
+        Animations to play while listening Flind
+    ]]}
+
+    params.AD = {type = EParamType.String, required = false, help=[[
+        AD to play while listening Flind
+    ]]}
+
+    local listeningAnim = Animation(params.listeningAnim)
+    local AD
+    local lookAt
+
+    self.OnInit = function()
+        if params.AD ~= nil then
+            AD = Dialog(params.AD)
+        end
+    end
+
+    nodes.ListeningFlindsSpeech = Action {
+        function()
+            Sleep(mod.math.random(0.15, 2.1))
+            mod.ZhentShipment.LookADAnim(me, lookAt, AD, listeningAnim, true)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_ConflictedFlind_Event_PlayReactionPeace" then
+                if e.Params[1] ~= nil then
+                    lookAt = e.Params[1]
+                end
+            end
+        end
+    end
+end}
+
+game.states.PLA_ConflictedFlind_BaseGnoll_Combat = State { function ()
+    description = [[Custom combat behaviour for gnolls. Currently is used for
+        for playing reaction animation after Flind turns against gnolls or
+        after being instigated.
+    ]]
+
+    modules = {"shared.math", "gustav.Act1.ZhentShipment"}
+
+    params.reactionAD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play.
+    ]]}
+
+    local reactionStarted = false
+    local reactionFinished = false
+    local instantReactionPlayed = false
+    local lookAtTarget = nil
+    local animToPlay = Animation("CUST_Idle_Still_Combat_01_590ea7e8-ae43-4307-916b-b1133ef47dfa")
+    local reactionAD = Dialog(params.reactionAD)
+
+    self.Valid = function()
+        return not me.IsCombatPaused
+    end
+
+    nodes = Selector{
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.TurnReaction = Action {
+        function()
+            mod.ZhentShipment.LookADAnim(me, lookAtTarget, reactionAD, nil, false, 0)
+            Sleep(0.1)
+            reactionFinished = true
+        end,
+        Valid = function()
+           return reactionStarted and not reactionFinished and me.CanActInCombatTeamTurn
+        end
+    }
+
+    nodes.InstantReaction = Action {
+        function()
+            mod.ZhentShipment.LookADAnim(me, lookAtTarget, reactionAD, nil, false, 0)
+            Sleep(0.1)
+            instantReactionPlayed = true
+        end,
+        Valid = function()
+           return reactionStarted and not reactionFinished and not instantReactionPlayed
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and me.IsInCombat then
+            if not reactionStarted and not reactionFinished and e.Event == "PLA_ConflictedFlind_Event_PlayReactionCombat" then
+                reactionStarted = true
+                instantReactionPlayed = false
+                if e.Params[1] ~= nil then
+                    lookAtTarget = e.Params[1]
+                end
+            end
+        end
+    end
+end}

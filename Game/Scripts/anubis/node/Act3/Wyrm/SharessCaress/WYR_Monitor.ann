@@ -1,0 +1,44 @@
+game.states.WYR_Monitor = State { function ()
+    
+    description = [[ 
+        Behaviour for Raphael when he is in Sharess Caress.
+    ]]
+
+    modules = { "shared.moveto", "shared.math" }  
+    
+    local withVossTrigger = Entity("S_WYR_RaphaelTango_RaphaelVossPos_80a733a3-50db-4892-9991-4c902bab77cc")
+    local aloneTrigger = Entity("S_WYR_RaphaelTango_RaphaelAlonePos_000_41d7b602-a685-4676-b89f-a8e85661e2ba")
+    local vossSceneInProgressFlag = Flag("WYR_RaphaelTango_Voss_State_TangoInProgress_2228d775-30ff-45b6-a711-e2865b704b51")
+
+    local waitingStart = Animation("CUST_Raphael_Waiting_01_Start_4e447a20-b578-4185-aab1-1b24c2365a46")
+    local waitingLoop = { Animation("CUST_Raphael_Waiting_01_Loop_0fea226c-09f5-4007-9e83-1be2829ccafd") }
+    local waitinEnd = Animation("CUST_Raphael_Waiting_01_End_da53147a-5bb5-41de-9716-002a0b1d9eeb")
+
+    nodes.WithVoss = Proxy {
+        game.states.WYR_PairedADInTrigger,
+        params = {
+            trigger = "S_WYR_RaphaelTango_RaphaelVossPos_80a733a3-50db-4892-9991-4c902bab77cc",
+            pairNPCs = { "S_GLO_GithKnight_2adce2df-0799-49dc-b867-ba7ca21e9aea" },
+            AD = "WYR_RaphaelTango_AD_RaphaelVoss_9ce546cf-bd61-640e-74bb-ea03c76ea229"
+        }, 
+        Valid = function()
+            return GetFlag(vossSceneInProgressFlag)
+        end
+    }
+
+    nodes.Alone = Action {
+        function()
+            Sleep(1)
+            if mod.moveto.MoveToPoint(aloneTrigger, MovementSpeed.Walk, me, 0.5) then
+                LookFrom(aloneTrigger)
+                PlayLoopingAnimation(waitingStart, waitingLoop, waitinEnd)
+            end 
+        end,
+        Valid = function()
+            return not GetFlag(vossSceneInProgressFlag)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+end}

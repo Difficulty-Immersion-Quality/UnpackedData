@@ -1,0 +1,118 @@
+game.states.UND_MyconidCircle_CheckpointMyconid = State { function()
+    description=[[Behaviour for the Myconids that guard the checkpoints]]
+
+    params.barrelStalk = {type = EParamType.String, required = false, default = "",
+        help = [[The BarrelStalk that the Myconid will use]]}
+
+    params.idlePosition = {type = EParamType.String, required = false, default = "",
+        help = [[Where the Myconids will stand after ]]}
+
+    modules = {"shared.util"}
+
+    ------------------------------------------
+    -- Behaviour Variables
+    local unlockWall = false
+    local forcingUpdates = false
+
+    -- Entities
+    local barrelStalk = Entity(params.barrelStalk)
+    local idlePos = Entity(params.idlePosition)
+
+    -- Flags
+    local UND_MyconidCircle_State_WallActive = Flag("UND_MyconidCircle_State_WallActive_c0d66b03-cec5-4ac1-915b-8c612c8d1594")
+
+    -- Dialogs
+    local greetingDialog1 = Guid("UND_MyconidCircle_CheckpointGuard_000_047d6b4a-8a65-5f04-75bb-0ec619703f66")
+    local greetingDialog2 = Guid("UND_MyconidCircle_CheckpointGuard_002_1960c702-c597-520f-ad29-011b0b0bc473")
+
+    -- Anims
+    local idleAnim_Loop = { Animation("CUST_GuardingCheckpoint_01_Loop_ee85efba-b613-4fd4-89f1-eeb60e159878") }
+    local idleAnim_End = Animation("CUST_GuardingCheckpoint_01_End_17247c1a-c986-4a58-b293-c5d83b75e790")
+
+    ------------------------------------------
+    -- Nodes
+    nodes.Dancing = Proxy {
+        game.states.UND_MyconidCircle_Dancing,
+        params = { moveToSovereignBeforeDancing = false }
+    }
+
+    nodes.DeactivateBarrelStalk = Action {
+        function()
+            local moveResult = MoveTo(barrelStalk, MovementSpeed.Walk, true, false, 0.5, 1.0, false)
+
+            if moveResult ~= error.MovementError.None then
+                SteerTo(barrelStalk)
+                Sleep(2.0)
+                return
+            end
+
+            -- Check if the Barrelstalk is still active in case it was disable before Myconid reached it
+            if GetFlag(UND_MyconidCircle_State_WallActive, barrelStalk) then
+                UseItem(barrelStalk.Item)
+            end
+        end,
+
+        Valid = function()
+            return unlockWall and GetFlag(UND_MyconidCircle_State_WallActive, barrelStalk)
+        end
+    }
+
+    nodes.MoveToIdlePos = Action {
+        function()
+            local moveResult = MoveTo(idlePos, MovementSpeed.Walk, true, false, 0.5, 1.0, false)
+
+            if moveResult ~= error.MovementError.None then
+                SteerTo(idlePos)
+                Sleep(2.0)
+                return
+            end
+
+            LookFrom(idlePos)
+
+            if forcingUpdates then
+                forcingUpdates = false
+                SetForceUpdate(me, false)
+            end
+
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not GetFlag(UND_MyconidCircle_State_WallActive, barrelStalk)
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            if forcingUpdates then
+                forcingUpdates = false
+                SetForceUpdate(me, false)
+            end
+
+            mod.util.SleepRandom(1.0, 4)
+            LookFrom(idlePos)
+
+            PlayLoopingAnimation(nil, idleAnim_Loop, idleAnim_End)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    ------------------------------------------
+    -- Events
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "UND_MyconidCircle_DeactivateWall" then
+            unlockWall = true
+            forcingUpdates = true
+            SetForceUpdate(me, true) -- Myconids at second entrance will be inactive
+        end
+    end
+
+    events.Died = function(e)
+        if e.Target == me and forcingUpdates then
+            forcingUpdates = false
+            SetForceUpdate(me, false)
+        end
+    end
+end}

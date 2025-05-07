@@ -1,0 +1,90 @@
+game.states.HAV_Manip = State {function ()
+
+    modules = {"shared.dialog"}
+
+    description = [[Arguing with Florrick. Then goes to the bar.]]
+
+    local altercationFlag = Flag("HAV_SavingPrisoners_Event_ManipLeavesFlorrick_fb8f1924-d622-f0b8-1467-b1e879165141")
+    local ancientFistSetupDialogFinished = Flag("SCL_AncientFist_InitialDialogComplete_fac9d20d-2f55-425d-bdfb-2ad9e23a9b06")
+    local tr_positionByBed = Entity("S_HAV_AncientFist_ManipPositionByBed_040ce6ce-d339-4056-a55e-25e93145efc1")
+    local florrick = Entity("S_GLO_Desire_8b9fa503-7205-4ddd-bdfa-bfaa781d9ea9")
+    local AD = Dialog("HAV_SavingPrisoners_AD_ArguingWithFlorrick_a9b8d0e4-f20c-71b5-cf90-10a3ed338dff")
+    local returnPos = Entity("S_HAV_VidorPos_e1f600d9-9fd1-4830-92c3-4880f8f6a942")
+    
+    
+    nodes.WalkingToAncientFist = Action{
+            --Ancient fist booster material, after initial dialog at the table, Manip walks over to the Ancient fist's bed to talk to him.
+            function()
+                if GetDistanceTo(me,tr_positionByBed) <=1.0 then
+                    Sleep(2.0)
+                    return
+                end
+                
+                local moveResult= MoveTo(tr_positionByBed,MovementSpeed.Walk, true, true, 1.0, 1.5,false)
+                
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Movement to bedside failed")
+                    Sleep(2.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(ancientFistSetupDialogFinished)
+            end
+        }
+    
+        nodes.BeforeAltercationWithFlorrick = Action{
+        function()
+            if GetDistanceTo(me, returnPos) <= 1.0 then
+                mod.dialog.StartCheckedAutomatedDialog(
+                    AD,
+                    {
+                       waitForCompletion = false
+                    },
+                    me,
+                    florrick
+                ) 
+                else 
+                    MoveTo(returnPos, MovementSpeed.Walk)
+                end
+        end,
+        Valid = function()
+            return not GetFlag(altercationFlag)
+        end
+    }
+
+    nodes.BeforeAltercation = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_HAV_VidorPos_e1f600d9-9fd1-4830-92c3-4880f8f6a942"
+        },
+        Valid = function()
+            return not GetFlag(altercationFlag)
+        end
+    }
+
+    
+
+    nodes.AfterAltercation = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_HAV_VidorBarPos_738c4466-9e91-4b16-93f0-c22eac526c1c"
+        },
+        Valid = function()
+            return GetFlag(altercationFlag)
+        end
+    }
+
+    nodes.Default = Action {
+        function()
+            Sleep(4.0)
+            --WaitForInterrupt()
+        end
+    }
+
+    events.FlagSet = function(e)
+        if(e.Flag == "HAV_SavingPrisoners_Event_ManipLeavesFlorrick_fb8f1924-d622-f0b8-1467-b1e879165141") then
+            Interrupt()
+        end
+    end
+
+end}

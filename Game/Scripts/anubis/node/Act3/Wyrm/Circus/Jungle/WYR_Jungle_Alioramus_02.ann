@@ -1,0 +1,73 @@
+game.states.WYR_Jungle_Alioramus_02 = State { function ()
+
+    description = [[ 
+        Patroling jungle dino behaviour. 
+    ]]
+
+    modules = { "shared.util", "shared.moveto", "shared.math" }
+
+    local eatingIntroFlag = Flag("WYR_Jungle_Event_StartFeedingIntro_e409feaa-398a-4c3a-b76b-59de927fb547")
+    local eatingAnimLoop = { Animation("CUST_Eating_01_Loop_0dae0f54-095c-489e-b611-6c42302f96d8") }
+    local eatingAnimStart = Animation("CUST_Eating_01_Start_06ea1c42-85d8-4476-a853-a5c0650189b5")
+    local eatingAnimEnd = Animation("CUST_Eating_01_End_389e4e72-4755-4b4f-a749-4334cb6f0af1")
+    local shoutAnim = Animation("CUST_Shout_01_f9335d58-e929-4838-a12f-0275d1a68ce7")
+    local preJumpPos = Entity("S_WYR_Jungle_Alioramus_02_PreJumpPos_d8dda507-03af-4f5f-8ce0-f4b53fe844e2")
+    local eatingPos = Entity("S_WYR_Jungle_Alioramus_02_EatingPos_6c660393-3c2d-444a-ac10-b1ef30e9df59")
+    local canJump = false
+
+    nodes.WaitingIntroStart = Action {
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not GetFlag(eatingIntroFlag)
+        end
+    }
+
+    nodes.Intro = Selector {
+        Valid = function()
+            return GetFlag(eatingIntroFlag)
+        end
+    }
+
+    nodes.Intro.SleepBeforeIntro = Action {
+        function()
+            if mod.moveto.MoveToPoint(preJumpPos, MovementSpeed.Walk, me) then
+                LookFrom(preJumpPos)
+            end
+            PlayAnimation(shoutAnim)
+            Sleep(3)
+            canJump = true
+        end,
+        Valid = function()
+            return not canJump
+        end
+    }
+
+    nodes.Intro.Jump = Proxy {
+        game.states.WYR_Jungle_AlioramusIntro,
+        params = {
+            introSpline = "S_WYR_Jungle_Alioramus_02_PatrolSpline_IntroA dd28950b-298e-4952-a230-2b6d10598451",
+            movementSpeed = "Run"
+        }
+    }
+
+    nodes.Intro.Eating = Action {
+        function()
+            if mod.moveto.MoveToPoint(eatingPos, MovementSpeed.Walk, me) then
+                LookFrom(eatingPos)
+                if canShout then
+                    Sleep(mod.math.random(1, 2))
+                    PlayAnimation(shoutAnim)
+                    canShout = false
+                    Sleep(mod.math.random(2, 3))
+                end
+                PlayLoopingAnimation(eatingAnimStart, eatingAnimLoop, eatingAnimEnd)
+            end
+        end,
+        OnLeave = function()
+            canShout = true
+            StopAnimation(me)
+        end
+    }
+end}

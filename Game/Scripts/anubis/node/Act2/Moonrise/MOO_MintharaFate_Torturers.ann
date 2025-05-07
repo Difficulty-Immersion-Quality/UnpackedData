@@ -1,0 +1,76 @@
+game.states.MOO_MintharaFate_Torturer = State{function()
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+
+    params.torturePosition = {type = EParamType.String, required = false, default = nil, help=[[
+        Trigger torturer stand at.
+    ]]}
+
+    params.otherTorturer = {type = EParamType.String, required = false, default = nil, help=[[
+        Other torturer that isn't me
+    ]]}
+
+    local preTortureTorturerAd = Dialog("MOO_MintharaFate_AD_TorturersBeforeTorture_d096a350-eab2-13d5-7bf4-c85568cb9ad3")
+    local duringTortureTorturerAd = Dialog("MOO_MintharaFate_AD_Torture_615a6753-3031-5996-daf1-287ffdfd561b")
+    local postTortureTorturerAd = Dialog("MOO_MintharaFate_AD_TorturersPostTorture_44f9aa2f-42f4-d0ad-fc8d-0246e4cd3321")
+    local welcomeVictimTorturerAd = Dialog("MOO_MintharaFate_AD_WelcomingMinthara_26eb5868-fe24-b55d-b091-b3b16eb20d0e")
+
+    local executionDone = Flag("MOO_GroundFloor_State_ExecutionOver_1560c0ae-5fec-4e7c-a6e7-35e9c33bbbeb")
+    local mintharaBrainwashed = Flag("MOO_MintharaFate_State_Pacified_bddd4113-9486-84fe-a88b-70ad9d87d00c")
+    local mintharaInTorture = Flag("MOO_MintharaFate_State_Torture_2c490890-6b9f-4411-bda4-be2b7981708b")
+    local mintharaFreed = Flag("MOO_MintharaFate_State_Freed_b77a54f6-a1e8-20a7-b932-9a0c10547a39")
+    local torturersAttacked = Flag("MOO_MintharaFate_Event_FightTorturers_9533b62a-0146-a079-76ca-789288c2d6b6")
+
+    local torturersWelcomedMinthara = false
+
+    local tortureAnim = Animation("SPL_DominatePerson_01_Cast_47a81cca-13c6-4d84-95b8-083b79258d48")
+
+    local minthara = Entity("S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b")
+    local otherTorturer = Entity(params.otherTorturer)
+    local torturerWanderArea = Entity("S_END_TortureWanderArea_12ed7d78-9f2f-492f-b404-480717cdbb89")
+    local torturePosition = Entity(params.torturePosition)
+
+    local torturer001 = Entity("S_MOO_MindTorturer_001_480b89b1-ae6c-46e7-ad79-1b3babe3655e")
+    local torturer002 = Entity("S_MOO_MindTorturer_002_5c744998-b3cb-4edb-8a32-4df06593e849")
+
+    nodes.AwaitingVictim = Action{
+        function()
+            Wander(torturerWanderArea, 10.0, MovementSpeed.Walk, me)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(preTortureTorturerAd, {waitForCompletion = true, minDelay = 40.0}, me, otherTorturer)
+        end,
+        Valid = function()
+            return not GetFlag(executionDone)
+        end
+    }
+
+    nodes.WelcomeMinthara = Action{
+        function()
+            if (CanSee(me, minthara)) and mod.moveto.MoveToPoint(torturePosition, MovementSpeed.Walk, me) then
+                SteerTo(minthara)
+                mod.dialog.StartCheckedAutomatedDialog(welcomeVictimTorturerAd, {waitForCompletion = false}, me, otherTorturer)
+                torturersWelcomedMinthara = true
+            end
+        end,
+        Valid = function()
+            return GetFlag(executionDone) and not torturersWelcomedMinthara
+        end
+    }
+
+    nodes.TorturingMinthara = Action{
+        function()
+            SteerTo(minthara)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(duringTortureTorturerAd, {waitForCompletion = false, minDelay = 10.0}, torturer002, torturer001, minthara)
+        end,
+        CanEnter = function()
+            return torturersWelcomedMinthara and GetFlag(mintharaInTorture) and IsInTrigger(minthara, torturerWanderArea.Trigger) and not me.IsInCombat
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            torturersWelcomedMinthara = true
+        end
+    }
+end
+}

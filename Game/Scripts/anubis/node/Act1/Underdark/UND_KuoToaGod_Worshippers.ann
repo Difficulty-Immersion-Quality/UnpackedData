@@ -1,0 +1,77 @@
+game.states.UND_KuoToaGod_Worshippers = State {function()
+    description = [[Behaviours for the Kuo-Toa worshipping BOOOAL]]
+
+    modules = {"shared.util", "shared.dialog"}
+
+    params.WorshipAnim = { type = EParamType.String, required = false, default = "",
+        help = [[Anim to loop while the Kuo-Toa are worshipping]]}
+
+    params.MinWorshipSleepTime = { type = EParamType.Number, required = false, default = 1, 
+        help = [[The minimum wait time before starting the worship behaviour. This is also the minimum wait time between chanting ADs]]}
+
+    params.MaxWorshipSleepTime = { type = EParamType.Number, required = false, default = 5.5, 
+        help = [[The maximum wait time before starting the worship behaviour. This is also the maximum wait time between chanting ADs]]}
+
+    local worshipAnim = Animation(params.WorshipAnim)
+    local chantingAD = Dialog("UND_KuoToaGod_AD_FishChanting_c440acc6-669f-9774-c003-6f64b27e8a37")
+
+    -- Entities
+    local spectateTarget = Entity("S_UND_KuoToaGod_GodAppearPoint_ae9a55db-9090-4a79-8a30-05355d824ebf")
+
+    -- Flags
+    local UND_KuoToaGod_Event_ChallengedBOOOAL = Flag("UND_KuoToaGod_Event_ChallengedBOOOAL_e181ba35-e538-4755-8c0d-c36633917448")
+    local UND_KuoToaGod_State_UsurpedBOOOAL = Flag("UND_KuoToaGod_State_UsurpedBOOOAL_215b8fc4-936f-4de1-a186-dfe5b88fec0a")
+    local UND_KuoToaGod_State_Chanting = Flag("UND_KuoToaGod_State_Chanting_af777202-2b5b-4f0b-834c-be4c89184ca4")
+    local UND_KuoToaGod_State_SacrificedCompanion = Flag("UND_KuoToaGod_State_SacrificedCompanion_1c40155d-1859-313e-cd78-c80a238d3dd5")
+
+    -- Internal vars
+    local fleeFromDuel = false
+
+    nodes.Flee = Action{
+        function()
+            try
+                FleeFrom(RelationType.Party, 6.0)
+                fleeFromDuel = false
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me,"Failed FleeFrom All")
+            end
+        end,
+
+        Valid = function()
+            return fleeFromDuel
+        end
+    }
+
+    nodes.Idle = Action{
+        function()     
+            mod.util.SleepRandom(params.MinWorshipSleepTime, params.MaxWorshipSleepTime)
+
+            SteerTo(spectateTarget)
+            PlayAnimation(worshipAnim, false, true)
+
+            if GetFlag(UND_KuoToaGod_State_Chanting, me) and mod.dialog.IsSpeakerAvailable(me) then
+                StartAutomatedDialog(chantingAD, true, me)
+            end
+        end,
+
+        OnEnter = function()
+            
+        end,
+
+        Valid = function()
+            return not fleeFromDuel
+        end
+    }
+
+    events.FlagSet = function(e)
+        if e.Flag == UND_KuoToaGod_Event_ChallengedBOOOAL.Guid then
+            spectateTarget = Entity("S_UND_KuoToaGod_BOOOAL_abede50d-0d73-412b-8912-c9a4b900493f")
+            fleeFromDuel = true
+        end
+
+        if e.Flag == UND_KuoToaGod_State_SacrificedCompanion.Guid then
+            spectateTarget = e.Entity
+            fleeFromDuel = true
+        end
+    end
+end}

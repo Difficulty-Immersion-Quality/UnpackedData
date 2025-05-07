@@ -1,0 +1,60 @@
+game.states.GOB_Branding_GoblinJolly = State{function()
+    modules = {"shared.dialog"}
+
+    -- Local params
+    local interlocutor
+    local homeTrigger
+    local saidAD = false
+
+    local AD
+
+    -- State nodes
+    self.OnInit = function()
+        interlocutor = FindEntity("S_GOB_GoblinLush_d738c9a4-a031-4dd9-912f-93cda8d8d8b7")
+        homeTrigger = FindEntity("S_GOB_GoblinJolly_HomeTrigger_560125b0-3f31-4343-8259-6200ecb21b8e")
+
+        AD = Dialog("GOB_GoblinJollyAndLush_AD_Tieflings_4ac660d9-66bd-82ee-7191-781527990e83")
+    end
+
+    -- Nodes
+    -- Gossip with the other goblin
+    nodes.Action_Gossip = Action{
+        function()
+            try
+                MoveTo(interlocutor)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception, couldn't reach interlocutor")
+            end
+            LookAtEntity(interlocutor, 3.0)
+            if mod.dialog.AreSpeakersAvailableAndNear(me, 5.0, true, false, false, interlocutor) then
+                StartAutomatedDialog(AD, true, me, interlocutor)
+            end
+            saidAD = true
+        end,
+        CanEnter = function()
+            return not saidAD
+        end,
+        OnLeave = function()
+            if IsInDialog(me, false) then
+                DialogRequestStop(me, AD)
+                saidAD = true
+            end
+        end
+    }
+
+    -- Return to home position
+    nodes.Action_ReturnToPosition = Action{
+        function()
+            try
+                if GetDistance2DTo(me, homeTrigger) > 0.5 then
+                    MoveTo(homeTrigger)
+                    LookFrom(homeTrigger)
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception, couldn't reach home")
+            end
+            Sleep(5.0)
+        end
+    }
+end
+}

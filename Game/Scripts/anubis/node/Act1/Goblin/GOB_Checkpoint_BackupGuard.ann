@@ -1,0 +1,225 @@
+game.states.GOB_Checkpoint_BackupGuard = State
+{
+    function ()
+        modules = { "shared.dialog", "shared.util", "shared.items" }
+
+        params.SitState = { type = EParamType.State, required = true }
+        params.Seat = { type = EParamType.String, required = false, default = "", help = [[seat]]}
+        params.SeatDefaultPosition = { type = EParamType.String, required = false, default = "", help = [[]]}
+        params.partner01 = { type = EParamType.String, required = false, default = "", help = [[first interlocutor]]}
+        params.partner02 = { type = EParamType.String, required = false, default = "", help = [[second interlocutor]]}
+        params.AD = { type = EParamType.String, required = false, default = "", help = [[AD at the Checkpoint Backup table]]}
+        params.drinkingDelayMin = { type = EParamType.Number, required = false, default = 2.0, help = [[delay before drinking booze after a toast MIN]]}
+        params.drinkingDelayMax = { type = EParamType.Number, required = false, default = 2.0, help = [[delay before drinking booze after a toast MAX]]}
+
+        params.Activity01_Position = { type = EParamType.String, required = false, default = "", help = [[activity position 01 - trigger]]}
+        params.Activity01_Animation = { type = EParamType.String, required = false, default = "", help = [[activity position 01 - animation]]}
+
+        params.PositionAtCheckpoint = { type = EParamType.String, required = true, help = [[Default Position at the Checkpoint]]}
+
+        local alarmInProgress
+        local checkingMountainPass = false
+
+        local canDrink = true
+        local drinkingDelayMin
+        local drinkingDelayMax
+        local animDrinking
+        local animDrinkingStanding
+        local AD
+        local canAD = true
+        local partner01
+        local partner02
+        local Seat
+        local seatIsDestroyed = false
+        local seatTrigger = Entity("S_GOB_Checkpoint_Backup_SeatTrigger_35210e8f-a027-4aa1-b56c-9d0df75768df")
+        local PositionAtCheckpoint = Entity(params.PositionAtCheckpoint)
+        local SeatDefaultPosition
+
+        local tr_Activity01
+        local anim_Activity01
+
+        local fl_GuardsReplaced = Flag("GOB_Checkpoint_State_BackupReplacedGuards_52b85601-cbfc-420d-b9b7-8a643faf80b8")
+
+        self.OnInit = function()
+
+            Seat = FindEntity(params.Seat)
+            SeatDefaultPosition = FindEntity(params.SeatDefaultPosition)
+            --defaultPosition = FindEntity(params.defaultPosition)
+            alarmInProgress = Flag("GOB_Checkpoint_State_alarmInProgress_93e1b28b-9b50-2108-94c3-4a689745aeda")
+            AD = Dialog(params.AD)
+            partner01 = FindEntity(params.partner01)
+            partner02 = FindEntity(params.partner02)
+            animDrinking = Animation("CUST_Drinking_Sitting_01_e46d0a23-6ff2-4e20-9760-7896894f2f1a")
+            animDrinkingStanding = Animation ("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+            drinkingDelayMin = params.drinkingDelayMin
+            drinkingDelayMax = params.drinkingDelayMax
+
+            tr_Activity01 = FindEntity(params.Activity01_Position)
+            anim_Activity01 = Animation(params.Activity01_Animation)
+        end
+
+        -- talking to the main guards
+        nodes.AtCheckpoint = Action {
+            function()
+                Sleep(16.0)
+            end,
+            Valid = function()
+                return (GetFlag(alarmInProgress))
+            end
+        }
+
+        -- replaced the main guards
+        nodes.AtCheckpointReplacedGuards = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {trigger = params.PositionAtCheckpoint},
+            Valid = function()
+                return GetFlag(fl_GuardsReplaced)
+            end
+        }
+
+        nodes.Sit = Proxy {
+            params.SitState,
+            CanEnter = function()
+                return (not me.IsReposed
+                    and not IsInDialog(me, true)
+                    and not checkingMountainPass)
+            end,
+            Valid = function()
+                return not mod.items.SafeIsDestroyed(Seat)
+                    and not seatIsDestroyed
+                    and IsInTrigger(Seat, seatTrigger.Trigger)
+            end
+        }
+
+        -- if the sit was destroyed or moved
+        nodes.Action_GoToTable = Action {
+            function()
+                try
+                    MoveTo(SeatDefaultPosition, MovementSpeed.Walk, true, false, 0.1, 0.5)
+                    Sleep(1.0)
+                    LookFrom(SeatDefaultPosition)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "MOVEMENT FAILED")
+                    Sleep(1.0)
+                end
+            end,
+            CanEnter = function()
+                return (seatIsDestroyed or not IsInTrigger(Seat, seatTrigger.Trigger)) and GetDistance2DTo(me, SeatDefaultPosition) > 0.5
+            end
+        }
+
+        nodes.Action_AD = Action {
+            function()
+                StartAutomatedDialog(AD, false, me, partner01, partner02)
+            end
+            ,
+            CanEnter = function()
+                return AD ~= nil and canAD and not IsInDialog(me, false)
+                    and mod.dialog.AreSpeakersAvailableAndNear(me, 10.0, true, false, false, { partner01, partner02 })
+                    and not checkingMountainPass
+            end
+        }
+
+        nodes.Action_Drink = Action {
+            function()
+                mod.util.SleepRandom(drinkingDelayMin, drinkingDelayMax)
+                if me.IsReposed then
+                    PlayAnimation(animDrinking, true, false)
+                else
+                    PlayAnimation(animDrinkingStanding, true, false)
+                end
+                mod.util.SleepRandom(3.0, 6.0)
+                checkingMountainPass = true
+                canDrink = false
+            end,
+            CanEnter = function()
+                return (not IsInDialog(me, false) and canDrink)
+            end
+        }
+
+        nodes.Action_CheckMountainPass_Check = Action {
+            function()
+                DebugText(me, "Checking MOUNTAIN PASS")
+                try
+                    MoveTo(tr_Activity01, MovementSpeed.Walk, true, false, 0.1, 0.5)
+                    LookFrom(tr_Activity01)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "Movement Failed")
+                    Sleep(1.0)
+                    checkingMountainPass = false
+                end
+
+                if GetDistance2DTo(me, tr_Activity01) < 2.0 then
+                    LookFrom(tr_Activity01)
+                    try
+                        PlayAnimation(anim_Activity01, true)
+                        checkingMountainPass = false
+                    catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                        DebugText(me, "Animation Failed")
+                        Sleep(1.0)
+                        checkingMountainPass = false
+                    end
+                else
+                    checkingMountainPass = false
+                end
+            end,
+            Valid = function()
+                return tr_Activity01 ~= nil and anim_Activity01 ~= nil and checkingMountainPass
+            end
+        }
+
+        nodes.Action_CheckMountainPass_Drink = Action {
+            function()
+                mod.util.SleepRandom(5.0, 10.0)
+                if me.IsReposed then
+                    PlayAnimation(animDrinking, true, false)
+                else
+                    PlayAnimation(animDrinkingStanding, true, false)
+                end
+                checkingMountainPass = false
+            end,
+            Valid = function()
+                return tr_Activity01 == nil and checkingMountainPass
+            end
+        }
+
+        nodes.State_Idle = Action
+        {
+            function()
+                Sleep(4)
+            end,
+            Valid = function()
+                return (not canDrink)
+            end
+        }
+        -- fallback
+        nodes.State_Fallback = Action
+        {
+            function()
+                Sleep(8)
+            end
+        }
+        events.TimerFinished = function(e)
+            if(e.TimerName == "GOB_Checkpoint_BackupGuard_ADTimer" and AD ~= nil) then
+                canAD = true
+            end
+        end
+
+        events.DialogEnded = function(e)
+            if (e.Instance.DialogUUID == Guid("GOB_Checkpoint_AD_BackupGroupDialog_7e3daeeb-fa39-6345-e6b9-56e57992d63b")) then
+                if (AD ~= nil) then
+                    canAD = false
+                    StartTimer(me, "GOB_Checkpoint_BackupGuard_ADTimer", 8.0, 0)
+                end
+                canDrink = true
+            end
+        end
+
+        events.Destroyed = function(e)
+            if e.Entity == Seat then
+                seatIsDestroyed = true
+            end
+        end
+
+    end
+}

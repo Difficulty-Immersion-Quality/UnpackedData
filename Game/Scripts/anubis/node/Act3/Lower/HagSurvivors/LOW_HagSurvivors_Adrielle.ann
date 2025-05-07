@@ -1,0 +1,60 @@
+game.states.LOW_HagSurvivors_Adrielle = State{function()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    local prayingAnim = Animation("CUST_Praying_01_7f50198e-dda0-4763-a217-0935865ce76c")
+    local prayingSpot = Entity("S_LOW_HagSurvivors_Adrielle_PrayingSpot_1eb4553f-da80-4565-96a2-0891a1cc1835")
+
+    local postFirstSurvivorsMeeting = Flag("LOW_HagSurvivors_State_MetSurvivors_e60750e6-26bc-4b80-a782-32dcc7d1e397")
+    local hagSpyAggroedFlag = Flag("LOW_HagSurvivors_State_HagSpyAggroed_74eca7c7-e83b-4f07-ac32-beac7cd5eff7")
+    local hagTrulyDeadFlag = Flag("LOW_BlushingMermaid_State_HagIsTrulyDead_c7c3e64d-dcfc-431b-a224-535a0c4a8e9c")
+
+    local prayingAD = Dialog("LOW_HagSurvivors_AD_Praying_Adrielle_6c2c03eb-2773-3422-3a5e-5cce6f0e2d9e")
+    local hagSpyBetrayalAD = Dialog("LOW_HagSurvivors_AD_Adrielle_HagSpyBetrayal_48772c3b-f8fd-bcf2-17a7-c1325503965e")
+    local relievedAD = Dialog("LOW_HagSurvivors_AD_Adrielle_Relieved_d3a07d2b-d98b-ca80-900b-483c73da86d5")
+
+    nodes.DefaultPosition = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_HagSurvivors_AdrielleSpot_c9108ccb-9cd4-42f3-a914-d4ad4e2f98d5"
+        },
+        Valid = function()
+            return not GetFlag(postFirstSurvivorsMeeting)
+        end
+    }
+
+    nodes.Praying = Action{
+        function()
+            mod.moveto.MoveToPoint(prayingSpot,MovementSpeed.Stroll,me)
+            PlayAnimation(prayingAnim,false,true)
+
+            local AD
+            if(not GetFlag(hagSpyAggroedFlag) and not GetFlag(hagTrulyDeadFlag)) then
+                AD = prayingAD
+            elseif(GetFlag(hagSpyAggroedFlag) and not GetFlag(hagTrulyDeadFlag)) then
+                AD = hagSpyBetrayalAD
+            elseif(GetFlag(hagTrulyDeadFlag)) then
+                AD = relievedAD
+            end
+
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                {
+                    waitForCompletion = true,
+                    minDelay = math.random(10,20)+20.0
+                },
+                me
+            )
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(5.0)
+        end
+    }
+end}

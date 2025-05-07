@@ -1,0 +1,45 @@
+game.states.LOW_Jaheira_Idle =
+    State {
+    function()
+
+        local minscSavedFromAbsolute = Flag("ORI_Minsc_State_SavedFromAbsolute_62e1d5ec-7c7e-70c2-68de-cadc7c7f5f20")
+        local JaheiraGoesToMinsc = Flag("LOW_MinscHideout_State_JaheiraGoesMinscKnockedOut_104cac9a-a794-46bc-8a93-64dc684b584a")
+        local Minsc = Entity("S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba")
+        local JaheiraCallsToPlayerAD = Dialog("LOW_MinscHideout_PAD_Jaheira_MinscKnockedOut_076e98ac-1617-3f94-0276-a28c551aed12")
+
+        nodes.MinscKnockedOut =
+            ImmediateSelector {
+            Valid = function(nodes)
+                return GetFlag(JaheiraGoesToMinsc) and not GetFlag(minscSavedFromAbsolute)
+            end
+        }
+
+        nodes.MinscKnockedOut.GoToMinsc = Action {
+            function() 
+                local MovementResult = MoveTo(Minsc, MovementSpeed.Run, true, false, 1.0, 3.0)
+                if MovementResult ~= error.MovementError.None then
+                    DebugText(me, "Can't get to Minsc!")
+                    Sleep(1.0)
+                end
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    JaheiraCallsToPlayerAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 15.0
+                    },
+                    me
+                )
+            end,
+            Valid = function() 
+                return not GetFlag(minscSavedFromAbsolute)
+            end
+        }
+
+        nodes.Fallback = Action {
+            function()
+                WaitForInterrupt()
+            end
+        }
+
+    end
+}

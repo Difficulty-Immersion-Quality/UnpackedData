@@ -1,0 +1,116 @@
+game.states.FOR_GoblinLooter_SpeakWithCompanion = State{
+    function()
+        modules = { "shared.dialog" }
+
+        ------------------------------------------------
+        -- Behaviour params
+        params.goblinAD = { type = EParamType.String, required = true,
+            help = [[Custom AD dialog with second goblin.]]}
+
+        params.companion = { type = EParamType.String, required = true,
+                help = [[Goblin companion speaker.]]}
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Local params
+        local AD = Dialog(params.goblinAD)
+        local canPlayAD = true
+        local companion = Entity(params.companion)
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- State nodes
+        self.CanEnter = function()
+            return canPlayAD and mod.dialog.IsSpeakerAvailable(companion, false)
+        end
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Nodes
+        nodes.Action_SpeakWithGoblinCompanion = Action{
+            function()
+                try
+                    MoveInRange(companion, 1.5, 3.0)
+                    SteerTo(companion)
+
+                    if mod.dialog.IsSpeakerAvailableAndNear(companion, me, 4.0, false, true) then
+                        mod.dialog.StartAutomatedDialogWithWait(AD, me, companion)
+                        canPlayAD = false
+                        StartTimer(me, "FOR_GoblinLooter_CustomAD", 40.0, 0)
+                    end
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Error: MovementFailed")
+                end
+            end,
+        }
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Events
+        events.TimerFinished = function(e)
+            if e.TimerName == "FOR_GoblinLooter_CustomAD" then
+                canPlayAD = true
+            end
+        end
+        ------------------------------------------------
+    end
+}
+
+game.states.FOR_GoblinLooter_LoneGoblin = State{
+    function()
+        modules = { "shared.dialog" }
+
+        ------------------------------------------------
+        -- Local params
+        local loot = Entity("S_FOR_Apothecary_ForkLoot_341708fa-b62c-41ca-96e1-cf5f1e3371af")
+        local lootAD = Dialog("FOR_ApothecaryGoblins_AD_GoblinLootsTrash_0bb5f2b6-413c-9f70-466a-bb353bc71569")
+
+        local playersInsideApothecaryFlag = Flag("FOR_ApothecaryGoblins_State_PlayersInsideGoblinsArea_58e93e89-c411-4039-91d4-652072a6f416")
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Nodes
+        nodes = Selector{
+            function(nodes)
+                return GetWeightedCanEnter(nodes, {
+                    [nodes.Proxy_SpeakWithCompanion] = 3,
+                    [nodes.Action_GrabLoot] = 1})
+            end,
+            CanEnter = function(nodes)
+                return CheckAnySelectable(nodes)
+            end
+        }
+
+        nodes.Proxy_SpeakWithCompanion = Proxy{
+            game.states.FOR_GoblinLooter_SpeakWithCompanion,
+            params = {
+                goblinAD = "FOR_ApothecaryGoblins_AD_Subordinates_30de6a0d-d85f-fa75-c8a4-ba8e6d2ec1d0",
+                companion = "S_FOR_ApothecaryGoblin_Goblin_000_a8c54070-5b72-4911-afd9-28be53296fd7"
+            }
+        }
+
+        nodes.Action_GrabLoot = Action{
+            function()
+                try
+                    MoveTo(loot)
+
+                    if CanSee(me, loot) then
+                        PickUpItem(loot)
+                        if mod.dialog.IsSpeakerAvailable(me, false) then
+                            StartAutomatedDialog(lootAD, false, me)
+                        end
+                    end
+                catch e if ls.CheckType(e, error.MovementFailed) or ls.CheckType(e, error.PickUpItemFailed) then
+                    DebugText(me, "Error: grab loot action failed")
+                end
+            end,
+            CanEnter = function()
+                return  GetFlag(playersInsideApothecaryFlag)          and
+                        mod.dialog.IsSpeakerAvailable(me, false)      and
+                        not IsInInventoryOf(loot, me) and
+                        CanSee(me, loot)
+            end
+        }
+        ------------------------------------------------
+    end
+}

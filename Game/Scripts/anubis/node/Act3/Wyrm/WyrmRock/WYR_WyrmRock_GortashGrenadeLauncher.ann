@@ -1,0 +1,114 @@
+game.states.WYR_WyrmRock_GortashGrenadeLauncher = State{function()
+    description = [[]]
+
+    params.distanceShooting = { type = EParamType.Number, default = 18.0,
+        help = [[Distance of shooting for the turret]]}
+
+    params.attackSpell = {type = EParamType.String, required = true,
+        help = [[Spell of the turret]]}
+
+    params.attackTrigger = {type = EParamType.String, required = true,
+        help = [[Trigger in which the Grenade Launcher can spot targets]]}
+
+    local target = nil
+    local attackTrigger = Entity(params.attackTrigger)
+
+    local shootingBlocked = false
+
+    self.OnLeave = function()
+        target = nil
+    end
+
+    helpers.CalculateTarget = function()
+
+        local newTarget = nil
+
+        local characters = GetActiveCharacters(me, params.distanceShooting)
+        if #characters > 0 then
+            for i, character in ipairs(characters) do
+                if character.OnStage
+                    and character.Character.IsPartyMember
+                    and not character.Character.IsDead
+                    and character.IsInCombat
+                    and IsInTrigger(character, attackTrigger.Trigger)
+                    and not HasActiveStatusWithGroup(character, "SG_Invisible")
+                    and HasLineOfSight(me, character) then
+                        newTarget = character
+                        break
+                end
+            end
+        end
+
+        target = newTarget
+    end
+
+    helpers.Shoot = function(target)
+
+        local validPos = FindValidPosition(target.Position, 1.5)
+
+        if validPos == nil then
+            validPos = target.Position
+        end
+
+        -- FindValidPosition always returns the same position for a specific Vector3, we want to randomize it a bit
+        validPos = validPos + ls.math.Vector3(math.random() - 0.3, 0.0, math.random() - 0.3)
+
+        local offset = helpers.GetOffsetForProjectileSpell(me)
+
+        ShootProjectileAt(params.attackSpell, me, offset, validPos)
+        shootingBlocked = true
+
+        if HasActiveStatus(me, "WYR_GORTASH_INCINERATOR_OVERHEATING") then
+            SetEntityEvent(me, "CMB_GortashGrenadeLauncher_ExplodeDelay")
+        else
+            ApplyStatus(me, "WYR_GORTASH_TURRET_RECHARGING", true, 6.0)
+        end
+    end
+
+    helpers.GetOffsetForProjectileSpell = function(target)
+
+        local horizontalOffsetVector = target.ForwardDirection
+        horizontalOffsetVector = helpers.NormalizeVector(horizontalOffsetVector)
+        horizontalOffsetVector = horizontalOffsetVector * 1.75
+
+        local verticalOffsetVector = target.UpDirection
+        verticalOffsetVector = helpers.NormalizeVector(verticalOffsetVector)
+        verticalOffsetVector = verticalOffsetVector * -1.45
+
+        local totalOffsetVector = horizontalOffsetVector + verticalOffsetVector
+
+        return totalOffsetVector
+
+    end
+
+    helpers.NormalizeVector = function(position)
+        local length = math.sqrt(position.X* position.X + position.Y * position.Y + position.Z * position.Z)
+        return ls.math.Vector3(position.X / length, position.Y / length, position.Z / length)
+    end
+
+    nodes.Shooting = Action{
+        function()
+            helpers.CalculateTarget()
+            if target == nil then
+                Sleep(2.0)
+            else
+                helpers.Shoot(target)
+            end
+        end,
+        CanEnter = function()
+            return not shootingBlocked and me.IsInCombat
+        end,
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+
+    events.StatusRemoved = function(e)
+        if e.Status.StatusID == "WYR_GORTASH_TURRET_RECHARGING" then
+            shootingBlocked = false
+        end
+    end
+end}

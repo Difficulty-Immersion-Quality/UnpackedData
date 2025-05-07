@@ -1,0 +1,152 @@
+game.states.SHA_Displacer = State{
+function()
+    description = [[Displacer's behaviour while it is in its lair after the ambush.]]
+
+    ---------------------------------------------
+    -- Local values
+    local orthon = Entity("S_SHA_Orthon_1dc8091d-2af6-4d33-9268-998ef266d19c")
+    local orthonDead = Flag("SHA_Orthon_State_Dead_f9b8bab6-c2ce-4051-9a3f-5b6c7846ff34")
+
+    local displacerLairPos = Entity("S_SHA_OrthonLair_Displacer_Pos_666632ba-abdd-4974-98aa-0a928d7d48cb")
+    local meat = Entity("S_SHA_SpiderMeatHunk_e5b96310-ee05-44d1-afb2-8cde9758e67b")
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- State nodes
+    nodes = Selector{
+        function(nodes)
+            if GetFlag(orthonDead) then
+                return nodes.Action_Mourn
+            else
+                return FindWeightedRandomSelectable(nodes, {
+                    [nodes.Action_Eat] = 1,
+                    [nodes.Action_Wander] = 3
+                })
+            end
+        end
+    }
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- Nodes
+    nodes.Action_Mourn = Action{
+        function()
+            local moveToPos = FindValidPosition(orthon, 2.0, me, true)
+            if moveToPos then
+                local moveToResult = MoveTo(moveToPos, MovementSpeed.Run, false, false, 2.0, 2.5, false)
+                if moveToResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo Orthon failed")
+                    Sleep(3.0)
+                else
+                    SteerTo(orthon)
+                    DebugText(me, "Mourn animation")
+                    Sleep(6.0)
+                end
+            else
+                DebugText(me, "Mourn animation")
+                Sleep(6.0)
+            end
+        end,
+    }
+
+    nodes.Action_Wander = Action{
+        CanEnter = function()
+            return not GetFlag(orthonDead)
+        end,
+        function()
+            try
+                Wander(5.0, 6.0, MovementSpeed.Walk, displacerLairPos)
+                Sleep(3.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Error: Wander MovementFailed")
+                Sleep(3.0)
+            end
+        end,
+    }
+
+    nodes.Action_Eat = Action{
+        CanEnter = function()
+            return not GetFlag(orthonDead)
+        end,
+        function()
+            if not IsInDangerousSurfaceFor(displacerLairPos, me.Character) then
+                local moveToResult = MoveTo(displacerLairPos, MovementSpeed.Walk, true, true, 0.0, 0.5, false)
+                if moveToResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo meat failed")
+                    Sleep(3.0)
+                else
+                    SteerTo(meat)
+                    DebugText(me, "Eating animation")
+                    Sleep(6.0)
+                end
+            else
+                DebugText(me, "Error: displacerLairPos in dangerous surface")
+                Sleep(3.0)
+            end
+        end,
+    }
+    ---------------------------------------------
+end
+}
+
+game.states.SHA_Displacer_Ambush = State{
+function()
+    modules = {"shared.util"}
+
+    ---------------------------------------------
+    -- Local values
+    local SHA_Displacer_State_WaitAtFirstLurePoint = Flag("SHA_Displacer_State_WaitAtFirstLurePoint_b20f15a7-f50b-4a46-a2e6-78426e90b78d")
+    local SHA_Displacer_State_WaitAtSecondLurePoint = Flag("SHA_Displacer_State_WaitAtSecondLurePoint_9a1ba959-74ee-48ea-bb9b-6b8d2eb3252b")
+    local SHA_Displacer_State_WaitAtThirdLurePoint = Flag("SHA_Displacer_State_WaitAtThirdLurePoint_9af221f9-b726-4dda-a188-612036ae9e36")
+
+    local wanderPoint = Entity("S_SHA_Displacer_WaitPos_000_ba967f1f-3d44-4818-8f8b-e695e20eec5d")
+    local wanderPoint_bed = Entity("S_SHA_Displacer_WaitPos_002_9d2c2baa-3c7d-4d05-b093-63a4efdc9b1c")
+    ---------------------------------------------
+
+    nodes = ImmediateSelector{}
+
+    nodes.Action_WaitAtThirdLurePoint = Action{
+        function()
+            try
+                Wander(6.0, 5.0, MovementSpeed.Walk, wanderPoint_bed)
+                mod.util.SleepRandom(3.0, 6.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(3.0)
+            end
+        end,
+        Valid = function()
+            return GetFlag(SHA_Displacer_State_WaitAtThirdLurePoint)
+        end
+    }
+
+    nodes.Proxy_WaitAtSecondLurePoint = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_SHA_Displacer_WaitPos_001_ccbf4599-abd8-4b9a-821d-4c9e74aa789b"
+        },
+        Valid = function()
+            return GetFlag(SHA_Displacer_State_WaitAtSecondLurePoint)
+        end
+    }
+
+    nodes.Action_WaitAtFirstLurePoint = Action{
+        function()
+            try
+                Wander(6.0, 5.0, MovementSpeed.Walk, wanderPoint)
+                mod.util.SleepRandom(3.0, 6.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(3.0)
+            end
+        end,
+        Valid = function()
+            return GetFlag(SHA_Displacer_State_WaitAtFirstLurePoint)
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end
+}

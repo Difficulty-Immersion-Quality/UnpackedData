@@ -1,0 +1,214 @@
+game.states.GOB_Festivities_RoastinDwarfOperator = State{function()
+
+    params.AtFirePos = { type = EParamType.String, required = true,
+        help = [[Default position near the roasting dwarf]] }
+
+    params.MeatCheckPos = { type = EParamType.String, required = true,
+        help = [[Position where goblins checks the roasting dwarf meat]] }
+
+    params.ReversePatrol = { type = EParamType.Bool, required = true,
+        help = [[Operator 000 false, operator 001 true]] }
+
+    modules = { "shared.math", "shared.util", "gustav.Act1.Goblins" }
+
+    local tr_AtFirePos = nil
+    local tr_CheckPos = nil
+
+    local fl_DwarfMeatStolen = Flag("GOB_RoastingDwarf_Quest_MeatStolen_21125a9e-8852-a631-e796-930160f74869")
+    local fl_BarrelPoisoned = Flag("GLO_GoblinHuntPoison_Quest_BeerPoisoned_0c261a18-68f7-4a4b-9e91-b0b5ef50f474")
+    local fl_RefilledPoison = Flag("GOB_GoblinToast_RefilledWithPoison_edc32909-4505-4b60-bf85-edf264901ee9")
+    local fl_Patrolling = Flag("GOB_RoastingDwarf_Patrolling_3785c8af-b8ad-4635-9795-f000ab5ad67b")
+
+    local spl_WalkAround = Spline("S_GOB_RoastingDwarf_Patrol_b6cfdc74-c6c4-4cc3-a60a-7e578709d369")
+
+    local anim_Inspect = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local anim_CheckDwarf = Animation("CUST_InspectBbq_01_e59b4d48-6032-46fd-87ad-37ab43650cf5")
+    local anim_Drinking = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+    local anim_Eating = Animation("CUST_Eating_01_Loop_0dae0f54-095c-489e-b611-6c42302f96d8")
+    local anim_Bored = Animation("CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef")
+
+    local b_Patrolling = false
+    local b_PatrolLook = false
+    local b_LastPatrolLook = false
+    local i_LastPoint
+
+    local b_CanGoPatrol = false
+    local s_CanGoPatrol = "GOB_RoastingDwarfOperator_CanGoPatrol"
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanGoPatrol then
+            b_CanGoPatrol = true
+        end
+    end
+    helpers.CanGoPatrolReset = function()
+        b_CanGoPatrol = false
+        StopTimer(me, s_CanGoPatrol)
+        StartTimer(me, s_CanGoPatrol, mod.math.random(40.0, 60.0), 0)
+    end
+
+
+    self.OnInit = function()
+        tr_AtFirePos = FindEntity(params.AtFirePos)
+        tr_CheckPos = FindEntity(params.MeatCheckPos)
+        ClearFlag(fl_Patrolling)
+        helpers.CanGoPatrolReset()
+        if params.ReversePatrol then
+            i_LastPoint = spl_WalkAround.NodeCount - 1
+        else
+            i_LastPoint = 0
+        end
+    end
+
+
+    nodes.WalkAroundBBQ = Selector{
+        Valid = function()
+            return b_Patrolling
+        end,
+
+        OnEnter = function()
+            SetFlag(fl_Patrolling)
+        end,
+
+        OnLeave = function()
+            ClearPatrol()
+            ClearFlag(fl_Patrolling)
+            helpers.CanGoPatrolReset()
+        end
+    }
+
+    events.SplineControlPointReached = function(ev)
+        if params.ReversePatrol then
+            i_LastPoint = ev.Index - 1
+        else
+            i_LastPoint = ev.Index + 1
+        end
+
+        if (params.ReversePatrol and i_LastPoint == 0) or (not params.ReversePatrol and i_LastPoint == spl_WalkAround.NodeCount) then
+            if params.ReversePatrol then
+                i_LastPoint = spl_WalkAround.NodeCount - 1
+            else
+                i_LastPoint = 0
+            end
+            b_LastPatrolLook = true
+        end
+        b_PatrolLook = true
+    end
+
+    nodes.WalkAroundBBQ.Look = Action{
+        function()
+            LookFrom(spl_WalkAround)
+            PlayAnimation(anim_Inspect)
+            b_PatrolLook = false
+            if b_LastPatrolLook then
+                b_LastPatrolLook = false
+                b_Patrolling = false
+            end
+        end,
+
+        Valid = function()
+            return b_PatrolLook
+        end
+    }
+
+    nodes.WalkAroundBBQ.Walk = Action{
+        function()
+            DoPatrol(spl_WalkAround, params.ReversePatrol, MovementSpeed.Stroll, i_LastPoint)
+        end,
+
+        Valid = function()
+            return not b_PatrolLook
+        end
+    }
+
+
+    nodes.Barbeque_MoveTo = Action{
+        function()
+            try
+                MoveTo(tr_AtFirePos)
+                LookFrom(tr_AtFirePos)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_AtFirePos)")
+            end
+            Sleep(1.0)
+        end,
+
+        CanEnter = function()
+            return GetDistanceTo(me, tr_AtFirePos) > 1.0
+        end
+    }
+
+    nodes.Barbeque_AtFire = Selector{
+        function(nodes)
+            if GetFlag(fl_RefilledPoison, me) then
+                return nodes.Drink
+            else
+                return GetWeightedCanEnter(nodes, {
+                    [nodes.Idle] = 5,
+                    [nodes.Drink] = 25,
+                    [nodes.Eat] = 25,
+                    [nodes.LookAtDwarf] = 25,
+                    [nodes.DecideToWalkAround] = 25,
+                })
+            end
+        end
+    }
+
+    nodes.Barbeque_AtFire.Idle = Action{
+        function()
+            mod.util.SleepRandom(3.0, 10.0)
+            if mod.math.CoinToss(0.35) then
+                PlayAnimation(anim_Bored)
+            end
+            mod.util.SleepRandom(1.0, 5.0)
+        end
+    }
+
+    nodes.Barbeque_AtFire.Drink = Action{
+        function()
+            LookFrom(tr_AtFirePos)
+            if GetFlag(fl_BarrelPoisoned) and GetFlag(fl_RefilledPoison, me) then
+                PlayAnimation(anim_Drinking)
+                SetEntityEvent(me, "GOB_GoblinToast_DrinkPoisonedBeer")
+            else
+                mod.Goblins.RepeatAnimationRandomTimes(anim_Drinking, 2, 2.0)
+            end
+        end
+    }
+
+    nodes.Barbeque_AtFire.Eat = Action{
+        function()
+            LookFrom(tr_AtFirePos)
+            mod.Goblins.RepeatAnimationRandomTimes(anim_Eating, 2, 2.0)
+        end
+    }
+
+    nodes.Barbeque_AtFire.LookAtDwarf = Action{
+        function()
+            try
+                MoveTo(tr_CheckPos)
+                LookFrom(tr_CheckPos)
+                PlayAnimation(anim_CheckDwarf)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_CheckPos)")
+            end
+        end,
+
+        CanEnter = function()
+            return not GetFlag(fl_DwarfMeatStolen)
+        end
+    }
+
+    nodes.Barbeque_AtFire.DecideToWalkAround = Action{
+        function()
+            if GetFlag(fl_Patrolling) then
+                helpers.CanGoPatrolReset()
+            else
+                b_Patrolling = true
+            end
+        end,
+
+        CanEnter = function()
+            return b_CanGoPatrol
+        end
+    }
+
+end}

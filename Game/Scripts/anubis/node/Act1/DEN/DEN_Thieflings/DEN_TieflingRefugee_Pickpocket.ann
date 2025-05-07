@@ -1,0 +1,351 @@
+game.states.DEN_TieflingRefugee_Pickpocket = State {function ()
+    description = [[Behaviour of the pickpocket in the Druids' Grove]]
+
+    modules = {"shared.moveto"}
+
+    -----------------------------------------
+    -- Local variables
+    local playerDetected = nil
+    local States = {None = 0, Look = 1, Follow = 2}
+    local currState = 0
+
+    --Entities
+    local merchant = Entity("S_DEN_PickpocketTrader_e1fda08b-45d4-41db-84b5-20e9931ba5af")
+    local atStallPos = Entity("S_DEN_PickpocketTrader_StallTalk_db10a5b0-6f60-42bf-bad7-7ca8ed781e5e")
+    local lookoutPos = Entity("S_DEN_Pickpocket_LookoutArea_bdf678ee-ba19-4770-953a-153f53df9994")
+    local pickWaitPos = Entity("S_DEN_Pickpocket_WaitingArea_e42b4f22-9eed-4865-b5d9-1f3ea57ec254")
+    local hideoutPos = Entity("S_DEN_Pickpocket_HideoutArea_0f94daf9-8fa6-4757-9786-0391014dd310")
+    local stashPos = Entity("S_DEN_Hideout_StashArea_11d74325-2323-4f77-8be8-24a9054a3573")
+    local abandonPos = Entity("S_DEN_Pickpocket_WaitingArea_e42b4f22-9eed-4865-b5d9-1f3ea57ec254")
+    local mark,theftTargetPos
+
+    --Animations
+    local guiltAnim = Animation("CUST_Guilty_01_99f17f86-8225-49ec-ab15-f976ad405c69")
+    local lookAnim = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local lookCloseAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local pickAnim = Animation("SCENE_Pickpocket_01_6d46f91b-e566-4431-aa6a-aa83d609b804")
+
+    --Flags
+    local robbedTwiceFlag = Flag("DEN_Thieflings_Event_PlayerRobbed_Twice_7ba0e606-d82c-c07b-6bac-b9add0838c36")
+    local caughtRobbingFlag = Flag("DEN_Thieflings_Event_CaughtThief_d0a01e3d-ce38-df20-2a92-ece24b52118e")
+    local caughtInDialogFlag = Flag("DEN_Thieflings_ThiefCaughtInDialog_3dc9225d-8c10-cdd8-f299-5774b5ff5ca4")
+    local inPositionFlag = Flag("DEN_Thieflings_State_ThiefInPosition_ff626731-79c9-4938-bdaf-7a825d9999d0")
+    local carryFlag = Flag("DEN_Thieflings_CarryingStolenItem_fa3c6306-8f42-49c6-9289-ef615670d65c")
+    local merchantLeavesFlag = Flag("DEN_Thieflings_Event_MerchantKidLeaves_9783bb1f-bde7-c61a-16aa-89e267dd7180")
+    local performedPickpocketFlag = Flag("DEN_Thieflings_Event_SuccessfulPickpocket_fe4d3b4d-ce37-4058-0aeb-db99b2b39927")
+    local resolvedFlag = Flag("DEN_Hideout_State_ResolvedThieflings_97712596-cf53-341f-160e-d2a83dbf98ff")
+    local abandonFlag = Flag("DEN_Thieflings_Event_HideoutAbandoned_f3808740-25b9-4393-a947-7a1f7a88ebda")
+    local atAbandon = Flag("DEN_Thieflings_State_AtAbandonPoint_d76525c1-b7e4-46b0-9847-73a1fdad245e")
+    local startAbandon = Flag("DEN_Thieflings_Event_Abandoning_883a6c02-9091-4b29-8bc3-99e070e3648b")
+    local emptyingStash = Flag("DEN_Thieflings_State_EmptyingStash_2203ac44-6623-40e6-967e-1b95a7c9dfb2")
+
+    --Bools
+    local tryingPick = false
+    local doneStealing = false
+    local droppingOff = false
+    local customerNear = false
+    local canAD = false
+    local canADMove = false
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.MoveBehindMark = Action {
+        function()
+            if mod.moveto.MoveToPoint(theftTargetPos,MovementSpeed.Run,me) then 
+                if (not GetFlag(inPositionFlag, nil))then
+                    SteerTo(mark, true)
+                    LookAtEntity(mark, 3.0)
+                    SetFlag(inPositionFlag,nil)
+                    PlayAnimation(pickAnim,true,false)
+                end
+                PlayAnimation(guiltAnim,true,false)
+            end
+        end,
+        Valid = function()
+            return (theftTargetPos ~= nil) and not droppingOff and not (GetFlag(abandonFlag) or GetFlag(resolvedFlag) or doneStealing)
+        end
+    }
+
+    nodes.moveToAndTalk  = Proxy {
+        OnLeave = function()
+            canADMove = false
+        end,
+        game.states.DEN_GeneralGroveStates_MoveToAndTalk,
+            params={
+                moveTarget = "S_DEN_PickpocketTrader_StallTalk_db10a5b0-6f60-42bf-bad7-7ca8ed781e5e",
+                lookTarget = "S_DEN_PickpocketTrader_e1fda08b-45d4-41db-84b5-20e9931ba5af"
+            },
+            Valid = function()
+                return (theftTargetPos == nil) and not droppingOff and not (GetFlag(abandonFlag) or doneStealing) and canADMove and not customerNear
+            end
+        }
+
+    nodes.workingStall = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return (theftTargetPos == nil) and not droppingOff and not (GetFlag(abandonFlag) or doneStealing) and not canADMove and not customerNear
+        end
+    }
+
+    nodes.workingStall.WaitForMark = Action {
+        function()
+            Sleep(math.random(2.0,4.0))
+            if mod.moveto.MoveToPoint(pickWaitPos,MovementSpeed.Walk,me) then   
+                LookFrom(pickWaitPos)
+                Sleep(1.0)
+                PlayAnimation(guiltAnim,true,false)
+                Sleep(math.random(1.0,3.0))
+            end
+        end,
+        Valid = function()
+            return (theftTargetPos == nil) and not droppingOff and not (GetFlag(abandonFlag) or doneStealing) and not canADMove and not customerNear
+        end
+    }
+
+    nodes.workingStall.LookOut = Action {
+        function()
+            Sleep(math.random(2.0,4.0))
+            if mod.moveto.MoveToPoint(lookoutPos,MovementSpeed.Walk,me) then   
+                LookFrom(lookoutPos)
+                Sleep(1.0)
+                PlayAnimation(lookAnim,true,false)
+                Sleep(math.random(1.0,3.0))
+            end
+        end,
+        Valid = function()
+            return (theftTargetPos == nil) and not droppingOff and not (GetFlag(abandonFlag) or doneStealing) and not canADMove and not customerNear
+        end
+    }
+
+    nodes.workingStall.LookThroughStall = Action {
+        function()
+            Sleep(math.random(2.0,4.0))
+            if mod.moveto.MoveToPoint(atStallPos,MovementSpeed.Walk,me) then   
+                LookFrom(atStallPos)
+                Sleep(1.0)
+                PlayAnimation(lookCloseAnim,true,false)
+                Sleep(math.random(1.0,3.0))
+            end
+        end,
+        Valid = function()
+            return (theftTargetPos == nil) and not droppingOff and not (GetFlag(abandonFlag) or doneStealing) and not canADMove and not customerNear
+        end
+    }
+
+    nodes.PlayerNearby = Action {
+        function()
+            if mod.moveto.MoveToPoint(pickWaitPos,MovementSpeed.Walk,me) then   
+                LookFrom(pickWaitPos)
+                Sleep(1.0)
+                PlayAnimation(guiltAnim,true,false)
+                Sleep(math.random(1.0,3.0))
+            end
+        end,
+        Valid = function()
+            return (theftTargetPos == nil) and not droppingOff and not (GetFlag(abandonFlag) or doneStealing) and customerNear
+        end
+    }
+
+    nodes.EmptyingStash= Action {
+        function()
+            Sleep(1)
+        end,
+        Valid = function()
+            return GetFlag(emptyingStash,me)
+        end
+    }
+
+    nodes.HideoutFollowing = Selector {
+        function(nodes)
+            return GetFirstCanEnter(nodes)
+        end,
+        Valid = function(node)
+            return CheckAnySelectable(node) and currState ~= 0
+        end
+    }
+
+    nodes.HideoutFollowing.FollowPlayer = Action{
+        function()
+            DebugText(me, "In Follow")
+            if GetDistance2DTo(me, playerDetected) < 4.0 then
+                LookAtEntity(playerDetected)
+            else
+                try
+                    MoveTo(playerDetected, MovementSpeed.Run)
+                catch ex if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Failed MoveTo(playerDetected)")
+                end
+            end
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return playerDetected ~= nil and not playerDetected.Character.IsDead and CanSee(me, playerDetected) and GetDistance2DTo(me, playerDetected) < params.FollowDistance and not interruptedFollow and currState == 2
+        end
+    }
+
+    nodes.HideoutFollowing.LookAtPlayer = Action{
+        function()
+            DebugText(me, "In Look")
+            LookAtEntity(playerDetected)
+            Sleep(0.5)
+            interruptedFollow = false
+        end,
+        Valid = function()
+            return playerDetected ~= nil and not playerDetected.Character.IsDead and CanSee(me, playerDetected) and currState == 1
+        end
+    }
+
+    nodes.InHideout= Action {
+        function()
+            if mod.moveto.MoveToPoint(hideoutPos,MovementSpeed.Walk,me) then
+                LookFrom(hideoutPos)
+                PlayAnimation(guiltAnim,true,false)
+            end
+        end,
+        Valid = function()
+            return not (GetFlag(startAbandon,me) or GetFlag(abandonFlag))
+        end
+    }
+
+    nodes.AbandonedHideout= Action {
+        function()
+            if mod.moveto.MoveToPoint(abandonPos,MovementSpeed.Walk,me) then
+                LookFrom(abandonPos)
+                PlayAnimation(guiltAnim,true,false)
+            end
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_Thieflings_SetMark") and not tryingPick and not GetFlag(robbedTwiceFlag,nil) and not GetFlag(caughtRobbingFlag,nil) and not GetFlag(resolvedFlag) then
+                mark = e.Params[1]
+                tryingPick = true
+                StartTimer(me,"DEN_Thieflings_MoveBehindTarget",1.0,0)
+            elseif(e.Event == "DEN_Thieflings_TheftProcessed") then
+                mark = nil
+                tryingPick = false
+                ClearFlag(inPositionFlag,nil)
+                theftTargetPos = nil
+                if GetFlag(caughtRobbingFlag,nil) or GetFlag(caughtInDialogFlag,nil) then --caught by player; goes to hideout
+                    SetHasOsirisDialog(me, false)
+                    doneStealing = true
+                    mod.moveto.MoveTo(hideoutPos,true,1.5,"Run","DEN_Thieflings_ArriveAtHideout",2.5,true,false)
+                elseif GetFlag(carryFlag,me) and not GetFlag(abandonFlag) then --has stolen item; proceed to put it in the hideout stash
+                    SetHasOsirisDialog(me, false)
+                    mod.moveto.MoveTo(stashPos,true,1.5,"Run","DEN_Thieflings_PutItemInStash",2.5,true,false)
+                end
+            elseif(e.Event == "DEN_Thieflings_UsedStash") then --deposited items in the stash, decide next move
+                if GetFlag(robbedTwiceFlag) then --stole two things; stay in hideout
+                    droppingOff = false
+                    doneStealing = true
+                    mod.moveto.MoveTo(hideoutPos,true,1.5,"Run","DEN_Thieflings_ArriveAtHideout",2.5,true,false)
+                elseif not GetFlag(robbedTwiceFlag) or doneStealing then
+                    mod.moveto.MoveTo(pickWaitPos,true,1.5,"Run","DEN_Thieflings_ReturnedToStall",2.5,true,false)
+                end
+            elseif(e.Event == "DEN_Thieflings_MerchantKidToHideout") then --partner caught by player, follow to hideout
+                SetFlag(caughtRobbingFlag)
+                doneStealing = true
+                mod.moveto.MoveTo(hideoutPos,true,1.5,"Run","DEN_Thieflings_ArriveAtHideout",2.5,true,false)
+            elseif(e.Event == "DEN_Thieflings_AbandonedHideout") then
+                SetFlag(startAbandon,me)
+                mod.moveto.MoveTo(abandonPos,true,1.5,"Run","DEN_Thieflings_ArriveAtAbandon",2.5,true,false)
+            elseif (e.Event == "DEN_Thieflings_ArriveAtHideout") then
+                SetHasOsirisDialog(me,true)
+            elseif(e.Event == "DEN_Thieflings_ArriveAtAbandon") then
+                SetFlag(atAbandon,me)
+                SetHasOsirisDialog(me,true)
+            elseif(e.Event == "DEN_Thieflings_ReturnedToStall") then
+                droppingOff = false
+                SetHasOsirisDialog(me,true)
+            elseif(e.Event == "DEN_MovedToTalk") then
+                SetEntityEvent(merchant,"DEN_MovedToTalk")
+            elseif(e.Event == "DEN_Pickpocket_MoveToTalk") then
+                canADMove = true
+            end
+        elseif (e.TargetEntity == merchant) then
+            if(e.Event == "DEN_Thieflings_PlayerNearStall") then
+                customerNear = true
+                Interrupt()
+            elseif(e.Event == "DEN_Thieflings_PlayersLeftStall") then
+                customerNear = false
+            end
+        end
+        if e.Event == "DEN_Thieflings_Event_SpottedPlayer" then
+            currState = 1
+            playerDetected = e.Params[1]
+        elseif e.Event == "DEN_thieflings_Event_Follow" then
+            currState = 2
+            playerDetected = e.Params[1]
+        elseif e.Event == "DEN_Thielfings_Event_StopFollow" then
+            currState = 0
+            playerDetected = nil
+        end
+    end
+    
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == Guid("DEN_Thieflings_AD_MagicTrick_0102c0ab-80c3-0bfb-9879-acbb12b2239a") and canADMove then
+            canADMove = false
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if(e.Flag == performedPickpocketFlag.Guid and GetFlag(carryFlag,me)) then
+            droppingOff = true
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_Thieflings_MoveBehindTarget" and not IsInDangerousSurfaceFor(mark,me.Character,3.0)) then
+            theftTargetPos = mark.Position + (mark.ForwardDirection * -0.75)
+        end
+    end
+
+end}
+
+game.states.DEN_TieflingRefugee_Pickpocket_AttackOnDen = State {function ()
+    
+    description = [[Behaviour of the pickpocket prior to the attack on den]]
+
+    -----------------------------------------
+    -- Local variables
+
+    local noStorytellerFlag = Flag("DEN_AttackOnDen_State_NoStoryteller_cd7198cb-4f9e-5239-3211-9aface6587b6")
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.NoStoryteller = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_AttackBardPos_0338cd9c-7fa2-4775-b297-88add42b865a",
+            anim = "CUST_DebugAsset_CustomAnim_01_Loop_50635108-0b10-4232-820a-aac14df09a75",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0,
+            loopingAnim = true
+        },
+        Valid = function()
+            return noStorytellerFlag
+        end,
+    } 
+
+    nodes.ListenToStory_Storyteller = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_AttackKidPos_002_bcb452b9-d566-4dba-8932-698940726230",
+            anim = "CUST_Listen_Interested_01_250d6f06-32c5-437b-accc-5c20367eed8d",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0
+        }
+    }   
+
+end}

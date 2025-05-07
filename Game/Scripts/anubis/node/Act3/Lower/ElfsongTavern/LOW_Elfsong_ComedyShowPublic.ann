@@ -1,0 +1,102 @@
+game.states.LOW_Elfsong_ComedyPublic = State{function ()
+
+    --------------------------------Description--------------------------------
+    description = [[Behavior of the public in the Comedy Show at Elfsong Tavern.]]
+
+    --------------------------------Params and modules--------------------------------
+    modules = {"shared.moveto", "shared.dialog"}
+
+    params.CheerAnimation =  {type = EParamType.String, help = "[[Cheer animation when a good joke was told]]", required = false }
+    params.DrinkingAnimation = {type = EParamType.String, help = "[[Drinking animation in the idle state]]", required = false }
+    --------------------------------Variables--------------------------------
+    local anchorTrigger = nil
+    local cheerFlagGeneralEvent = Flag("LOW_Elfsong_Event_ComedyFestival_CheeringEvent_f15b705f-bedf-4949-bd89-c703c7b383ec")
+    local cheering = nil
+    local localDrinkingAnimation = Animation(params.DrinkingAnimation)
+    local localCheerAnimation = Animation(params.CheerAnimation)
+    local steerPointScenary = nil
+
+    --------------------------------Nodes--------------------------------
+    self.OnInit = function()
+
+        cheering = false
+        steerPointScenary = Entity("S_LOW_Elfsong_ReferencePointSteer_f83da7d2-3466-48eb-8d42-db841239595d")
+        anchorTrigger = Entity("S_LOW_Elfsong_ComedyShow_Anchor_001_c7d602aa-393f-4bbe-80f1-ac550238e40b")
+
+    end
+
+    nodes = Selector{
+        function(nodes)
+            return GetWeightedCanEnter(nodes, {
+                                                [nodes.Drink] = 1,
+                                                [nodes.Cheers] = 10,
+                                                [nodes.Wander] = 2,
+                                                [nodes.Idle] = 1
+
+            })
+        end
+    }
+
+    nodes.Drink = Action {
+        function()
+            try
+                SteerTo(steerPointScenary)
+                PlayAnimation(localDrinkingAnimation)
+                Sleep(5 + 8 * math.random())
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Drinking animation is not working")
+                Sleep(12 + 15 * math.random())
+            end
+        end,
+        CanEnter = function()
+            return not cheering
+        end
+    }
+
+    nodes.Cheers = Action {
+        function()
+            cheering = false
+            try
+                SteerTo(steerPointScenary)
+                PlayAnimation(localCheerAnimation)
+                Sleep(2 + 3 * math.random())
+                PlayAnimation(localCheerAnimation)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                Sleep(7 + 10 * math.random())
+            end
+        end,
+        CanEnter = function()
+            return cheering
+        end
+    }
+
+    nodes.Wander = Action {
+        function()
+            Wander(5.0, 4.0, MovementSpeed.Stroll, anchorTrigger)
+            SteerTo(steerPointScenary)
+            Sleep(4 + 9 * math.random())
+        end,
+        CanEnter = function()
+            return not cheering
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            Sleep(10 + 12 * math.random())
+        end,
+        CanEnter = function()
+            return not cheering
+        end
+    }
+
+    --------------------------------Events--------------------------------
+
+    events.FlagSet = function(e)
+        if e.Flag == cheerFlagGeneralEvent.Guid then
+            cheering = true
+        end
+    end
+
+end
+}

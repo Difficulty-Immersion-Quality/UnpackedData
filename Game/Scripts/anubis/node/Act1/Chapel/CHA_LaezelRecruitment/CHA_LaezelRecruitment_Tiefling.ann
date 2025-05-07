@@ -1,0 +1,266 @@
+game.states.CHA_LaezelRecruitment_Tiefling = State{ function ()
+
+    description = [[Used by the two tieflings during the recruitment of Lae'zel.]]
+
+    modules = { "shared.util", "shared.dialog" }
+
+    -----------------------------------------
+    -- params section
+    params.partner = { type = EParamType.String, required = true,
+        help = [[The other tiefling.]]
+    }
+    params.openCageSoloAD = { type = EParamType.String, required = true,
+        help = [[AD used to tell the player to open the cage.]]
+    }
+    params.isDeadSoloAD = { type = EParamType.String, required = true,
+        help = [[Solo AD used after Lae'zel was killed (when one of the 2 tieflings died; otherwise they have a dual AD)]]
+    }
+    params.prepLeavePoint = { type = EParamType.String, required = true,
+        help = [[Moves to this point trigger before departing to the crash site.]]
+    }
+
+    -----------------------------------------
+    -- local state section
+
+    local partner = Entity(params.partner)
+    local laezel = Entity("S_Player_Laezel_58a69333-40bf-8358-1d17-fff240d7fb12")
+    local player
+
+    local isADStarter = false
+    local canAD = true
+
+    local inCageDualAD = Dialog("CHA_LaeZelRecruitment_AD_LaeZelTieflingsIntro_33760198-94e1-5ea3-687d-469318b4cb7a")
+    local openCageSoloAD = Dialog(params.openCageSoloAD)
+    local isDeadDualAD = Dialog("CHA_LaeZelRecruitment_AD_LaeZelDead_af7166d6-9ea8-c9d8-b24a-1872d42cec26")
+    local isDeadSoloAD = Dialog(params.isDeadSoloAD)
+    local leavingTogetherAD = Dialog("CHA_LaezelRecruitment_AD_TieflingsLeaving_1c6cf2e4-05b7-f18e-7308-a845a97d617c")
+
+    local playerInProximity = false  --toggled from osiris events
+
+    local laezelDefeatedFlag = Flag("CHA_LaezelRecruitment_State_LaezelIsDefeated_d22e4798-d9bd-4e74-8fc8-80242f3e3595")
+    local laezelFreedFlag = Flag("CHA_LaezelRecruitment_State_Freed_0fe8e284-83a6-c1ad-9f18-20ed58985cf0")
+    local kidnapLaezelFlag = Flag("CHA_LaezelRecruitment_Event_TieflingsGetLaezel_5e8867b9-67e5-dc2d-934f-4471a25a5ddf")
+    local isWaitingForCageToOpen = false
+
+    local areLeaving = false
+    local readyToLeave = false
+
+    local prepLeaveArea = Entity("S_CHA_PrepLeavingArea_848dba6f-f0cc-4e46-8e1e-569ee287c92e")
+    local prepLeavePoint = Entity(params.prepLeavePoint)
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        if me == Entity("S_CHA_CagerLaezel1_2c8537fb-bf73-43a2-a8ff-48e41453adea") then
+            isADStarter = true
+        end
+    end
+
+    -----------------------------------------
+    -- node section
+
+    nodes.AtChapel = Selector {
+        Valid = function()
+            return not areLeaving
+        end
+    }
+
+    nodes.LeavingChapel = Selector {
+    }
+
+
+    --[[    At Lae'zel's cage   ]]
+    nodes.AtChapel.LaezelIsInCage = Selector {
+        Valid = function()
+            return
+                not GetFlag(laezelDefeatedFlag) and
+                not GetFlag(laezelFreedFlag)
+        end,
+    }
+
+    nodes.AtChapel.LaezelIsDefeated = Selector {
+        Valid = function()
+            return GetFlag(laezelDefeatedFlag)
+        end,
+    }
+
+    -- Lae'zel is alive and in the cage
+    nodes.AtChapel.LaezelIsInCage.WaitingForCageToOpen = Action {
+        function()
+            if player ~= nil and
+                not player.Character.IsDead and
+                CanSee(me, player) then
+                    SteerTo(player)
+                    if canAD then
+                        StartTimer(me, "CHA_LaezelRecruitment_ADTimer", 30, 0)
+                        canAD = false
+                        StartAutomatedDialog(openCageSoloAD, false, me)
+                    end
+            end
+            Sleep(10)
+        end,
+        Valid = function()
+            return isWaitingForCageToOpen
+        end
+    }
+
+    nodes.AtChapel.LaezelIsInCage.DoAD = Action {
+        CanEnter = function()
+            return isADStarter and
+                    not isWaitingForCageToOpen and
+                    playerInProximity and
+                    canAD
+        end,
+        function()
+            if not partner.Character.IsDead then
+                if mod.dialog.IsSpeakerAvailable(partner) and mod.dialog.IsSpeakerAvailable(laezel) then
+                    StartTimer(me, "CHA_LaezelRecruitment_ADTimer", 45, 0)
+                    canAD = false
+                    StartAutomatedDialog(inCageDualAD, false, laezel, me, partner)
+                end
+            else
+                canAD = false --without the timer, disabling it forever
+            end
+            Sleep(0.5)
+        end,
+        Valid = function()
+            return not isWaitingForCageToOpen
+        end
+    }
+
+    nodes.AtChapel.LaezelIsInCage.Waiting = Action {
+        function()
+            SteerTo(laezel)
+            Sleep(5)
+        end
+    }
+
+    -- Laezel is defeated
+    nodes.AtChapel.LaezelIsDefeated.DoAD = Action {
+        CanEnter = function()
+            return canAD
+        end,
+        function()
+            Sleep(4)
+            canAD = false
+            if partner.Character.IsDead and laezel.Character.IsDead then
+                SteerTo(partner)
+                Sleep(1)
+                StartAutomatedDialog(isDeadSoloAD, false, me) --solo versions make sense only if she's dead
+            elseif isADStarter and mod.dialog.IsSpeakerAvailable(partner) then
+                StartAutomatedDialog(isDeadDualAD, false, me, partner)
+                Sleep(1)
+            end
+        end,
+    }
+
+    nodes.AtChapel.LaezelIsDefeated.Wait = Action {
+        function()
+            Sleep(2)
+        end,
+    }
+
+    nodes.AtChapel.Sleep = Action {
+        function()
+            WaitForInterrupt()
+        end,
+    }
+
+
+    --[[    Leaving Chapel area   ]]
+    nodes.LeavingChapel.LeaveWithLaezel = Action {
+        --Osiris is handling this one, Anubis just needs to not interfere.
+        --If Lae'zel is defeated in the process, then they can leave to the crash instead
+        --Note: the tieflings don't really leave with Lae'zel: that's their intent, but she attacks them
+        CanEnter = function()
+            return
+                not GetFlag(laezelDefeatedFlag) and
+                GetFlag(kidnapLaezelFlag)
+        end,
+        function()
+            Sleep(1)
+        end,
+        Valid = function()
+            return not GetFlag(laezelDefeatedFlag)
+        end
+    }
+
+    nodes.LeavingChapel.PrepLeaveToCrash = Action {
+        function()
+            --[[Sleeping only if Lae'zel is defeated
+                because they should leave more quickly after being persuaded
+                to leave in dialog while Lae'zel is still in the cage]]
+            if not readyToLeave then
+                if GetFlag(laezelDefeatedFlag) then
+                    mod.util.SleepRandom(1.5, 3.0)
+                end
+                if not IsInTrigger(me, prepLeaveArea.Trigger) then
+                    try
+                        MoveTo(prepLeavePoint)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(3)
+                    end
+                end
+                if not partner.Character.IsDead then
+                    if isADStarter and
+                        not IsInDialog(me, false) and
+                        mod.dialog.IsSpeakerAvailable(partner) then
+                            --will finish playing while disappearing out of sight from Osiris
+                            StartAutomatedDialog(leavingTogetherAD, false, me, partner)
+                    end
+                    if GetFlag(laezelDefeatedFlag) then
+                        Sleep(3)
+                    end
+                elseif GetFlag(laezelDefeatedFlag) then
+                    -- look at the dead partner
+                    Sleep(1)
+                    LookAtEntity(partner, 3.0)
+                    Sleep(1.5)
+                end
+                SetEntityEvent(me, "DEN_LaezelRecruit_ReadyToLeave")
+            end
+            WaitForInterrupt() --gets there when the tieflings don't need Anubis anymore anyways
+        end,
+    }
+
+
+    -----------------------------------------
+    -- event section
+    events.FlagSet = function(e)
+        if e.Flag == Guid("CHA_LaezelRecruitment_State_Freed_0fe8e284-83a6-c1ad-9f18-20ed58985cf0") then
+            StopTimer(me, "CHA_LaezelRecruitment_ADTimer")
+            canAD = true
+        elseif e.Flag == Guid("CHA_LaezelRecruitment_Event_ReadyToLeave_e84c6f3a-00c3-4315-b49e-705a2e4c3caf") or
+            e.Flag == Guid("CHA_LaezelRecruitment_Event_TieflingsGetLaezel_5e8867b9-67e5-dc2d-934f-4471a25a5ddf") then
+                areLeaving = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        --osiris is checking the players entering and leaving the area and sending these events
+        if e.Event == "CHA_LaezelRecruitment_PlayerEnteredRegion" then
+            playerInProximity = true
+        elseif e.Event == "CHA_LaezelRecruitment_PlayersLeftRegion" then
+            playerInProximity = false
+        elseif e.Event == "CHA_LaezelRecruitment_OpeningCage" then --tieflings opening cage themselves
+            isWaitingForCageToOpen = true
+        elseif e.Event == "CHA_LaezelRecruitment_WasToldToLowerCage" then --player tasked to open the cage
+            player = e.TargetEntity
+            isWaitingForCageToOpen = true
+            StopTimer(me, "CHA_LaezelRecruitment_ADTimer")
+            canAD = true
+        elseif e.Event == "DEN_LaezelRecruit_ReadyToLeave" then
+            if e.TargetEntity == me then
+                readyToLeave = true
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "CHA_LaezelRecruitment_ADTimer" then
+            canAD = true
+        end
+    end
+
+end}
+

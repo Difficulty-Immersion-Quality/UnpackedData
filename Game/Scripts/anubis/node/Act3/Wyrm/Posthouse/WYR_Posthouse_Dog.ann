@@ -1,0 +1,53 @@
+game.states.WYR_Posthouse_Dog = State { function ()
+    description = [[ Dog in Posthouse will leave the cage if it opens. ]]
+
+    params.CageDoor = {type = EParamType.String,  required=true, help=[[
+        Door that holds the dog in the cage
+    ]]}
+    params.CageTrigger = {type = EParamType.String,  required=true, help=[[
+        Trigger to register when the dog leaves the cage
+    ]]}
+
+    local dogFreedFlag = Flag("WYR_Posthouse_Event_DogFreed_27141221-ccf3-45b8-9eae-b6974fc1f180")
+    local dogLooseFlag = Flag("WYR_Posthouse_State_DogLoose_9ff746c2-47b3-4da7-9894-a5a7c8343bac")
+    local dogWanderTrigger_STR = "S_WYR_Posthouse_Poly_DogWander_b86c547e-feda-49a1-a0d9-943c5d2ee3de"
+    local dogWanderTrigger
+
+    self.OnInit = function()
+        dogWanderTrigger = Entity(dogWanderTrigger_STR)
+    end
+
+    nodes.StuckInCage = Proxy {
+        game.states.GLO_StateInTrigger,
+        params = {
+            Trigger = params.CageTrigger
+        },
+        Valid = function()
+            return not GetFlag(dogLooseFlag, me) and not GetFlag(dogFreedFlag, me)
+        end
+    }
+
+    nodes.LeaveCage = Action {
+        function()
+            MoveTo(dogWanderTrigger, MovementSpeed.Run, true, false, 0.5, 1.0)
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return not GetFlag(dogLooseFlag, me) and GetFlag(dogFreedFlag, me)
+        end
+    }
+
+    nodes.WanderOutside = Proxy {
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 14,
+            sleepMin = 8,
+            trigger = dogWanderTrigger_STR,
+            wanderMax = 6,
+            wanderMin = 3
+        },
+        Valid = function()
+            return GetFlag(dogLooseFlag, me)
+        end
+    }
+end}

@@ -1,0 +1,53 @@
+game.roots.DEN_RitualHelper = State { function ()
+
+    description = [[Used to control the praying loop on the druids. Attached to a helper character.]]
+
+    local ritualOngoing = true
+    local druids = {
+        Entity("S_DEN_RitualDruid_004_32bef45a-47ca-4c3a-b907-13a857b316fd"),
+        Entity("S_DEN_RitualDruid_005_641fc4b5-3c42-4c4d-a759-541ad437f9df"),
+        Entity("S_DEN_RitualDruid_003_7cae8e24-d610-4229-859d-7b2da7c5d162"),
+        Entity("S_DEN_RitualDruid_001_9c5c4c89-890b-4e72-8698-53d36e6b4271"),
+        Entity("S_DEN_RitualDruid_002_96e41e71-9239-498b-9cb8-8b14fd48acd0"),
+    }
+
+    helpers.NotifyNextCaster = function(i)
+        if i >= #druids then
+            SetUnicastEntityEvent(druids[1], "DEN_RitualCaster_CastAtIdol")
+        else
+            SetUnicastEntityEvent(druids[i+1], "DEN_RitualCaster_CastAtIdol")
+        end
+    end
+
+    nodes.DummyAction = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if ritualOngoing then
+            if e.Event == "DEN_RitualCasters_RitualStopped" then
+                --this event currently unused, might delete later
+                ritualOngoing = false
+            elseif e.Event == "DEN_RitualCasters_DoneAD" then
+                for i,druid in pairs(druids) do
+                    if druid.UUID == e.TargetEntity.UUID then
+                        helpers.NotifyNextCaster(i)
+                        break
+                    end
+                end
+            elseif e.Event == "DEN_RitualCasters_Died" then
+                for i,druid in pairs(druids) do
+                    if druid.UUID == e.TargetEntity.UUID then
+                        if e.Params[1] == true then
+                            helpers.NotifyNextCaster(i-1)
+                        end
+                        table.remove(druids, i)
+                        break
+                    end
+                end
+            end
+        end
+    end
+end}

@@ -1,0 +1,115 @@
+game.states.GOB_Festivities_Graffiti = State{function ()
+
+    description = [[A behaviour for Goblin_007, walks to certain points and draws graffiti on the walls]]
+
+    modules = { "shared.params", "gustav.Act1.Goblins" }
+
+    params.NonGraffitiState = { type = EParamType.State, required = true,
+        help = [[Behaviour while not drawing graffiti]]}
+
+    params.GraffitiPoints = { type = EParamType.String, required = true, arrayRange = "1..",
+        help = [[Points where goblin draws graffiti]]}
+
+    params.GraffitiTriggers = {type = EParamType.String, help = [[Behaviour triggers for the graffiti]], required = true, arrayRange = "1.." }
+
+    params.GraffitiDialog = {type = EParamType.String, help = [[Array for dialogs]], required = true, arrayRange = "1.." }
+
+    local fl_Absent = Flag("GOB_Festivities_Behaviour_Absent_ed2fbbf4-42b3-4845-865d-39827dedb503")
+    local fl_Graffiti = Flag("GOB_Festivities_Behaviour_Graffiti_24b1e6d5-5540-43e4-8440-acf9b297fa72")
+    local tr_GraffitiPos = {}
+    local tr_GraffitiTriggers = {}
+    local tr_GraffitiDialog = {}
+    local tr_ChosenPos = nil
+    local tr_ChosenBehaviourTrigger = nil
+    local tr_ChosenBehaviourDialog = nil
+    local anim_Thinking = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+    local localGraffitiIndex = 1
+
+    helpers.ChoosePosition = function()
+        --if #tr_GraffitiPos > 0 then
+            --tr_ChosenPos = tr_GraffitiPos[math.random(#tr_GraffitiPos)]
+            --DebugText(me, "Chose pos [1]", tr_ChosenPos.Name)
+        --end
+        DebugText(me, "Starting choose position in index " .. localGraffitiIndex)
+        tr_ChosenPos = tr_GraffitiPos[localGraffitiIndex]
+        tr_ChosenBehaviourTrigger = tr_GraffitiTriggers[localGraffitiIndex]
+        tr_ChosenBehaviourDialog = tr_GraffitiDialog[(localGraffitiIndex % 2)+1]
+    end
+
+    self.OnInit = function()
+        tr_GraffitiPos = mod.params.ParamArrayToEntityList(params.GraffitiPoints)
+        tr_GraffitiTriggers = mod.params.ParamArrayToEntityList(params.GraffitiTriggers)
+        tr_GraffitiDialog = mod.params.ParamArrayToDialogList(params.GraffitiDialog)
+    end
+
+    events.FlagSet = function(ev)
+        if ev.Entity == me then
+            if ev.Flag == fl_Graffiti.Guid then
+                helpers.ChoosePosition()
+                SetFlag(fl_Absent, me)
+            end
+        end
+    end
+
+
+    nodes.NonGraffitiState = Proxy{
+        params.NonGraffitiState,
+
+        Valid = function()
+            return not GetFlag(fl_Graffiti, me) or IsInDialog(me)
+        end
+    }
+
+    nodes.Graffiti = Selector{
+        OnEnter = function()
+            SetEntityEvent(me, "GOB_Festivities_AC_Graffiti.Confirm")
+        end
+    }
+
+    -- hack state because switching to nodes.Graffiti happens faster then reaction to fl_Graffiti flag set
+    -- and hence faster then tr_ChosenPos being set
+    nodes.Graffiti.ChoosePoint = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return tr_ChosenPos == nil
+        end
+    }
+
+    nodes.Graffiti.MoveTo = Action{
+        function()
+            try
+                MoveTo(tr_ChosenPos)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_ChosenPos)")
+                helpers.ChoosePosition()
+            end
+        end,
+
+        CanEnter = function()
+            return tr_ChosenPos ~= nil and GetDistanceTo(me, tr_ChosenPos) > 1.0
+        end
+    }
+
+    nodes.Graffiti.Graffiti = Action{
+        function()
+            LookFrom(tr_ChosenPos)
+            DebugText(me, "Drawing graffiti")
+            --PlayAnimation(anim_Graffiti)
+            try
+                StartBehaviorDialog(tr_ChosenBehaviourDialog, tr_ChosenBehaviourTrigger.Trigger, true, me)
+            catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                DebugText(me, "Failed to start world behaviour")
+            end
+            --mod.Goblins.RepeatAnimationRandomTimes(anim_Graffiti, 2, 1.0)
+            PlayAnimation(anim_Thinking)
+            ClearFlag(fl_Graffiti, me)
+            localGraffitiIndex = localGraffitiIndex + 1
+            if (localGraffitiIndex > #tr_GraffitiPos) then
+                localGraffitiIndex = 1
+            end
+        end
+    }
+end}

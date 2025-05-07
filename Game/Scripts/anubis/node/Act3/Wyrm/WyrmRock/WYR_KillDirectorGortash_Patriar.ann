@@ -1,0 +1,74 @@
+game.states.WYR_KillDirectorGortash_Patriar = State{
+
+    function()
+
+        modules = { "shared.dialog", "shared.moveto", "shared.math" }
+
+        params.bench = { type = EParamType.String, required = true, help = [[Bench for the patriar]] }
+        params.posGortashArchDuke = { type = EParamType.String, required = true, help = [[Position after Gortash became an arch duke]] }
+        params.dialogGortashArchDuke = { type = EParamType.String, required = false, help = [[AD after Gortash became an arch duke]] }
+        params.dialogPartner = { type = EParamType.String, required = false, help = [[Partner for AD]] }
+        params.atTable = { type = EParamType.Bool, required = false, default = false, help = [[Patriar at the table]] }
+
+        local bench = params.bench
+        local archDukeFlag = Flag("WYR_KillDirectorGortash_State_GortashBecameArchduke_b91a5012-d49b-429d-9b86-b75686fa7582")
+        local posGortashArchDuke = Entity(params.posGortashArchDuke)
+        local dialogGortashArchDuke = Dialog(params.dialogGortashArchDuke)
+        local dialogPartner = Entity(params.dialogPartner)
+        local atTable = params.atTable
+
+        local drinkingAnimation = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+
+        helpers.action.ActAtDefaultPos = function()
+            LookFrom(posGortashArchDuke)
+            if dialogGortashArchDuke ~= nil then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    dialogGortashArchDuke,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 20.0
+                    },
+                    me,
+                    dialogPartner
+                )
+            else
+                if atTable then
+                    local rand = math.random(10)
+                    PlayAnimation(drinkingAnimation, true)
+                    Sleep(math.random(3.0, 9.0))
+                    PlayAnimation(drinkingAnimation, true)
+                else
+                    Sleep(math.random(3.0, 9.0))
+                end
+            end
+        end
+
+        nodes.MoveToDefaultPos = Action {
+            function()
+                Sleep(math.random(3.0, 9.0))
+                if GetDistance2DTo(me, posGortashArchDuke) > 0.5 then
+                    local moveResult = MoveTo(posGortashArchDuke, MovementSpeed.Walk, false, false, 0.1, 0.5, false)
+                    if moveResult == error.MovementError.None then
+                        helpers.ActAtDefaultPos()
+                    end
+                else
+                    helpers.ActAtDefaultPos()
+                end
+            end,
+            Valid = function()
+                return GetFlag(archDukeFlag) and posGortashArchDuke ~= nil
+            end
+        }
+
+        nodes.Sit = Proxy {
+            game.states.Sit,
+            params = {
+                seat = bench
+            },
+            Valid = function()
+                return not GetFlag(archDukeFlag)
+            end
+        }
+
+    end
+}

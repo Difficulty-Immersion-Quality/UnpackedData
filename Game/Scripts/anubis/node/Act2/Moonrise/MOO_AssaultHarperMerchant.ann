@@ -1,0 +1,94 @@
+game.states.MOO_AssaultHarperMerchant = State{function ()
+    description = [[Behaviour for the harper merchant during the assault on Moonrise]]
+
+    modules = { "shared.moveto" }
+
+    local interiourTowerPoint = Entity("S_MOO_AllyMainFloorPoint_008_27bd5e47-d664-496f-b307-acdb7ee82dfc")
+    local standPoint = Entity("S_MOO_AssaultHarperMerchantPoint_b65e46d5-8fba-4b6b-9601-9070214fde0f")
+    local changedStandPoint = false
+    local mainFloorClearedFlag = Flag("MOO_Assault_State_MainFloorEnemiesDefeated_1016055f-387a-4564-b3f9-cac9d2735b9d")
+    local deadCharacterTable = {}
+    local targetDeadCharacter
+    local isLooting = false
+    local anim_KneelingBesideCorpse_Start = Animation("CUST_KneelingBesideCorpse_01_Start_86c1e910-b6a7-40e4-bc17-e91152786fc1")
+    local anim_KneelingBesideCorpse_Loop_01 = Animation("CUST_KneelingBesideCorpse_01_Loop_312687d1-eb1b-4c66-a8fe-433b980c1f4f")
+    local anim_KneelingBesideCorpse_Loop_02 = Animation("CUST_KneelingBesideCorpse_02_Loop_0185a85b-1fb5-41b4-b41b-e4d19ec1ab63")
+    local anim_KneelingBesideCorpse_Loop_03 = Animation("CUST_KneelingBesideCorpse_03_Loop_bf4ddff9-5e50-4edc-8238-5486d17a6ae9")
+    local anim_KneelingBesideCorpse_End = Animation("CUST_KneelingBesideCorpse_01_End_978e3922-2e06-4b5f-8b9b-8cce3ba772d9")
+
+    nodes.ChangeStandPoint = Action {
+        CanEnter = function()
+            return GetFlag(mainFloorClearedFlag) and not changedStandPoint
+        end,
+
+        function()
+            standPoint = interiourTowerPoint
+            changedStandPoint = true
+        end
+    }
+
+    nodes.SearchBody = Action {
+        CanEnter = function()
+            return isLooting
+        end,
+
+        OnEnter = function()
+            deadCharacterTable = GetActiveCharacters(me, 12)
+        end,
+
+        function()
+            if #deadCharacterTable > 0 then
+                for i = #deadCharacterTable, 1, -1 do
+                    if GetRelation(me.Faction, deadCharacterTable[i].Faction) == FactionRelation.Ally or deadCharacterTable[i].Character.IsDead ~= true then
+                        table.remove(deadCharacterTable, i)
+                    end
+                end
+                local targetDeadCharacter = deadCharacterTable[math.random(1, #deadCharacterTable)]
+                if  targetDeadCharacter ~= nil then
+                    if mod.moveto.MoveToPoint(targetDeadCharacter, MovementSpeed.Walk, me) then
+                        SteerTo(targetDeadCharacter)
+                        PlayLoopingAnimation(anim_KneelingBesideCorpse_Start, {anim_KneelingBesideCorpse_Loop_01, anim_KneelingBesideCorpse_Loop_02, anim_KneelingBesideCorpse_Loop_03}, anim_KneelingBesideCorpse_End)
+                        Sleep(8)
+                        StopAnimation(me)
+                        Sleep(3 + 6 * math.random())
+                        isLooting = false
+                    end
+                end
+            end
+            isLooting = false
+        end,
+
+        OnLeave = function()
+            isLooting = false
+            targetDeadCharacter = nil
+            for i = #deadCharacterTable, 1, -1 do
+                table.remove(deadCharacterTable, i)
+            end
+        end
+    }
+
+    nodes.Idle = Action {
+        OnEnter = function()
+            StopTimer(me, "MOO_Assault_MerchantSearchBody")
+            StartTimer(me, "MOO_Assault_MerchantSearchBody", 10.0, 0)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(standPoint,  MovementSpeed.Walk, me) then
+                LookFrom(standPoint)
+                Sleep(2)
+            else
+                SteerTo(standPoint)
+            end
+            Sleep(2)
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "MOO_Assault_MerchantSearchBody") then
+            isLooting = true
+        end
+    end
+
+end
+}

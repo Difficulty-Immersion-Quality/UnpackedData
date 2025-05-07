@@ -1,0 +1,144 @@
+game.states.WYR_South_GoldQuestGiver = State{function()
+    description = [[Behavior for a Flaming Fist who gives a gold quest to get Wulbren's head
+        Initially sits on a benchInside outside of gate tower
+        Announces reward if gnomes do not show up at checkpoint
+        Runs towards the descent where gnomes disappear with and AD if gnomes showed up at checkpoint
+        Walk into the gate tower after talking to player]]
+
+    modules = { "shared.dialog" }
+
+    params.playersNearby = {type = EParamType.Bool, default = false, help=[[
+        Check if player is nearby for advertising quest
+    ]]}
+
+    local animationLookDown = Animation("CUST_BanditLookingAtHole_01_5aa2427f-b8ab-4213-ae48-57c10a619239")
+    local anouncePos = Entity("S_WYR_South_GuardsRunTo_002_8df585d7-14b0-43b1-b834-5bd3bd7f5785")
+    local anounceRewardAD = Dialog("WYR_South_AD_GoldGiverAfterSunflash_0b6c82df-ea74-c09d-e4e8-e0f1ece006d9")
+    local anounceFlag = Flag("WYR_South_State_AnouncingReward_d611fa14-a0ce-4da2-8f4b-617b50cff635")
+    local callAD = Dialog("WYR_South_AD_GoldGiver_Calling_c5fede89-6014-24c2-b9cb-e948767fad22")
+    local callFlag = Flag("WYR_South_State_CallingAD_b9fd347c-3cf8-4af6-b8a5-2c2c08a21329")
+
+    local charToCallOut = nil
+
+    local benchOutside = Entity("S_WYR_South_GoldQuestGiver_Bench_00_db52d309-a5ea-4cd3-bba0-dce942c79cb2")
+    local benchZoneOutside = Entity("S_WYR_South_GoldQuestGiver_BenchZone_00_05bff84c-a5ca-4662-a2a8-9ab077485a02")
+    local posOutside = Entity("S_WYR_South_GoldQuestGiver_PosAtStart_95152e9a-4f7a-4c0e-9c77-cbe6ea44b083")
+    local benchInside = Entity("S_WYR_South_GoldQuestGiver_Bench_01_1ea0a254-b055-47c1-b015-d6e5a8cafffd")
+    local benchZoneInside = Entity("S_WYR_South_GoldQuestGiver_BenchZone_01_7de6bc71-9ef5-4b58-bf81-67f7f6d87061")
+    local posInside = Entity("S_WYR_South_GoldQuestGiver_Pos_37e30c59-1dbb-43b2-9901-2041bd801026")
+
+    local goInside = Flag("WYR_South_GoldQuestGiver_GoInside_80f84ddc-0422-4160-aed2-a7dacaeaecde")
+
+    nodes.AnnounceReward = Action{
+        CanEnter = function()
+            return GetFlag(anounceFlag, me)
+        end,
+
+        function()
+            LookFrom(anouncePos)
+            PlayAnimation(animationLookDown, false, false)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(anounceRewardAD, {
+                waitForCompletion = true,
+                minDelay = 30.0 },
+                me)
+        end
+    }
+
+    nodes.CallOut = Selector{
+        CanEnter = function()
+            return params.playersNearby and GetFlag(callFlag, me)
+        end,
+        OnLeave = function()
+            charToCallOut = nil
+        end
+    }
+
+    nodes.CallOut.AddressPlayer = Action{
+        Valid = function()
+            return charToCallOut ~= nil
+        end,
+
+        function()
+            SteerTo(charToCallOut)
+            LookAtEntity(charToCallOut, 1.0)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(callAD, {
+                waitForCompletion = false,
+                minDelay = 15.0 },
+                me)
+        end
+    }
+
+    nodes.CallOut.FindPlayer = Action{
+        function()
+            local minDist = nil
+            local actives = GetActiveCharacters(me, 15.0)
+            if #actives > 0 then
+                for _,char in pairs(actives) do
+                    if char.Character.IsPlayer and not char.IsDead and CanSee(me, char) 
+                        and not HasActiveStatusWithGroup(char, "SG_Polymorph_BeastShape") then
+                        local dist = GetDistanceTo(me, char)
+                        if minDist == nil or dist < minDist then
+                            charToCallOut = char
+                            minDist = dist
+                        end
+                    end
+                end
+            end
+            StopTimer(me, "Timer_WYR_South_GoldQuestGiver_ResetCallout")
+            StartTimer(me, "Timer_WYR_South_GoldQuestGiver_ResetCallout", 5.1, 0)
+        end
+    }
+
+    nodes.Inside = Selector {
+        CanEnter = function()
+            return GetFlag(goInside, me)
+        end
+    }
+
+    nodes.Inside.Sit = Proxy{
+        game.states.JustSit,
+        params = {
+            seat = "S_WYR_South_GoldQuestGiver_Bench_01_1ea0a254-b055-47c1-b015-d6e5a8cafffd",
+            seatTrigger = "S_WYR_South_GoldQuestGiver_BenchZone_01_7de6bc71-9ef5-4b58-bf81-67f7f6d87061",
+        }
+    }
+
+    nodes.Inside.Stand = Proxy{
+        game.states.GLO_StandAtTriggerSplit,
+        params = {
+            trigger = "S_WYR_South_GoldQuestGiver_Pos_37e30c59-1dbb-43b2-9901-2041bd801026",
+            distance = 0.3,
+            animation = "",
+        }
+    }
+
+    nodes.Outside = Selector {
+        Valid = function()
+            return not GetFlag(goInside, me)
+        end
+    }
+
+    nodes.Outside.Sit = Proxy{
+        game.states.JustSit,
+        params = {
+            seat = "S_WYR_South_GoldQuestGiver_Bench_00_db52d309-a5ea-4cd3-bba0-dce942c79cb2",
+            seatTrigger = "S_WYR_South_GoldQuestGiver_BenchZone_00_05bff84c-a5ca-4662-a2a8-9ab077485a02",
+        }
+    }
+
+    nodes.Outside.Stand = Proxy{
+        game.states.GLO_StandAtTriggerSplit,
+        params = {
+            trigger = "S_WYR_South_GoldQuestGiver_PosAtStart_95152e9a-4f7a-4c0e-9c77-cbe6ea44b083",
+            distance = 0.3,
+            animation = "",
+        }
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_South_GoldQuestGiver_ResetCallout" then
+            charToCallOut = nil
+        end
+    end
+end}

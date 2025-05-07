@@ -1,0 +1,320 @@
+game.states.FOR_BottomlessSpider = State { function ()
+
+    description = [[Simple patrol script for the spiders (patrolling is not mandatory).]]
+
+    -----------------------------------------
+    -- Params
+    params.spline = {type = EParamType.String,
+        required = false,
+        help = [[Spline to patrol on. Won't patrol if null.]]
+    }
+
+    params.sleepTime = {type = EParamType.Number,
+        required = false,
+        default = 5.0,
+        help = [[Waiting for how long at each spline point. To avoid sleeping at a specific point, set the script event 'NoSleep' on that point (edit it on the spline).]]
+    }
+
+    -----------------------------------------
+    -- Local variables
+    local sleep = 1.0
+    local spline
+
+    local currentSplineIndex = -1
+    local targetSplineIndex = -1
+    local canWalkOnSpline = false
+
+    local isReversed = false
+
+    -----------------------------------------
+    -- Helper functions
+
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        if params.spline then
+            spline = Spline(params.spline)
+            canWalkOnSpline = true
+        end
+        if params.sleepTime then
+            sleep = params.sleepTime
+        end
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes.Patrol = Action {
+        function()
+            try
+                DoPatrol(spline, isReversed, MovementSpeed.Walk, targetSplineIndex)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                canWalkOnSpline = false
+            end
+        end,
+
+        Valid = function()
+            return (spline ~= nil) and canWalkOnSpline
+        end
+    }
+
+    nodes.Sleep = Action {
+        function()
+            Sleep(sleep)
+            if spline then
+                canWalkOnSpline = true
+            end
+        end,
+    }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        -- Spline patrol logic
+        if e.EndReached then
+            if isReversed then
+                isReversed = false
+            else
+                isReversed = true
+            end
+        end
+        
+        targetSplineIndex = e.NewIndex
+
+        if (e.Event and (e.Event == "NoSleep")) or (sleep <= 0.0) then
+            canWalkOnSpline = true
+        else
+            canWalkOnSpline = false
+        end
+    end
+end}
+
+
+
+game.actions.InvestigationBehaviours.FOR_Bottomless_MatriarchInvestigate = Action
+{
+    function(state)  
+        -- Setup for the right spell
+        local queenJaunt = "Target_EtherealJaunt_Queen"  
+        local spiderJaunt = "Target_EtherealJaunt"
+        local queen = Entity("S_FOR_Bottomless_SpiderQueen_e6b2f3ba-2d02-4507-8680-6047322e1a4b")
+        local jauntSpell = spiderJaunt
+        local needTeleport = false
+
+        if (me == queen) then
+            jauntSpell = queenJaunt
+        end
+
+        -- If spiders are close, try to get to the criminal pos through MoveTo
+        local criminalPos = state.Investigate.GetInvestigationCriminalLocation()     
+        if GetDistanceTo(me,criminalPos) < 10.0 then   
+            try
+                MoveTo(criminalPos, MovementSpeed.Run, false, false, 5.0)
+                Sleep(2.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                needTeleport = true
+            end
+        else
+            needTeleport = true
+        end       
+        
+        -- If spiders reached the pos, no need to teleport
+        if not needTeleport then                                                
+            state.Investigate.ClearCustomInvestigationBehaviour()
+            return 
+        end
+
+        -- If spiders can't reach it or too far away - teleport attempt
+        local targetPos = FindValidPosition(criminalPos, 10.0, me)
+        if (targetPos == nil) then 
+            DebugText(me, "failed to find pos") 
+            state.Investigate.ClearCustomInvestigationBehaviour()
+            return
+        end
+        
+        DebugText(me, "trying teleport")          
+        try
+            UseSpell(jauntSpell, targetPos, nil, nil, nil, false, false, false, false, true)
+            Sleep(1)
+        catch e then
+            Sleep(1)
+        end
+        
+        state.Investigate.ClearCustomInvestigationBehaviour()
+        return
+    end
+}
+
+game.states.FOR_BottomlessSpiderMatriarch = State { function ()
+
+    description = [[More complex patrol script for Spider Matriarch.]]
+
+    modules = { "shared.util" }
+
+    -----------------------------------------
+    -- Local variables
+    local sleep = 6.0
+    local patrolSplines = {}
+
+    local currentSpline
+    local nextSpline
+
+    local targetSplineIndex = -1
+    local canWalkOnSpline = false
+
+    local isReversed = false
+
+    local jauntSpell = "Target_EtherealJaunt_Queen"  
+
+    -----------------------------------------
+    -- Helper functions
+    helpers.NextSpline = function(oldSplineRemoved)
+        if patrolSplines[1].originalSpline ~= nil then
+            -- first spline has not yet been disabled, use it
+            nextSpline = 1
+        else
+            -- first spline is disabled, take a different one
+            local nextSplineKey, _ = mod.util.RandomFrom(patrolSplines)
+            nextSpline = nextSplineKey
+        end
+        if oldSplineRemoved then
+            -- previous spline was destroyed, invalidate it
+            currentSpline = -1
+        end
+        if nextSpline ~= currentSpline then
+            -- spider will search for nearest spline index on the next spline
+            targetSplineIndex = -1
+        end
+    end
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        -- Spline patrol logic
+        if e.EndReached then
+            isReversed = not isReversed
+        end
+
+        targetSplineIndex = e.NewIndex
+
+        -- when spider reaches the start point of the spline, check if she needs to swap splines
+        if e.Index == patrolSplines[currentSpline].startIndex and math.random(1, 2) == 1 then
+            helpers.NextSpline(false)
+        end
+
+        if (e.Event and (e.Event == "NoSleep")) or (sleep <= 0.0) then
+            canWalkOnSpline = true
+        else
+            canWalkOnSpline = false
+        end
+    end
+
+    events.PlatformDestroyed = function(e)
+        -- clean up unusable splines
+        for index, _ in pairs(patrolSplines) do
+            if e.Target == patrolSplines[index].webPlatform then
+                table.remove(patrolSplines, index)
+                DebugText(me, "removed spline [1]", index)
+                helpers.NextSpline(true)
+            end
+        end 
+    end
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        local web = Entity("S_FOR_Bottomless_MatriarchWeb_002_1aed092f-c97b-4cc8-9ba9-e453e4c52a14")
+        local webDestroyed = false
+        if not web.Platform.IsDestroyed then
+            table.insert(patrolSplines, {
+                originalSpline = 1,
+                webPlatform = Entity("S_FOR_Bottomless_MatriarchWeb_002_1aed092f-c97b-4cc8-9ba9-e453e4c52a14"),
+                spline = Spline("S_FOR_Bottomless_SpiderQueen_Spline_9a64990c-ee99-4525-ab63-e79fe1c59cf0"),
+                startPoint = Entity("S_FOR_Bottomless_SpiderQueen_Point_StartPatrol_47bb07bf-ae91-42de-ab66-bc2c68747880"),
+                startIndex = 1
+            })
+        else 
+            webDestroyed = true
+        end
+
+        web = Entity("S_FOR_Bottomless_MatriarchWeb_000_2102b781-7437-d940-2993-10666c9ba252")
+        if not web.Platform.IsDestroyed then
+            table.insert(patrolSplines, {
+                webPlatform = Entity("S_FOR_Bottomless_MatriarchWeb_000_2102b781-7437-d940-2993-10666c9ba252"),
+                spline = Spline("S_FOR_Bottomless_SpiderQueen_Spline_Backup1_f0c7d38e-e743-47f3-bdab-032e744fa786"),
+                startPoint = Entity("S_FOR_Bottomless_SpiderQueen_Point_StartPatrol1_4aeba6c7-daaa-4645-ac50-d00d00ee08bb"),
+                startIndex = 0
+            })
+        else 
+            webDestroyed = true
+        end
+
+        table.insert(patrolSplines, {
+            spline = Spline("S_FOR_Bottomless_SpiderQueen_Spline_Backup2_eaef688a-5e2d-4f63-8036-ea48e31bca92"),
+            startPoint = Entity("S_FOR_Bottomless_SpiderQueen_Point_StartPatrol2_03803f67-76c1-42d0-ba42-b7e967db18c5"),
+            startIndex = 2
+        })
+
+        table.insert(patrolSplines, {
+            spline = Spline("S_FOR_Bottomless_SpiderQueen_Spline_Backup3_edbb54d1-9634-42fb-a6d3-5feae785e754"),
+            startPoint = Entity("S_FOR_Bottomless_SpiderQueen_Point_StartPatrol3_257aecab-7c7e-415f-8ad3-3cdeab86b59f"),
+            startIndex = 0
+        })
+
+        currentSpline = 1
+        nextSpline = 1
+        helpers.NextSpline(webDestroyed)
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes.GoToNextSpline = Action {
+        function()
+            local targetPos = FindValidPosition(patrolSplines[nextSpline].startPoint, 3.0, me, true)
+            if (targetPos == nil) then 
+                DebugText(me, "failed to find jump pos") 
+                Sleep(1.0)
+            elseif GetDistanceTo(me, targetPos) < 5.0 and
+                MoveTo(targetPos, MovementSpeed.Walk, false, false, 0.5, 1.0, false) == error.MovementError.None then
+                currentSpline = nextSpline
+            else
+                try
+                    UseSpell(jauntSpell, targetPos, nil, nil, nil, false, false, false, false, true)
+                    Sleep(1.0)
+                    currentSpline = nextSpline
+                catch e then
+                    Sleep(1.0)
+                end
+            end
+        end,
+        CanEnter = function()
+            return nextSpline ~= currentSpline
+        end
+    }
+
+    nodes.Patrol = Action {
+        function()
+            try
+                DoPatrol(patrolSplines[currentSpline].spline, isReversed, MovementSpeed.Walk, targetSplineIndex)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                helpers.NextSpline(false)
+                canWalkOnSpline = false
+            end
+        end,
+        CanEnter = function()
+            return nextSpline == currentSpline
+        end,
+        Valid = function()
+            return (currentSpline ~= nil and patrolSplines[currentSpline].spline ~= nil) and canWalkOnSpline
+        end
+    }
+
+    nodes.Sleep = Action {
+        function()
+            Sleep(sleep)
+            if currentSpline ~= nil and patrolSplines[currentSpline].spline ~= nil then
+                canWalkOnSpline = true
+            end
+        end,
+    }
+end}

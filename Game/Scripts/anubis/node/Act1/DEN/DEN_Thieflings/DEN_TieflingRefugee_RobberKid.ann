@@ -1,0 +1,352 @@
+game.states.DEN_TieflingRefugee_RobberKid = State {function ()
+    description = [[Behaviour of the robbing tiefling kid in the Druid's Grove]]
+
+    modules = { "gustav.Act1.GroveRefugee","shared.moveto","shared.dialog"}
+
+    -----------------------------------------
+    -- Params
+    params.Custom = {type=EParamType.State, required=false, default=nil, help=[[State for Custom Behavior]]}
+    -----------------------------------------
+    -- Local variables
+    local playerDetected = nil
+    local States = {None = 0, Look = 1, Follow = 2}
+    local currState = 0
+
+    --Entities
+    local adventurer = Entity("S_DEN_RobbedAdventurer_534bceaf-678c-40a0-8ca9-e1134f95ba0d")
+    local confrontPos = Entity("S_DEN_RobberKid_ConfrontArea_0326b5fd-6710-4802-ba50-07f5236c4685")
+    local hideoutPos = Entity("S_DEN_RobberKid_HideoutArea_3ab8db39-4e89-4614-977d-0d7f1ede7a3c")
+    local abandonPos = Entity("S_DEN_Thieflings_RobberKidAbandonArea_b61af23c-a905-4c93-a0ea-94c410b7278d")
+    local goods = Entity("DEN_AdventurerGoodsBundle_2cd0ca80-816e-4e55-9179-4a62c9d72f20")
+    local goods2 = Entity("S_DEN_Thieflings_RobberSearchBag_52766403-73c3-404b-b8dc-086d4f1c7628")
+    local stolenLocket = Entity("S_DEN_AdventurerLocket_dbfd4598-a941-4169-927c-9e823aad81c5")
+    local robPoint = Entity("S_DEN_RobberKidPos_001_e75e0a3c-cc94-433f-9e2f-22a818199b09")
+    local goodsPos = nil
+    local goodsPos2 = nil
+
+    --Bools
+    local tryStealLocket = false
+    local atConfront = false
+    local canAD = true
+
+    --Flags
+    local hasLocketFlag = Flag("DEN_Thieflings_State_HasStolenLocket_e6fba99f-42cd-5a66-4a7b-23b3f77e993b")
+    local confrontFlag = Flag("DEN_Thieflings_State_InKidConfrontation_1b4d990d-fa82-4bb5-b2ae-b910aeccbdf7")
+    local endFlag = Flag("DEN_Thieflings_State_AfterRobberKidConfront_081b5119-aa6c-8b1e-b321-d622cbe162d7")
+    local peaceFlag = Flag("DEN_RaidingParty_State_PeacefulResolution_f4529d52-b459-6545-b4bf-8b2fb2cd6f2f")
+    local adventurerPermaDefeatedFlag = Flag("DEN_Thieflings_State_RobbedAdventurerPermaDefeated_ec701cb1-e09d-777b-994b-085e9d5394d6")
+    local leaderconfrontFlag = Flag("DEN_RaidingParty_Quest_ConfrontationResolved_dc97da68-5ed9-ffe2-7582-2533be0efbcd")
+    local abandonFlag = Flag("DEN_Thieflings_Event_HideoutAbandoned_f3808740-25b9-4393-a947-7a1f7a88ebda")
+    local inHideout = Flag("DEN_Thieflings_State_AtHideoutPoint_5f768dc1-8294-49ee-b2d2-964fcb22f5ff")
+    local atAbandon = Flag("DEN_Thieflings_State_AtAbandonPoint_d76525c1-b7e4-46b0-9847-73a1fdad245e")
+    local startAbandon = Flag("DEN_Thieflings_Event_Abandoning_883a6c02-9091-4b29-8bc3-99e070e3648b")
+    local emptyingStash = Flag("DEN_Thieflings_State_EmptyingStash_2203ac44-6623-40e6-967e-1b95a7c9dfb2")
+
+    --Animations
+    local confrontAnim = Animation("CUST_ArmsCrossed_01_e52783f3-520a-4f34-aaca-8f48e3c9336f")
+    local robAnim = Animation("SCENE_Pickpocket_01_6d46f91b-e566-4431-aa6a-aa83d609b804")
+    local inspectAnim = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local takeAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local slashAnim = Animation("51d4761b-2b2e-41a3-b52b-40b6700d6e39") --CUST_Training_Sword_01
+    local jabAnim = Animation("899aec6f-36ce-4b46-ab46-8f0f94a0a2fd") --CUST_Training_Sword_02
+    local scratchAnim = Animation("97b93945-3fcd-4262-8459-454443db5530") --CUST_Training_Defense_02
+    local biteAnim = Animation("070fc857-99c9-46de-a762-05284191dac7") --CUST_Training_Defense_01
+
+    --Tables
+    local robPoint1anims = {}
+    local robPoint2anims = {}
+    local phaseAnims = {}
+    local hideoutAnims = {}
+
+    --Dialogs
+
+    local AD = Dialog("DEN_Thieflings_AD_RobberKid_9412f7b3-6534-2a35-6588-911ec8b9e0ff")
+
+    -----------------------------------------
+    -- Helper functions
+    helpers.GetAnimation = function()
+        local currentAnims = phaseAnims[math.random(#phaseAnims)]
+        return currentAnims[math.random(#currentAnims)]
+    end
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        goodsPos = goods.Position
+        goodsPos2 = goods2.Position
+        phaseAnims = {
+            {biteAnim, slashAnim, scratchAnim},
+            {slashAnim, jabAnim},
+            {scratchAnim, biteAnim}
+        }
+        hideoutAnims = {
+            takeAnim,
+            robAnim
+        }
+    end 
+    
+    -----------------------------------------
+    -- Nodes
+
+    nodes.doAD = Action {
+        CanEnter = function()
+            return canAD
+        end,
+
+        OnEnter = function()
+            canAD = false
+        end,
+
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = false,
+                },
+                me
+            )
+        end,
+        OnLeave = function()
+            StopTimer(me,"ADTimer_DEN_Thieflings_AD_RobberKid")
+            StartTimer(me,"ADTimer_DEN_Thieflings_AD_RobberKid", 60 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return ((not tryStealLocket and not GetFlag(confrontFlag) and not GetFlag(endFlag,nil) and not GetFlag(inHideout,me) and not GetFlag(abandonFlag))
+            or (GetFlag(inHideout,me) and not GetFlag(startAbandon,me) and not GetFlag(emptyingStash,me))
+            or GetFlag(atAbandon,me))
+        end,
+    }
+
+    nodes.RobbingSelector = Selector{
+        function(nodes)
+            if mod.GroveRefugee.CheckItemLocation(goods2,goodsPos2) then
+                return FindDifferentRandomSelectable(nodes)
+            else
+                return nodes.InspectingGoods
+            end
+        end,
+        Valid = function()
+            return GetFlag(hasLocketFlag, adventurer) and not tryStealLocket and not GetFlag(endFlag,nil)
+        end
+    }
+
+    nodes.RobbingSelector.InspectingGoods = Proxy {
+        Valid = function()
+                return GetFlag(hasLocketFlag, adventurer) and not tryStealLocket and not GetFlag(endFlag,nil) and not GetFlag(confrontFlag,nil)
+        end,
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+            params={
+                moveTarget = "S_DEN_RobberKidPos_001_e75e0a3c-cc94-433f-9e2f-22a818199b09",
+                lookTarget = "DEN_AdventurerGoodsBundle_2cd0ca80-816e-4e55-9179-4a62c9d72f20",
+                anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+
+                waitMin = 0,
+                waitMax = 1
+            },
+            OnLeave = function()
+                StopAnimation(me)
+            end
+    }
+
+    nodes.RobbingSelector.RiflingThrough = Proxy {
+        Valid = function()
+                return GetFlag(hasLocketFlag, adventurer) and not tryStealLocket and not GetFlag(endFlag,nil) and not GetFlag(confrontFlag,nil) and mod.GroveRefugee.CheckItemLocation(goods2,goodsPos2)
+        end,
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+            params={
+                moveTarget = "S_DEN_RobberKidPos_002_b144eef7-4a0b-406a-bf1a-18653c1a8501",
+                lookFromMoveTarget = true,
+                anim = "CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17",
+                waitMin = 0,
+                waitMax = 1
+            },
+            OnLeave = function()
+                StopAnimation(me)
+            end
+    }
+
+    nodes.TryStealLocket = Action {
+        function()
+            if mod.moveto.MoveToPoint(adventurer,MovementSpeed.Walk,me) and GetFlag(hasLocketFlag, adventurer)  then
+                if IsInInventoryOf(stolenLocket,adventurer) then
+                    SteerTo(adventurer)
+                    PlayAnimation(robAnim,true,false)
+                    ToInventory(stolenLocket.Item,me,1,false,false)
+                    SetFlag(confrontFlag)
+                elseif IsInInventoryOf(stolenLocket,me) then --very unlikely edge case that the kid is interrupted mid-theft sequence
+                    SetFlag(confrontFlag)
+                else
+                    SetFlag(endFlag)
+                end
+            elseif mod.moveto.MoveToPoint(adventurer,MovementSpeed.Walk,me) and not GetFlag(hasLocketFlag, adventurer) then
+                SetFlag(endFlag)
+            else
+                tryStealLocket = false
+                StartTimer(adventurer,"DEN_Thieflings_RobberKidChaseCheckTimer",1,0)
+            end
+        end,
+        
+        Valid = function()
+            return not GetFlag(endFlag,nil) and not GetFlag(confrontFlag,nil)
+        end
+    }
+
+    nodes.Confront = Action {
+        function()
+            if atConfront then
+                if mod.moveto.MoveToPoint(confrontPos,MovementSpeed.Run,me) then
+                    LookFrom(confrontPos,true)
+                    PlayAnimation(confrontAnim,false,true)
+                    WaitForInterrupt()
+                end
+            else
+                try
+                    MoveTo(confrontPos, MovementSpeed.Run, true, true)
+                    atConfront = true
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(1.0)
+                end
+            end
+        end,
+        Valid = function()
+            return GetFlag(confrontFlag,nil) and not GetFlag(endFlag,nil)
+        end
+    }
+
+    --Extended successive operations via story
+    nodes.EmptyingStash= Action {
+        function()
+            Sleep(1)
+        end,
+        Valid = function()
+            return GetFlag(emptyingStash,me)
+        end
+    }
+
+    nodes.HideoutFollowing = Selector {
+        function(nodes)
+            return GetFirstCanEnter(nodes)
+        end,
+        Valid = function(node)
+            return CheckAnySelectable(node) and currState ~= 0 and not Getflag(startAbandon, me)
+        end
+    }
+
+    nodes.HideoutFollowing.FollowPlayer = Action{
+        function()
+            DebugText(me, "In Follow")
+            if GetDistance2DTo(me, playerDetected) < 4.0 then
+                LookAtEntity(playerDetected)
+            else
+                try
+                    MoveTo(playerDetected, MovementSpeed.Run)
+                catch ex if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Failed MoveTo(playerDetected)")
+                end
+            end
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return playerDetected ~= nil and not playerDetected.Character.IsDead and CanSee(me, playerDetected) and GetDistance2DTo(me, playerDetected) < params.FollowDistance and not interruptedFollow and currState == 2
+        end
+    }
+
+    nodes.HideoutFollowing.LookAtPlayer = Action{
+        function()
+            DebugText(me, "In Look")
+            LookAtEntity(playerDetected)
+            Sleep(0.5)
+            interruptedFollow = false
+        end,
+        Valid = function()
+            return playerDetected ~= nil and not playerDetected.Character.IsDead and CanSee(me, playerDetected) and currState == 1
+        end
+    }
+
+    nodes.InHideout = Action {
+        function()
+            if mod.moveto.MoveToPoint(hideoutPos,MovementSpeed.Walk,me)then
+                LookFrom(hideoutPos)
+                Sleep(math.random (3, 5))
+                PlayAnimation(hideoutAnims[math.random(1,#hideoutAnims)],true,false)
+            end
+        end,
+        Valid = function()
+            return not (GetFlag(startAbandon,me) or GetFlag(abandonFlag,nil))
+        end
+    }
+
+    nodes.AttackDummy = Action {
+        function()
+            if mod.moveto.MoveToPoint(abandonPos,MovementSpeed.Walk,me) then
+                Sleep(math.random (3, 5))
+                LookFrom(abandonPos)
+                PlayAnimation(helpers.GetAnimation(),true,false)
+                Sleep(math.random (2, 4))
+            end
+        end,
+        Valid = function()
+            return GetDistanceTo(me, abandonPos) < 1.0
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.FlagSet = function(e)
+        if(e.Flag == leaderconfrontFlag.Guid and not GetFlag(peaceFlag,nil))
+            or e.Flag == adventurerPermaDefeatedFlag.Guid then
+            SetHasOsirisDialog(me,true)
+            SetFlag(endFlag)
+        elseif(e.Flag == confrontFlag.Guid) then
+            SetHasOsirisDialog(me,false)
+            StopTimer(me,"ADTimer_DEN_Thieflings_AD_RobberKid")
+            canAD = false
+            Interrupt()
+        elseif(e.Flag == endFlag.Guid) then
+            mod.moveto.MoveTo(hideoutPos,true,1.5,"Run","DEN_Thieflings_ArriveAtHideout",2.5,true,false)
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_RunFromAdventurer") and not tryStealLocket then
+                tryStealLocket = true
+                StopAnimation(me)
+                Interrupt()
+            elseif(e.Event == "DEN_Thieflings_AbandonedHideout") then
+                SetFlag(startAbandon,me)
+                DebugText(me, "AttemptingToAbandon")
+                mod.moveto.MoveTo(abandonPos,true,1.5,"Run","DEN_Thieflings_ArriveAtAbandon",2.5,true,false)
+            elseif (e.Event == "DEN_Thieflings_ArriveAtHideout") then
+                SetFlag(inHideout,me)
+                canAD = true
+            elseif(e.Event == "DEN_Thieflings_ArriveAtAbandon") then
+                SetFlag(atAbandon,me)
+            end
+            if e.Event == "DEN_Thieflings_Event_SpottedPlayer" then
+                currState = 1
+                playerDetected = e.Params[1]
+            elseif e.Event == "DEN_thieflings_Event_Follow" then
+                currState = 2
+                playerDetected = e.Params[1]
+            elseif e.Event == "DEN_Thielfings_Event_StopFollow" then
+                currState = 0
+                playerDetected = nil
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_Thieflings_AD_RobberKid") then 
+            canAD = true
+        end
+    end
+
+end}

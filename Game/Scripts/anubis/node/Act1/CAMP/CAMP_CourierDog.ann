@@ -1,0 +1,572 @@
+game.states.CAMP_CourierDog = State {function()
+    description = [[Behaviour of the Courier Dog at the campsite]]
+
+    modules = {"shared.util","shared.math", "shared.moveto"}
+
+    local campPoint = Entity("S_CAMP_Courier_Dog_30e443f6-6fde-46f3-8f4e-609cd40c3370")
+    local campPoint_SafeTospline = Entity("S_CAMP_Courier_Dog_30e443f6-6fde-46f3-8f4e-609cd40c3370")
+    local owlbearCubFlag = Flag("GOB_ChickenChase_State_OwlbearAcquired_da704027-02ea-717c-4390-f538e5e5cd7a")
+    local owlbearCub = Entity("S_FOR_OwlBear_Cub_001_c66b2865-6613-4372-b97a-e330c1d75d09")
+    local dogChaseFlag = Flag("CAMP_Courier_Dog_Event_ChaseOwlbearCub_a52a966c-e387-42c6-85a8-ced6dd9d4a74")
+    local owlbearCubDogNightConcludedFlag = Flag("NIGHT_OwlbearCubDog_902e10f8-e9d8-4eb6-ac0f-9ad8ba8787ed")
+    local restFlag = Flag("CAMP_Courier_Dog_Event_Rest_dd64a974-2584-4ce6-bbd6-8bd55a76d362")
+    local restPoint = Entity("S_CAMP_CourierDog_Night_001_99dd862e-0826-4ce6-830e-e1fc8f81e10a")
+    local currentRestPoint = nil
+    local facingPoint = Entity("S_OwlbearCubCourierDog_FacingPoint_001_0f8cdb3e-9f5a-424c-bac6-944fead4ceef")
+    local tieflingPetsDogDialog = Dialog("BHVR_WRLD_WLD_TieflingCelebration_TieflingPetsScratch_5633e8b6-2fd1-fd19-cadb-b7185b9ca516")
+    local tieflingPetsDogFlag = Flag("CAMP_GoblinHuntCelebration_State_PettingDog_cc8b4a4d-99ca-41a1-b38a-57686feb7070")
+    local kidTag = Tag("KID_ee978587-6c68-4186-9bfc-3b3cc719a835")
+    local scratchIsFocusedOnThrowFlag = Flag("FOR_CourierDog_State_FocusedOnThrowingPlayer_35d81592-1643-4618-8308-fa0fd8cbb43b")
+    local scratchIsPlayingFetchFlag = Flag("FOR_CourierDog_State_IsPlayingFetch_55ca1e39-8b83-4f9d-b720-a66e97abbb4e")
+
+    local playfulAnim = Animation("CUST_Play_01_653ae4dc-c82a-44ad-84b6-ae6a1b16b54b")
+    local failSafeTime = 0
+    local restCount = 0
+    local hasPlayedAnim = false
+    local restTime = 20
+
+    local chaseSpline = Spline("S_CAMP_GoblinHuntCelebration_DogChaseSpline_35ff5925-5cd6-4dfd-92b4-17843395b076")
+    local targetSplineIndex = -1
+
+    local dogAtGoblinParty = false
+    local dogAtTieflingParty = false
+    local tieflingsAtParty = {}
+    local nextTiefling = nil
+
+    local shadowheart = Entity("S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679")
+    local callflag = Flag("CAMP_Shadowheart_Event_CallDog_a77ef785-def5-45cc-a5a1-e9e0cd08765b")
+    local petarrivedflag = Flag("CAMP_Shadowheart_Event_PetArrived_3fc1c969-f630-4d20-a61e-b1924873d8e2")
+
+    --------------------HELPERS---------------------
+    helpers.action.PlayfulAnimTransition = function(target, isWaiting)
+        LookAtEntity(target, 3.0)
+        failSafeTime = 0 --In case the owlbear cub never gets in range for whatever reason
+        while (GetDistance2DTo(me, target) > 3 and failSafeTime < 10) do
+            if isWaiting then
+                Sleep(1)
+            end
+            failSafeTime = failSafeTime + 1
+        end
+        PlayAnimation(playfulAnim, true, false)
+    end
+
+    helpers.action.GetRandomFromTable = function(prevValue, table)
+        if #table == 0 then
+            return nil
+        end
+
+        if #table == 1 then
+            return table[1]
+        end
+
+        local newValue = prevValue
+        while prevValue == newValue do
+            newValue = table[math.random(1, #table)]
+        end
+        return newValue
+    end
+
+    helpers.action.GetNextTieflingToPlayWith = function()
+        if nextTiefling ~= nil then
+            ClearFlag(tieflingPetsDogFlag, nextTiefling)
+        end
+        nextTiefling = helpers.GetRandomFromTable(nextTiefling, tieflingsAtParty)
+        SetFlag(tieflingPetsDogFlag, nextTiefling)
+        return nextTiefling
+    end
+
+    --------------------NODES---------------------
+    nodes.PlayFetch = Proxy {
+        game.states.CourierDog_PlayingFetch,
+        Valid = function()
+            return GetFlag(scratchIsPlayingFetchFlag)
+        end
+    }
+
+    nodes.WaitForFetch = Proxy {
+        game.states.CourierDog_WaitForFetch,
+        Valid = function()
+            return GetFlag(scratchIsFocusedOnThrowFlag)
+            and not GetFlag(scratchIsPlayingFetchFlag)
+        end
+    }
+
+    nodes.GoblinHunt_RunFromGoblin = Action {
+        function()
+            try
+                DoPatrol(chaseSpline, false, MovementSpeed.Run, targetSplineIndex)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                DebugText(me, "ERROR: Could not start patrol")
+            end
+        end,
+
+        Valid = function()
+            return dogAtGoblinParty
+            and not GetFlag(scratchIsFocusedOnThrowFlag)
+            and not GetFlag(scratchIsPlayingFetchFlag)
+        end
+    }
+
+    -- Scratch moves from tiefling to tiefling to receive pets
+    nodes.TieflingCelebration = Selector{
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return dogAtTieflingParty
+            and not GetFlag(scratchIsFocusedOnThrowFlag)
+            and not GetFlag(scratchIsPlayingFetchFlag)
+        end
+    }
+    nodes.TieflingCelebration.Idle = Action {
+        function()
+            Sleep(math.random(5,8))
+        end
+    }
+    nodes.TieflingCelebration.Wander = Action {
+        function()
+            Wander(20.0,8.0, MovementSpeed.Run, campPoint)
+            Sleep(math.random(2,4))
+        end
+    }
+    nodes.TieflingCelebration.GreetGuest = Action {
+        function()
+            nextTiefling = helpers.GetNextTieflingToPlayWith()
+            local moveResult = MoveTo(nextTiefling, MovementSpeed.Run, false, false, 0.5, 2.0)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(nextTiefling)
+                Sleep(2.0)
+                return false
+            end
+            SetEntityEvent(nextTiefling, "StartPetTheDog") -- send event so tiefling prepares to pet the dog with EndRepose
+            helpers.PlayfulAnimTransition(nextTiefling, false)
+            Sleep(1.0)
+            DebugText(me, "Petting animation")
+            StartBehaviorDialog(tieflingPetsDogDialog, nil, true, me, nextTiefling)
+            ClearFlag(tieflingPetsDogFlag, nextTiefling)
+        end,
+        CanEnter = function()
+            return #tieflingsAtParty > 0
+        end,
+        OnLeave = function()
+            ClearFlag(tieflingPetsDogFlag, nextTiefling)
+        end
+    }
+
+    -- Behaviour between OwlbearCub & Scratch
+    nodes.Play = ImmediateSelector{
+        CanEnter = function()
+            return GetFlag(owlbearCubDogNightConcludedFlag)
+        end,
+
+        Valid = function()
+            return not owlbearCub.Character.IsDead
+            and not GetFlag(scratchIsFocusedOnThrowFlag)
+            and not GetFlag(scratchIsPlayingFetchFlag)
+        end
+    }
+
+    nodes.Play.Rest = Action{
+        CanEnter = function()
+            return GetFlag(restFlag)
+        end,
+
+        function()
+            if campPoint ~= campPoint_SafeTospline then
+                currentRestPoint = campPoint
+            else
+                currentRestPoint = restPoint
+            end
+            if  not IsInDangerousSurfaceFor(currentRestPoint, me.Character, 2.0, true) then
+                local moveResult = MoveTo(currentRestPoint, MovementSpeed.Walk, false, false, 2.5, 5.0, false)
+                if moveResult ~= error.MovementError.None then
+                    Wander(3.0,2.0, MovementSpeed.Walk, campPoint)
+                else
+                    if campPoint == campPoint_SafeTospline then
+                        LookAtEntity(facingPoint, 3.0)
+                    end
+                    Sleep(restTime)
+                end
+            end
+            ClearFlag(restFlag)
+        end,
+
+        Valid = function()
+            return GetFlag(restFlag)
+        end
+    }
+
+    nodes.Play.RunFromOwlbearCub_Spline = Action{
+        function()
+            if not hasPlayedAnim then
+                helpers.PlayfulAnimTransition(owlbearCub, true)
+                hasPlayedAnim = true;
+            end
+            try
+                DoPatrol(chaseSpline, false, MovementSpeed.Run, -1, false)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                SetFlag(restFlag)
+            end
+        end,
+
+        Valid = function()
+            return not GetFlag(dogChaseFlag)
+        end,
+
+        OnLeave = function()
+           hasPlayedAnim = false
+        end,
+        CanEnter = function()
+            return not GetFlag(dogChaseFlag) and campPoint == campPoint_SafeTospline
+        end,
+
+    }
+
+    nodes.Play.RunFromOwlbearCub_Wander = Action {
+        function()
+            if not hasPlayedAnim then
+                helpers.PlayfulAnimTransition(owlbearCub, true)
+                hasPlayedAnim = true;
+            end
+            Wander(10, 20, MovementSpeed.Run, campPoint)
+            SetFlag(restFlag)
+        end,
+
+        Valid = function()
+            return not GetFlag(dogChaseFlag)
+        end,
+
+        OnLeave = function()
+           hasPlayedAnim = false
+        end,
+        CanEnter = function()
+            return not GetFlag(dogChaseFlag) and campPoint ~= campPoint_SafeTospline
+        end,
+    }
+
+    nodes.Play.Follow = Action {
+        CanEnter = function()
+            return GetFlag(dogChaseFlag)
+        end,
+
+        function()
+            try
+                MoveInRange(owlbearCub, 1.0, 1.5, MovementSpeed.Run)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                SetFlag(restFlag)
+            end
+            if not hasPlayedAnim then --If they are at destination, prevents anim from playing twice
+                helpers.PlayfulAnimTransition(owlbearCub, false)
+                hasPlayedAnim = true
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(dogChaseFlag)
+        end,
+
+        OnLeave = function()
+            hasPlayedAnim = false
+        end
+    }
+
+    nodes.ShadowheartCall = Action {
+        function()
+            if mod.moveto.MoveToPoint(shadowheart, MovementSpeed.Run, me) then
+                SteerTo(shadowheart)
+                SetFlag(petarrivedflag)
+                Sleep(5.0)
+            else
+                ClearFlag(callflag)
+            end
+        end,
+        Valid = function()
+            return GetFlag(callflag)
+        end,
+        OnLeave = function()
+            ClearFlag(callflag)
+        end
+    }
+
+    nodes.Wander = Action {
+        function()
+            Wander(20.0,5.0, MovementSpeed.Walk, campPoint)
+            Sleep(math.random(5,8))
+        end,
+        Valid = function()
+            return not GetFlag(scratchIsFocusedOnThrowFlag)
+            and not GetFlag(scratchIsPlayingFetchFlag)
+        end,
+        OnLeave = function()
+            if campPoint ~= campPoint_SafeTospline then
+                if mod.math.CoinToss(0.90) then
+                    SetFlag(dogChaseFlag)
+                end
+                restCount = restCount + 1
+                if restCount >= 15 then
+                    restCount = 0
+                    SetFlag(restFlag)
+                end
+                DebugText(me, "Leaving Wander")
+            end
+        end
+    }
+
+    --------------------EVENTS---------------------
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "CAMP_GoblinHuntCelebration_SetupDogForGoblins" then
+            dogAtGoblinParty = true
+        elseif e.TargetEntity == me and e.Event == "CAMP_GoblinHuntCelebration_SetupDogForTieflings" then
+            dogAtTieflingParty = true
+        elseif e.TargetEntity == me and e.Event == "CAMP_GoblinHuntCelebration_ClearDog" then
+            dogAtGoblinParty = false
+            dogAtTieflingParty = false
+            tieflingsAtParty = nil
+        elseif e.TargetEntity == me and e.Event == "CampPositionChange" then
+            campPoint = e.Params[1]
+        elseif e.Event == "CAMP_GoblinHuntCelebration_Teleported" then
+            if e.TargetEntity.IsCharacter and not Tagged(kidTag, e.TargetEntity) then
+                table.insert(tieflingsAtParty, e.TargetEntity)
+            end
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        if GetFlag(owlbearCubFlag) then --SplineControlPointReached is also used for GoblinParty, so make sure this only runs for ChaseOwlbearCub
+            if mod.math.CoinToss(0.15) then
+                SetFlag(dogChaseFlag)
+            end
+            restCount = restCount + 1
+            if restCount >= 15 then
+                restCount = 0
+                SetFlag(restFlag)
+            end
+        end
+    end
+
+end}
+
+game.states.CAMP_CourierDog_Night = State {function()
+
+    description = [[Unique behaviour of the Courier Dog for important campsite events]]
+
+    local owlbearCubDogFirstMeetFlag = Flag("CAMP_OwlbearCubDog_State_NightActive_e092ebb1-f756-4644-b4dc-5bf0c0df3fd7")
+
+    self.Valid = function()
+        return GetFlag(owlbearCubDogFirstMeetFlag)
+    end
+
+    --------------------NODES---------------------
+    nodes.Sleeping = Action {
+        OnEnter = function()
+            ApplyStatus(me, "SLEEPING", false, -1)
+        end,
+
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(owlbearCubDogFirstMeetFlag) and not me.IsInCombat
+        end
+    }
+
+    nodes.Wander = Action {
+        function()
+            Wander(5.0,5.0, MovementSpeed.Walk, campPoint)
+            Sleep(math.random(5,8))
+        end
+    }
+
+    --------------------EVENTS---------------------
+    events.FlagCleared = function(e)
+        if e.Flag == owlbearCubDogFirstMeetFlag.Guid then
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me then
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end
+    end
+
+
+end}
+
+game.states.CourierDog_WaitForFetch = State {function()
+
+    description = [[Scratch will anxiously wait when a player is about to throw something]]
+
+    local playfulAnim = Animation("CUST_Play_01_653ae4dc-c82a-44ad-84b6-ae6a1b16b54b")
+
+    local scratchIsFocusedOnThrowFlag = Flag("FOR_CourierDog_State_FocusedOnThrowingPlayer_35d81592-1643-4618-8308-fa0fd8cbb43b")
+    local characterIsAboutToThrowFlag = Flag("FOR_CourierDog_Player_IsAboutToThrow_b886a9e3-4bb3-4e2c-93bf-72c04433f1dd")
+    local charactersAboutToThrow = {}
+    local scratchFocusCharacter = nil
+
+    --------------------NODES---------------------
+    nodes.GoToFocusChar = Action {
+        function()
+            MoveTo(scratchFocusCharacter, MovementSpeed.Sprint, false, false, 1.0, 1.5, false)
+        end,
+        Valid = function()
+            return scratchFocusCharacter ~= nil
+        end,
+        CanEnter = function()
+            return scratchFocusCharacter ~= nil and GetDistanceTo(me, scratchFocusCharacter) > 2.0
+        end
+    }
+
+    nodes.WaitForThrow = Action {
+        function()
+            SteerTo(scratchFocusCharacter)
+            PlayAnimation(playfulAnim, true, false)
+            Sleep(2.0)
+        end,
+        Valid = function()
+            return scratchFocusCharacter ~= nil
+        end
+    }
+
+    nodes.Waiting = Action {
+        function()
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return scratchFocusCharacter == nil
+        end
+    }
+
+    --------------------EVENTS---------------------\
+    events.EntityEvent = function(e)
+        if e.Event == "FOR_Courier_Dog_AboutToThrow" then
+            charactersAboutToThrow[e.TargetEntity.UUID.String] = true
+            if scratchFocusCharacter == nil and GetDistanceTo(me, e.TargetEntity) < 10.0 then
+                scratchFocusCharacter = e.TargetEntity
+                SetFlag(scratchIsFocusedOnThrowFlag)
+            end
+        elseif e.Event == "FOR_Courier_Dog_ThrowFinished" then
+            if charactersAboutToThrow[e.TargetEntity.UUID.String] == true then
+                charactersAboutToThrow[e.TargetEntity.UUID.String] = nil
+                if scratchFocusCharacter == e.TargetEntity then
+                    scratchFocusCharacter = nil
+                    ClearFlag(scratchIsFocusedOnThrowFlag)
+
+                    local nextChar, distance, closestChar, closestDistance
+                    for nextCharStr,_ in pairs(charactersAboutToThrow) do
+                        nextChar = Entity(nextCharStr)
+                        distance = GetDistanceTo(me, nextChar)
+                        if closestDistance == nil or closestDistance > distance then
+                            closestChar = nextChar
+                            closestDistance = distance
+                        end
+                    end
+                    if closestDistance ~= nil then
+                        scratchFocusCharacter = closestChar
+                        SetFlag(scratchIsFocusedOnThrowFlag)
+                    end
+                end
+            end
+        end
+    end
+end}
+
+game.states.CourierDog_PlayingFetch = State {function()
+
+    description = [[Scratch is playing fetch]]
+
+    local thrownObject, objectThrower, changeFetch
+    local scratchIsPlayingFetchFlag = Flag("FOR_CourierDog_State_IsPlayingFetch_55ca1e39-8b83-4f9d-b720-a66e97abbb4e")
+    local lootAnimation = Animation("UTIL_Loot_01_ab7b2bab-e9be-4462-9771-aa17f93a14ac")
+
+    nodes.ChangeFetch = Action {
+        function()
+            changeFetch = nil
+        end,
+        Valid = function()
+            return changeFetch ~= nil
+        end
+    }
+
+    nodes.RunToThrowerWithObject = Action {
+        function()
+            local thrower = Entity(objectThrower)
+            local moveToResult = MoveTo(thrower, MovementSpeed.Run, false, false, 0.5, 1.5)
+            if moveToResult == error.MovementError.None then
+                PlayAnimation(lootAnimation, false, false)
+                SetEntityEvent(me, "FOR_CourierDog_Fetch_ArrivedAtThrower", thrower)
+                Sleep(3.0)
+                return
+            end
+            moveToResult = MoveInRange(thrower, 3.0, 10.0, MovementSpeed.Run, nil, false, false)
+            if moveToResult ~= error.MovementError.None then
+                -- can fail silently
+            end
+            -- failed move
+            SteerTo(thrower)
+            Sleep(3.0) -- make Scratch bark
+            ClearFlag(scratchIsPlayingFetchFlag)
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return objectThrower ~= nil
+        end
+    }
+
+    nodes.RunToThrownObject = Action {
+        function()
+            local object = Entity(thrownObject)
+            local moveToResult = MoveTo(object, MovementSpeed.Sprint, false, false, 0.5, 1.5, false)
+            if moveToResult == error.MovementError.None then
+                PlayAnimation(lootAnimation, true, false)
+                SetEntityEvent(me, "FOR_CourierDog_Fetch_ArrivedAtObject", object)
+                Sleep(3.0)
+                return
+            end
+            moveToResult = MoveInRange(object, 3.0, 10.0, MovementSpeed.Run, nil, false, false)
+            if moveToResult ~= error.MovementError.None then
+                -- can fail silently
+            end
+            -- failed move
+            SteerTo(object)
+            Sleep(3.0) -- make Scratch bark
+            ClearFlag(scratchIsPlayingFetchFlag)
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return thrownObject ~= nil and objectThrower == nil
+        end
+    }
+
+    nodes.ClearFetch = Action {
+        function()
+            ClearFlag(scratchIsPlayingFetchFlag)
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return thrownObject == nil and objectThrower == nil
+        end
+    }
+
+    --------------------EVENTS---------------------
+    events.EntityEvent = function(e)
+        if e.Event == "FOR_CourierDog_Fetch_SetObject" then
+            thrownObject = e.Params[1]
+            changeFetch = true
+            SetFlag(scratchIsPlayingFetchFlag)
+        elseif e.Event == "FOR_CourierDog_Fetch_SetThrower" then
+            objectThrower = e.Params[1]
+            changeFetch = true
+        elseif e.Event == "FOR_CourierDog_Fetch_ClearObject" and thrownObject == e.Params[1] then
+            thrownObject = nil
+        elseif e.Event == "FOR_CourierDog_Fetch_ClearThrower" and objectThrower == e.Params[1] then
+            objectThrower = nil
+        end
+    end
+end}

@@ -1,0 +1,61 @@
+game.states.LOW_Park_FlamingFist_Patrol = State{
+    function()
+        params.waitTime = {type = EParamType.Number, required = false, default = 6.0, help = [[Wait time.]]}
+        params.patrolSpline = {type = EParamType.String, required = true, help = [[Patrol spline.]]}
+        params.wanderAnchor = {type = EParamType.String, required = true, help = [[Wander point trigger]]}
+        params.newAnimation = {type = EParamType.String, required = false, help = [[Optional animation override]]}
+
+        local bWait = false
+        local bCombat = false
+        local spPatrol = Spline(params.patrolSpline)
+        local afterCombatFlag = Flag("LOW_Park_Event_AbsoluteMessengerDied_2b89b979-7d80-4574-b89a-2d1eff182e2c")
+        local wanderTrigger = Entity(params.wanderAnchor)
+        local animation = Animation(params.newAnimation)
+
+        self.OnEnter = function()
+            SetWeaponUnsheathed(me,false)
+        end
+
+        self.Valid = function()
+            return bWait or GetFlag(afterCombatFlag)
+        end
+
+        self.OnLeave = function()
+            bWait = false
+        end
+        
+        nodes.Action_AfterCombat = Action{
+            function()
+                if GetDistance2DTo(wanderTrigger,me) > 2.0 then
+                        MoveTo(wanderTrigger, MovementSpeed.Run, false, false, 0.5, 1.0, true, PathClimbingMode.DynamicOnly)
+                else
+                    try 
+                        SteerTo(wanderTrigger)
+                        PlayLoopingAnimation(nil, {animation}, nil, false)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        Wander(3.0, 3.0, MovementSpeed.Walk, wanderTrigger)
+                        Sleep(4.0)
+                    end
+                end
+                end,
+            Valid = function()
+                return GetFlag(afterCombatFlag) 
+            end
+        }
+
+        nodes.Action_Wait = Action{
+            function()
+                LookFrom(spPatrol)
+                Sleep(params.waitTime)
+                bWait = false
+            end
+        }
+
+
+        events.SplineControlPointReached = function(e)
+            if e.Event == "Wait" then
+                bWait = true
+            end
+        end
+    end
+}

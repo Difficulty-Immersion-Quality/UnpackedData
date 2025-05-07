@@ -1,0 +1,261 @@
+--[[
+Same as LOW_SWS_Common except it has a node to play a world behaviour
+--]]
+game.states.LOW_SWS_Inspector = State{function ()
+    description = [[A common script for Steel Watch Streets situation participants: SWs, FFs and civilians]]
+
+    modules = { }
+
+    params.PreState = { type = EParamType.State, required = true,
+        help = [[State before Steel Watch Foundry destroyed]] }
+    params.TransState = { type = EParamType.State, required = false, default = nil,
+        help = [[Transition state when Steel Watch Foundry was just destroyed]] }
+    params.PostState = { type = EParamType.State, required = true,
+        help = [[State after Steel Watch Foundry destroyed]] }
+
+    local foundryDestroyed = Flag("GLO_Foundry_State_ControlCentreDestroyed_456906c5-40a6-429e-8e1c-7120a2ef631b")
+    local postState = Flag("LOW_SWS_DisabledState_709ca754-4a9d-4f55-bc83-9fca078fc153")
+
+    nodes.PostState = Proxy {
+        CanEnter = function()
+            return GetFlag(postState)
+        end,
+
+        params.PostState
+    }
+
+    nodes.PreState = Proxy {
+        CanEnter = function()
+            return not GetFlag(foundryDestroyed)
+        end,
+
+        params.PreState
+    }
+
+    nodes.TransState = Proxy {
+        params.TransState
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(1.0)
+        end
+    }
+end}
+
+
+game.states.LOW_SWS_Inspector_StandWithAD = State{function ()
+    description = [[A common script for Steel Watch Streets situation participants: stand with periodic AD]]
+    modules = { "shared.dialog" }
+
+    params.Position = { type = EParamType.String, required = false, default = "", help = [[Stand position]] }
+    params.AD = { type = EParamType.String, required = false, default = "", help = [[The AD to play.]] }
+    params.Partners = { type = EParamType.String, arrayRange = "..4", required = false, default = {}, help = [[Dialog Partner list]]}
+
+    local pos = nil
+    local AD = Dialog(params.AD)
+    local partners = {}
+    local behaviourDialog = Dialog("BHVR_WRLD_LOW_LookingThroughPapers_HUM_F_e4b13911-7012-c1b4-1691-b1cf50053f2e")
+    local sceneTrigger = Entity("S_LOW_SWS_BHVR_WRLD_LookingThroughPapers_TimelineSceneTrigger_788c4533-107f-401a-9ef5-4ac13e5cad96")
+
+    self.OnInit = function()
+        if params.Position ~= "" then
+            pos = Entity(params.Position)
+        end
+        for _, partner in ipairs(params.Partners) do
+            table.insert(partners, FindEntity(partner))
+        end
+    end
+
+    nodes = Selector{
+        function(node)
+                return FindWeightedRandomSelectable(node, {
+                    [node.MoveTo] = 3,
+                    [node.AD] = 3,
+                    [node.NoAD] = 1,
+                    [node.DoBehaviour] = 2,
+                })
+            end
+    }
+
+    nodes.MoveTo = Action {
+        CanEnter = function()
+            return pos ~= nil and GetDistanceTo(me, pos) > 1.0
+        end,
+
+        function()
+            local result = MoveTo(pos, MovementSpeed.Walk, false, false, 0.1, 1.0, false)
+            if result == error.MovementFailed then
+                SteerTo(pos)
+                Sleep(1.0)
+            else
+                LookFrom(pos)
+            end
+        end
+    }
+
+    nodes.AD = Action {
+        CanEnter = function()
+            return AD ~= nil
+        end,
+
+        function()
+            if pos ~= nil then
+                LookFrom(pos)
+            end
+            local partnersAvailable = true
+            for i, partner in ipairs(partners) do
+                if not mod.dialog.IsSpeakerAvailable(partner) then
+                    partnersAvailable = false
+                end
+            end
+            if partnersAvailable then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(AD, {
+                    waitForCompletion = true,
+                    minDelay = 30.0,
+                }, me, partners)
+            end
+            Sleep(1.0)
+        end
+    }
+
+    nodes.NoAD = Action {
+        function()
+            if pos ~= nil then
+                LookFrom(pos)
+            end
+            Sleep(7.0)
+        end
+    }
+
+    nodes.DoBehaviour = Action {
+        CanEnter = function()
+            return behaviourDialog ~= nil
+        end,
+
+        function()
+            StartBehaviorDialog(behaviourDialog, sceneTrigger.Trigger, true, me)
+        end,
+    
+    }
+end}
+
+
+game.states.LOW_SWS_Common_FFTransition = State{function ()
+    description = [[A common script for Steel Watch Streets situation Flaming Fists: look at broken Steel Watcher]]
+
+    params.SteelWatcher = { type = EParamType.String, required = true, help = [[Steel Watcher to look at]] }
+    params.Zone = { type = EParamType.String, required = false, help = [[Limit moving to SW to this zone trigger]]}
+
+    local steelWatcher = Entity(params.SteelWatcher)
+    local zone = nil
+    local panic = Animation("CUST_PanicLookingAround_01_988e60aa-11f3-49b7-8de5-aa9f20cdc9dc")
+
+    self.OnInit = function()
+        if params.Zone ~= "" then
+            zone = Entity(params.Zone)
+        end
+    end
+
+    nodes.MoveTo = Action {
+        CanEnter = function()
+            return  (zone == nil or IsInTrigger(steelWatcher, zone.Trigger)) and GetDistanceTo(me, steelWatcher) > 2.5
+        end,
+
+        function()
+            local result = MoveInRange(steelWatcher, 1.0, 2.0, MovementSpeed.Walk, nil, false, false)
+            SteerTo(steelWatcher)
+            if result == error.MovementFailed then
+                Sleep(1.0)
+            end
+        end
+    }
+
+    nodes.PanicLook = Action {
+        CanEnter = function()
+            return CanSee(me, steelWatcher) and (zone == nil or IsInTrigger(steelWatcher, zone.Trigger))
+        end,
+
+        function()
+            SteerTo(steelWatcher)
+            LookAtEntity(steelWatcher, 3.0)
+            PlayAnimation(panic, false, true)
+            Sleep(1.0)
+        end
+    }
+
+    nodes.Panic = Action {
+        function()
+            PlayAnimation(panic, false, true)
+            Sleep(1.0)
+        end
+    }
+
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+end}
+
+
+game.states.LOW_SWS_Common_FFPost = State{function ()
+    description = [[A common script for Steel Watch Streets situation Flaming Fists: look at broken Steel Watcher]]
+
+    params.Position = { type = EParamType.String, required = false, default = "", help = [[Stand position]] }
+    params.AD = { type = EParamType.String, required = false, default = "", help = [[The AD to play.]] }
+    params.Partners = { type = EParamType.String, arrayRange = "..4", required = false, default = {}, help = [[Dialog Partner list]]}
+    params.SteelWatcher = { type = EParamType.String, required = false, default = "", help = [[Steel Watcher to look at]] }
+    params.Zone = { type = EParamType.String, required = false, help = [[Limit moving to SW to this zone trigger]]}
+    params.StayWithSteelWatcher = { type = EParamType.Bool, required = false, default = true, help = [[Whether the FF stands at SteelWatcher confused why it's broken (alternative is to stand at position)]] }
+
+    local steelWatcher = Entity(params.SteelWatcher)
+    local zone = nil
+    local panic = Animation("CUST_PanicLookingAround_01_988e60aa-11f3-49b7-8de5-aa9f20cdc9dc")
+
+    self.OnInit = function()
+        if params.Zone ~= "" then
+            zone = Entity(params.Zone)
+        end
+    end
+
+    nodes.MoveTo = Action {
+        CanEnter = function()
+            return params.StayWithSteelWatcher and steelWatcher ~= nil
+                and (zone == nil or IsInTrigger(steelWatcher, zone.Trigger))
+                and GetDistanceTo(me, steelWatcher) > 2.5
+        end,
+
+        function()
+            local result = MoveInRange(steelWatcher, 1.0, 2.0, MovementSpeed.Walk, nil, false, false)
+            SteerTo(steelWatcher)
+            if result == error.MovementFailed then
+                Sleep(1.0)
+            end
+        end
+    }
+
+    nodes.Stand = Action {
+        CanEnter = function()
+            return params.StayWithSteelWatcher
+                and (zone == nil or IsInTrigger(steelWatcher, zone.Trigger))
+        end,
+
+        function()
+            SteerTo(steelWatcher)
+            LookAtEntity(steelWatcher, 3.0)
+            Sleep(1.0)
+        end
+    }
+
+    nodes.Stand = Proxy {
+        game.states.LOW_SWS_Common_StandWithAD,
+        params = {
+            Position = params.Position,
+            AD = params.AD,
+            Partners = params.Partners,
+        }
+    }
+
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+end}

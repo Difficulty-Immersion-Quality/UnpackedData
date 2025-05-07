@@ -1,0 +1,107 @@
+game.states.LOW_OskarsBeloved_Chef = State {function ()
+    modules = {"shared.dialog", "shared.util","shared.moveto","shared.character", "shared.math"}
+
+    local AD = Dialog("95cde0e5-2bb6-3fe7-b135-1d2259fef213")
+    local sousChef = Entity("S_LOW_SousChef_635592ec-64a4-4582-a038-aa78fb6a681e")
+    local behaviorDialog = Dialog("BHVR_WRLD_LOW_OskarsBeloved_CookingChef_73bc74fb-5f50-d002-5bbf-a4655c054cb5")
+    local behaviorTrigger = Entity("BHVR_WRLD_LOW_OskarsBeloved_ChefCooking_SceneTrigger_25548908-9d19-4f70-bccf-b231ebb0df5a")
+    local pieThrowFlag = Flag("LOW_OskarsBeloved_Event_ThrowPieChef_696653f7-17be-4f6d-bdba-10f4e0a89eac")
+    local sousCanDoADFlag = Flag("LOW_OskarsBeloved_State_SousChefCanAD_1fdf0a3e-30eb-47e3-94b6-552c12c0d759")
+    local ADingFlag = Flag("LOW_OskarsBeloved_State_ChefADing_221ebb73-82d8-4cd8-9fb5-e5e972afe914")
+    local kitchenTrigger = Entity("S_LOW_ChefsCookingTrigger_2afb5013-da53-4b21-9acf-46a79c85ac55")
+    local readingLocation = Entity("S_LOW_OskarsBeloved_KitchenReadingTrigger_f35d27c1-0b20-483a-ad1d-d4497b2f9c07")
+    local readAnim = Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716")
+
+
+    helpers.DecideToAD = function()
+        if mod.math.CoinToss(0.8) and not GetFlag(ADingFlag) then
+            SetFlag(ADingFlag)
+        end
+    end
+
+
+    nodes.WaitingForStart = Action {
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not GetFlag(pieThrowFlag)
+        end
+    }
+
+    nodes.ADing = Action {
+
+        function()
+            Sleep(1.0)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD, 
+                {   
+                    waitForCompletion = true,
+                    minDelay = 10
+                }, 
+                    me,
+                    sousChef)
+            ClearFlag(ADingFlag)
+            ClearFlag(sousCanDoADFlag)
+        end,
+        CanEnter = function()
+            return GetFlag(sousCanDoADFlag) and IsInTrigger(sousChef, kitchenTrigger.Trigger) and not mod.character.IsDefeated(sousChef) and mod.dialog.IsSpeakerAvailable(sousChef) and mod.dialog.IsSpeakerAvailable(me)
+        end,
+        OnLeave = function ()
+            ClearFlag(ADingFlag)
+        end
+    }
+
+    nodes.Cooking = Selector {
+        function(nodes)
+            helpers.DecideToAD()
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        CanEnter = function()
+            return not GetFlag(sousCanDoADFlag)
+        end
+    }
+
+
+    nodes.Cooking.Reading = Action {
+        function()
+            Wander(kitchenTrigger,math.random(2,4),MovementSpeed.Walk)
+            PlayAnimation(readAnim,true,false)
+            Sleep(math.random(3,5))
+        end
+          
+    }
+
+    nodes.Cooking.Smelling = Action {
+
+        function()
+            try
+                StartBehaviorDialog(behaviorDialog, behaviorTrigger.Trigger, true, me)
+            catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                DebugText(me, "Failed to start wrld bhvr [2]: Error [1]", tostring(e), tostring(behaviorDialog.Guid))
+            end
+            Sleep(3.0)
+            
+        end,
+        CanEnter = function()
+            return not GetFlag(sousCanDoADFlag)
+        end
+          
+    }
+
+    nodes.Cooking.Waiting = Action {
+
+        function()
+            Wander(kitchenTrigger,math.random(6,10),MovementSpeed.Walk)
+            Sleep(math.random(6,12))
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(math.random(3,5))
+        end
+    }
+
+end}

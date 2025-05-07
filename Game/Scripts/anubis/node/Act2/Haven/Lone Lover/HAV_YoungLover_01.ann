@@ -1,0 +1,131 @@
+game.states.HAV_YoungLover_01 = State{function()
+
+    modules = {"shared.moveto", "shared.dialog", "shared.math"}
+
+
+    local bex = Entity("S_GLO_YoungLover_02_dcf597c0-36c5-4c81-957a-6fe9fca50a68")
+    local waitPos = Entity("S_HAV_LoverPos_001_42ef3169-e468-43b2-b467-6fb55184e5f0")
+
+    local loverSpline = Spline("S_HAV_DanisSpline_6bfbe42f-f072-4cdd-8e66-b326c5bb20f1")
+    local reunionOverFlag = Flag("HAV_LoneLover_Event_ReunionDone_16fc4bc2-2eab-47a6-b83f-ff60a6aeede7")
+
+    local leaveInspectionFlag = Flag("HAV_SavingPrisoners_Event_PrisonersLeaveInspection_6582e781-ba50-4dcc-b88c-cf0bc4c144b1")
+    local inspectionPos = nil
+
+    local startedPatrol = false
+    local patrolling = false
+
+    nodes.WaitForInspection = Action{
+        function()
+            Sleep(math.random(0,2))
+            SetEntityEvent(me, "HAV_SavingPrisoners_AppearedAtHaven_Boat")
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos == nil
+        end
+    }
+
+    nodes.Inspection = Action{
+        function()
+            if mod.moveto.MoveToPoint(inspectionPos,  MovementSpeed.Walk, me) then
+                LookFrom(inspectionPos)
+                SetEntityEvent(me, "HAV_SavingPrisoners_AtInspectionPos")
+                WaitForInterrupt()
+            else
+                SteerTo(inspectionPos)
+            end
+            Sleep(4)
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos ~= nil
+        end
+    }
+
+    nodes.Reunion = Action{
+        function()
+            if mod.moveto.MoveToPoint(waitPos, MovementSpeed.Walk, me) then
+                Sleep(2)
+                SteerTo(bex)
+            else
+                LookAtEntity(waitPos, 3.0)
+            end
+        end,
+        Valid = function()
+            return not bex.Character.IsDead and not GetFlag(reunionOverFlag)
+        end
+    }
+
+    nodes.LoverPromenade = Selector{
+        OnEnter = function()
+            if(not startedPatrol) then
+                patrolling = true
+                startedPatrol = true
+            end
+        end,
+        Valid = function()
+            return not bex.Character.IsDead and GetFlag(reunionOverFlag)
+        end
+    }
+
+    nodes.LoverPromenade.Patrol = Action{
+        function()
+            DoPatrol(loverSpline, false, MovementSpeed.Stroll)
+        end,
+        CanEnter = function()
+            return patrolling
+        end
+    }
+
+    nodes.LoverPromenade.WaitForLover = Action{
+        function()
+            LookAtEntity(bex)
+            Sleep(8)
+            if(mod.dialog.isSpeakerAvailable(bex)) then
+                mod.moveto.MoveToPoint(bex, MovementSpeed.Stroll, me)   -- Characters can potentially get weirdly stuck in the patrol. Reunite them if they need to be.
+            end
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, bex) > 4.0 and not patrolling
+        end
+    }
+
+    nodes.LoverPromenade.MomentWithLover = Action{
+        function()
+            LookFrom(loverSpline)
+            Sleep(10)
+        end
+    }
+
+    nodes.Alone = Action{
+        function()
+            if mod.moveto.MoveToPoint(waitPos, MovementSpeed.Walk, me) then
+                LookFrom(waitPos)
+                WaitForInterrupt()
+            else
+                LookAtEntity(waitPos, 3.0)
+            end
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "HAV_LoneLover_ResumePromenade" then
+                if not patrolling then
+                    patrolling = true
+                    Interrupt()
+                end
+            elseif(e.Event == "HAV_SavingPrisoners_SetInspectionPos") then
+                inspectionPos = e.Params[1]
+                Interrupt()
+            end
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        if(e.Event ~= "HAV_LoneLovers_NoStopSplinePoint") then
+            patrolling = false
+        end
+    end
+
+end
+}

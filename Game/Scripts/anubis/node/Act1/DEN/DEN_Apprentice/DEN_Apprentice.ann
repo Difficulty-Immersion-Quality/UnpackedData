@@ -1,0 +1,154 @@
+game.states.DEN_Apprentice = State { function ()
+
+    description = [[Nettie's behaviour at the Druid Grove in Act1]]
+    modules = { "shared.dialog", "shared.moveto" }
+
+    ------ Tadpole scene
+    local tadpoled = nil
+    local tadpoledStarted = false
+    local tadpoledFullyOver = false
+
+	local canAD = false
+    local soloAD = Dialog("DEN_Apprentice_AD_1eea08d9-9676-5076-1a7c-5a37c5cdd8d3")
+
+    local doCare = true
+    local woundedBird = Entity("S_DEN_WoundedBird_200bc56e-f3e1-445b-8b75-a5ddb541e123")
+    local woundedAD = Dialog("DEN_Apprentice_AD_WithBird_1cb03c40-e755-7215-b228-739388b2b72d")
+    local birdCarePoint = Entity("S_DEN_BirdCarePoint_9430c446-c6d1-4be9-83c6-c61c0f469b06")
+
+    local birdCareStart = Animation("CUST_InspectClose_01_Start_f5fc4cd6-66f6-4291-a244-3e0de135b680")
+    local birdCareLoop = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local birdCareEnd = Animation("CUST_InspectClose_01_End_b5e6ad3a-b760-48b4-937d-2369e8b0ff1e")
+
+    -----------------------------------------
+    -- State nodes
+
+    -----------------------------------------
+    -- node section
+    nodes.TadpoledScene = Proxy {
+        game.states.DEN_Apprentice_TadpoledScene,
+        Valid = function()
+            return tadpoled ~= nil
+        end
+    }
+
+    nodes.PostCyanideLockedUp = Proxy {
+        -- Sitting at the desk, waiting to be persuaded or killed
+        CanEnter = function()
+            return tadpoledStarted and (not tadpoledFullyOver)
+        end,
+        game.states.Sit,
+        params = {
+            seat = [[S_DEN_AppChair_4465f4f4-f805-4546-85e7-5343f0e9a734]],
+            seatTrigger = [[S_DEN_AppChairBox_100bdc53-c506-42db-a3ba-5a2550f1fb14]],
+            useSeatPositionAsFallBack = false,
+            sitOnGroundAsFallback = false,
+            sitIdle = StateRef{game.states.DEN_Apprentice_Study},
+            nonSitIdle = StateRef{game.states.DEN_Apprentice_Study}
+        }
+    }
+
+    --default
+    nodes.Caring = Selector {
+        CanEnter = function()
+            return doCare and (not woundedBird.Character.IsDead)
+        end
+    }
+    nodes.Caring.AD = Action {
+        CanEnter = function()
+            return canAD == true
+        end,
+        function()
+            if not IsInDialog(me, false) and mod.dialog.IsSpeakerAvailableAndNear(woundedBird, me, 10.0, true) then
+                canAD = false
+                StartAutomatedDialog(woundedAD, true, me, woundedBird)
+            end
+            Sleep(1)
+        end
+    }
+    nodes.Caring.Idle = Action {
+        function()
+            local moveResult = MoveTo(birdCarePoint, MovementSpeed.Walk, true, false, 0.5, 0.6 ,false)
+
+            if moveResult ~= error.MovementError.None or birdCarePoint == nil or
+            birdCareStart == nil or birdCareLoop == nil or birdCareEnd == nil then
+                Sleep(8.0)
+            else
+                LookFrom(birdCarePoint)
+                DebugText(me, "Looking")
+                PlayLoopingAnimation(birdCareStart,{birdCareLoop},birdCareEnd,false)
+                Sleep(13.0)
+                StopAnimation(me)
+                Sleep(3.0) --TODO: hard-coded animation sleep fix
+            end
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+
+    nodes.AD = Action {
+        CanEnter = function()
+            return canAD == true
+        end,
+        function()
+            canAD = false
+            StartAutomatedDialog(soloAD, true, me)
+        end
+    }
+    nodes.Default = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_DEN_ApprenticePoint_bb3b023c-f24a-440a-bf0c-82776e60d02b"
+        }
+    }
+    --[[ --TODO: find a better animation to use or add a variety of actions
+    nodes.Default = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_ApprenticePoint_bb3b023c-f24a-440a-bf0c-82776e60d02b",
+            lookFromMoveTarget = true,
+            anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+        }
+    }]]
+
+    -----------------------------------------
+    -- event section
+    -- timers
+    events.DialogEnded = function(e)
+        local uuid = e.Instance.DialogUUID
+        if (uuid == woundedAD.Guid) or (uuid == soloAD.Guid) then
+            StopTimer(me, "DEN_Apprentice_ADTimer")
+            StartTimer(me, "DEN_Apprentice_ADTimer", 70.0, 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_Apprentice_ADTimer" then
+            canAD = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == Guid("DEN_Apprentice_State_TadpoleSceneDone_694528f9-7991-84b9-2fdd-816daa7dc013") then
+            tadpoledFullyOver = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.Event == "DEN_Apprentice_Event_RevealedTadpole" then
+            tadpoled = e.TargetEntity
+            tadpoledStarted = true
+        elseif e.TargetEntity == me then
+            if e.Event == "DEN_Apprentice_Event_EndTadpoleScene" then
+                tadpoled = nil --legit ended
+            elseif e.Event == "DEN_Apprentice_StopCaringForBird" then
+                doCare = false
+            elseif e.Event == "DEN_Apprentice_StartADing" then
+                --start when the player enters the room
+                canAD = true
+            end
+        end
+    end
+end}

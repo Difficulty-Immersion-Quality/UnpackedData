@@ -1,0 +1,54 @@
+game.states.SCE_PatrollingFlamingFist = State{
+    function()
+        
+    params.patrolSpline = {type=EParamType.String, required = true,
+    help = [[Patrol spline to use.]]}
+
+        local patrolSpline = nil
+        local wait = false
+        local inDialog = true
+
+        self.OnInit = function()
+            patrolSpline = Spline(params.patrolSpline)
+        end
+    
+        self.Valid = function()
+            return wait or inDialog
+        end
+    
+        nodes.Action_DoingDialog = Action{
+            function()
+                Sleep(6.0)
+            end,
+            CanEnter = function()
+                return inDialog
+            end
+        }
+    
+        nodes.Action_LookFromTrigger = Action{
+            function()
+                LookFrom(patrolSpline)
+                Sleep(6.0)
+                wait = false
+            end
+        }
+    
+        events.SplineControlPointReached = function(e)
+            if e.Event == "Sleep" then
+                wait = true
+            end
+        end
+    
+        events.DialogActorJoined = function(e)
+            if e.Actor == me and not e.Instance.Automated then
+                inDialog = true
+            end
+        end
+    
+        events.DialogActorLeft = function(e)
+            if e.Actor == me and not e.Instance.Automated then
+                inDialog = false
+            end
+        end
+    end
+    }

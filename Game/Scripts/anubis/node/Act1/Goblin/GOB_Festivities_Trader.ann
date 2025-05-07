@@ -1,0 +1,139 @@
+game.states.GOB_Festivities_Trader = State{function()
+
+    description = [[State for the goblin trader in the Festivities Area]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local dlg_DefaultAD = Dialog("GOB_Festivities_Trader_AD_ffa08b36-ddce-de66-9a08-bffc03ee2847")
+    local b_CanDoAD = true
+    local s_CanDoADTimer = "GOB_Festivities_Trader.CanDoAD"
+
+    local fl_VoloOnStage = Flag("GOB_VoloBallad_State_OnStage_0bc1d7d7-9129-4c6e-188d-054640cea3b9")
+
+    local tr_ADPosition = Entity("S_GOB_Festivities_Trader_Position_001_eed4dfd0-56d1-4ecb-b807-ce56261cae42")
+    local tr_Position001 = "S_GOB_Festivities_Trader_Position_001_eed4dfd0-56d1-4ecb-b807-ce56261cae42"
+    local tr_Position002 = "S_GOB_Festivities_Trader_Position_002_e92fea21-3621-48cd-8c67-f4e0a94debba"
+    local tr_Position003 = "S_GOB_Festivities_Trader_Position_003_68a67de1-7c4d-4d85-b990-583ccedc7be3"
+    local tr_Position004 = "S_GOB_Festivities_Trader_Position_004_0112e438-e538-43bb-bc89-eb34152fcde5"
+
+    local anim_Thinking = "CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba"
+    local anim_Urinate = "CUST_Urinating_01_d7b689ac-2183-4c62-a481-eb5db76ac243"
+    local anim_LeanForward = "CUST_Leaning_Forward_01_5487ae28-60dc-4eea-b60c-0c00749c8281"
+    local anim_Mock = "CUST_Mocking_01_313bddc4-712f-4f08-874f-db9af7a6c4a1"
+    local anim_Stretch = "CUST_Stretching_01_9af703b0-c02f-4c17-bfee-7e11f1f80d6b"
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(16.0, 20.0), 0)
+    end
+
+    nodes.DefaultAD = Action{
+        function()
+            try
+                MoveTo(tr_ADPosition)
+                LookFrom(tr_ADPosition)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+            end
+            if b_CanDoAD and not IsInDialog(me, false) then
+                StartAutomatedDialog(dlg_DefaultAD, true, me)
+                helpers.CanDoADReset()
+            end
+        end,
+
+        Valid = function()
+            return b_CanDoAD
+        end
+    }
+
+    nodes.Behavior = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Behavior.Trigger001_Volo = Proxy {
+        game.states.GOB_Festivities_Trader_MoveAndPlayAnimation,
+        params = {
+            Position = tr_Position001,
+            Animation = anim_Mock,
+        },
+        Valid = function()
+            return GetFlag(fl_VoloOnStage)
+        end
+    }
+
+    nodes.Behavior.Trigger001_NoVolo = Proxy {
+        game.states.GOB_Festivities_Trader_MoveAndPlayAnimation,
+        params = {
+            Position = tr_Position001,
+            Animation = anim_Stretch,
+        },
+        Valid = function()
+            return not GetFlag(fl_VoloOnStage)
+        end
+    }
+
+    nodes.Behavior.Trigger002 = Proxy {
+        game.states.GOB_Festivities_Trader_MoveAndPlayAnimation,
+        params = {
+            Position = tr_Position002,
+            Animation = anim_Thinking,
+        }
+    }
+
+    nodes.Behavior.Trigger003 = Proxy {
+        game.states.GOB_Festivities_Trader_MoveAndPlayAnimation,
+        params = {
+            Position = tr_Position003,
+            Animation = anim_LeanForward,
+        }
+    }
+
+    nodes.Behavior.Trigger004 = Proxy {
+        game.states.GOB_Festivities_Trader_MoveAndPlayAnimation,
+        params = {
+            Position = tr_Position004,
+            Animation = anim_Urinate,
+            SleepTime = 1.0
+        }
+    }
+
+end}
+
+game.states.GOB_Festivities_Trader_MoveAndPlayAnimation = State { function()
+
+    description = [[Helper state]]
+
+    params.Position = {type = EParamType.String, required = false, default = "", help=[[Position to go to]]}
+    params.Animation = {type = EParamType.String, required = false, default = "", help=[[Animation to play]]}
+    params.SleepTime = {type = EParamType.Number, required = false, default = 3.0, help=[[Delay before leaving the state]]}
+
+    local tr_Position
+    local anim_Animation
+    local num_SleepTime
+
+    self.OnInit = function()
+        tr_Position = Entity(params.Position)
+        anim_Animation = Animation(params.Animation)
+        num_SleepTime = params.SleepTime
+    end
+
+    nodes.Action_MoveAndPlayAnimation = Action {
+        function()
+            try
+                MoveTo(tr_Position, MovementSpeed.Walk, true, false, 0.1, 0.5)
+                LookFrom(tr_Position)
+                PlayAnimation(anim_Animation, true)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+            end
+            Sleep(num_SleepTime)
+        end
+    }
+
+end}

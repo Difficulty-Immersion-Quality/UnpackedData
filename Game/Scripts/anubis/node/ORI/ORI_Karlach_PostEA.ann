@@ -1,0 +1,255 @@
+game.states.PLA_Karlach_PostEA = State {function ()
+
+    modules = { "shared.items" }
+
+    local BurningFlag = Flag("ORI_Karlach_State_Burning_e3ebe6f8-d24a-4b47-acf2-8e47a96a1464")
+    local LeavingFlag = Flag("PLA_KarlachRecruitment_Event_KarlachLeaves_3c7fc104-976e-4573-b18e-f1ffd4eebab2")
+
+    local Pos_Karlach = Entity("S_PLA_KarlachPos_6cd446e9-be56-42c3-99d1-0ec78df1f152")
+    local Pos_Backpack = Entity("S_PLA_KarlachBackpack_e6b331da-d5e2-481f-8db6-8c36ddb9562d")
+
+    local Trig_Backpack = Entity("S_PLA_KarlachBagBounds_d34ae8de-76c4-4708-aefb-b193d1be2ce3")
+    local Trig_JumpStart = Entity("S_PLA_KarlachJumpStart_e7ba4029-51f0-4e30-bd91-a28735e08aea")
+    local Trig_JumpEnd = Entity("S_PLA_KarlachJumpEnd_e5d0f3bd-06b4-43a5-9d56-372f85de7760")
+
+    local Anim_Packing = Animation("CUST_Packing_01_2f29380f-3a19-4f8f-ab25-7b755027b323")
+
+    local inPain = Animation("CUST_KarlachPain_01_Loop_5f64bc7f-34e8-46ea-8579-23284cac6422")
+    local endInPain = Animation("CUST_KarlachPain_01_End_e6158461-9405-4f17-b2f0-3c176a3bb917")
+
+    nodes = ImmediateSelector {}
+
+    helpers.action.IdleAction = function(pos, animation)
+        try
+            if(not IsInDangerousSurfaceFor(pos,me.Character,3.0)) then
+                MoveTo(pos.Position, MovementSpeed.Walk)
+                LookFrom(pos)
+                PlayAnimation(animation, false, true)
+                DebugText(me, "Try Animation")
+                WaitForInterrupt()
+            else
+                Sleep(4.0)
+            end
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            DebugText(me,"Move Exception")
+            Sleep(4.0)
+        catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+            DebugText(me, "PlayAnimationFailed")
+            Sleep(4.0)
+        end
+    end
+
+    nodes.KarlachInPain = Action{
+        function()
+            local moveToResult = MoveTo(Pos_Karlach, MovementSpeed.Walk, true, false, 0.5, 1.0, false)
+            if moveToResult ~= error.MovementError.None then
+                DebugText(me, "Error: movement failed")
+                Sleep(3.0)
+            else
+                LookFrom(Pos_Karlach)
+                PlayLoopingAnimation(nil, {inPain}, endInPain)
+                WaitForInterrupt()
+            end
+        end,
+        Valid = function()
+            return GetFlag(BurningFlag) and not GetFlag(LeavingFlag)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.KarlachIdle = Action{
+        function()
+            helpers.IdleAction(Pos_Backpack, Anim_Packing)
+        end,
+        Valid = function()
+            return (not mod.items.SafeIsDestroyed(Pos_Backpack) and
+                    IsInTrigger(Pos_Backpack, Trig_Backpack.Trigger)) and
+                    not GetFlag(BurningFlag) and
+                    not GetFlag(LeavingFlag)
+        end
+    }
+
+
+    nodes.KarlachLeaving = Action{
+        function()
+            if not IsInDangerousSurfaceFor(Pos_Backpack, me.Character, 1.0) and IsInTrigger(Pos_Backpack, Trig_Backpack.Trigger) then
+                local moveResult = MoveTo(Pos_Backpack, MovementSpeed.Walk, true, false, 0.5, 4.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                    else
+                        if IsInTrigger(Pos_Backpack, Trig_Backpack.Trigger) then
+                            LookAtEntity(Pos_Backpack, 3.0)
+                            SetOnStage(Pos_Backpack, false)
+                        end
+                    end
+            end
+
+            if not IsInDangerousSurfaceFor(Trig_JumpStart, me.Character, 1.0) then
+                local moveResult = MoveTo(Trig_JumpStart, MovementSpeed.Walk, true, false, 0.5, 4.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                    else
+                        UseSpell("Projectile_Jump", Trig_JumpEnd,  nil, nil, nil, true, true, true)
+                    end
+            end
+
+            SetFlag(Flag("GEN_DisappearOutOfSight_5dc33889-cbfb-c3d2-9e4e-8d826bf8566f"), me)
+        end,
+        Valid = function()
+            return GetFlag(LeavingFlag)
+        end
+    }
+
+    nodes.KarlachFallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end
+}
+
+game.states.ORI_KarlachOverrides = State{
+function()
+    modules = {"shared.util", "shared.items", "shared.dialog"}
+
+    ----------------------------------------------
+    local enragedAD = Dialog("PLA_PaladinsOfTyr_PAD_KarlachEnraged_904b4b20-0834-bb1b-d5e0-171b4721190b")
+
+    local tollHouse = Entity("S_PLA_PaladinsOfTyr_TollHouse_c16587fd-4a00-40e5-a106-2170068e98ed")
+    local tollHouseItems = {}
+
+    local currentTarget = nil
+    local currentTargetIndex = -1
+    local attacksCounter = 0
+    ----------------------------------------------
+
+    ----------------------------------------------
+    -- Helpers
+    helpers.event.IsInTable = function(item, table)
+        for i, v in ipairs(table) do
+            if item == v then
+                return i
+            end
+        end
+        return -1
+    end
+    ----------------------------------------------
+
+    ----------------------------------------------
+    -- State nodes
+    nodes = Selector{
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Proxy_FireTrail = Proxy{
+        game.states.SurfaceTrailSpawner,
+        params = {
+            TrailRadius = 1.0,
+            SurfaceType = "FIRE",
+            ControlStatus = "ORI_KARLACH_ENRAGE"
+        }
+    }
+
+
+    nodes.Action_Enraged = Action{
+        OnEnter = function()
+            DebugText(me, "Enrage behaviour")
+            SetWeaponUnsheathed(me, true)
+        end,
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                enragedAD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 10.0
+                },
+                me)
+
+            if attacksCounter >= 5 then
+                DebugText(me, "Attacked 5 times, find another item")
+                currentTarget = nil
+            end
+
+            if currentTarget ~= nil and mod.items.SafeIsDestroyed(currentTarget) then
+                DebugText(me, "Item destroyed, removing from list")
+                table.remove(tollHouseItems, currentTargetIndex)
+                currentTarget = nil
+            end
+
+            if #tollHouseItems > 0 then
+                if currentTarget == nil then
+                    attacksCounter = 0
+                    currentTargetIndex = math.random(1, #tollHouseItems)
+                    currentTarget = tollHouseItems[currentTargetIndex]
+                end
+
+                if currentTarget ~= nil then
+                    try
+                        DebugText(me, "Target found. Attacking target")
+                        Attack(currentTarget, false, false)
+                        attacksCounter = attacksCounter + 1
+                    catch e if ls.CheckType(e, error.AttackFailed) then
+                        DebugText(me, "Error: Attack failed, removing item from list")
+                        table.remove(tollHouseItems, currentTargetIndex)
+                        currentTarget = nil
+                        Sleep(3.0)
+                    end
+                else
+                    DebugText(me, "No target found")
+                    Sleep(3.0)
+                end
+            end
+
+            if me.IsInTurnBasedMode then
+                EndTurn(me)
+            end
+        end,
+        Valid = function()
+            return HasActiveStatus(me, "ORI_KARLACH_ENRAGE")
+        end,
+        OnLeave = function()
+            SetWeaponUnsheathed(me, false)
+        end
+    }
+
+    -- Other statuses
+    nodes.Proxy_DefaultOverrides = Proxy{
+        game.states.DefaultStatusOverrides
+    }
+    ----------------------------------------------
+
+
+    ----------------------------------------------
+    -- Events
+    events.EnteredTrigger = function(e)
+        if e.Trigger == tollHouse and e.Target.Item.IsDestructible then
+            DebugText(e.Target, "Inside house")
+            local index = helpers.IsInTable(e.Target, tollHouseItems)
+            if index == -1 then
+                DebugText(e.Target, "Adding Item")
+                table.insert(tollHouseItems, e.Target)
+            end
+        end
+    end
+
+    events.LeftTrigger = function(e)
+        if e.Trigger == tollHouse then
+            local index = helpers.IsInTable(e.Target, tollHouseItems)
+            if index ~= -1 then
+                if index == currentTargetIndex then
+                    currentTarget = nil
+                    currentTargetIndex = -1
+                    attacksCounter = 0
+                end
+
+                table.remove(tollHouseItems, index)
+            end
+        end
+
+    end
+end
+}

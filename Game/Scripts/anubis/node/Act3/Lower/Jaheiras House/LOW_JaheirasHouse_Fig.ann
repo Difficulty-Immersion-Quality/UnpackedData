@@ -1,0 +1,64 @@
+game.states.LOW_JaheirasHouse_Fig = State{
+    function()
+        modules = {"shared.dialog"}
+        modules = {"shared.moveto"}
+
+        local bWait = false
+
+        local JaheiraReturned = Flag("LOW_JaheirasHouse_State_JaheiraSpokeToFamily_efad8157-79e3-46a0-ae9e-3bb6f6a191d0")
+        local FigSawJaheira = Flag("LOW_JaheirasHouse_State_GranddaughterConfrontedJaheira_f2f6c8b6-b241-4f92-bc43-984cbeed7a68")
+        local FigReady = Flag("LOW_JaheirasHouse_State_GranddaughterReadyToStart_f7aa5ec3-2f09-4069-ab3c-d74546c69ebe")
+        local trainingDummy = Entity("DEC_GEN_Training_Dummy_A_004_d2338ebf-0c19-48e5-b13f-bac3d8f34ee1")
+        local AD = Dialog("LOW_JaheirasHouse_AD_Granddaughter_2333f7dd-af95-c76e-5110-767d3e27bd0a")
+
+        nodes.WaitAlert = Action {
+        CanEnter = function()
+            return GetFlag(JaheiraReturned) == false
+        end,
+        function()
+            Sleep(1.0)
+        end,
+        Valid = function()
+        return GetFlag(FigReady)
+    end
+    }
+
+        nodes.PracticeSwording = Action {
+            CanEnter = function()
+                return not IsInDangerousSurfaceFor(trainingDummy, me.Character)
+            end,
+            OnEnter = function()
+                if canLook then
+                    doLookAt = true
+                end
+            end,
+            function()
+                local i = 1
+                Sleep(0.5)
+                if mod.moveto.MoveToPoint(trainingDummy,MovementSpeed.Stroll,me) then
+                    while (i < 8) or IsInDialog(me, false) do
+                        Sleep(1.0)
+                        SetWeaponUnsheathed(me,true,false)
+                        if not IsInDialog(me, false) then
+                            StartCheckedAutomatedDialogRateLimited(
+                        AD,
+                    {
+                        waitForCompletion = false,
+                        checkSight = true,
+                        minDelay = 10
+                    },
+                    me
+                )
+                        end
+                        Attack(trainingDummy,false,false)
+                        Sleep(1.5)
+                        i = i + 1
+                    end
+                end
+            end,
+            OnLeave = function()
+                SetWeaponUnsheathed(me,false,false)
+            end
+        }
+        end
+    }

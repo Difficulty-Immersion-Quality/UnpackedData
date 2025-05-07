@@ -1,0 +1,194 @@
+game.states.LOW_SteelWatchFoundry_BaneiteOfficer_LoopingAD = State{function()
+    description = [[Baneite Officer behaviour with looping AD]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+
+    ------------------------------------------------ 
+    local ironThroneDestroyed = Flag("IRN_IronThrone_State_Destroyed_91795368-af06-4b56-9ac1-b78995aa9ea9")
+    local switchExploded = Flag("LOW_SteelWatchFoundry_State_KillSwitchDestroyedIRN_7d083a0a-4f0d-4ebb-aab5-fb45c90b5c95")
+    local goToDoor = Flag("LOW_SteelWatchFoundry_Event_GoToAlarmDoor_64bc125e-52ee-47b6-90f4-1a8691163dea")
+    local doorPosition = Entity("S_LOW_DoorAlarm_AttentionPoint_ceb933c6-e79b-48cd-9fba-5daef27d150c")
+
+    params.inRegionFlag = {type = EParamType.String, required = false, default = nil, help = [[Flag to indicate if player is in the correct AD zone.]]}
+    local inRegionFlag
+
+    params.AD = {type = EParamType.String, required = false, default = nil, help = [[AD to play]]}
+    local ad
+    params.adFirstSpeaker = {type = EParamType.String, required = false, default = nil, help = [[first speaker of AD]]}
+    local adFirstSpeaker = Entity(me)
+    params.adSecondSpeaker = {type = EParamType.String, required = false, default = nil, help = [[second speaker of AD]]}
+    local adSecondSpeaker
+    params.adThridSpeaker = {type = EParamType.String, required = false, default = nil, help = [[third speaker of AD]]}
+    local adThridSpeaker
+
+    params.threatenTarget = {type = EParamType.String, required = false, default = nil, help = [[Target to look at while playing the anxious animation.]]}
+    local threatenTarget
+    params.anxiousPacing =  {type = EParamType.String, required = false, default = nil, help = [[Animation for when the Baneite knows the Foundry was destroyed.]]}
+    local anxiousPacing
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    self.OnInit = function()
+        ad = Dialog(params.AD)
+        if params.adFirstSpeaker ~= nil then
+            adFirstSpeaker = FindEntity(params.adFirstSpeaker)
+        end
+        if params.adSecondSpeaker ~= nil then
+            adSecondSpeaker = FindEntity(params.adSecondSpeaker)
+        end
+        if params.adThirdSpeaker ~= nil then
+            adThridSpeaker = FindEntity(params.adThridSpeaker)
+        end
+        if params.anxiousPacing ~= nil then
+            anxiousPacing = Animation(params.anxiousPacing)
+        end
+        if params.threatenTarget ~= nil then
+            threatenTarget = FindEntity(params.threatenTarget)
+        end
+        if params.inRegionFlag ~= nil then
+            inRegionFlag = Flag(params.inRegionFlag)
+        end
+    end
+    --running to the alarm door when it is unlocked via any means that is not the key, to search for the intruder
+    nodes.Action_RunToDoor = Action
+    {
+        function()
+            if mod.moveto.MoveToPoint(doorPosition, MovementSpeed.Sprint, me) then
+                mod.util.SleepRandom(1.0, 4.0)
+                ClearFlag(goToDoor,me)
+            end
+        end,
+        Valid = function()
+            return GetFlag(goToDoor, me)
+        end
+    }
+
+    --Play AD with 1 or 2 or 3 speakers
+    nodes.Action_PlayRepeatedAD = Action
+    {
+        function()
+            --DebugText(me, "playing AD")
+            --three-speaker AD
+            if adThridSpeaker ~=nil then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    ad,
+                    {                        
+                        minDelay = math.random(10.0, 15.0),
+                        cullingDistance = 30.0,
+                        waitForCompletion = true
+                    },
+                    adFirstSpeaker,
+                    adSecondSpeaker,
+                    adThridSpeaker
+                )
+                --two-speaker AD
+            elseif adSecondSpeaker ~=nil then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    ad,
+                    {                        
+                        minDelay = math.random(10.0, 15.0),
+                        cullingDistance = 30.0,
+                        waitForCompletion = true
+                    },
+                    adFirstSpeaker,
+                    adSecondSpeaker
+                )
+                --solo AD
+            else
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    ad,
+                    {                        
+                        minDelay = math.random(10.0, 15.0),
+                        cullingDistance = 30.0,
+                        waitForCompletion = true
+                    },
+                    adFirstSpeaker
+                )
+            end
+
+            Sleep(3.0)
+            
+
+        end,
+
+        Valid = function()
+            return not GetFlag(ironThroneDestroyed)
+        end,
+
+        CanEnter = function()
+            return GetFlag(inRegionFlag)
+        end
+    }
+
+    --If player is not in appropriate trigger to start talking wait
+    nodes.WaitingToAD = Action
+    {
+        function()
+            Sleep(3.0)
+        end,
+        Valid = function()
+            return not GetFlag(ironThroneDestroyed)
+        end
+
+    }
+
+
+    --if the gondians get incinareted by collars, just wander around
+    nodes.Action_GondiansAreDead = Action
+    {
+        function ()
+            local wanderAnchor = me.Position
+            Wander(10.0, 3.0, MovementSpeed.Walk, wanderAnchor)
+        end,
+
+        Valid = function()
+            return GetFlag(switchExploded)
+        end
+    }
+
+    --if Iron Throne destroyed by the player visiting it, Gondians still alive
+    nodes.Action_IRNdestroyed = Action
+    {
+        function ()
+            if threatenTarget~=nil then
+                LookAtEntity(threatenTarget,5.0)
+            end
+            PlayAnimation(anxiousPacing,false, true)
+            Sleep(5.0)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return GetFlag(ironThroneDestroyed)
+            and (not GetFlag(switchExploded))
+            and anxiousPacing ~= nil
+            and anxiousPacing ~= ""
+        end
+    }
+
+    -- Action - fallback
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+    }
+end}

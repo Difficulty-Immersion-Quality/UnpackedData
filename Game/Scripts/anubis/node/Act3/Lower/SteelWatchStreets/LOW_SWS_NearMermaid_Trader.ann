@@ -1,0 +1,43 @@
+game.states.LOW_SWS_NearMermaid_Trader = State{function ()
+    description = [[Traders script for Steel Watch Streets situation at Blushing mermaid.
+    It is same as LOW_SWS_Common, but has additinal flag for when FFs were killed to switch to PostState]]
+
+    modules = { }
+
+    params.PreState = { type = EParamType.State, required = true,
+        help = [[State before Steel Watch Foundry destroyed]] }
+    params.TransState = { type = EParamType.State, required = false, default = nil,
+        help = [[Transition state when Steel Watch Foundry was just destroyed]] }
+    params.PostState = { type = EParamType.State, required = true,
+        help = [[State after Steel Watch Foundry destroyed]] }
+
+    local foundryDestroyed = Flag("GLO_Foundry_State_ControlCentreDestroyed_456906c5-40a6-429e-8e1c-7120a2ef631b")
+    local postState = Flag("LOW_SWS_DisabledState_709ca754-4a9d-4f55-bc83-9fca078fc153")
+    local ffsDead = Flag("LOW_SWS_NearMermaid_State_FFsDead_8f0613ee-1b92-4b05-9154-e2902a6acdaf")
+
+    nodes.PostState = Proxy {
+        CanEnter = function()
+            return GetFlag(postState) or GetFlag(ffsDead)
+        end,
+
+        params.PostState
+    }
+
+    nodes.PreState = Proxy {
+        CanEnter = function()
+            return not GetFlag(foundryDestroyed)
+        end,
+
+        params.PreState
+    }
+
+    nodes.TransState = Proxy {
+        params.TransState
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(1.0)
+        end
+    }
+end}

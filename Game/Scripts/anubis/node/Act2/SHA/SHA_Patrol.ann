@@ -1,0 +1,88 @@
+game.states.SHA_Patrol = State{
+    function()
+        ------------------------------------------------
+        -- Params
+        params.patrolSpline = {type = EParamType.String, required = true,
+            help = [[Patrol spline]]}
+        params.waitTime = {type = EParamType.Number, required = false, default = 0,
+            help = [[Wait between control points]]}
+        params.ignoredIndexes = {type = EParamType.Int, arrayRange = "..", required = false, default = {},
+            help = [[Don't wait in specified indexes]]}
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Local variables
+        local wait = false
+        local ignoredIndexes = {}
+
+        local patrolSpline = Spline(params.patrolSpline)
+        local patrolSplineIndex = 0
+
+        local trLightTrialSecretRoom = Entity("S_SHA_LightTrial_SecretRoom_335cae58-3416-41c0-874d-78b16f6bcb45")
+        local trLightTrialSecretRoomClosed = Flag("SHA_Trials_State_SecretRoomClosed_224e42c9-4a5a-4be1-84dd-119e4929cc3b")
+        ------------------------------------------------
+
+        self.OnInit = function()
+            if params.ignoredIndexes ~= nil then
+                for i, v in ipairs(params.ignoredIndexes) do
+                    ignoredIndexes[v] = true
+                end
+            end
+        end
+
+        ------------------------------------------------
+        -- Nodes
+        nodes.Action_StuckInSecretRoom = Action{
+            OnEnter = function()
+                ShortPatrolInterrupt()
+            end,
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return IsInTrigger(me, trLightTrialSecretRoom.Trigger) and GetFlag(trLightTrialSecretRoomClosed)
+            end
+        }
+
+        nodes.Action_PatrolWait = Action{
+            OnEnter = function()
+                ShortPatrolInterrupt()
+            end,
+            function()
+                LookFrom(patrolSpline)
+                Sleep(params.waitTime)
+                wait = false
+            end,
+            Valid = function()
+                return wait
+            end
+
+        }
+
+        nodes.Action_Patrol = Action{
+            function()
+                try
+                    DoPatrol(patrolSpline, false, MovementSpeed.Walk, patrolSplineIndex)
+                catch e if ls.CheckType(e, error.MissingComponent) then
+                    DebugText(me, "Error: MissingComponent")
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return not wait
+            end
+        }
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Events
+        events.SplineControlPointReached = function(e)
+            patrolSplineIndex = e.NewIndex
+
+            if not ignoredIndexes[e.Index] and params.waitTime ~= 0 then
+                wait = true
+            end
+        end
+        ------------------------------------------------
+    end
+}

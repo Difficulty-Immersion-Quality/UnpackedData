@@ -1,0 +1,100 @@
+game.states.HAV_Gnome_002 = State {function ()
+
+    modules = {"shared.moveto", "shared.math"}
+
+    description = [[Behaviour of Nickels in Haven]]
+
+    local leaveInspectionFlag = Flag("HAV_SavingPrisoners_Event_PrisonersLeaveInspection_6582e781-ba50-4dcc-b88c-cf0bc4c144b1")
+    local inspectionPos = nil
+
+    nodes.WaitForInspection = Action{
+        function()
+            Sleep(math.random(0,2))
+            SetEntityEvent(me, "HAV_SavingPrisoners_AppearedAtHaven_Boat")
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos == nil
+        end
+    }
+
+    nodes.Inspection = Action{
+        function()
+            if mod.moveto.MoveToPoint(inspectionPos,  MovementSpeed.Walk, me) then
+                LookFrom(inspectionPos)
+                SetEntityEvent(me, "HAV_SavingPrisoners_AtInspectionPos")
+                WaitForInterrupt()
+            else
+                SteerTo(inspectionPos)
+            end
+            Sleep(4)
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos ~= nil
+        end
+    }
+
+    nodes.Sitting = Proxy {
+        game.states.Sit,
+        params = {
+            seat = "S_HAV_GnomeSeat_002_28c57061-e169-421a-b0c0-ec789e331fbe",
+            seatTrigger = "S_HAV_GnomeSeatArea_002_8dca8002-9648-46a4-8a0c-9aa983018953",
+            sitIdle = StateRef{game.states.HAV_Gnome_002_Sitting},
+            nonSitIdle = StateRef{game.states.HAV_Gnome_002_Standing},
+            useSeatPositionAsFallBack = false,
+            sitOnGroundAsFallback = false
+        }
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if(e.Event == "HAV_SavingPrisoners_SetInspectionPos") then
+                inspectionPos = e.Params[1]
+                Interrupt()
+            end
+        end
+    end
+
+end}
+
+game.states.HAV_Gnome_002_Sitting = State {function ()
+
+    modules = {"shared.math"}
+
+    description = [[Behaviour of Nickels in Haven while he is sitting]]
+
+    local drinkingDialog = Dialog("BHVR_WRLD_GLO_MagicPocketsSitAndDrink_c2e8c0bf-d1d0-af01-72c3-e7c244444e2c")
+    local seat = Entity("S_HAV_GnomeSeat_002_28c57061-e169-421a-b0c0-ec789e331fbe")
+
+    nodes.Default = Action {
+        function()
+            Sleep(2.0)
+            StartBehaviorDialog(drinkingDialog, nil, true, me, seat)
+            Sleep(5.0 + 8.0 * math.random())
+        end
+    }
+
+end}
+
+game.states.HAV_Gnome_002_Standing = State {function ()
+
+    modules = {"shared.moveto"}
+
+    description = [[Behaviour of Nickels in Haven while he is standing]]
+
+    local armsCrossedAnim = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+
+    local position = Entity("S_HAV_GnomePrisonerPos_002_a9a4049a-6f91-4326-b494-7a6e198173f2")
+
+    nodes.Default = Action {
+        function()
+            if mod.moveto.MoveToPoint(position, MovementSpeed.Walk, me) then
+                LookFrom(position)
+            else
+                SteerTo(position)
+            end
+            PlayAnimation(armsCrossedAnim, false, true)
+            WaitForInterrupt()
+        end,
+    }
+
+end}

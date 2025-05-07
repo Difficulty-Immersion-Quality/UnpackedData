@@ -1,0 +1,89 @@
+game.states.LOW_CellarWaveservants_Guards = State{function()
+    description = [[Cellar guards behavior]]
+    modules = {"shared.dialog"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local repeatedAD = Dialog("LOW_WaterQueensHouse_AD_VaultGuaardWaveservantsChat_c372fff5-a30e-a3b3-b17d-91a8f0e1438f")
+    local secondNPC = Entity("S_LOW_VaultGuardWaveservant02_e76f27c5-0799-472c-a6a0-9d7e714d0114")
+    local thirdNPC = Entity("S_LOW_VaultGuardWaveservant03_f362518e-a204-48b5-8400-f8e61e9323aa")
+        
+    local guardSpot = Entity("S_LOW_WaterQueensHouse_GuardSpot04_68f517e7-4ccd-4285-9cef-0228d6e517f1")
+
+    local anim = Animation("CUST_Bored_02_7892cb3b-2935-4aa3-b65c-64d9664cbe75")
+    
+    local readyForAd = true
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Unless killed, the kitchen waveservants keep talking with a rate limited AD
+    nodes.Action_ADLoop = Action{
+        function()
+            if IsInDangerousSurfaceFor(guardSpot, me.Character) then
+                SteerTo(guardSpot)
+            end
+            local moveResult = MoveTo(guardSpot, MovementSpeed.Walk)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(guardSpot)
+            end
+            LookFrom(guardSpot)    
+            PlayAnimation(anim, false, true)
+            Sleep(5)      
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                repeatedAD,
+                {
+                    maxDistance = 30.0, 
+                    waitForCompletion = true,
+                    minDelay = 2
+                },
+                me,
+                secondNPC,
+                thirdNPC
+            )
+        end,
+        OnEnter = function()
+            SetDoNotFace(me, true)
+            SetDoNotFace(secondNPC, true)
+            SetDoNotFace(thirdNPC, true)
+        end,
+        OnLeave = function()
+            SetDoNotFace(me, false)
+            SetDoNotFace(secondNPC, false)
+            SetDoNotFace(thirdNPC, false)
+        end,
+        Valid = function()
+            return not secondNPC.IsDead and not thirdNPC.IsDead
+        end
+    }
+
+    nodes.Guard =Action{
+        function()
+            MoveTo(guardSpot)
+            LookFrom(guardSpot)
+            PlayAnimation(anim, true, false)   
+        end
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

@@ -1,0 +1,412 @@
+game.states.UND_MyconidCircle_Farmers = State { function ()
+
+    -----------------------------------------
+    -- Params
+    params.Garden = {type = EParamType.String, required = false,default = "",
+        help = [[Garden the Myconid will tend to]]}
+    params.MeditationSpot = {type = EParamType.String, required = false,default = "",
+        help = [[Area where the Myconid will meditate]]}
+    -----------------------------------------
+    -- Behaviour Variables
+
+    local meditationSpot = Entity(params.MeditationSpot)
+    local gardenPos = Entity(params.Garden)
+    local wanderArea = Entity("S_UND_MyconidCircle_MainArea_a08c9f65-06ed-4f36-95a9-2330fa9462da")
+
+    -- Anims
+    local meditationAnim = Animation("CUST_Meditating_01_45b1a54b-b127-46d2-bfe6-daa8963398ea")
+    local gardeningAnim = Animation("CUST_TendingToMushroom_01_8f17942c-6844-4b19-8238-ef1f35c7b543")
+
+    ------------------------------------------
+    -- Helpers
+
+    helpers.action.MoveToPoint = function(point, speed)
+        if IsInDangerousSurfaceFor(point, me.Character) then
+            SteerTo(point)
+            Sleep(2.0)
+            return false
+        end
+
+        local moveResult = MoveTo(point, speed, true, false, 2, 3.5, false)
+
+        if moveResult ~= error.MovementError.None then
+            SteerTo(point)
+            Sleep(2.0)
+            return false
+        end
+
+        return true
+    end
+
+    helpers.action.PerformActionAtPosition = function(location, anim)
+        if helpers.MoveToPoint(location, MovementSpeed.Stroll) then
+            LookFrom(location)
+            try
+                PlayAnimation(anim, false, true)
+                Sleep(math.random(13, 20))
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Failed to play Anim")
+                Sleep(5.0)
+            end
+        end
+    end
+
+    ------------------------------------------
+    -- nodes
+
+    nodes.Dancing = Proxy {
+        game.states.UND_MyconidCircle_Dancing,
+        params = { moveToSovereignBeforeDancing = true }
+    }
+
+    nodes.MyconidFarmer = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.MyconidFarmer.Gardening = Action{
+        function()
+            helpers.PerformActionAtPosition(gardenPos, gardeningAnim)
+        end,
+
+        CanEnter = function()
+            return gardenPos ~= nil
+        end
+    }
+
+    nodes.MyconidFarmer.Meditating = Action{
+        function()
+            helpers.PerformActionAtPosition(meditationSpot, meditationAnim)
+        end,
+
+        CanEnter = function()
+            return meditationSpot ~= nil
+        end
+    }
+
+    nodes.MyconidFarmer.Wander = Action{
+        function()
+            Wander(wanderArea, math.random(25, 35), MovementSpeed.Stroll)
+        end
+    }
+
+end}
+
+game.states.UND_MyconidCircle_CorpseTending = State { function ()
+
+    local i=1
+    local todayVictim = {Entity("S_UND_MyconidCircle_DeadMyconid_000_4b026c61-6aaf-449c-b23e-dd8c5078ace5"),
+        Entity("S_UND_MyconidCircle_DeadMyconid_002_5e1d5291-f414-4d01-a5f1-abcd18457554"),
+        Entity("S_GLO_InjuredGnome_fcf53ac7-1805-4e57-b6ed-4f7b0f90cf96")}
+
+    local injuredGnome = Entity("S_GLO_InjuredGnome_fcf53ac7-1805-4e57-b6ed-4f7b0f90cf96")
+    local corpseTendingAnim = Animation("CUST_TendingToMushroom_01_8f17942c-6844-4b19-8238-ef1f35c7b543")
+    local validCorpseArea = Entity("S_UND_MyconidCircle_MainArea_a08c9f65-06ed-4f36-95a9-2330fa9462da")
+    local gnomeHealed = Flag("UND_InjuredGnome_State_Healed_6dd9c64e-a6b0-47d5-87f6-b1a1c49d3ab4")
+    local gnomeServant = Flag("UND_InjuredGnome_State_SporeServant_4a1d7911-e00d-4e32-8dff-3352a0a7af63")
+
+    helpers.RemoveVictim = function(victim)
+        for index,corpse in ipairs(todayVictim) do
+            if corpse==victim then
+                table.remove(todayVictim,index)
+                helpers.SelectNextVictim()
+                break
+            end
+        end
+    end
+
+    helpers.SelectNextVictim = function()
+        i = i+1
+        if i>#todayVictim then
+            i=1
+        end
+    end
+
+    nodes.Dancing = Proxy {
+        game.states.UND_MyconidCircle_Dancing,
+        params = { moveToSovereignBeforeDancing = true }
+    }
+
+    nodes.CorpseTender = Selector{
+        CanEnter = function()
+            return todayVictim~={}
+        end
+    }
+
+    nodes.CorpseTender.Animation = Action{
+        function()
+            PlayAnimation(corpseTendingAnim,true)
+            helpers.SelectNextVictim()
+        end,
+        CanEnter = function()
+            return IsInTrigger(todayVictim[i], validCorpseArea.Trigger) and GetDistance2DTo(me,todayVictim[i])<2
+        end,
+        Valid = function()
+            return not IsInDialog(todayVictim[i], true)
+        end
+    }
+
+    nodes.CorpseTender.MoveTo = Action{
+        function()
+            MoveTo(todayVictim[i],MovementSpeed.Stroll)
+            SteerTo(todayVictim[i])
+        end,
+        CanEnter = function()
+            return GetDistance2DTo(me,todayVictim[i])>1
+        end,
+        Valid = function()
+            return not IsInDialog(todayVictim[i], true)
+        end
+    }
+
+    nodes.CorpseTender.FallbackNextVictim = Action{
+        function()
+            Sleep(2)
+            helpers.SelectNextVictim()
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+    -----------------------------------
+    -- events
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity~=nil and e.Event=="UND_NecroMushrooms_Event_CorpseResurrected" then
+            helpers.RemoveVictim(e.TargetEntity)
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == gnomeHealed.Guid or e.Flag == gnomeServant.Guid then
+            helpers.RemoveVictim(injuredGnome)
+        end
+    end
+
+end}
+
+game.states.UND_MyconidCircle_Noisome = State { function ()
+
+    modules = {"shared.util"}
+
+    local idleAnim = Animation("CUST_GuardingCheckpoint_01_Loop_ee85efba-b613-4fd4-89f1-eeb60e159878")
+
+    nodes.Dancing = Proxy {
+        game.states.UND_MyconidCircle_Dancing,
+        params = { moveToSovereignBeforeDancing = true }
+    }
+
+    nodes.Idling = Action {
+        function()
+            mod.util.SleepRandom(1.0, 4)
+            PlayAnimation(idleAnim, false, true)
+        end
+    }
+
+end}
+
+game.states.UND_MyconidCircle_SporeServantWorker = State { function()
+
+    params.WorkPosition1 = {type = EParamType.String, required = false,default = "",
+        help = [[First area the spore servant will move to work at]]}
+
+    params.WorkPosition2 = {type = EParamType.String, required = false,default = "",
+        help = [[Second area the spore servant will move to work at]]}
+
+    params.WorkAnimation = {type = EParamType.String, required = false,default = "",
+        help = [[Animation the spore servant will play while working]]}
+
+    local workPos1 = Entity(params.WorkPosition1)
+    local workPos2 = Entity(params.WorkPosition2)
+
+    local workAnim = Animation(params.WorkAnimation)
+
+    nodes.Dancing = Proxy {
+        game.states.UND_MyconidCircle_Dancing,
+        params = { moveToSovereignBeforeDancing = true }
+    }
+
+    helpers.action.SporeServant_Work = function(point, speed, anim, animName)
+        if IsInDangerousSurfaceFor(point, me.Character) then
+            SteerTo(point)
+            Sleep(2.0)
+            return false
+        end
+
+        local moveResult = MoveTo(point, speed, true, false, 0.5, 1.0, false)
+
+        if moveResult ~= error.MovementError.None then
+            SteerTo(point)
+            Sleep(2.0)
+            return false
+        end
+
+        LookFrom(point)
+        try
+            PlayAnimation(anim, false, true)
+            Sleep(math.random(15, 20))
+        catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+            DebugText(me, animName)
+            Sleep(5.0)
+        end
+    end
+
+    nodes.Action_SporeServantWork = Action {
+        function()
+            helpers.SporeServant_Work(workPos1, MovementSpeed.Stroll, workAnim, params.WorkAnimation)
+
+            if workPos2 ~= nil then
+                helpers.SporeServant_Work(workPos2, MovementSpeed.Stroll, workAnim, params.WorkAnimation)
+            end
+        end,
+
+        CanEnter = function()
+            return workPos1 ~= nil
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}
+
+game.states.UND_MyconidCircle_GuardPatrol = State { function()
+    params.PatrolSpline = { type = EParamType.String, required = false,default = "",
+        help = [[Patrol spline GUID for the guard]] }
+
+    params.IdleAnimation = { type = EParamType.String, required = false,default = "",
+    help = [[Animation to play while idling before patrol]] }
+
+    modules = {"shared.util"}
+
+    -- Flags
+    local playerPassedCheckpoint = Flag("UND_MyconidCircle_State_GainedAccess_fb9b0ee2-a499-cef2-fd3e-d9556050ea6a")
+
+    -- Anims
+    local idleAnim = Animation(params.IdleAnimation)
+
+    nodes.Action_Patrol = Proxy {
+        game.states.GEN_Patrol,
+        params = { patrolSpline = params.PatrolSpline},
+
+        CanEnter = function()
+            return GetFlag(playerPassedCheckpoint)
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            if idleAnim then
+                mod.util.SleepRandom(1.0, 4)
+                PlayAnimation(idleAnim, false, true)
+            else
+                Sleep(2.0)
+            end
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}
+
+game.states.UND_MyconidCircle_Dancing = State { function ()
+    description = [[
+        Special state to use for Slender-typed myconids to happily dance under specific
+        conditions (killing Spaw and switching sides or brining Nere's head).
+    ]]
+
+    params.moveToSovereignBeforeDancing = { type = EParamType.Bool, required = false, default = false, help = [[
+        If myconid should first move to the Sovereign's place before starting dancing.
+    ]]}
+
+    local dancingLoopAnim_Start = Animation("CUST_Dancing_01_Start_0a4a0000-7b24-4d6d-9f45-81ed5ab5f245")
+    local dancingLoopAnim_Loop = { Animation("CUST_Dancing_01_Loop_dd1f4fbc-3d2d-4924-a3d4-a45d13038b95") }
+    local dancingLoopAnim_End = Animation("CUST_Dancing_01_End_f06e76ac-534c-44be-a743-13a150d367c7")
+
+    local startDanceFlag = Flag("UND_BroodingSovereign_Event_MyconidsCelebrate_dc56b8e2-07e5-48a8-80ea-d71f1a8fbdb1")
+    local sporeServantTag = Tag("CREATURE_SPORE_SERVANT_e45d5440-4a29-42e1-845d-890ae8e82a63")
+
+    local sovereignAreaTrigger = Entity("S_UND_MyconidCircle_DanceLocation_a146a6b5-2aab-406f-8b71-72807256c309")
+    local lookAtTrigger = Entity("S_UND_BroodingSovereign_Mushroom_21e8275f-5bd9-4bf7-9dd2-0e0704f22067")
+
+    local moving = false
+
+    modules = { "shared.moveto", "shared.util" }
+
+    self.Valid = function()
+        return GetFlag(startDanceFlag) and not IsTagged(me, sporeServantTag)
+    end
+
+    nodes.MoveToSovereignPlace = Action {
+        function()
+            mod.util.SleepRandom(0.0, 2.0)
+            local pos = TriggerGetRandomPosition(sovereignAreaTrigger.Trigger)
+            local validPos = FindValidPosition(pos, 3.0, me)
+            if validPos ~= nil then
+                if not mod.moveto.MoveToPoint(validPos, MovementSpeed.Walk, me) then
+                    DebugText(me,"MoveTo failed.")
+                end
+            end
+            moving = false
+        end,
+        Valid = function()
+            return moving
+        end
+    }
+
+    nodes.Dance = Action {
+        function()
+            SteerTo(lookAtTrigger)
+            PlayLoopingAnimation(dancingLoopAnim_Start, dancingLoopAnim_Loop, dancingLoopAnim_End)
+            Sleep(6.0)
+        end,
+        CanEnter = function()
+            return not moving
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    -- Events
+    events.FlagSet = function(e)
+        if e.Flag == startDanceFlag.Guid then
+            moving = params.moveToSovereignBeforeDancing
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == startDanceFlag.Guid then
+            moving = false
+        end
+    end
+end}
+
+game.actions.generics.UND_MyconidCircle_Happy = Action
+{
+    function()
+        local dancingLoopAnim_Start = Animation("CUST_Dancing_01_Start_0a4a0000-7b24-4d6d-9f45-81ed5ab5f245")
+        local dancingLoopAnim_Loop = { Animation("CUST_Dancing_01_Loop_dd1f4fbc-3d2d-4924-a3d4-a45d13038b95") }
+        local dancingLoopAnim_End = Animation("CUST_Dancing_01_End_f06e76ac-534c-44be-a743-13a150d367c7")
+
+        Sleep(0.5+math.random())
+        local criminal = me.Blackboard.GetFact("Criminal1")
+        SteerTo(criminal)
+
+        PlayLoopingAnimation(dancingLoopAnim_Start, dancingLoopAnim_Loop, dancingLoopAnim_End)
+
+        Sleep(15.0+math.random()*5)
+    end,
+    OnLeave = function()
+        StopAnimation(me)
+    end
+}

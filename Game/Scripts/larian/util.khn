@@ -1,0 +1,573 @@
+local __m = {}
+
+__m.Array = ls.Class("anubis.util.Array", function(self, initialItems)
+    local _items = {}
+    local _capacity = 0
+    local _count = 0
+
+    self.GetCount = function()
+        return _count
+    end
+
+    self.Get = function(i)
+        __m.AssertType(i, "int")
+        return _items[i]
+    end
+
+    self.Set = function(i, item)
+        __m.AssertType(i, "int")
+        self.Reserve(i)
+        _items[i] = item
+        _count = math.max(_count, i)
+    end
+
+    self.Append = function(item)
+        _count = _count + 1
+        self.Reserve(_count)
+        _items[_count] = item
+    end
+
+    self.Reserve = function(capacity)
+        if capacity <= _capacity then
+            return
+        end
+
+        _items = {table.unpack(_items, 1, capacity)}
+        _capacity = capacity
+    end
+
+    self.Iterate = function()
+        local iterator = function(_, i)
+            if i > _count then
+                return
+            end
+
+            return _items[i], i + 1
+        end
+
+        return iterator, self, 1
+    end
+
+    if initialItems ~= nil then
+        __m.AssertType(initialItems, "table", __m.Array)
+
+        self.Reserve(#initialItems)
+
+        for _, item in ipairs(initialItems) do
+            self.Append(item)
+        end
+    end
+end)
+
+function __m.Array:__len()
+    return self.GetCount()
+end
+
+function __m.Array:__index(i)
+    return self.Get(i)
+end
+
+function __m.Array:__newindex(i, item)
+    return self.Set(i, item)
+end
+
+function __m.Array:__pairs()
+    return self.Iterate()
+end
+
+function __m.Array:__ipairs()
+    return self.Iterate()
+end
+
+function __m.Array.__is_convertible_from(type)
+    return type == "table"
+end
+
+local Exception = ls.Class("anubis.util.Exception", function(self, message, backtrace)
+    self.message = message
+    self.backtrace = backtrace
+
+    self.contexts = __m.Array()
+end)
+
+function Exception:__tostring()
+    local message = self.message .. "\n"
+
+    for _, context in ipairs(self.contexts) do
+        message = message .. "\t" .. context .. "\n"
+    end
+
+    message = message .. "\n" .. self.backtrace
+
+    return message
+end
+
+__m.ToString = function(x)
+    if type(x) == "table" then
+        local name = rawget(x, "__name")
+
+        return name or __m.Dump(x, 2)
+    else
+        return tostring(x)
+    end
+end
+
+__m.Format = function(format, ...)
+    local args = {}
+
+    for i = 1, select('#', ...) do
+        local arg = select(i, ...)
+
+        args[i] = __m.ToString(arg)
+    end
+
+    return string.format(format, table.unpack(args))
+end
+
+__m.Throw = function(format, ...)
+    local e = Exception(__m.Format(format, ...), debug.traceback(nil, 2))
+    error(e)
+end
+
+__m.Rethrow = function(e, format, ...)
+    if not ls.CheckType(e, Exception) then
+        e = Exception(__m.ToString(e), debug.traceback(nil, 2))
+    end
+
+    local context = __m.Format(format, ...)
+    e.contexts.Append(context)
+    error(e)
+end
+
+__m.Assert = function(condition, format, ...)
+    if not condition then
+        __m.Throw(format, ...)
+    end
+end
+
+local function checkSingleType(value, t, conversionAllowed)
+    if t == "int" then
+        return __m.IsInt(value), false
+    elseif type(t) == "string" then
+        return type(value) == t, false
+    elseif ls.IsEnum(t) or ls.IsClass(t) then
+        if ls.CheckType(value, t) then
+            return true, false
+        end
+
+        if conversionAllowed and t.__is_convertible_from then
+            return t.__is_convertible_from(__m.GetType(value)), true
+        end
+
+        return false, false
+    elseif ls.IsEnumItem(t) then
+        return type(value) == "table" and value.type == t
+    else
+        __m.Throw("Unknown type %s when checking value %s", t, value)
+    end
+end
+
+__m.CheckType = function(value, ...)
+    for i = 1, select('#', ...) do
+        local type_ = select(i, ...)
+
+        local match, _ = checkSingleType(value, type_, false)
+
+        if match then
+            return true
+        end
+    end
+
+    return false
+end
+
+__m.GetType = function(value)
+    local t = type(value)
+
+    if t == "table" or t == "userdata" then
+        return getmetatable(value) or t
+    end
+
+    return t
+end
+
+__m.GetTypeName = function(value)
+    local t = type(value)
+
+    if t == "table" or t == "userdata" then
+        local meta = getmetatable(value)
+
+        if meta ~= nil and meta.__name then
+            return meta.__name
+        end
+    end
+
+    return t
+end
+
+local function makeTypeUnionString(...)
+    local expected = ""
+    local count = select('#', ...)
+
+    for i = 1, count - 1 do
+        local arg = select(i, ...)
+        expected = expected .. __m.ToString(arg) .. " | "
+    end
+
+    return expected .. __m.ToString(select(count, ...))
+end
+
+local function throwTypeException(value, ...)
+    local expected = makeTypeUnionString(...)
+    local got = __m.GetTypeName(value)
+
+    __m.Throw("Invalid type. Expected %s, got %s: %s", expected, got, value)
+end
+
+__m.EnsureType = function(value, ...)
+    local count = select('#', ...)
+
+    if count == 0 then
+        return value
+    end
+
+    for i = 1, count do
+        local t = select(i, ...)
+
+        local match, converted = checkSingleType(value, t, true)
+
+        if match then
+            if converted then
+                return t(value)
+            else
+                return value
+            end
+        end
+    end
+
+    throwTypeException(value, ...)
+end
+
+__m.AssertType = function(value, ...)
+    if not __m.CheckType(value, ...) then
+        throwTypeException(value, ...)
+    end
+end
+
+__m.AssertTypedTable = function(table, ...)
+    __m.AssertType(table, "table")
+
+    local t = table.type
+
+    __m.Assert(t ~= nil, "Expected a table with .type member, but there is no such member. Table is: %s", table)
+
+    for i = 1, select('#', ...) do
+        if t == select(i, ...) then
+            return
+        end
+    end
+
+    local expected = makeTypeUnionString(...)
+    __m.Throw("Expected table with .type = %s, but .type is %s. Table is: %s", expected, t, table)
+end
+
+__m.IsInt = function(x)
+    return type(x) == "number" and math.floor(x) == x
+end
+
+__m.IsTable = function(x)
+    return type(x) == "table"
+end
+
+__m.GetFunctionEnv = function(f)
+    local name, env = debug.getupvalue(f, 1)
+
+    if name == "_ENV" then
+        return env
+    end
+
+    return nil
+end
+
+__m.SetFunctionEnv = function(f, env)
+    local old = __m.GetFunctionEnv(f)
+
+    if old ~= nil then
+        debug.setupvalue(f, 1, env)
+    end
+
+    return old
+end
+
+__m.CopyFunctionWithEnv = function(f, env)
+    local oldEnv = __m.GetFunctionEnv(f)
+
+    if oldEnv == nil then
+        return f
+    end
+
+    local copy = debug.copyfunction(f) -- luacheck: ignore
+
+    debug.setupvalue(copy, 1, env)
+
+    return copy
+end
+
+__m.CallWithEnv = function (f, env, ...)
+    local oldEnv = __m.SetFunctionEnv(f, env)
+    f(...)
+    __m.SetFunctionEnv(f, oldEnv)
+end
+
+__m.MergeTableInto = function (dst, src)
+    if src ~= nil then
+        for k, v in pairs(src) do
+            dst[k] = v
+        end
+    end
+end
+
+__m.Copy = function(table)
+    if type(table) ~= "table" or getmetatable(table) ~= nil then
+        return table
+    end
+
+    local result = {}
+
+    for k, v in pairs(table) do
+        result[k] = v
+    end
+
+    return result
+end
+
+__m.GetFieldName = function(object, collection)
+    for k, v in pairs(collection) do
+        if object == v then
+            return k
+        end
+    end
+    return nil
+end
+
+__m.Dump = function(value, maxLevel, level)
+    maxLevel = maxLevel or 0
+    level = level or 0
+
+    local result = ""
+
+    if type(value) == "table" and not (getmetatable(value) and getmetatable(value).__tostring) then
+        if level >= maxLevel then
+            result = result .. "{...}"
+        else
+            local offset = string.rep("\t", level)
+
+            result = result .. "{"
+
+            for k, v in pairs(value) do
+                result = result .. "\n" .. offset .. "\t" .. tostring(k) .. " = " .. __m.Dump(v, maxLevel, level + 1)
+            end
+
+            result = result .. "\n" .. offset .. "}"
+        end
+    else
+        if level == 0 then
+            result = tostring(value)
+        else
+            local t = __m.GetTypeName(value)
+            result = "(" .. t .. ") " .. tostring(value)
+        end
+    end
+
+    return result
+end
+
+__m.KWArgs = ls.Class("larian.util.KWArgs", function(self, name, ...)
+    local count = select('#', ...)
+
+    local kwargs
+
+    local first = select(1, ...)
+
+    if count ~= 1 or type(first) ~= "table" then
+        kwargs = {...}
+    elseif getmetatable(first) == __m.KWArgs then
+        kwargs = first.TakeAll()
+    else
+        kwargs = __m.Copy(first)
+    end
+
+    self.TakeRequired = function(key, description, ...)
+        local result = kwargs[key]
+
+        __m.Assert(result ~= nil, "%s expects a %s as %s argument", name, description, key)
+
+        kwargs[key] = nil
+
+        return __m.EnsureType(result, ...)
+    end
+
+    self.TakeOptional = function(key, default, description, ...)
+        local result = kwargs[key]
+
+        if result == nil then
+            result = default
+        else
+            kwargs[key] = nil
+        end
+
+        return __m.EnsureType(result, ...)
+    end
+
+    self.Has = function(key)
+        return kwargs[key] ~= nil
+    end
+
+    self.TakeAll = function()
+        local result = kwargs
+        kwargs = {}
+        return result
+    end
+
+    self.Set = function(key, value)
+        kwargs[key] = value
+    end
+
+    self.MergeOnlyNew = function(other)
+        other = other.TakeAll()
+
+        for k, v in pairs(other) do
+            if kwargs[k] == nil then
+                kwargs[k] = v
+            end
+        end
+    end
+
+    self.Validate = function()
+        for key in pairs(kwargs) do
+            __m.Throw("Unexpected argument '%s' for %s", key, name)
+        end
+    end
+end)
+
+__m.OrderedMap = ls.Class("larian.util.OrderedMap", function (self)
+    local items = {}
+    local key_to_index = {}
+    local index_to_key = {}
+    local count = 0
+
+    local function set(key, value, override)
+        local index
+
+        if type(key) == "number" then
+            index = key
+
+            assert(override or index_to_key[key] == nil, "Attempting to set an existing key " .. key)
+
+            key = index_to_key[index]
+            key_to_index[key] = nil
+        else
+            assert(override or key_to_index[key] == nil, "Attempting to set an existing key " .. key)
+
+            index = key_to_index[key]
+        end
+
+        if index == nil then
+            count = count + 1
+            index = count
+        end
+
+        assert(index <= count)
+
+        items[index] = value
+        key_to_index[key] = index
+        index_to_key[index] = key
+
+        return index
+    end
+
+    self.GetCount = function()
+        return count
+    end
+
+    self.Set = function(key, value)
+        return set(key, value, true)
+    end
+
+    self.Add = function(key, value, override)
+        return set(key, value, override)
+    end
+
+    self.Get = function(key)
+        local index = self.Find(key)
+
+        if index == nil then
+            return nil
+        end
+
+        return items[index]
+    end
+
+    self.Find = function(key)
+        if type(key) == "number" then
+            return key
+        else
+            return key_to_index[key]
+        end
+    end
+
+    self.GetNext = function(key)
+        local index = 1
+
+        if key ~= nil then
+            index = assert(key_to_index[key]) + 1
+        end
+
+        local nextKey = index_to_key[index]
+
+        if nextKey ~= nil then
+            return nextKey, items[index]
+        end
+
+        return nil
+    end
+end)
+
+function __m.OrderedMap:__ipairs()
+    local iterator = function(table, i)
+        i = i + 1
+        local v = table.Get(i)
+
+        if v ~= nil then
+            return i, v
+        end
+
+        return nil
+    end
+
+    return iterator, self, nil
+end
+
+function __m.OrderedMap:__pairs()
+    local iterator = function(table, key)
+        return table.GetNext(key)
+    end
+
+    return iterator, self, nil
+end
+
+function __m.OrderedMap:__index(i)
+    return self.Get(i)
+end
+
+function __m.OrderedMap:__newindex(key, value)
+    if value ~= nil then
+        return self.Set(key, value)
+    end
+end
+
+function __m.OrderedMap:__len()
+    return self.GetCount()
+end
+
+return __m

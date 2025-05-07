@@ -1,0 +1,186 @@
+game.states.DEN_PetBird = State { function ()
+
+    description = [[The bird with the nest and the coin and the song]]
+
+    modules = { "shared.util", "shared.dialog" }
+
+    -----------------------------------------
+    -- params section
+
+    local pondSphere = Entity("S_DEN_PetBirdPondSphere_b83df483-3074-4db0-b5b7-c8345f6bc571")
+    local nestSphere = Entity("S_DEN_PetBirdNestSphere_a7543b9d-992a-4382-84c7-4b6022865004")
+    local nestPoint = Entity("S_DEN_PetBirdNestPoint_a586adac-71ba-404d-89e4-60dbcadeb28f")
+
+    local coinTemplate
+    local coinBox = Entity("S_DEN_BirdCoinBox_a231c447-278a-4f5e-a98f-ce8b6791a446")
+
+    local songAD = Dialog("DEN_DruidPet_AD_Birdsong_fee33310-09f9-d0e3-2cb5-a447cd8f386c")
+
+    local coinFlag = Flag("DEN_DruidPet_003_State_NoCoinNearby_c30522af-f6e4-4a78-84c8-e9ed46a498b8")
+    local songFlag = Flag("DEN_DruidPet_003_State_PersuadedCharlatan_054d2fe6-cbb1-1be5-26f5-682e412f6201")
+    local flyFlag = Flag("DEN_DruidPet_003_Event_TakeFlight_db06789d-b03e-cf68-77dd-0970663fec3e")
+    local nestFlag = Flag("DEN_DruidPet_003_State_NearNest_a82b7075-981d-473f-8668-b0759012ca51")
+    local lostOwnershipFlag = Flag("DEN_DruidPet_003_Event_ClearOwnership_11ada5c5-96bb-7f98-8dce-13d6c7d9de33")
+
+    local landAnimStart = Animation("CUST_Topaz_Idle_01_Start_0f1c296d-300a-4d0c-a6e7-cdadd3871e1c")
+    local landAnimLoop = Animation("CUST_Topaz_Idle_01_Loop_769b577d-8391-4bce-b2da-3c284c4b8aa0")
+    local landAnimEnd =  Animation("CUST_Topaz_Idle_01_End_2b628e1a-b434-414a-b4d3-fbf0963b8d26")
+
+    local misplacedItems = {}
+    local itemBox = Entity("S_DEN_BirdItemBox_10680b5f-2a18-463d-8218-34ecd55ad77c")
+
+    -----------------------------------------
+    -- local state section
+
+    -----------------------------------------
+    -- helper functions
+    helpers.action.BirdWander = function(anchor, wanderCount, duration, range)
+        for i = 1, wanderCount, 1 do
+            Wander(range or 1.5, duration or 1.0, MovementSpeed.Stroll, anchor)
+            mod.util.SleepRandom(1.0, 2.5)
+        end
+    end
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        coinTemplate = FindTemplate("LOOT_Gold_A_1c3c9c74-34a1-4685-989e-410dc080be6f")
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.Sing = Action {
+        CanEnter = function()
+            return GetFlag(songFlag)
+        end,
+        function()
+            Sleep(2)
+            local songResult = mod.dialog.StartCheckedAutomatedDialogRateLimited(songAD, {minDelay = 15.0}, me)
+            if songResult ~= error.RateLimitedAutomatedDialogError.None then
+                helpers.BirdWander(nestSphere, math.random(2, 4), 3)
+            end
+        end,
+    }
+
+    nodes.AtNest = Selector {
+        function(nodes)
+            return GetRandomCanEnterNoRepeat(nodes)
+        end,
+        Valid = function()
+            return GetFlag(nestFlag, me)
+        end
+    }
+
+    nodes.AtNest.Wander = Action {
+        function()
+            helpers.BirdWander(nestSphere, math.random(3, 7))
+        end
+    }
+
+    nodes.AtNest.PlaceCoin = Action {
+        CanEnter = function()
+            return not GetFlag(lostOwnershipFlag)
+        end,
+        function()
+            Sleep(3.0)
+            try 
+                MoveTo(nestPoint)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                return
+            end
+            local nearCoin
+            for _, item in ipairs(GetActiveItems(me, 2.0)) do
+                if item.Item.Template == coinTemplate and CanSee(me, item) then
+                    nearCoin = item
+                    break
+                end
+            end
+            if nearCoin then
+                for i = 1, math.random(4,6), 1 do
+                    try 
+                        MoveItem(nearCoin, TriggerGetRandomPosition(coinBox.Trigger))
+                    catch e if
+                        ls.CheckType(e, error.MoveItemError) or
+                        ls.CheckType(e, error.NotEnoughStats) or
+                        ls.CheckType(e, error.NotEnoughAP) or
+                        ls.CheckType(e, error.MoveItemFailed) then
+                    end
+                    mod.util.SleepRandom(1.0, 3.0)
+                    try 
+                        MoveTo(nestPoint)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        break
+                    end
+                end
+            else
+                SteerTo(nestPoint)
+                mod.util.SleepRandom(4.0, 10.0)
+            end
+        end
+    }
+
+    nodes.AtNest.PlaceItem = Action {
+        CanEnter = function()
+            return #misplacedItems > 0
+        end,
+        function()
+            Sleep(3.0)
+            try 
+                MoveTo(nestPoint)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                return
+            end
+            local item = misplacedItems[1]
+            if EntityExists(item) then
+                local itemPos = TriggerGetRandomPosition(itemBox.Trigger)
+                try 
+                    MoveItem(item, itemPos)
+                catch e if
+                    ls.CheckType(e, error.MoveItemError) or
+                    ls.CheckType(e, error.NotEnoughStats) or
+                    ls.CheckType(e, error.NotEnoughAP) or
+                    ls.CheckType(e, error.MoveItemFailed) then
+                end
+            end
+            mod.util.SleepRandom(3.0, 5.0)
+        end,
+        OnLeave = function()
+            table.remove(misplacedItems, 1) --remove it whether or not it succeeded, it's not a crucial behaviour
+        end
+    }
+
+    nodes.AtNest.Sleep = Action {
+        function()
+            MoveTo(nestPoint)
+            PlayLoopingAnimation(landAnimStart, {landAnimLoop}, landAnimEnd, false)
+            Sleep(18.5)
+            StopAnimation(me)
+            Wait(2.16)
+        end
+    }
+
+    nodes.AtPond = Action {
+        function()
+            Sleep(1)
+            helpers.BirdWander(pondSphere, 7, 4, 4)
+            SetFlag(flyFlag)
+        end,
+        Valid = function()
+            return not GetFlag(nestFlag, me)
+        end
+    }
+
+    nodes.Sleep = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.Event == "DEN_PetBird_Event_MisplacedItem" then
+            table.insert(misplacedItems, e.TargetEntity)
+        end
+    end
+end}

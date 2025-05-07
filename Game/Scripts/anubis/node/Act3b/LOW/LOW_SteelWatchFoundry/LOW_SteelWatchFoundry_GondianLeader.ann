@@ -1,0 +1,187 @@
+game.states.LOW_SteelWatchFoundry_GondianLeader = State{function()
+    description = [[Gondian Leader's behaviours]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+
+
+    --Status flags
+    local switchExploded = Flag("LOW_SteelWatchFoundry_State_KillSwitchDestroyedIRN_7d083a0a-4f0d-4ebb-aab5-fb45c90b5c95")
+    local isFollower = Flag("LOW_SteelWatchFoundry_State_FundangoFollower_a3021d6d-9cc1-3545-54f3-53a35d44d89b")
+    local waitingBySwitchboard = Flag("LOW_SteelWatchFoundry_State_FundangoBySwitchBoard_d4ba6a0d-8233-4fdc-999b-8c75d598a375")
+    local ironThroneDestroyed = Flag("IRN_IronThrone_State_Destroyed_91795368-af06-4b56-9ac1-b78995aa9ea9")
+    local postIRNWorkroomBaneitesDead = Flag("LOW_SteelWatchFoundry_State_PostIRNWorkroomBaneitesDefeated_1c0a4b23-9bc2-4d25-9c89-c066ee42f6c7")
+
+    --Freaking out   
+    params.freakingOutAnim =  {type = EParamType.String, required = false, default = nil, help = [[AD to play while working]]}
+    local freakingOutAnim 
+    --Waiting outside control centre
+    local isWaitingOutsideControlCentre = Flag("LOW_SteelWatchFoundry_State_FundangoWaitingInBrainRoom_4db9b98c-8867-4cc3-8371-47dc227ab044")
+    local waitingPosition = Entity("S_LOW_BrainRoomFundangoPos_fcc39dad-8eb2-4633-818d-4c36a39e560c")
+
+    --Control centre
+    local positionBySwitchboard = Entity("S_LOW_FundangoSwitchboardPos_28247708-93f9-43eb-8f5c-a2fcc2071b25")
+    local adBySwitchboard = Dialog("LOW_SteelWatchFoundry_AD_ToobinNearSwitchBoard_67803335-46a3-9534-98d5-2d0369ef24a4")
+
+    --Security office
+    local playerAgreedToHelp = Flag("LOW_SteelWatchFoundry_State_AgreedToHelpGondians_5acaf88a-ea7d-3e0d-ef62-c33e8b4203d1")
+    local secOfficeArea = Entity("S_LOW_SecurityOffice_57e9fbdb-91d8-4b17-b0a2-3958f939f6ba")
+    
+    --Parameters
+    params.workPositions = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[Positions to work at.]]}
+    params.workTargets = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[Things to look at while working (match the index of positions)]]}
+    params.workAD = {type = EParamType.String, required = false, default = nil, help = [[ADs to play while working]]}
+    params.alternateWorkAD = {type = EParamType.String, required = false, default = nil, help = [[Alternate ADs to play while working]]}
+    params.workAnimations = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[Work animations to play (match the index of positions).]]}
+    params.workBhvrs = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[Work world behaviours to play (match the index of positions).]]}
+    params.isWrldBhvr = {type = EParamType.Bool, arrayRange = "1..", required = false, default = nil, help=[[Set to true if the animation is a World Behaviour.]]}
+
+
+    --Stalling against Baneite
+    local stallingAD = Dialog("LOW_SteelWatchFoundry_AD_BeforeConfrontation_eed396fc-e6e5-46f1-9b62-4667f115fddb")
+    local postIRNBaneite = Entity("S_LOW_BaneiteOfficer_PostIRN01_36c0bb47-a8cc-4381-882b-a2ded38d0b5c")
+    
+    local ignoreDangerousSurfacesTag = Tag("IGNORE_DANGEROUS_SURFACES_bbf62461-4af4-4631-807a-eb0bd988d9a6")
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    self.OnInit = function()
+        freakingOutAnim = params.freakingOutAnim
+    end
+    -- While he is working in the office he walks around and speakd ADs
+
+    --Before player agrees to do the quest
+    nodes.Work = Proxy{
+        game.states.LOW_SteelWatchFoundry_GondianWorking,
+        params = {
+            workPositions = params.workPositions,
+            workTargets = params.workTargets,
+            workAD = params.workAD,
+            workAnimations = params.workAnimations,
+            workBhvrs = params.workBhvrs,
+            isWrldBhvr = params.isWrldBhvr
+        },
+    
+        Valid = function()
+            return (not GetFlag(ironThroneDestroyed))
+            and (not GetFlag(playerAgreedToHelp))
+        end
+    }
+
+    --After player agrees to do the quest
+    nodes.AlternateWork = Proxy{
+        game.states.LOW_SteelWatchFoundry_GondianWorking,
+        params = {
+            workPositions = params.workPositions,
+            workTargets = params.workTargets,
+            workAD = params.alternateWorkAD,
+            workAnimations = params.workAnimations,
+            workBhvrs = params.workBhvrs,
+            isWrldBhvr = params.isWrldBhvr
+        },
+    
+        Valid = function()
+            return (not GetFlag(ironThroneDestroyed))
+            and GetFlag(playerAgreedToHelp)
+        end
+    }
+
+    --After player destroys IRN
+    nodes.Action_StallingForTime = Action
+    {
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                stallingAD,
+                    {                        
+                        minDelay = math.random(20.0, 30.0),
+                        cullingDistance = 20.0,
+                        waitForCompletion = true
+                    },
+                    me,
+                    postIRNBaneite
+                )
+                    Sleep(3.0)
+        end,
+
+        Valid = function()
+            return GetFlag(ironThroneDestroyed)
+            and (not GetFlag(postIRNWorkroomBaneitesDead))
+            and (not GetFlag(isWaitingOutsideControlCentre))
+            and (not GetFlag(waitingBySwitchboard))
+        end
+    }
+
+    --Waiting for player to kill the Titan
+    nodes.Action_WaitingByControlRoom = Proxy 
+    {
+        game.states.GLO_StandAtTrigger,
+        params = {
+        trigger = "S_LOW_BrainRoomFundangoPos_fcc39dad-8eb2-4633-818d-4c36a39e560c"
+        },
+
+        Valid = function()
+            return GetFlag(isWaitingOutsideControlCentre)
+        end
+    }
+
+    --Waiting by the switchboard for player to initiate dialog
+    nodes.Action_StandingBySwitchboard = Action
+    {
+        function ()
+            if not IsInDangerousSurfaceFor(positionBySwitchboard, me.Character) or IsTagged(me, ignoreDangerousSurfacesTag) then
+                if GetDistanceTo(me, positionBySwitchboard) > 0.5 then
+                    try
+                        MoveTo(positionBySwitchboard,MovementSpeed.Run, true, false, 0.1, 0.5, false)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        SteerTo(positionBySwitchboard)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(positionBySwitchboard)
+                end
+            else
+                SteerTo(positionBySwitchboard)
+            end
+            StartAutomatedDialog(adBySwitchboard,true,me)
+            WaitForInterrupt()     
+        end,
+
+        Valid = function()
+            return GetFlag(waitingBySwitchboard)
+        end
+    }
+    --If all gondians die but him, because of a killswitch
+    nodes.SoleSurvivor = Action
+    {
+        function()
+            PlayAnimation(freakingOutAnim)
+        end,
+        Valid = function()
+            return GetFlag(switchExploded) 
+        end
+    }
+    -- Action - fallback
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+    }
+end}

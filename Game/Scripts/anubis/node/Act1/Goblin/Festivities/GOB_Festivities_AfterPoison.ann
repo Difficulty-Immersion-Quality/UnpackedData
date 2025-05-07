@@ -1,0 +1,311 @@
+game.states.GOB_Festivities_AfterPoison = State{function ()
+
+    description = [[Behaviour for Festivities goblins after they realized their mates were poisoned]]
+
+    params.AfterPoisonBattlePosition = { type = EParamType.String, required = false, default = nil,
+        help = [[Battle position of this goblin]]}
+    params.AfterPoisonInvestigationPoint = { type = EParamType.String, required = false, default = nil,
+        help = [[Point to which the goblin will go right after the toast]]}
+    params.AfterPoisonAD = { type = EParamType.String, required = false, default = nil,
+        help = [[AD at table after poisoning was done]]}
+    params.CanPlayInvestigatingAnimation = { type = EParamType.Bool, required = false, default = true,
+        help = [[This character can play investigate animation]]}
+    params.CanPlayCheckingCorpseAnimation = { type = EParamType.Bool, required = false, default = true,
+        help = [[This character can play checking corpse animation]]}
+
+    params.NonPoisonState = { type = EParamType.State, required = true,
+        help = [[Slot for goblins' state tree before the poisoning]] }
+
+    modules = { "shared.math", "shared.items" }
+
+    local dlg_AfterPoisonAD = Dialog(params.AfterPoisonAD)
+    local dlg_ToStationsAD = Dialog("GOB_GoblinToast_AD_ToStations_9369ece0-ff61-bbee-78f0-d394bd4e08f5")
+    local b_SendGoblinsToStations = false
+    local tr_AfterPoisonInvestigationPoint
+    local tr_AfterPoisonBattlePosition
+    local fl_ToastSuccess = Flag("GOB_GoblinToast_Event_ToastSuccess_8567a81c-abe6-cbea-0090-7b9af53aee39")
+    local fl_RealizedPoison = Flag("GOB_GoblinToast_State_RealizedPoison_0e867c08-b2b9-4f43-8260-168026663e2c")
+    local fl_ToStations = Flag("GOB_GoblinToast_Event_ToStations_0b555ee8-2b8e-3881-b35e-9811f6baf77a")
+    local it_BeerTub = Entity("S_GOB_GoblinToast_BeerSkullTub_43d2f409-e9cb-4bbe-974c-b1e2cce87562")
+    local fl_DestroyingTub = Flag("GOB_GoblinToast_State_DestroyingTub_5f3d9ca8-b7bb-e0d3-f3a8-c6cab3f775ac")
+    local fl_DestroyTub = Flag("GOB_GoblinToast_Event_DestroyTub_b7337301-f6e7-40d3-be8a-df00d82a838c")
+    local fl_KingDeadNoPoison = Flag("GOB_Festivities_State_KingDeadNoPoison_74d1d1b5-b8de-4685-8c30-4325aedbab03")
+
+    local tr_FestiveZone = nil
+
+    local b_CheckedCorpses = false
+
+    local b_RemovedCorpses = false
+    local ch_Goblins = {}
+    local ch_GoblinCorpse = nil
+
+    local b_CanPlayInvestigatingAnimation = params.CanPlayInvestigatingAnimation
+    local b_CanPlayCheckingCorpseAnimation = params.CanPlayCheckingCorpseAnimation
+    local b_Investigate = true
+    local tr_InvestigationPoints = {}
+    local anim_InvestigatingAnims = {}
+    local tr_ToastPos
+    local anim_LookingAround = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7")
+    local anim_CheckingCorpse = Animation("CUST_Leaning_Forward_01_5487ae28-60dc-4eea-b60c-0c00749c8281")
+
+    local b_CanDoAD = false
+    local s_CanDoADTimer = "GOB_Festivities_AfterPoison.AD.CanDoAD"
+
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(30.0, 40.0), 0)
+    end
+
+    local s_CheckAnotherCorpseTimer = "GOB_Festivities_AfterPoison.CheckAnotherCorpse"
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        elseif ev.TimerName == s_CheckAnotherCorpseTimer then
+            ch_GoblinCorpse = nil
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "GOB_GoblinToast_NewTub" then
+            it_BeerTub = e.Params[1]
+        end
+    end
+
+    helpers.CheckAnotherCorpseReset = function()
+        StartTimer(me, s_CheckAnotherCorpseTimer, mod.math.random(5.0, 15.0), 0)
+    end
+
+    self.OnInit = function()
+        --b_CanDoAD = false
+
+        tr_AfterPoisonBattlePosition = FindEntity(params.AfterPoisonBattlePosition)
+
+        ch_Goblins = {
+            FindEntity("S_GOB_Festivities_Goblin_000_031e9fb7-136a-46c7-91d7-77ce3e20236a"),
+            FindEntity("S_GOB_Festivities_Goblin_001_774c78ed-1227-48f9-812e-aac0021c71bf"),
+            FindEntity("S_GOB_Festivities_Goblin_002_bb9c82a2-7ed9-45ed-99b6-58f84520fb8c"),
+            FindEntity("S_GOB_Festivities_Goblin_003_0296a9f6-b2bc-46a0-8632-ba72679a36d3"),
+            FindEntity("S_GOB_Festivities_Goblin_004_e63401de-04ea-40b6-a988-b2f90a90f748"),
+            FindEntity("S_GOB_Festivities_Goblin_005_a955aea9-9040-4d4c-9264-e46e385dea94"),
+            FindEntity("S_GOB_Festivities_Goblin_006_f3f416d1-b946-4019-95ba-7053f63dd776"),
+            FindEntity("S_GOB_Festivities_Goblin_007_10a00987-1dbe-4540-aa34-e96976c7bac0"),
+            FindEntity("S_GOB_DrunkGoblin_0c3404d4-af6f-4c3c-8873-101a79cc4d86"),
+            FindEntity("S_GOB_PartyingGoblin_000_69ab2a7d-9035-4e4e-97e5-2d005c9662ee"),
+            FindEntity("S_GOB_PartyingGoblin_001_4aa22ae0-1f97-42e3-8fd7-474f2f3b7269"),
+            FindEntity("S_GOB_PartyingGoblin_002_bedb5fe5-2fa7-42f4-82c0-dda23883ff7c"),
+            FindEntity("S_GOB_ChickenChase_Commentator_eb2c434d-1833-485e-bca2-f181eed6010b"),
+            FindEntity("S_GOB_RoastingDwarfOperator_000_1fe911f8-c9c9-4405-83fa-d343d59c7be9"),
+            FindEntity("S_GOB_RoastingDwarfOperator_001_3837d519-dc92-459c-ab2d-1eac0b208fc7") }
+        tr_FestiveZone = FindEntity("S_GOB_TablesArea_OwnershipTigger_76833627-48b3-4ab8-8cc3-780f170acc31")
+
+        tr_ToastPos = FindEntity("S_GOB_GoblinToast_ToastPoint_e363d352-2a2b-4c01-87e4-1494eb8a46ad")
+        if params.AfterPoisonInvestigationPoint ~= nil then
+            tr_AfterPoisonInvestigationPoint = FindEntity(params.AfterPoisonInvestigationPoint)
+        end
+
+        anim_InvestigatingAnims = {
+            Animation("CUST_Investigating_LookingAround_01_dfbe749c-d0c2-4f4f-91cf-f1caaec3f3bf"),
+            Animation("CUST_Investigating_LookingAround_02_ab739447-e85f-4fca-b1d4-fb783d61fa9c"),
+            Animation("CUST_Investigating_LookingAround_03_41d0a2ea-f16e-435c-bbf3-a8499b873fd5")
+            }
+    end
+
+    self.OnEnter = function()
+        if dlg_AfterPoisonAD ~= nil then
+            helpers.CanDoADReset()
+            if math.random() < 0.4 then
+                b_CanDoAD = true
+            end
+        end
+    end
+
+    nodes.NonPoisonState = Proxy{
+        params.NonPoisonState,
+
+        Valid = function()
+            return not GetFlag(fl_RealizedPoison)
+        end
+    }
+
+    -- wait for N seconds / investigate the first investigation positions
+    -- go to battlestations
+    -- at battlestations
+
+    nodes.FirstInvestigationToastSuccess = Action{
+        function()
+            try
+                DebugText(me, "Investigating the scene")
+
+                local ch_GoblinToLookAt = ch_Goblins[math.random(#ch_Goblins)]
+                SteerTo(ch_GoblinToLookAt)
+                Sleep(mod.math.random(1.0, 2.0))
+                ch_GoblinToLookAt = ch_Goblins[math.random(#ch_Goblins)]
+                SteerTo(ch_GoblinToLookAt)
+                Sleep(mod.math.random(1.5, 3.0))
+
+                SteerTo(tr_AfterPoisonInvestigationPoint)
+                MoveTo(tr_AfterPoisonInvestigationPoint, MovementSpeed.Walk, false, false, 0.0, 1.0)
+                LookFrom(tr_AfterPoisonInvestigationPoint)
+                if b_CanPlayCheckingCorpseAnimation then
+                    PlayAnimation(anim_CheckingCorpse, true)
+                end
+                Sleep(6.0)
+                b_CheckedCorpses = true
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                b_CheckedCorpses = true
+            end
+        end,
+
+        Valid = function()
+            return tr_AfterPoisonInvestigationPoint ~= nil and not b_CheckedCorpses and GetFlag(fl_ToastSuccess) and not GetFlag(fl_ToStations)
+        end
+    }
+
+    nodes.FirstInvestigationToastFailure = Action{
+        function()
+            DebugText(me, "FirstInvestigationToastFailure")
+            b_Investigate = false -- make them check corpses first
+            b_CheckedCorpses = true
+        end,
+
+        Valid = function()
+            return not b_CheckedCorpses and not GetFlag(fl_ToastSuccess) and not GetFlag(fl_ToStations)
+        end
+    }
+
+    nodes.DestroyTub = Action{
+        function()
+            DebugText(me, "DestroyTub")
+            try
+                MoveTo(it_BeerTub, MovementSpeed.Run)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+            end
+            Attack(it_BeerTub, true, false)
+            SetFlag(fl_DestroyTub, it_BeerTub)
+            Sleep(3.0)
+        end,
+
+        Valid = function()
+            return GetFlag(fl_DestroyingTub, me) and not mod.items.SafeIsDestroyed(it_BeerTub)
+        end
+    }
+
+    nodes.MoveToBattleposition = Action{
+        function()
+            try
+                DebugText(me, "MoveToBattleposition")
+                MoveTo(tr_AfterPoisonBattlePosition, MovementSpeed.Run)
+                LookFrom(tr_AfterPoisonBattlePosition)
+                SetWeaponUnsheathed(me, true, true)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+            end
+        end,
+
+        Valid = function()
+            return not GetFlag(fl_DestroyingTub, me) and GetFlag(fl_ToStations) and GetDistance2DTo(me, tr_AfterPoisonBattlePosition) > 1.5
+        end
+    }
+
+    -- no toast / failed toast
+    -- either check a corspe or just look around
+    nodes.NoToast = Action{
+        function()
+
+            local ch_GoblinToLookAt = ch_Goblins[math.random(#ch_Goblins)]
+            SteerTo(ch_GoblinToLookAt)
+            Sleep(mod.math.random(1.0, 2.0))
+            ch_GoblinToLookAt = ch_Goblins[math.random(#ch_Goblins)]
+            SteerTo(ch_GoblinToLookAt)
+            Sleep(mod.math.random(1.5, 2.5))
+
+            local ch_ClosestCorpse = nil
+            local num_DistanceToClosestCorpse = 100;
+
+            for key, ch_Goblin in ipairs(ch_Goblins) do
+                if ch_Goblin.Character.IsDead and IsInTrigger(ch_Goblin, tr_FestiveZone.Trigger) then
+                    local num_DistanceToCorpse = GetDistance2DTo(me, ch_Goblin)
+                    if num_DistanceToCorpse < num_DistanceToClosestCorpse then
+                        ch_ClosestCorpse = ch_Goblin
+                        num_DistanceToClosestCorpse = num_DistanceToCorpse
+                    end
+                end
+            end
+
+            if ch_ClosestCorpse ~= nil then
+                MoveTo(ch_ClosestCorpse)
+                SteerTo(ch_ClosestCorpse)
+                if b_CanPlayCheckingCorpseAnimation then
+                    PlayAnimation(anim_CheckingCorpse, true)
+                end
+                Sleep(6.0)
+            end
+
+        end,
+        Valid = function()
+            return not GetFlag(fl_ToastSuccess) and not GetFlag(fl_ToStations)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            DebugText(me, "Fallback")
+            Sleep(math.random(6, 10))
+        end,
+        Valid = function()
+            return not GetFlag(fl_ToStations)
+        end
+    }
+
+    nodes.AfterPoison = Selector{
+        function(nodes)
+            return GetRandomCanEnter(nodes)
+        end,
+        Valid = function()
+            return GetFlag(fl_ToStations)
+        end
+    }
+
+    nodes.AfterPoison.Investigate = Action{
+        function()
+            DebugText(me, "Investigating")
+
+            if b_CanPlayInvestigatingAnimation then
+                local randomAnim = anim_InvestigatingAnims[math.random(1,#anim_InvestigatingAnims)]
+                try
+                    PlayAnimation(randomAnim, true)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (randomAnim)")
+                end
+            else
+                Sleep(6.0)
+            end
+        end
+    }
+
+    nodes.AfterPoison.Idle = Action{
+        function()
+            DebugText(me, "Idle")
+            LookFrom(tr_AfterPoisonBattlePosition)
+            Sleep(6.0)
+            SetWeaponUnsheathed(me, true, true)
+        end
+    }
+
+    nodes.AfterPoison.AD = Action{
+        function()
+            DebugText(me, "AD")
+            LookFrom(tr_AfterPoisonBattlePosition)
+            Sleep(math.random(3, 5))
+            StartAutomatedDialog(dlg_AfterPoisonAD, true, me)
+            helpers.CanDoADReset()
+        end,
+        CanEnter = function()
+            return not IsInDialog(me, false) and not GetFlag(fl_KingDeadNoPoison)
+        end,
+
+        Valid = function()
+            return b_CanDoAD
+        end
+    }
+
+end}

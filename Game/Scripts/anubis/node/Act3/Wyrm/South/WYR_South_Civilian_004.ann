@@ -1,0 +1,83 @@
+game.states.WYR_South_Civilian_004 = State{function()
+    description = [[Kid civilian at WYR south checkpoint.
+        - Run to a spot to look somewhere
+        - Run around parents
+        - Stand bored
+    ]]
+
+    modules = { "shared.util" }
+
+    local otherKid = Entity("S_WYR_South_Civilian_005_3215b076-c050-45d5-a068-45725f539b24")
+    local lookAt = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local bored = Animation("CUST_Listen_Bored_01_020103b1-f053-46e8-92c0-6e0347bcda1d")
+    local spline = Spline("S_WYR_South_KidsRunSpline_d98d8fad-a225-449b-96cc-7a2a071d2776")
+    local pos = Entity("S_WYR_South_Civilian_Pos_004_1c5390da-0c12-48b7-95e4-7848eca562ae")
+    local posLookAtSmth = Entity("S_WYR_South_Civilian_Look_004_aa13c80d-ca14-4d9a-b2c8-ba08b32bee55")
+    local action = "StandBored"
+
+
+    nodes = Selector{
+        function(nodes)
+            if action ~= nil then
+                return nodes[action]
+            end
+            return GetRandomCanEnterNoRepeat(nodes)
+        end
+    }
+
+    nodes.RunAround = Action{
+        OnEnter = function()
+            action = "RunAround"
+            SetEntityEvent(otherKid, "WYR_South_Kid_ChangeActivity", action)
+            StartTimer(me, "Timer_WYR_South_Kid_ChangeActivity", math.random(15.0, 25.0), 0)
+        end,
+
+        function()
+            DoPatrol(spline, false, MovementSpeed.Run, -1, false)
+        end
+    }
+
+    nodes.StandBored = Action{
+        OnEnter = function()
+            action = "StandBored"
+            SetEntityEvent(otherKid, "WYR_South_Kid_ChangeActivity", action)
+            StartTimer(me, "Timer_WYR_South_Kid_ChangeActivity", math.random(5.0, 15.0), 0)
+        end,
+
+        function()
+            local res = MoveTo(pos, MovementSpeed.Run, false, false, 1.0, 1.5, false)
+            if res ~= error.MovementError.None then
+                SteerTo(pos)
+                Sleep(1.0)
+            end
+            PlayAnimation(bored, true, false)
+        end
+    }
+
+    nodes.LookAtSomething = Action{
+        CanEnter = function()
+            return GetDistanceTo(me, posLookAtSmth) > 1.0
+        end,
+        OnEnter = function()
+            action = "LookAtSomething"
+            SetEntityEvent(otherKid, "WYR_South_Kid_ChangeActivity", action)
+            StartTimer(me, "Timer_WYR_South_Kid_ChangeActivity", math.random(10.0, 20.0), 0)
+        end,
+
+        function()
+            local res = MoveTo(posLookAtSmth, MovementSpeed.Run, false, false, 1.0, 1.5, false)
+            if res ~= error.MovementError.None then
+                LookFrom(posLookAtSmth)
+                Sleep(1.0)
+            end
+        end
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_South_Kid_ChangeActivity" then
+            action = nil
+            SetEntityEvent(otherKid, "WYR_South_Kid_ChangeActivity", action)
+        end
+    end
+end}

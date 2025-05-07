@@ -1,0 +1,896 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                    xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:System="clr-namespace:System;assembly=mscorlib"
+                    xmlns:ls="clr-namespace:ls;assembly=Code"
+                    xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+                    xmlns:diag="clr-namespace:System.Diagnostics;assembly=WindowsBase"
+                    mc:Ignorable="d">
+
+
+    <!-- Passive rolls template -->
+    <!-- Passive rolls when they're shown within screen bounds -->
+    <DataTemplate x:Key="Overhead.PassiveRoll" DataType="{x:Type ls:OverheadPassiveRoll}">
+        <!-- note: eventually we'll display passive rolls differently for entities outside the viewport -->
+        <Canvas x:Name="canvas" Height="{Binding Path=ActualHeight, ElementName=icon_container}" Opacity="0">
+            <Canvas.Resources>
+                
+
+                <!-- Progress bar animation -->
+                <Storyboard x:Key="PassiveRoll.Anim.Progressbar">
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetName="progressbar" Storyboard.TargetProperty="Opacity">
+                        <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                    </DoubleAnimationUsingKeyFrames>
+                    <!-- progress bar filling up -->
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetName="progressbar" Storyboard.TargetProperty="Value">
+                        <LinearDoubleKeyFrame Value="0" KeyTime="0:0:0" />
+                        <LinearDoubleKeyFrame Value="1" KeyTime="0:0:0.25" />
+                    </DoubleAnimationUsingKeyFrames>
+                </Storyboard>
+                <Storyboard x:Key="PassiveRoll.Anim.ResultText">
+                    <!-- text fade -->
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetName="result_text" Storyboard.TargetProperty="Opacity">
+                        <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                        <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="1">
+                            <EasingDoubleKeyFrame.EasingFunction>
+                                <CubicEase EasingMode="EaseOut"/>
+                            </EasingDoubleKeyFrame.EasingFunction>
+                        </EasingDoubleKeyFrame>
+                    </DoubleAnimationUsingKeyFrames>
+                    
+                    <!-- The background has to follow the fading rythm of the text-->
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetName="BackgroundPassiveRoll" Storyboard.TargetProperty="Opacity">
+                        <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                        <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="{Binding DataContext.CurrentPlayer.UIOptions.TextDialogueOpacity, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}">
+                            <EasingDoubleKeyFrame.EasingFunction>
+                                <CubicEase EasingMode="EaseOut"/>
+                            </EasingDoubleKeyFrame.EasingFunction>
+                        </EasingDoubleKeyFrame>
+                    </DoubleAnimationUsingKeyFrames>
+                </Storyboard>
+
+               
+            </Canvas.Resources>
+            <Canvas.RenderTransform>
+                <TranslateTransform X="0" Y="0" />
+            </Canvas.RenderTransform>
+
+            <ls:LSNineSliceImage x:Name="BackgroundPassiveRoll"
+                                 Style="{StaticResource AccessibilityBackgroundStyle}"
+                                 ImageSource="{StaticResource BackgroundImg}"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,8"
+                       Opacity="0"
+                       Width="{Binding ActualWidth, ElementName=text_container, Converter={StaticResource AddConverter}, ConverterParameter=110}"
+                                 Height="{Binding ActualHeight, ElementName=canvas, Converter={StaticResource AddConverter}, ConverterParameter=-20}"
+                                 Canvas.Left="{DynamicResource Overhead.PassiveRolls.IconWidthOffset}" Canvas.Top="8"/>
+
+            <Grid x:Name="icon_container" 
+                  Width="{DynamicResource Overhead.PassiveRolls.IconWidth}" Height="{DynamicResource Overhead.PassiveRolls.IconHeight}"
+                  Canvas.Left="{Binding ActualWidth, ConverterParameter=-0.5, Mode=OneWay, Converter={StaticResource MultiplierConverter}, RelativeSource={RelativeSource Self}}">
+                <Image Source="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/passiveRollIndicator_bg.png" Stretch="None" />
+
+                <!-- progress bar -->
+                <ls:LSPie x:Name="progressbar" Value="0.0" SweepDirection="Counterclockwise"
+                          Width="{DynamicResource Overhead.PassiveRolls.IconWidth}" Height="{DynamicResource Overhead.PassiveRolls.IconHeight}"
+                          VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <ls:LSPie.Style>
+                        <Style TargetType="ls:LSPie">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding LongestDurationStatus.Duration}" Value="-1">
+                                    <Setter Property="Visibility" Value="Hidden"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Path=Visibility, ElementName=img_result}" Value="Visible">
+                                    <Setter Property="Visibility" Value="Hidden"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ls:LSPie.Style>
+                    <Image x:Name="img_progress"
+                           Width="{DynamicResource Overhead.PassiveRolls.IconWidth}" Height="{DynamicResource Overhead.PassiveRolls.IconHeight}"
+                           VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Image.Style>
+                            <Style TargetType="Image">
+                                <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/passiveRollIndicator_Progress.png" />
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding Finished}" Value="True"/>
+                                            <Condition Binding="{Binding Path=Tag, ElementName=canvas}" Value="show-result"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <MultiDataTrigger.Setters>
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </MultiDataTrigger.Setters>
+                                    </MultiDataTrigger>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding Finished}" Value="True"/>
+                                            <Condition Binding="{Binding Path=Tag, ElementName=canvas}" Value="show-result2"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <MultiDataTrigger.Setters>
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </MultiDataTrigger.Setters>
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Image.Style>
+                    </Image>
+                </ls:LSPie>
+                <Image x:Name="img_result"
+                       Width="{DynamicResource Overhead.PassiveRolls.IconWidth}" Height="{DynamicResource Overhead.PassiveRolls.IconHeight}" Visibility="Collapsed"
+                       VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <Image.Style>
+                        <Style TargetType="Image">
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding Successful}" Value="True"/>
+                                        <Condition Binding="{Binding Finished}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.Setters>
+                                        <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/passiveRollIndicator_Success.png" />
+                                    </MultiDataTrigger.Setters>
+                                </MultiDataTrigger>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding Successful}" Value="False"/>
+                                        <Condition Binding="{Binding Finished}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.Setters>
+                                        <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/passiveRollIndicator_Failed.png" />
+                                    </MultiDataTrigger.Setters>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Image.Style>
+                </Image>
+
+                <!-- type image -->
+                <Image x:Name="img_type" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Image.Style>
+                        <Style TargetType="Image">
+                            <!-- TODO: use another default image -->
+                            <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/ico_sneak.png" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Type}" Value="Sneaking">
+                                    <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/ico_sneak.png" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Type}" Value="SavingThrow">
+                                    <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/ico_saving_throw.png" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Type}" Value="DeathSavingThrow">
+                                    <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/ico_died.png" />
+                                    <Setter Property="Height" Value="40" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Type}" Value="Initiative">
+                                    <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/ico_combatlog_h.png" />
+                                    <Setter Property="Height" Value="40" />
+                                </DataTrigger>
+                                <!-- TODO: add more images for other types of dice -->
+                            </Style.Triggers>
+                        </Style>
+                    </Image.Style>
+                </Image>
+
+                <!-- Dice -->
+                <Image x:Name="dice_ico" Source="pack://application:,,,/Core;component/Assets/Overhead/PassiveRoll/passiveRollIndicator_d20.png" Opacity="0" RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <RotateTransform />
+                            <ScaleTransform />
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+            </Grid>
+            <Border x:Name="text_container" Height="{Binding Path=ActualHeight, ElementName=canvas, Mode=OneWay}" Canvas.Left="{Binding Path=ActualWidth, ElementName=icon_container, Mode=OneWay, Converter={StaticResource MultiplierConverter}, ConverterParameter='0.5'}">
+                <StackPanel Margin="16,0,0,0" Orientation="Horizontal"  x:Name="result_text"  VerticalAlignment="Center" Opacity="0">
+                    <TextBlock Style="{DynamicResource Overhead.PassiveRolls.Text}">
+                        <b:Interaction.Behaviors>
+                            <ls:CtxTransStringRunGeneratorBehavior Source="{Binding ResultText}" />
+                        </b:Interaction.Behaviors>
+                        <TextBlock.Effect>
+                            <DropShadowEffect Direction="270" Color="Black" ShadowDepth="3.0" BlurRadius="0.0"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+                    <TextBlock Style="{DynamicResource Overhead.PassiveRolls.Text}" Visibility="{Binding SourceName, Converter={StaticResource StringToVisibilityConverter}}">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Direction="270" Color="Black" ShadowDepth="3.0" BlurRadius="0.0"/>
+                        </TextBlock.Effect>
+                        <Run Text=" "/><Run Text="{Binding SourceName, StringFormat={}({0})}"/>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+            <!--<WrapPanel Margin="200,0,0,0" Width="800">
+                <TextBlock Text="{Binding ElementName=canvas,Path=Tag}" />
+                <TextBlock Text="{Binding FinishEventFlag,StringFormat='{} FinishEventFlag : {0}'}" />
+                <TextBlock Text="{Binding IsActiveSequence,StringFormat='{} IsActiveSequence : {0}'}" />
+                <TextBlock Text="{Binding TimeRemaining,StringFormat='{} TimeRemaining : {0}'}" />
+            </WrapPanel>-->
+            
+            <b:Interaction.Triggers>
+                
+                <!--make sure this stays the first trigger begin-->
+                <!--Trigger [0]-->
+                <b:DataTrigger Binding="{Binding ElementName=progressbar,Path=Value}" Value="0">
+                    <b:ControlStoryboardAction>
+                        <b:ControlStoryboardAction.Storyboard>
+                            <!-- Dice animation -->
+                            <Storyboard x:Name="testStoryBoard" FillBehavior="HoldEnd" RepeatBehavior="1x">
+                                <!-- opacity -->
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="dice_ico" Storyboard.TargetProperty="Opacity">
+                                    <LinearDoubleKeyFrame Value="0" KeyTime="0:0:0" />
+                                    <EasingDoubleKeyFrame Value="1" KeyTime="0:0:0.66">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <QuarticEase EasingMode="EaseOut"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                </DoubleAnimationUsingKeyFrames>
+                                <!-- rotation -->
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="dice_ico" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(RotateTransform.Angle)">
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0" Value="-360" />
+                                    <EasingDoubleKeyFrame KeyTime="0:0:0.66" Value="0">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <QuarticEase EasingMode="EaseOut"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                </DoubleAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </b:ControlStoryboardAction.Storyboard>
+                    </b:ControlStoryboardAction>
+                    <b:ChangePropertyAction TargetName="canvas" PropertyName="Tag" Value="dice-anim" />
+                    <b:ChangePropertyAction TargetName="progressbar" PropertyName="Value" Value="0.0" />
+                    <b:ControlStoryboardAction Storyboard="{StaticResource PassiveRoll.Anim.ResultText}" />
+                </b:DataTrigger>
+                <!--Trigger [1]-->
+                <b:StoryboardCompletedTrigger Storyboard="{Binding (b:Interaction.Triggers)[4].Actions[1].Storyboard, ElementName=canvas}">
+                    <b:ControlStoryboardAction >
+                        <b:ControlStoryboardAction.Storyboard>
+                            <!-- Fade out animation -->
+                            <Storyboard>
+                                <!-- fade-out -->
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="canvas" Storyboard.TargetProperty="Opacity">
+                                    <EasingDoubleKeyFrame KeyTime="0:0:1.8" Value="1">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <QuarticEase EasingMode="EaseIn"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                    <LinearDoubleKeyFrame KeyTime="0:0:2" Value="0" />
+                                </DoubleAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </b:ControlStoryboardAction.Storyboard>
+                    </b:ControlStoryboardAction>
+                    <b:ChangePropertyAction TargetName="img_result" PropertyName="Visibility" Value="Visible" />
+
+                </b:StoryboardCompletedTrigger>
+                <!--Trigger [2]-->
+                <!-- cancel passive sequence -->
+                <b:PropertyChangedTrigger Binding="{Binding IsActiveSequence}">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding IsActiveSequence}" Operator="Equal" RightOperand="False" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <b:ChangePropertyAction TargetName="canvas" PropertyName="Tag" Value="closing-anim-fast" />
+                    <b:ControlStoryboardAction >
+                        <b:ControlStoryboardAction.Storyboard>
+                            <Storyboard>
+                                <!-- fade-out -->
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity" >
+                                    <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <QuarticEase EasingMode="EaseIn"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0.15" Value="0" />
+                                </DoubleAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </b:ControlStoryboardAction.Storyboard>
+                    </b:ControlStoryboardAction>
+                </b:PropertyChangedTrigger>
+                <!--Trigger [3]-->
+                <!-- result animation (sequence passive)-->
+                <b:DataTrigger Binding="{Binding Path=Tag, ElementName=canvas}" Value="show-result">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding IsSequence}" Operator="Equal" RightOperand="True" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <b:ChangePropertyAction TargetName="img_result" PropertyName="Visibility" Value="Visible" />
+                    <b:ControlStoryboardAction >
+                        <b:ControlStoryboardAction.Storyboard>
+                            <!-- Result animation (normal passive) -->
+                            <Storyboard Duration="0:0:1"  FillBehavior="Stop" RepeatBehavior="1x">
+                                <!-- dice expand -->
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="dice_ico" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(ScaleTransform.ScaleX)">
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                                    <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="1.25">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <CubicEase EasingMode="EaseOut"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                </DoubleAnimationUsingKeyFrames>
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="dice_ico" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(ScaleTransform.ScaleY)">
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                                    <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="1.25">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <CubicEase EasingMode="EaseOut"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                </DoubleAnimationUsingKeyFrames>
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="dice_ico" Storyboard.TargetProperty="Opacity">
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0.25" Value="0" />
+                                </DoubleAnimationUsingKeyFrames>
+
+                                <!-- progress fade -->
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="progressbar" Storyboard.TargetProperty="Opacity">
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0.5" Value="1" />
+                                    <EasingDoubleKeyFrame KeyTime="0:0:1" Value="0">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <CubicEase EasingMode="EaseOut"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                </DoubleAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </b:ControlStoryboardAction.Storyboard>
+                    </b:ControlStoryboardAction>
+                    <b:ChangePropertyAction TargetName="canvas" PropertyName="Tag" Value="show-result2" />
+                </b:DataTrigger>
+                <!--Trigger [4]-->
+                <!-- result animation (normal passive)-->
+                <b:DataTrigger Binding="{Binding Path=Tag, ElementName=canvas}" Value="show-result">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding IsSequence}" Operator="Equal" RightOperand="False" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <b:ChangePropertyAction TargetName="img_result" PropertyName="Visibility" Value="Visible" />
+                    <b:ControlStoryboardAction >
+                        <b:ControlStoryboardAction.Storyboard>
+                            <!-- Result animation (normal passive) -->
+                            <Storyboard FillBehavior="HoldEnd" RepeatBehavior="1x">
+                                <!-- dice expand -->
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="dice_ico" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(ScaleTransform.ScaleX)">
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                                    <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="1.25">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <CubicEase EasingMode="EaseOut"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                </DoubleAnimationUsingKeyFrames>
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="dice_ico" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(ScaleTransform.ScaleY)">
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                                    <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="1.25">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <CubicEase EasingMode="EaseOut"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                </DoubleAnimationUsingKeyFrames>
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="dice_ico" Storyboard.TargetProperty="Opacity">
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                                    <LinearDoubleKeyFrame KeyTime="0:0:0.25" Value="0" />
+                                </DoubleAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </b:ControlStoryboardAction.Storyboard>
+                    </b:ControlStoryboardAction>
+                    <b:ChangePropertyAction TargetName="canvas" PropertyName="Tag" Value="show-result2" />
+                </b:DataTrigger>
+                <!--Trigger [5]-->
+                <!--<b:DataTrigger Binding="{Binding TimeRemaining}" Value="0">
+                    <b:ControlStoryboardAction >
+                        <b:ControlStoryboardAction.Storyboard>
+                            <Storyboard FillBehavior="HoldEnd" RepeatBehavior="1x">
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity">
+                                    <EasingDoubleKeyFrame KeyTime="0:0:4.5" Value="1">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <QuarticEase EasingMode="EaseIn"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                    <LinearDoubleKeyFrame KeyTime="0:0:4.65" Value="0" />
+                                </DoubleAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </b:ControlStoryboardAction.Storyboard>
+                    </b:ControlStoryboardAction>
+                    <b:ChangePropertyAction TargetName="img_result" PropertyName="Visibility" Value="Visible" />
+
+                </b:DataTrigger>-->
+                <!--make sure this stays the first trigger end-->
+                
+                <b:StoryboardCompletedTrigger Storyboard="{Binding (b:Interaction.Triggers)[3].Actions[1].Storyboard, ElementName=canvas}">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding DiscardOnShowResult}" Operator="Equal" RightOperand="True" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <b:InvokeCommandAction Command="{Binding Path=DataContext.DiscardRollCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+                </b:StoryboardCompletedTrigger>
+
+                <!-- Roll sounds -->
+                <!-- Saving Throw roll (case "Show all passive rolls") -->
+                <b:DataTrigger Binding="{Binding ElementName=progressbar,Path=Value}" Value="0.0">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="Equal" RightOperand="SavingThrow" />
+                                <b:ComparisonCondition LeftOperand="{Binding DataContext.Data.CurrentRuleSetModifiers,Converter={StaticResource RuleSetModifierValueConverter}, RelativeSource={RelativeSource AncestorType=ls:UIWidget}, ConverterParameter='HIDE_FAILED_PERCEPTION_ROLLS'}" Operator="Equal" RightOperand="False" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <ls:LSPlaySound Sound="UI_Gameplay_SavingThrow_Diceroll_Appear"/>
+                </b:DataTrigger>
+                <!-- Saving Throw roll (case "Hide failed passive rolls", has to appear only if it's successful) -->
+                <b:DataTrigger Binding="{Binding ElementName=progressbar,Path=Value}" Value="0.0">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="Equal" RightOperand="SavingThrow" />
+                                <b:ComparisonCondition LeftOperand="{Binding Successful}" Operator="Equal" RightOperand="True" />
+                                <b:ComparisonCondition LeftOperand="{Binding DataContext.Data.CurrentRuleSetModifiers,Converter={StaticResource RuleSetModifierValueConverter}, RelativeSource={RelativeSource AncestorType=ls:UIWidget}, ConverterParameter='HIDE_FAILED_PERCEPTION_ROLLS'}" Operator="Equal" RightOperand="True" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <ls:LSPlaySound Sound="UI_Gameplay_SavingThrow_Diceroll_Appear"/>
+                </b:DataTrigger>
+                <!-- Initiative roll -->
+                <b:DataTrigger Binding="{Binding ElementName=progressbar,Path=Value}" Value="0.0">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="Equal" RightOperand="Initiative" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <ls:LSPlaySound Sound="UI_Gameplay_Initiative_Diceroll_Appear"/>
+                </b:DataTrigger>
+                <!-- Passive roll (case "Show all passive rolls") -->
+                <b:DataTrigger Binding="{Binding ElementName=progressbar,Path=Value}" Value="0.0">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="NotEqual" RightOperand="SavingThrow" />
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="NotEqual" RightOperand="Initiative" />
+                                <b:ComparisonCondition LeftOperand="{Binding DataContext.Data.CurrentRuleSetModifiers,Converter={StaticResource RuleSetModifierValueConverter}, RelativeSource={RelativeSource AncestorType=ls:UIWidget}, ConverterParameter='HIDE_FAILED_PERCEPTION_ROLLS'}" Operator="Equal" RightOperand="False" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <ls:LSPlaySound Sound="UI_Gameplay_Passive_Diceroll_Appear"/>
+                </b:DataTrigger>
+                <!-- Passive roll (case "Hide failed passive rolls", has to appear only if it's successful) -->
+                <b:DataTrigger Binding="{Binding ElementName=progressbar,Path=Value}" Value="0.0">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="NotEqual" RightOperand="SavingThrow" />
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="NotEqual" RightOperand="Initiative" />
+                                <b:ComparisonCondition LeftOperand="{Binding Successful}" Operator="Equal" RightOperand="True" />
+                                <b:ComparisonCondition LeftOperand="{Binding DataContext.Data.CurrentRuleSetModifiers,Converter={StaticResource RuleSetModifierValueConverter}, RelativeSource={RelativeSource AncestorType=ls:UIWidget}, ConverterParameter='HIDE_FAILED_PERCEPTION_ROLLS'}" Operator="Equal" RightOperand="True" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <ls:LSPlaySound Sound="UI_Gameplay_Passive_Diceroll_Appear"/>
+                </b:DataTrigger>
+
+                <!-- Success sounds -->
+                <!-- Saving Throw -->
+                <b:DataTrigger Binding="{Binding Path=Tag, ElementName=canvas}" Value="show-result2">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Successful}" Operator="Equal" RightOperand="True" />
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="Equal" RightOperand="SavingThrow" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <ls:LSPlaySound Sound="UI_Gameplay_SavingThrow_Diceroll_Success"/>
+                </b:DataTrigger>
+
+                <!-- Passive Roll -->
+                <b:DataTrigger Binding="{Binding Path=Tag, ElementName=canvas}" Value="show-result2">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Successful}" Operator="Equal" RightOperand="True" />
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="NotEqual" RightOperand="SavingThrow" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <ls:LSPlaySound Sound="UI_Gameplay_Passive_Diceroll_Result_Success"/>
+                </b:DataTrigger>
+
+                <!-- Fail sounds -->
+                <!-- Saving Throw -->
+                <b:DataTrigger Binding="{Binding Path=Tag, ElementName=canvas}" Value="show-result2">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Successful}" Operator="Equal" RightOperand="False" />
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="Equal" RightOperand="SavingThrow" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <ls:LSPlaySound Sound="UI_Gameplay_SavingThrow_Diceroll_Fail"/>
+
+                </b:DataTrigger>
+
+                <!-- Passive Roll -->
+                <b:DataTrigger Binding="{Binding Path=Tag, ElementName=canvas}" Value="show-result2">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Successful}" Operator="Equal" RightOperand="False" />
+                                <b:ComparisonCondition LeftOperand="{Binding Type}" Operator="NotEqual" RightOperand="SavingThrow" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <ls:LSPlaySound Sound="UI_Gameplay_Passive_Diceroll_Result_Fail"/>
+                </b:DataTrigger>
+
+                <b:EventTrigger EventName="Loaded">
+                    <b:ControlStoryboardAction >
+                        <b:ControlStoryboardAction.Storyboard>
+                            <!-- Intro animation -->
+                            <Storyboard>
+                                <!-- slide up -->
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)">
+                                    <LinearDoubleKeyFrame Value="20" KeyTime="0:0:0" />
+                                    <EasingDoubleKeyFrame Value="0" KeyTime="0:0:0.5">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <CubicEase EasingMode="EaseOut"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                </DoubleAnimationUsingKeyFrames>
+                                <!-- fade-in -->
+                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity">
+                                    <LinearDoubleKeyFrame Value="0" KeyTime="0:0:0" />
+                                    <EasingDoubleKeyFrame Value="1" KeyTime="0:0:0.5">
+                                        <EasingDoubleKeyFrame.EasingFunction>
+                                            <SineEase EasingMode="EaseOut"/>
+                                        </EasingDoubleKeyFrame.EasingFunction>
+                                    </EasingDoubleKeyFrame>
+                                </DoubleAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </b:ControlStoryboardAction.Storyboard>
+                    </b:ControlStoryboardAction>
+                    <b:ChangePropertyAction TargetName="canvas" PropertyName="Tag" Value="intro-anim" />
+
+                    <b:ControlStoryboardAction Storyboard="{StaticResource PassiveRoll.Anim.Progressbar}"/>
+
+                </b:EventTrigger>
+                <b:EventTrigger EventName="Loaded">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Successful}" Operator="Equal" RightOperand="False" />
+                                <b:ComparisonCondition LeftOperand="{Binding DataContext.Data.CurrentRuleSetModifiers,Converter={StaticResource RuleSetModifierValueConverter}, RelativeSource={RelativeSource AncestorType=ls:UIWidget}, ConverterParameter='HIDE_FAILED_PERCEPTION_ROLLS'}" Operator="Equal" RightOperand="True" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <b:InvokeCommandAction Command="{Binding Path=DataContext.DiscardRollCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+                </b:EventTrigger>
+
+                <!-- dice animation-->
+
+                <b:StoryboardCompletedTrigger Storyboard="{Binding (b:Interaction.Triggers)[0].Actions[0].Storyboard, ElementName=canvas}">
+                
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding FinishEventFlag}" Operator="Equal" RightOperand="False" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <b:ChangePropertyAction TargetName="canvas" PropertyName="Tag" Value="wait-finished" />
+                </b:StoryboardCompletedTrigger>
+
+                <b:StoryboardCompletedTrigger Storyboard="{Binding (b:Interaction.Triggers)[0].Actions[0].Storyboard, ElementName=canvas}">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding FinishEventFlag}" Operator="Equal" RightOperand="True" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <b:ChangePropertyAction TargetName="canvas" PropertyName="Tag" Value="show-result" />
+                </b:StoryboardCompletedTrigger>
+
+                <b:StoryboardCompletedTrigger Storyboard="{Binding (b:Interaction.Triggers)[0].Actions[0].Storyboard, ElementName=canvas}">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding FinishEventFlag}" Operator="Equal" RightOperand="True" />
+                                <b:ComparisonCondition LeftOperand="{Binding IsSequence}" Operator="Equal" RightOperand="True" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <b:InvokeCommandAction Command="{Binding Path=DataContext.ResetFinishEventFlag, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+                </b:StoryboardCompletedTrigger>
+
+             
+
+                <b:StoryboardCompletedTrigger Storyboard="{Binding (b:Interaction.Triggers)[1].Actions[0].Storyboard, ElementName=canvas}">
+                    <b:ChangePropertyAction TargetName="img_result" PropertyName="Visibility" Value="Collapsed" />
+                    <b:InvokeCommandAction Command="{Binding Path=DataContext.DiscardRollCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+                </b:StoryboardCompletedTrigger>
+
+                <!-- This trigger restarts the roll animation in a sequence. This should only happen on successful roll otherwise the storyboard plays one extra time after the UI disappears -->
+                <b:StoryboardCompletedTrigger Storyboard="{Binding (b:Interaction.Triggers)[3].Actions[1].Storyboard, ElementName=canvas}">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Successful}" Operator="Equal" RightOperand="True" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <b:ChangePropertyAction TargetName="canvas" PropertyName="Tag" Value="ResultSequenceRestart-anim" />
+                    <b:ChangePropertyAction TargetName="img_result" PropertyName="Visibility" Value="Collapsed" />
+                    <b:ControlStoryboardAction >
+                        <b:ControlStoryboardAction.Storyboard >
+                            <Storyboard x:Name="ProgressBar" Children="{StaticResource PassiveRoll.Anim.Progressbar}" SpeedRatio="{Binding ResultDelay, Converter={StaticResource ReciprocalConverter}}" Storyboard.TargetName="canvas"/>
+                        </b:ControlStoryboardAction.Storyboard>
+                    </b:ControlStoryboardAction>
+                </b:StoryboardCompletedTrigger>
+
+
+                <!-- logic while waiting to show result -->
+
+                <b:PropertyChangedTrigger Binding="{Binding FinishEventFlag}">
+                    <b:Interaction.Behaviors>
+                        <b:ConditionBehavior>
+                            <b:ConditionalExpression>
+                                <b:ComparisonCondition LeftOperand="{Binding Path=Tag,ElementName=canvas}" Operator="Equal" RightOperand="wait-finished" />
+                                <b:ComparisonCondition LeftOperand="{Binding FinishEventFlag}" Operator="Equal" RightOperand="True" />
+                            </b:ConditionalExpression>
+                        </b:ConditionBehavior>
+                    </b:Interaction.Behaviors>
+                    <b:ChangePropertyAction TargetName="canvas" PropertyName="Tag" Value="show-result" />
+                    <b:InvokeCommandAction Command="{Binding Path=DataContext.ResetFinishEventFlag, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}" />
+                </b:PropertyChangedTrigger>
+
+
+
+                <b:StoryboardCompletedTrigger Storyboard="{Binding (b:Interaction.Triggers)[2].Actions[0].Storyboard, ElementName=canvas}">
+                    <b:InvokeCommandAction Command="{Binding Path=DataContext.DiscardRollCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+                </b:StoryboardCompletedTrigger>
+
+                <!--<b:StoryboardCompletedTrigger Storyboard="{Binding (b:Interaction.Triggers)[5].Actions[0].Storyboard, ElementName=canvas}">
+                    <b:InvokeCommandAction Command="{Binding Path=DataContext.DiscardRollCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+                </b:StoryboardCompletedTrigger>-->
+
+
+
+                <b:EventTrigger EventName="Unloaded">
+                    <b:ControlStoryboardAction Storyboard="{StaticResource PassiveRoll.Anim.Progressbar}" ControlStoryboardOption="Stop"/>
+                    <b:ControlStoryboardAction Storyboard="{StaticResource PassiveRoll.Anim.ResultText}" ControlStoryboardOption="Stop" />
+                </b:EventTrigger>
+
+            </b:Interaction.Triggers>
+        </Canvas>
+        <!--<DataTemplate.Triggers>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding Path=Tag, ElementName=canvas}" Value="dice-animDone" />
+                </MultiDataTrigger.Conditions>
+                <MultiDataTrigger.Setters>
+                    <Setter TargetName="canvas" Property="Tag" Value="woopy" />
+                </MultiDataTrigger.Setters>
+            </MultiDataTrigger>
+        </DataTemplate.Triggers>-->
+    </DataTemplate>
+
+    <!-- Storyboards -->
+    <Storyboard x:Key="StatusAnimations">
+        <!-- Animate in -->
+        <DoubleAnimation From="0.8" To="1.0" Duration="0:0:0.2" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)">
+            <DoubleAnimation.EasingFunction>
+                <CubicEase EasingMode="EaseOut"/>
+            </DoubleAnimation.EasingFunction>
+        </DoubleAnimation>
+        <DoubleAnimation From="0.8" To="1.0" Duration="0:0:0.2" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)">
+            <DoubleAnimation.EasingFunction>
+                <CubicEase EasingMode="EaseOut"/>
+            </DoubleAnimation.EasingFunction>
+        </DoubleAnimation>
+
+        <!-- Animate out -->
+        <DoubleAnimation To="0" BeginTime="0:0:2.7" Duration="0:0:0.3" Storyboard.TargetProperty="(UIElement.Opacity)">
+            <DoubleAnimation.EasingFunction>
+                <CubicEase EasingMode="EaseIn"/>
+            </DoubleAnimation.EasingFunction>
+        </DoubleAnimation>
+
+        <DoubleAnimation To="-30" BeginTime="0:0:0.5" Duration="0:0:3.0" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[3].(TranslateTransform.Y)">
+            <DoubleAnimation.EasingFunction>
+                <CubicEase EasingMode="EaseIn"/>
+            </DoubleAnimation.EasingFunction>
+        </DoubleAnimation>
+    </Storyboard>
+
+    <ItemsPanelTemplate x:Key="StackedOverheadsPanel">
+        <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
+    </ItemsPanelTemplate>
+
+    <!-- item template bound to a VMOverheadMessage -->
+    <DataTemplate x:Key="TextTemplate" DataType="{x:Type ls:OverheadMessage}">
+        <Grid RenderTransformOrigin="0.5,0.5" x:Name="TextHolder" HorizontalAlignment="Center" VerticalAlignment="Bottom">
+            <Grid.RenderTransform>
+                <!-- for animating position -->
+                <TransformGroup>
+                    <ScaleTransform/>
+                    <SkewTransform/>
+                    <RotateTransform/>
+                    <TranslateTransform X="0" Y="0"/>
+                </TransformGroup>
+            </Grid.RenderTransform>
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Type}" Value="Default">
+                            <DataTrigger.EnterActions>
+                                <BeginStoryboard Storyboard="{StaticResource StatusAnimations}"/>
+                            </DataTrigger.EnterActions>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Type}" Value="Status">
+                            <DataTrigger.EnterActions>
+                                <BeginStoryboard Storyboard="{StaticResource StatusAnimations}"/>
+                            </DataTrigger.EnterActions>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+
+            <ls:LSNineSliceImage x:Name="Background"
+                                 Style="{StaticResource AccessibilityBackgroundStyle}"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,4"
+                                 Width="{Binding ActualWidth, ElementName=TextContent, Converter={StaticResource AddConverter}, ConverterParameter=40}"
+                                 Height="{Binding ActualHeight, ElementName=TextContent, Converter={StaticResource AddConverter}, ConverterParameter=8}" MinHeight="40"/>
+
+            <TextBlock x:Name="TextContent" ls:TextBlockFormatter.SourceText="{Binding Text}"
+                       TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" HorizontalAlignment="Center"
+                       Foreground="{StaticResource LS_PrimaryColor}"
+                       Opacity="{Binding TextOpacity}"
+                       noesis:Text.StrokeThickness="{DynamicResource TextOutlineThickness}"
+                       FontSize="{Binding DataContext.CurrentPlayer.UIOptions.OverheadFontSizeModifier, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}, Converter={StaticResource AddConverter}, ConverterParameter={StaticResource ScaledIntermediateFontSize}}">
+                            <noesis:Text.Stroke>
+                                <SolidColorBrush Color="{StaticResource TextOutlineColor}" Opacity="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=TextBlock}, Path=Foreground.Opacity}"/>
+                            </noesis:Text.Stroke>
+                <TextBlock.Effect>
+                    <DropShadowEffect Direction="270" Color="{StaticResource LS_PrimaryColorDropShadowColor}" ShadowDepth="3.0" BlurRadius="0.0"/>
+                </TextBlock.Effect>
+            </TextBlock>
+
+            <Rectangle x:Name="StrikeThroughLine" Visibility="Collapsed" Stroke="Black" Fill="White" StrokeThickness="2 " Height="8" Width="{Binding ActualWidth, ElementName=TextContent}" VerticalAlignment="Center"  HorizontalAlignment="Center">
+                <Rectangle.OpacityMask>
+                    <LinearGradientBrush x:Name="fadeBrush" StartPoint="0,0" EndPoint="0,0">
+                        <GradientStop Offset="0.99" Color="White" />
+                        <GradientStop Offset="1" Color="Transparent" />
+                    </LinearGradientBrush>
+                </Rectangle.OpacityMask>
+            </Rectangle>
+        </Grid>
+
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding Type}" Value="Experience">
+                <Setter TargetName="TextContent" Property="Foreground" Value="{DynamicResource LS_ExperienceTextColor}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Type}" Value="ExperienceOverflow">
+                <Setter TargetName="TextContent" Property="Foreground" Value="{DynamicResource LS_ExperienceOverflowTextColor}" />
+            </DataTrigger>
+
+            <DataTrigger Binding="{Binding Type}" Value="DialogueNPC">
+                <Setter TargetName="TextContent" Property="FontSize" Value="{Binding DataContext.CurrentPlayer.UIOptions.OverheadFontSizeModifier, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}, Converter={StaticResource AddConverter}, ConverterParameter={StaticResource ScaledDefaultFontSize}}"/>
+            </DataTrigger>
+
+            <DataTrigger Binding="{Binding TextAnimation}" Value="StrikeThrough">
+                <Setter TargetName="TextContent" Property="TextWrapping" Value="NoWrap"/>
+                <DataTrigger.EnterActions>
+                    <BeginStoryboard >
+                        <BeginStoryboard.Storyboard>
+                            <Storyboard>
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Visibility" Storyboard.TargetName="StrikeThroughLine">
+                                    <DiscreteObjectKeyFrame KeyTime="0:0:0" Value="{x:Static Visibility.Visible}"/>
+                                </ObjectAnimationUsingKeyFrames>
+                                <PointAnimationUsingKeyFrames Storyboard.TargetProperty="EndPoint" Storyboard.TargetName="fadeBrush">
+                                    <LinearPointKeyFrame KeyTime="0:0:0.5" Value="0,0"/>
+                                    <LinearPointKeyFrame KeyTime="0:0:1.1" Value="1,0"/>
+                                </PointAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </BeginStoryboard.Storyboard>
+                    </BeginStoryboard>
+                </DataTrigger.EnterActions>
+            </DataTrigger>
+
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding Type}" Value="DialogueNPC"/>
+                    <Condition Binding="{Binding InTheSameRoomWithSelected}" Value="False"/>
+                </MultiDataTrigger.Conditions>
+                <MultiDataTrigger.Setters>
+                    <Setter  TargetName="TextHolder" Property="Visibility" Value="Collapsed"/>
+                </MultiDataTrigger.Setters>
+            </MultiDataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+    
+    <!-- Death saving throw template-->
+    <System:Double x:Key="Overhead.DeathSavingThrow.LosingBarOpacity">0.75</System:Double>
+
+    <ControlTemplate x:Key="Overhead.DeathSavingThrow" TargetType="ContentControl">
+        <Canvas Width="176" Height="220">
+            <Image x:Name="bg" Canvas.Left="27" Canvas.Top="22" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/downedTally_bg.png" />
+
+            <Image x:Name="death_1" Canvas.Left="104" Canvas.Top="62" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/downedTally_death1.png" Visibility="Collapsed" />
+            <Image x:Name="death_2" Canvas.Left="104" Canvas.Top="62" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/downedTally_death2.png" Visibility="Collapsed" />
+            <Image x:Name="death_3" Canvas.Left="56" Canvas.Top="62" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/downedTally_death3.png" Visibility="Collapsed" />
+
+            <Image x:Name="life_1" Canvas.Left="26" Canvas.Top="100" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/downedTally_life1.png" Visibility="Collapsed" />
+            <Image x:Name="life_2" Canvas.Left="26" Canvas.Top="22" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/downedTally_life2.png" Visibility="Collapsed" />
+            <Image x:Name="life_3" Canvas.Left="26" Canvas.Top="22" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/downedTally_life3.png" Visibility="Collapsed" />
+
+            <Image x:Name="fg" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/downedTally_frame.png" />
+            <Image x:Name="fg_stabilized" Canvas.Left="26" Canvas.Top="46" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/downedStabilized_frame.png" Visibility="Collapsed"/>
+
+            <Image x:Name="life_icon" Canvas.Left="72" Canvas.Top="28" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/ico_revive.png" Stretch="None" />
+            <Image x:Name="death_icon" Canvas.Left="72" Canvas.Top="157" Source="pack://application:,,,/Core;component/Assets/Overhead/Downed/ico_die.png" Stretch="None" />
+
+            <!-- we need this wrapper for proper centering of differently sized icons -->
+            <Border Width="60" Height="72" Canvas.Left="62" Canvas.Top="76" BorderBrush="{x:Null}" BorderThickness="0">
+                <Border.Background>
+                    <ImageBrush ImageSource="pack://application:,,,/Core;component/Assets/Overhead/Downed/downedTally_dicebg.png" />
+                </Border.Background>
+                <Image x:Name="center_icon" Source="pack://application:,,,/Core;component/Assets/PlayerPortraits/ico_downed.png" HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="None" />
+            </Border>
+        </Canvas>
+
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding DeathSavingThrowInfo.RollSuccesses}" Value="1">
+                <Setter TargetName="life_1" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding DeathSavingThrowInfo.RollSuccesses}" Value="2">
+                <Setter TargetName="life_2" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding DeathSavingThrowInfo.TotalFailures}" Value="1">
+                <Setter TargetName="death_1" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding DeathSavingThrowInfo.TotalFailures}" Value="2">
+                <Setter TargetName="death_2" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding DeathSavingThrowInfo.TotalFailures}" Value="3">
+                <Setter TargetName="death_3" Property="Visibility" Value="Visible" />
+                <Setter TargetName="life_icon" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="death_icon" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="life_1" Property="Opacity" Value="{StaticResource Overhead.DeathSavingThrow.LosingBarOpacity}" />
+                <Setter TargetName="life_2" Property="Opacity" Value="{StaticResource Overhead.DeathSavingThrow.LosingBarOpacity}" />
+                <Setter TargetName="life_3" Property="Opacity" Value="{StaticResource Overhead.DeathSavingThrow.LosingBarOpacity}" />
+                <Setter TargetName="center_icon" Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/Downed/ico_died.png"/>
+            </DataTrigger>
+
+            <DataTrigger Binding="{Binding DeathSavingThrowInfo.IsSuccessSaving}" Value="True">
+                <Setter TargetName="fg" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="bg" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="fg_stabilized" Property="Visibility" Value="Visible" />
+                <Setter TargetName="life_icon" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="death_icon" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="center_icon" Property="Source" Value="pack://application:,,,/Core;component/Assets/Overhead/Downed/ico_revived.png" />
+                <Setter TargetName="life_1" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="life_2" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="life_3" Property="Visibility" Value="Collapsed" />
+                <!-- When stabilized, the total failures is still kept as you may get back to death saving throws, so you need to hide these elements.-->
+                <Setter TargetName="death_1" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="death_2" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="death_3" Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+</ResourceDictionary>

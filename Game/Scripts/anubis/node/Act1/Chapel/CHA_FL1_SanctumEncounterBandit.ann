@@ -1,0 +1,152 @@
+game.states.CHA_FL1_SanctumEncounterBandit = State{
+    function()
+        modules = {"shared.character", "shared.items"}
+
+        description = [[Behaviour of sanctum bandits when the others are alerted. They will run to their battle positions.]]
+
+        ---------------------------------------------
+        -- Local params
+        params.battlePos = { type = EParamType.String, required = true, help = [[Place where the bandit should be when battle is about to start]] }
+        params.crashPos = { type = EParamType.String, required = true, help = [[Place where the bandit should be when the boulder falls]] }
+        params.corridorPos = { type = EParamType.String, required = true, help = [[Place where the bandit should be when they are called to the corridor]] }
+        params.patrolSpline = { type = EParamType.String, required = true, help = [[Patrol spline of the bandit]] }
+        params.waitTime = { type = EParamType.Number, required = false, default = 6.0, help = [[Patrol spline of the bandit]] }
+        ---------------------------------------------
+
+        ---------------------------------------------
+        -- Local variables
+        local alertFlag = Flag("CHA_FL1_State_BanditsAlerted_1c0232a5-b415-4003-8bcd-dbc5e565c793")
+        local crashFlag = Flag("CHA_FL1_State_BanditsGoToCrash_4f46902a-3d8a-40bd-a31f-af557ce1811a")
+        local corridorFlag = Flag("CHA_FL1_State_BanditsGoToCorridor_c68ce420-15b7-4845-a92b-0283eb38b443")
+
+        local battlePos = Entity(params.battlePos)
+        local crashPos = Entity(params.crashPos)
+        local corridorPos = Entity(params.corridorPos)
+
+        local sanctumDoor = Entity("S_CHA_FL1_InnerSanctumDoor_717caa29-eae8-4373-b931-fec1f4bb60f9")
+
+        local patrolSpline = Spline(params.patrolSpline)
+
+        local patrolSplineIndex = -1
+        local wait = false
+
+        local guardBandit = Entity("S_CHA_FL1_BanditGuard_4000f859-71fe-49ef-8400-da44b6fef92a")
+        ---------------------------------------------
+
+        ---------------------------------------------
+        -- Helpers
+        helpers.action.RunToCombatPos = function(pos)
+            SetWeaponUnsheathed(me, true, false)
+
+            local moveResult = MoveTo(pos, MovementSpeed.Run, true, false, 0.0, 0.5, false)
+            if moveResult == error.MovementError.None then
+                LookFrom(pos)
+                WaitForInterrupt()
+            else
+                DebugText(me, "Error: MoveTo failed")
+                SteerTo(pos)
+                Sleep(1.0)
+            end
+        end
+        ---------------------------------------------
+
+        ---------------------------------------------
+        -- Nodes
+        nodes = ImmediateSelector{}
+
+        -- Combat positions after alert
+        -- Default battle pos
+        nodes.Action_MoveToBattlePos = Action{
+            function()
+                if not IsInDangerousSurfaceFor(battlePos, me.Character) then
+                    helpers.RunToCombatPos(battlePos)
+                    if guardBandit.IsInCombat then
+                        SetEntityEvent(me, "CHA_JoinGuardCombat")
+                    end
+                else
+                    SteerTo(battlePos)
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(alertFlag)
+            end
+        }
+
+        -- Position when the boulder falls
+        nodes.Action_MoveToCrashPos = Action{
+            function()
+                if not IsInDangerousSurfaceFor(crashPos, me.Character) then
+                    helpers.RunToCombatPos(crashPos)
+                else
+                    SteerTo(crashPos)
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(crashFlag)
+            end
+        }
+
+        -- Position at the corridor
+        nodes.Action_MoveToCorridorPos = Action{
+            function()
+                if not IsInDangerousSurfaceFor(corridorPos, me.Character) then
+                    helpers.RunToCombatPos(corridorPos)
+                else
+                    SteerTo(corridorPos)
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(corridorFlag)
+            end
+        }
+
+        nodes.Action_Wait = Action{
+            OnEnter = function()
+                ShortPatrolInterrupt()
+            end,
+            function()
+                LookFrom(patrolSpline)
+                Sleep(params.waitTime)
+                wait = false
+            end,
+            Valid = function()
+                return wait and not GetFlag(alertFlag)
+            end
+        }
+
+        nodes.Action_Patrol = Action{
+            function()
+                try
+                    DoPatrol(patrolSpline, false, MovementSpeed.Walk, patrolSplineIndex)
+                catch e if ls.CheckType(e, error.MissingComponent) then
+                    DebugText(me, "Error: MissingComponent on DoPatrol()")
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return not wait and not GetFlag(alertFlag)
+            end
+        }
+
+        nodes.Action_Fallback = Action{
+            function()
+                WaitForInterrupt()
+            end
+        }
+        ---------------------------------------------
+
+        ---------------------------------------------
+        -- Events
+        events.SplineControlPointReached = function(e)
+            patrolSplineIndex = e.NewIndex
+
+            if me.Active and e.Event == "Wait" then
+                wait = true
+            end
+        end
+        ---------------------------------------------
+    end
+}

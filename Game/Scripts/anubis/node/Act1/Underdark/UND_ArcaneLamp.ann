@@ -1,0 +1,88 @@
+game.states.UND_ArcaneLamp = State{function()
+
+    description = [[State for an Arcane Lamp inside Arcane Tower. Powered by central Generator]]
+
+    params.FXGuid = { type = EParamType.String, default = "",
+        help = [[VFX for the light]] }
+    params.SwitchTimeout = { type = EParamType.Number, default = 1.0,
+        help = [[Delay after main power switch on/off before this lamp turns on/off (for the cool floor-by-floor activation of the tower)]] }
+
+    --local s_Drain = "UND_SUSSURTREEANTIMAGIC"
+    local fl_PowerOn = Flag("UND_ArcaneTower_MainPowerOn_9423ae80-9b08-4fda-95c6-1832f753ca2b")
+    local fx_LightFX = nil
+    local b_PowerOn = false -- save a couple of GetFlag calls during frame
+    local s_PowerOn = "UND_ArcaneLamp.PowerOn"
+    local s_PowerOff = "UND_ArcaneLamp.PowerOff"
+    local h_EffectHandle = nil
+
+    self.OnInit = function()
+        if params.FXGuid ~= nil and params.FXGuid ~= "" then
+            fx_LightFX = PrepareEffect(params.FXGuid)
+        end
+        b_PowerOn = GetFlag(fl_PowerOn)
+    end
+
+    events.FlagSet = function(ev)
+        if ev.Flag == fl_PowerOn.Guid then
+            StopTimer(me, s_PowerOff)
+            StartTimer(me, s_PowerOn, params.SwitchTimeout, 0)
+        end
+    end
+
+    events.FlagCleared = function(ev)
+        if ev.Flag == fl_PowerOn.Guid then
+            StopTimer(me, s_PowerOn)
+            StartTimer(me, s_PowerOff, params.SwitchTimeout, 0)
+        end
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_PowerOn then
+            b_PowerOn = true
+        elseif ev.TimerName == s_PowerOff then
+            b_PowerOn = false
+        end
+    end
+
+    events.SavegameLoaded = function(ev)
+        if b_PowerOn and fx_LightFX ~= nil then
+            h_EffectHandle = PlayEffectAt(fx_LightFX, me)
+            SwitchGameplayLight(me, false, 5.0, false, 0.1)
+        end
+    end
+
+    nodes = ImmediateSelector{}
+
+    nodes.TurnedOn = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        OnEnter = function()
+            h_EffectHandle = PlayEffectAt(fx_LightFX, me)
+            SwitchGameplayLight(me, false, 5.0, false, 0.1)
+        end,
+
+        Valid = function()
+            return b_PowerOn
+        end
+    }
+
+    nodes.TurnedOff = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        OnEnter = function()
+            if h_EffectHandle ~= nil then
+                StopEffect(h_EffectHandle)
+                h_EffectHandle = nil
+                SwitchGameplayLight(me, false, 5.0, false, 0.1)
+            end
+        end,
+
+        Valid = function()
+            return not b_PowerOn
+        end
+    }
+end}

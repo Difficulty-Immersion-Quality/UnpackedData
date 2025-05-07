@@ -1,0 +1,140 @@
+game.states.LOW_Volo_Idle = State{function()
+
+    modules = {"shared.dialog", "shared.util"}
+
+    local inCampFlag = Flag("GLO_Volo_State_AtCamp_de1cadca-2eca-4cee-a3dc-e262bbb92277")
+    local savedAD = Dialog("LOW_VoloFate_AD_Saved_2d446394-a8b5-3255-89b1-e3ebab01d2ce")
+
+    local idleTrigger = Entity("S_LOW_VoloFate_VoloEscape_PointTrigger_1276afe9-391a-4397-81c7-98e716343458")
+    local cartTrigger = Entity("S_LOW_VoloFate_OnCart_Trigger_e59418a9-e7de-46db-89eb-dff597ef9171")
+    local jumpPosTrigger = Entity("S_LOW_VoloFate_JumpPos_Trigger_752314a0-2030-40ef-9246-0f56c4cf5885")
+    local triggerString = "S_LOW_VoloFate_VoloEscape_PointTrigger_1276afe9-391a-4397-81c7-98e716343458"
+
+    self.OnEnter = function()
+        SetUnicastEntityEvent(me, "ClearPeaceReturn")
+    end
+
+    nodes.LeaveCart = Action{        
+        function()
+            local jumpPos = FindValidPosition(jumpPosTrigger,2.0,me,true)
+            if(jumpPos == nil) then
+                jumpPos = FindValidPosition(jumpPosTrigger,2.0,me,false)
+            end
+            UseSpell("Projectile_Jump", jumpPos,  nil, nil, nil, true, true, true, true, true)
+        end,
+
+        Valid = function()
+            return IsInTrigger(me,cartTrigger.Trigger)
+        end
+    }
+
+    nodes.Idle = Action{        
+        function()
+            LookFrom(idleTrigger)
+            Sleep(math.random(5,10))
+            local player = mod.util.GetNearbyPlayer(me, 16.0)
+            if(player ~= nil and CanSee(me,player)) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    savedAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 10
+                    },
+                    me
+                )
+            end
+        end,
+
+        Valid = function()
+            return not GetFlag(inCampFlag) and GetDistanceTo(me, idleTrigger) <= 2.0
+        end
+    }
+
+    nodes.StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = triggerString
+        },
+
+        Valid = function()
+            return not GetFlag(inCampFlag)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+end}
+
+game.states.LOW_Volo_Combat = State{function()
+
+    local escapPointTrigger = Entity("S_LOW_VoloFate_VoloEscape_PointTrigger_1276afe9-391a-4397-81c7-98e716343458")
+    local escapeArea = Entity("S_LOW_VoloFate_VoloEscapeArea_BoxTrigger_49ec3855-c18d-43f8-82b3-936458f096f2")
+    local cartTrigger = Entity("S_LOW_VoloFate_OnCart_Trigger_e59418a9-e7de-46db-89eb-dff597ef9171")
+    local jumpPosTrigger = Entity("S_LOW_VoloFate_JumpPos_Trigger_752314a0-2030-40ef-9246-0f56c4cf5885")
+    
+    local inCampFlag = Flag("GLO_Volo_State_AtCamp_de1cadca-2eca-4cee-a3dc-e262bbb92277")
+
+    self.Valid = function()
+        return me.IsInCombat
+    end
+
+    self.OnEnter = function()
+        ApplyStatus(me, "ANIM_COWER")
+        SetUnicastEntityEvent(me, "ClearPeaceReturn")
+    end
+
+    nodes.EscapeExecution = Action{        
+        CanEnter = function()
+            return me.CanActInCombatTeamTurn and not GetFlag(inCampFlag) and not IsInTrigger(me,escapeArea.Trigger)
+        end,
+
+        function()
+            if(IsInTrigger(me,cartTrigger.Trigger)) then
+                local jumpPos = FindValidPosition(jumpPosTrigger,2.0,me,true)
+                if(jumpPos == nil) then
+                    jumpPos = FindValidPosition(jumpPosTrigger,2.0,me,false)
+                end
+                UseSpell("Projectile_Jump", jumpPos,  nil, nil, nil, true, true, true, true, true)                
+            end
+            
+            local validEscapePos = FindValidPosition(escapPointTrigger,4.0,me,true)
+            if(validEscapePos == nil) then
+                validEscapePos = FindValidPosition(escapPointTrigger,4.0,me,false)
+            end
+            try
+                MoveTo(validEscapePos, MovementSpeed.Run, false, false, 1.5, 2.5)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Can't move to escape trigger")
+            end
+            EndTurn(me)
+        end
+    }
+
+    nodes.CombatTurn = Action{
+        CanEnter = function()
+            return me.CanActInCombatTeamTurn
+        end,
+
+        function()
+            if(not IsInDangerousSurfaceFor(me)) then
+                Sleep(2)
+                EndTurn(me)
+            else
+                FleeFromDangerousSurface()
+            end
+        end
+    }
+
+    nodes.DefaultCombat = Proxy{
+        game.states.DefaultCombat    
+    }
+
+    self.OnLeave = function()
+        RemoveStatus(me, "ANIM_COWER")
+    end
+
+end}

@@ -1,0 +1,196 @@
+game.states.UND_ScryingEye = State { function ()
+    description = [[Patrols and follows, looks at, and flees from player]]
+
+    modules = { "shared.moveto" }
+
+--------------------------------LOCAL--------------------------------
+    --Follow, Look, & Flee
+    local offender, lastKnownPos
+    local lookAtTargets
+    local actedHostileFlag = Flag("GLO_ScryingEyes_State_ActedHostile_44fff0f3-bae2-4576-8e4b-8bfa091a504b")
+    local isLooking = false
+    local isFollowing = false
+    local followDuration = 30
+    local hasLostSight = false
+    local isFleeing = false
+    --Patrol--
+    local patrolSpline = Spline("S_UND_ScryingEye_PatrolSpline_c18e826f-d31a-49a7-846d-dc9aed0e3374")
+    local targetSplineIndex = -1
+    local canLookFromSpline = false
+
+--------------------------------NODES--------------------------------
+
+    nodes = ImmediateSelector{}
+
+     --Attacked but not killed, run away from the player for a short time (will attach actedHostileFlag to the player)
+     nodes.Flee = Action {
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+
+        function()
+            Sleep(0.5)
+            try
+                FleeFromEntity(offender, 10)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                SteerTo(offender)
+                Sleep(6)
+            end
+            isFleeing = false
+        end,
+
+        Valid = function()
+            return offender ~= nil and isFleeing
+        end
+    }
+
+    --When lost sight, continue to the last known player location, then if it still connot see player, wander a bit
+    --till it finds the player, or give up and return to patrol
+    nodes.LostSight = Action {
+        OnEnter = function()
+            DebugText(me, "Lost sight of player!")
+            StartTimer(me, "UND_ScryingEye_LostSight", 12, 0)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(lastKnownPos, MovementSpeed.Walk, me) then
+                if HasLineOfSight(me, offender) and CanSee(me, offender) then
+                    hasLostSight = false
+                else
+                    Wander(5, 2, MovementSpeed.Walk, lastKnownPos)
+                    Sleep(1)
+                    if HasLineOfSight(me, offender) and CanSee(me, offender) then
+                        hasLostSight = false
+                    end
+                end
+            else
+                SteerTo(lastKnownPos)
+            end
+        end,
+
+        Valid = function()
+            return offender ~= nil and hasLostSight and isFollowing
+        end,
+
+        OnLeave = function()
+            StopTimer(me, "UND_ScryingEye_LostSight")
+        end
+    }
+
+    --Follow the player if they attempted to sneak, or always follow player on sight if they have been flagged by this or the other
+    --scrying eye for committing a violent crime
+    nodes.Follow = Action {
+        OnEnter = function()
+            ShortPatrolInterrupt()
+            hasLostSight = false
+            StopTimer(me, "UND_ScryingEye_FollowDuration")
+            if not GetFlag(actedHostileFlag, offender) then
+                StartTimer(me, "UND_ScryingEye_FollowDuration", followDuration, 0)
+            end
+        end,
+
+        function()
+            lastKnownPos = offender.Position
+            try
+                MoveInRange(offender, 1, 3, MovementSpeed.Walk)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+            end
+            SteerTo(offender)
+        end,
+
+        Valid = function()
+            return isFollowing and offender ~= nil
+        end
+    }
+
+    --If the player is very close, steer towards them
+    nodes.Looking = Action {
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+
+        function()
+            SteerTo(offender)
+        end,
+
+        Valid = function()
+            return isLooking and offender ~= nil and CanSee(me, offender) and GetDistance2DTo(me, offender) <= 3
+        end,
+
+        OnLeave = function()
+            isLooking = false
+        end
+    }
+
+    nodes.LookFromSpline = Action{
+        function()
+           LookFrom(patrolSpline)
+           Sleep(15)
+           canLookFromSpline = false
+        end,
+
+        Valid = function()
+            return canLookFromSpline
+        end,
+
+        OnLeave = function()
+            canLookFromSpline = false
+        end
+    }
+
+    nodes.Patrol = Action{
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Walk, targetSplineIndex, true)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+            end
+        end
+    }
+
+--------------------------------EVENTS--------------------------------
+    events.SplineControlPointReached = function(e)
+        canLookFromSpline = true
+        targetSplineIndex = e.NewIndex
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "GLO_ScryingEye_Event_SpottedChar" and e.Params[1] then
+                --Called by PROC_GLO_ScryingEye_LookOrFollow() when spotted and the player is not sneaking and does not have
+                --the actedHostile flag
+                if not isFollowing and not hasLostSight and not isFleeing then
+                    offender = e.Params[1]
+                    isLooking = true
+                end
+            elseif e.Event == "GLO_ScryingEye_Event_Follow" and e.Params[1] then
+                --Sent by PROC_GLO_ScryingEye_StartFollow()
+                offender = e.Params[1]
+                isFollowing = true
+                isLooking = false
+            elseif e.Event == "UND_ScryingEye_Event_LostSight" and e.Params[1] and isFollowing then
+                lastKnownPos = offender.Position
+                hasLostSight = true
+            elseif e.Event == "GLO_ScryingEye_Event_StopFollow" then
+                isFollowing = false
+                hasLostSight = false
+                StopTimer(me, "UND_ScryingEye_FollowDuration")
+            elseif e.Event == "GLO_ScryingEye_Event_Flee" and e.Params[1] then
+                --Sent from AttackedBy()
+                offender = e.Params[1]
+                isFleeing = true
+                hasLostSight = false
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "UND_ScryingEye_FollowDuration" or e.TimerName == "UND_ScryingEye_LostSight" then
+            SetEntityEvent(me, "GLO_ScryingEye_SearchEnded")
+            offender = nil
+            --Calls PROC_GLO_ScryingEye_StopFollow(), which also sends the "GLO_ScryingEye_Event_StopFollow" event
+        end
+    end
+
+end}

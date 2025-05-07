@@ -1,0 +1,144 @@
+game.states.MOO_Assault_Jaheira = State { function()
+
+    description = [[Jaheira has arrived at Moonrise Tower for the assault.]]
+
+    modules = { "shared.dialog", "shared.moveto", "shared.math" }
+
+--------------------------------FLAGS--------------------------------
+    local jaheiraJoinedFlag = Flag([[MOO_Assault_State_JaheiraJoined_2bea8f68-eac7-4734-9128-1b3f3c248da5]])
+    local alliesReadyFlag = Flag("MOO_Assault_State_AllyReadyPositions_f0316e51-b885-472a-a8db-b5cf64aca732")
+    local mainFloorClearedFlag = Flag("MOO_Assault_State_MainFloorEnemiesDefeated_1016055f-387a-4564-b3f9-cac9d2735b9d")
+    local gaveOrdersFlag = Flag("MOO_Assault_Event_JaheiraGaveOrders_f7e185fe-a85a-40e9-a9a6-fcff1fe156d8")
+    local allHarpersDefeatedFlag = Flag("MOO_Assault_State_AllActiveHarpersDefeated_93c03711-7efc-44fb-b4ae-736606afe843")
+    local waitingOnRoofFlag = Flag("MOO_Assault_State_JaheiraWaitingOnRoof_3f57e1aa-6ed0-4c38-855d-fcf7ddadcffb")
+
+--------------------------------ENTITIES--------------------------------
+    local outsideStandPoint = Entity("S_MOO_AssaultJaheiraPoint_4987be17-39bd-4c8b-bf50-4c462bd5ac32")
+    local readyPositionPoint = Entity("S_MOO_AssaultAllyReadyPoints_001_2eb86f25-a51b-45c3-9134-922a0d812b0d")
+    local insideStandPoint = Entity("S_MOO_AllyMainFloorPoint_007_b24b58a3-c030-4d23-94d0-43c4e0c8a7ea")
+    local roofIdlePoint = Entity("S_MOO_JaheiraRoofRecruitPoint_fb63ebfd-99ac-4e09-a258-478cd5a2a073")
+
+--------------------------------ADS--------------------------------
+    local jaheiraSoloAD = Dialog("MOO_Assault_AD_JaheiraSolo_fa31a350-d95d-550c-d77e-ab40cff804cb")
+    local jaheiraOrdersAD = Dialog("MOO_Assault_JaheiraThroneRoomOrders_d98064f4-a51f-94e1-8626-fbfebd8fdcf5")
+
+    local combatReadyAnim = Animation("CUST_Idle_Still_Combat_01_590ea7e8-ae43-4307-916b-b1133ef47dfa")
+
+    self.CanEnter = function()
+        return GetFlag(jaheiraJoinedFlag)
+    end
+
+    nodes.Assault_RoofRecruitment = Action {
+        CanEnter = function()
+            return GetFlag(waitingOnRoofFlag)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(roofIdlePoint,  MovementSpeed.Walk, me) then
+                LookFrom(roofIdlePoint)
+            else
+                SteerTo(roofIdlePoint)
+            end
+            Sleep(1)
+        end
+    }
+
+    nodes.Assault_GiveOrder = Action{
+        function()
+            if mod.moveto.MoveToPoint(insideStandPoint,  MovementSpeed.Walk, me) then
+                Sleep(18.0)
+                LookFrom(insideStandPoint)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    jaheiraOrdersAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                SetFlag(gaveOrdersFlag) --Harper behaviours use this flag to start their guard patrol behaviour
+            else
+                SteerTo(insideStandPoint)
+                Sleep(18.0)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    jaheiraOrdersAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                SetFlag(gaveOrdersFlag)
+            end
+            Sleep(2.0)
+        end,
+
+        Valid = function()
+            return GetFlag(mainFloorClearedFlag) and not GetFlag(allHarpersDefeatedFlag) and not GetFlag(gaveOrdersFlag)
+        end
+    }
+
+    nodes.Assault_InTower = Action{
+        CanEnter = function()
+            return GetFlag(mainFloorClearedFlag)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(insideStandPoint,  MovementSpeed.Walk, me) then
+                SetWeaponUnsheathed(me, true)
+                PlayAnimation(combatReadyAnim, false, true)
+                LookFrom(insideStandPoint)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    jaheiraSoloAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                Sleep(30.0 + 20.0 * math.random())
+            else
+                SteerTo(insideStandPoint)
+                Sleep(2.0)
+            end
+        end
+    }
+
+    nodes.Assault_ReadyForCombat = Action{
+        CanEnter = function()
+            return GetFlag(alliesReadyFlag)
+        end,
+
+        function()
+            SetWeaponUnsheathed(me, true)
+            if mod.moveto.MoveToPoint(readyPositionPoint,  MovementSpeed.Run, me) then
+                LookFrom(readyPositionPoint)
+                Sleep(2)
+            else
+                SteerTo(readyPositionPoint)
+                Sleep(2)
+            end
+            PlayAnimation(combatReadyAnim, false, true)
+        end
+    }
+
+    nodes.Assault_Intro = Action {
+        function()
+            if mod.moveto.MoveToPoint(outsideStandPoint,  MovementSpeed.Walk, me) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                        jaheiraSoloAD,
+                        {
+                            waitForCompletion = true
+                        },
+                        me
+                    )
+                    LookFrom(outsideStandPoint)
+                    Sleep(30.0 + 20.0 * math.random())
+                Sleep(2.0)
+            else
+                SteerTo(outsideStandPoint)
+                Sleep(2.0)
+            end
+        end
+    }
+
+
+
+end}

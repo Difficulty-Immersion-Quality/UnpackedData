@@ -1,0 +1,124 @@
+game.states.FOR_AmbushGoblin = State{ function()
+    description = [[Goblins at the entrance of the abandoned village. They are just scouting the area for intruders from the roofs of the houses.]]
+
+    params.scoutAnimation = { type = EParamType.String, required = false, default = "", help = [[
+        Animation for the goblin to play while idle
+    ]]}
+
+    params.ambushPosition = { type = EParamType.String, required = true, help = [[
+        Position for the goblin to stand while waiting to ambush
+    ]]}
+
+    local scoutAnimation = Animation(params.scoutAnimation)
+    local ambushPosition = Entity(params.ambushPosition)
+
+    nodes.Action_Scout = Action{
+        function()
+            if IsInDangerousSurfaceFor(ambushPosition, me.Character) then
+                Sleep(2.0)
+                return
+            end
+
+            if GetDistance2DTo(me, ambushPosition) > 1 then
+                local moveResult = MoveTo(ambushPosition, MovementSpeed.Walk, true, false, 0.5, 0.8, false)
+
+                if moveResult ~= error.MovementError.None then
+                    SteerTo(ambushPosition)
+                    DebugText(me, "MOVEMENT FAILED")
+                    Sleep(2.0)
+                    return
+                end
+            end
+
+            LookFrom(ambushPosition)
+
+            -- Random sleep to stagger animations beginning
+            if scoutAnimation then
+                Sleep(math.random(1, 4))
+                PlayAnimation(scoutAnimation, false, true)
+                WaitForInterrupt()
+            end
+        end
+    }
+end}
+
+
+game.states.FOR_AmbushGoblin_Patrol = State{ function()
+    description = [[Goblin patrolling the center of the village for intruders]]
+
+    params.patrolSpline = { type = EParamType.String, required = false, default = "", help = [[
+        GUID of patrol spline
+    ]]}
+
+    local patrolSpline = Spline(params.patrolSpline)
+    local lookDownAnim = Animation("CUST_Leaning_Forward_01_5487ae28-60dc-4eea-b60c-0c00749c8281")
+    local stretchingAnim = Animation("CUST_Stretching_01_9af703b0-c02f-4c17-bfee-7e11f1f80d6b")
+
+    local targetSplineIndex = -1
+    local currentSplineIndex = -1
+    
+    local stretching = false
+    local peeringDownWell = false
+
+    nodes.Action_Patrol = Action{
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll, targetSplineIndex)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                DebugText(me, "ERROR: Could not start patrol")
+            end
+        end,
+
+        Valid = function()
+            return patrolSpline ~= nil and
+                    not (peeringDownWell or stretching)
+        end
+    }
+
+    nodes.Action_PeerDownWell = Action{
+        function()
+            try
+                LookFrom(patrolSpline)
+                PlayAnimation(lookDownAnim, true, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me "ERROR: failed to play animation CUST_Leaning_Forward_01")
+            end
+
+            peeringDownWell = false
+        end,
+
+        Valid = function()
+            return peeringDownWell
+        end,
+    }
+
+    nodes.Action_Stretching = Action{
+        function()
+            try
+                LookFrom(patrolSpline)
+                PlayAnimation(stretchingAnim, true, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me "ERROR: failed to play animation CUST_Inspect_01")
+            end
+
+            stretching = false
+        end,
+
+        Valid = function()
+            return stretching
+        end,
+    }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        currentSplineIndex = e.Index
+
+        if currentSplineIndex == 1 then
+            stretching = true
+        elseif currentSplineIndex == 2 then
+            peeringDownWell = true
+        end
+    end
+end}

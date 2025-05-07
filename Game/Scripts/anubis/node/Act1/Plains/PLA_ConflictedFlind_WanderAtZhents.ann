@@ -1,0 +1,225 @@
+game.states.PLA_ConflictedFlind_WanderAtZhents = State { function ()
+
+    description = [[State after long rest or provoking Gnolls. Idle wandering after moving to Zhents position.]]
+
+    modules = { "shared.math", "shared.params", "shared.dialog" }
+
+    -----------------------------------------
+    -- params section
+
+    params.idleInspiringSpeech = {type = EParamType.State, required = true, help = [[
+        State for behaviour while listening (or performing) Flind's speech before rushing at Zhents (by Instigate)
+    ]]}
+
+    params.aggroAnims = {type = EParamType.String, arrayRange = "1..", required = true, help=[[
+        Aggressive animations to play at random
+    ]]}
+
+    params.eatingCorpseAnim = {type = EParamType.String, required=false, help=[[
+        Animation to play near the corpse
+    ]]}
+
+    params.sniffAnim = {type = EParamType.String, required=false, help=[[
+        Animation to play in between corpses approach
+    ]]}
+
+    params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+        The AD to play.
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks this specific AD from happening (prevents repetition)
+    ]]}
+
+    params.regionBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks the ADs for the entire group of characters (prevents overlap)
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local eatingCorpseAnim = nil
+    local sniffAnim = nil
+    local combatArea = nil
+    local rushArea = nil
+    local groupSyncedAD = nil
+    local zhentsBodies = {}
+    local shouldRushAtZhents = false
+    local rushFinished = false
+    local aggroAnims = {}
+    -- flags
+    local dialogBlockFlag
+    local regionBlockFlag
+    local zhentsDeadFlag = Flag("PLA_ZhentShipment_State_SurvivorsAreDead_bb54af09-b0c2-46c2-84e8-642280ccec6a")
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        if params.AD then
+            groupSyncedAD = Dialog(params.AD)
+        end
+        if params.regionBlockFlag then
+            regionBlockFlag = Flag(params.regionBlockFlag)
+        end
+        if params.dialogBlockFlag then
+            dialogBlockFlag = Flag(params.dialogBlockFlag)
+        end
+        combatArea = FindEntity("S_PLA_ConflictedFlind_MainCombatArea_a45aa75d-81d7-4420-a69b-cee1d0174506")
+        rushArea = FindEntity("S_PLA_ConflictedFlind_GnollsRushArea_b0666f1b-5b63-49b5-806e-4bd9bc8c5fe2")
+        zhentsBodies = {
+            FindEntity("S_PLA_ZhentShipment_Agent_002_7eda738e-8a85-4975-a1e1-1b3b2c4d641c"),
+            FindEntity("S_PLA_ZhentShipment_Agent_001_fd9b4edd-7828-4e22-85a9-ead2ba9d29e4")
+        }
+        aggroAnims = mod.params.ParamArrayToAnimationsList(params.aggroAnims)
+        eatingCorpseAnim = Animation(params.eatingCorpseAnim)
+        sniffAnim = Animation(params.sniffAnim)
+    end
+
+    -----------------------------------------
+    -- node section
+
+    nodes.ZhentsAlive = Selector
+    {
+        Valid = function()
+            return not GetFlag(zhentsDeadFlag)
+        end
+    }
+
+    nodes.ZhentsAlive.ListenInspiringSpeech = Proxy {
+        params.idleInspiringSpeech,
+        Valid = function()
+            return not shouldRushAtZhents
+        end
+    }
+
+    nodes.ZhentsAlive.Rush = Action {
+        function()
+            Sleep(mod.math.random(1, 3))
+            local randomPos = TriggerGetRandomPosition(rushArea.Trigger)
+            local validPos = FindValidPosition(randomPos, 5, me)
+            if validPos ~= nil then
+                try
+                    MoveTo(validPos, MovementSpeed.Run)
+                    rushFinished = true
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "MoveTo failed")
+                    Sleep(mod.math.random(2, 3))
+                end
+            end
+        end,
+        Valid = function()
+            return not rushFinished and shouldRushAtZhents
+        end
+    }
+
+    nodes.ZhentsAlive.JustBeforeCombat = Action {
+        function()
+            local randomZhent = zhentsBodies[math.random(1,#zhentsBodies)]
+            if randomZhent ~= nil then
+                SteerTo(randomZhent)
+                SetEntityEvent(randomZhent, "PLA_ZhentShipment_Event_AgentDamagedByGnoll", me)
+            end
+            local randomAnim = aggroAnims[math.random(1,#aggroAnims)]
+            try
+                PlayAnimation(randomAnim, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed: random aggressive anim")
+            end
+            Sleep(mod.math.random(0, 2))
+            -- Realtime combat simulation
+            if randomZhent ~= nil and not randomZhent.Character.IsDead then
+                try
+                    Attack(randomZhent, true, false)
+                catch e if ls.CheckType(e, error.AttackFailed) then
+                    DebugText(me, "AttackFailed")
+                end
+            end
+        end,
+        Valid = function()
+            return rushFinished and shouldRushAtZhents
+        end
+    }
+
+    nodes.ZhentsDead = Selector
+    {
+        Valid = function()
+            return GetFlag(zhentsDeadFlag)
+        end
+    }
+
+    nodes.ZhentsDead.MovingToZhentsArea = Action {
+        function()
+            local randomPos = TriggerGetRandomPosition(combatArea.Trigger)
+            local validPos = FindValidPosition(randomPos, 7, me)
+            if validPos ~= nil and not IsInDangerousSurfaceFor(validPos, me.Character) then
+                try
+                    MoveTo(validPos, MovementSpeed.Walk)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "MoveTo failed")
+                    Sleep(3.0)
+                end
+            end
+        end,
+        Valid = function()
+            return not IsInTrigger(me, combatArea.Trigger)
+        end
+    }
+
+    nodes.ZhentsDead.WanderAndEating = Action {
+        function()
+            try
+                Wander(combatArea, mod.math.random(3, 5), MovementSpeed.Walk)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Wander MovementFailed")
+            end
+            Sleep(mod.math.random(1, 2))
+            try
+                PlayAnimation(sniffAnim)
+                Sleep(mod.math.random(1, 2))
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (sniffAnim)")
+            end
+            local foundBody = nil
+            for _, zhentBody in ipairs(zhentsBodies) do
+                if GetDistance2DTo(me, zhentBody) < 5.0 then
+                    foundBody = zhentBody
+                end
+            end
+            if foundBody ~= nil then
+                try
+                    MoveTo(foundBody)
+                    SteerTo(foundBody)
+                    PlayAnimation(eatingCorpseAnim)
+                    Sleep(mod.math.random(1, 2))
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "MovementFailed")
+                    Sleep(5)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (eatingCorpseAnim)")
+                    Sleep(2)
+                end
+            else
+                -- Playing grunt AD
+                Sleep(mod.math.random(0.5, 2.5))
+                if groupSyncedAD ~= nil and regionBlockFlag ~= nil and dialogBlockFlag ~= nil and
+                    not GetFlag(regionBlockFlag) and not GetFlag(dialogBlockFlag) and
+                    mod.dialog.IsSpeakerAvailable(me)
+                then
+                    StartAutomatedDialog(groupSyncedAD, false, me)
+                end
+            end
+        end,
+        Valid = function()
+            return IsInTrigger(me, combatArea.Trigger)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_ConflictedFlind_Event_RushAtZhents" then
+                shouldRushAtZhents = true
+            end
+        end
+    end
+end}

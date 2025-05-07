@@ -1,0 +1,304 @@
+game.states.GOB_WarchiefGrumpy_BeforeRaid = State { function()
+
+    description = [[State for WarchiefGrumpy walking around the goblin camp and reporting to the Drow.]]
+
+    modules = {"shared.dialog","shared.util","shared.moveto"}
+
+    local count = 0
+
+    --Bools
+
+
+
+    --Characters
+    local drow = Entity("S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b")
+    local guard = Entity("S_GOB_Torturers_Goblet_0f18201e-2836-4642-8a26-d0a6e1a8a8cc")
+    local chieftain = Entity("S_GOB_RaiderChieftain_5bac0842-c1d4-4358-a85c-24ab745d0280")
+    local raider1 = Entity("S_GOB_RaiderHardy_6687f78f-5d6a-40d4-8cfd-2b972dacde3c")
+    local raider2 = Entity("S_GOB_RaiderArrogant_43d953fa-575e-452c-b220-939e6bdcc36b")
+
+    --Dialogs
+    local patrolAD
+
+    local drowAD = Dialog("GOB_DrowCommander_AD_WithPatrol_c4c7fd2e-07bb-980a-f951-8159b4c49e80")
+    local guardAD = Dialog("GOB_WarchiefGrumpy_AD_WithGuard_5e6af448-e1b2-40d1-baa7-ac1908104bf4")
+    local raider1AD = Dialog("GOB_WarchiefGrumpy_AD_WithStoneRaiders_cf1d91ce-8b78-0853-3115-5a3eb8d833a8")
+    local raider2AD = Dialog("GOB_WarchiefGrumpy_AD_WithCoalRaiders_69549d6a-df80-30f1-4fd9-a563a3b55d99")
+
+
+    --Patrol
+    local patrolSpline = Spline("S_GOB_GrumpySpline_f7c720d8-bf5d-4e31-a70a-afbc5638784a")
+    local prevSplineIndex = 0
+    local currentSplineIndex = 1
+    local targetSplineIndex = 2
+    local canWalkOnSpline = true
+    local splineEvent = ""
+
+    --Table
+    local partnerTable = {}
+
+    --Trigger
+    local penanceRoomPoint = Entity("S_GOB_GrumpyPenancePoint_10e45497-86d6-4b7a-8685-ce5951271ec0")
+    local penanceSUBBox = Entity("S_GOB_PainPenance_SUB_3189cec7-0f63-468c-a147-6a5fe426f518")
+
+    --Flag
+    local inPenanceFlag = Flag("GOB_PainPriest_State_Penitent_5e6ff7d1-7018-4938-8030-20ec00b3ce64")
+    local lowHPPenitentFlag = Flag("GOB_PainPriest_State_LowHealth_bf01a677-b13c-4992-8d02-4121ecd2adf5")
+    local playerPenanceFlag = Flag("GOB_PainPriest_Event_TempBlockGoblinsAD_2aeac444-0be1-49e4-bba7-d06d7ee62f0a")
+    local leaveForRaidFlag = Flag("GOB_DrowCommander_Event_RaidersSortie_26816b01-2d64-b50c-3bf6-bffd7dc5f0b9")
+
+    helpers.NextPatrolValid = function(splineIndex)
+        if (partnerTable[splineIndex + 1].dialogPartner == nil) then
+            return true
+        elseif (partnerTable[splineIndex + 1].dialogPartner ~= nil and not partnerTable[splineIndex + 1].dialogPartner.Character.IsDead) then
+            return true
+        else
+            return false
+        end
+    end
+
+    self.OnInit = function()
+        table.insert(partnerTable, {
+            dialogPartner = nil,
+            event = "GOB_Grumpy_AtEntrance"
+        })
+        table.insert(partnerTable, {
+            patrolAD = guardAD,
+            dialogPartner = guard,
+            lookAt = true,
+            wait = true,
+            completion = true,
+            event = "GOB_Grumpy_AtTorture"
+        })
+        table.insert(partnerTable, {
+            dialogPartner = nil,
+            event = ""
+        })
+        table.insert(partnerTable, {
+            patrolAD = drowAD,
+            dialogPartner = drow,
+            lookAt = true,
+            wait = true,
+            completion = true,
+            event = "GOB_Grumpy_AtDrow"
+        })
+        table.insert(partnerTable, {
+            dialogPartner = nil,
+            event = "GOB_Grumpy_AtChieftain"
+        })
+        table.insert(partnerTable, {
+            dialogPartner = nil,
+            event = ""
+        })
+        table.insert(partnerTable, {
+            patrolAD = raider1AD,
+            dialogPartner = raider1,
+            lookAt = true,
+            wait = true,
+            completion = false,
+            event = "GOB_Grumpy_AtRaiders1"
+        })
+        table.insert(partnerTable, {
+            dialogPartner = nil,
+            event = ""
+        })
+        table.insert(partnerTable, {
+            patrolAD = raider2AD,
+            dialogPartner = raider2,
+            lookAt = true,
+            wait = true,
+            completion = false,
+            event = "GOB_Grumpy_AtRaiders2"
+        })
+
+    end
+
+    nodes.PatrollingCamp = Action {
+        OnEnter = function()
+            count = 0
+            if(patrolSpline == nil) then
+                patrolSpline = Spline("S_GOB_GrumpySpline_f7c720d8-bf5d-4e31-a70a-afbc5638784a")
+            end
+            while not helpers.NextPatrolValid(targetSplineIndex) do
+                if(targetSplineIndex == 3) then
+                    targetSplineIndex = targetSplineIndex + 3
+                else
+                    targetSplineIndex = targetSplineIndex + 1
+                end
+                if(targetSplineIndex == #partnerTable) then
+                    targetSplineIndex = 0
+                end
+            end
+            if(targetSplineIndex == 4) then
+                StartTimer(chieftain, "GOB_ScryingEye_EyeLeaves", 4, 0)
+            end
+            prevSplineIndex = currentSplineIndex
+        end,
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Walk, targetSplineIndex)
+            catch e if ls.CheckType(e, error.MissingComponent) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    nodes.ADwithPartner = Action{
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+        function()
+            local currentPartner = partnerTable[currentSplineIndex + 1].dialogPartner
+            local skipAD = false
+            if(currentPartner == guard) and IsInTrigger(currentPartner, penanceSUBBox.Trigger) then
+                -- if Grush is in the Pain Priest's room, move to a point near the entrance of this room
+                if mod.moveto.MoveToPoint(penanceRoomPoint, MovementSpeed.Walk, me) then
+                    -- avoid talking to Grush if: player is doing the penance scene or Grush is actively participating in a penance
+                    if GetFlag(playerPenanceFlag) or (GetFlag(inPenanceFlag, currentPartner) and not GetFlag(lowHPPenitentFlag, currentPartner)) then
+                        skipAD = true
+                    end 
+                else
+                    skipAD = true
+                end
+            end
+            if(partnerTable[currentSplineIndex + 1].lookAt == true) then
+                SteerTo(currentPartner)
+            end
+            Sleep(1)
+            if(mod.dialog.IsSpeakerAvailableAndNear(currentPartner, me, 10, true)) then                
+                if (currentPartner == drow) and (GetFlag(leaveForRaidFlag)) then
+                    skipAD = true
+                end
+                if not skipAD then
+                    SetEntityEvent(currentPartner, "GOB_WarchiefGrumpy_StopAD")
+                    StartAutomatedDialog(partnerTable[currentSplineIndex + 1].patrolAD, partnerTable[currentSplineIndex + 1].wait, me, currentPartner)
+                end
+                canWalkOnSpline = true
+            end
+            if(partnerTable[currentSplineIndex + 1].completion == false) then
+                canWalkOnSpline = true
+            else
+                if (count < 45) then    
+                    count = count + 1
+                else
+                    canWalkOnSpline = true
+                end
+            end
+        end,
+        Valid = function()
+            return not canWalkOnSpline and (splineEvent ~= "") and (partnerTable[currentSplineIndex + 1].dialogPartner ~= nil)
+        end,
+    }
+
+    nodes.TakeBreakAtEntrance = Action{
+        function()
+            LookFrom(patrolSpline)
+            Sleep(15)
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline and splineEvent == "GOB_Grumpy_AtEntrance" and partnerTable[currentSplineIndex + 1].dialogPartner == nil
+        end
+    }
+
+    nodes.ContinuePatrol = Action{
+        function()
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline and splineEvent ~= "GOB_Grumpy_AtEntrance" and partnerTable[currentSplineIndex + 1].dialogPartner == nil
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        currentSplineIndex = e.Index
+        if prevSplineIndex == currentSplineIndex then
+            targetSplineIndex = e.Index - 1
+        else
+            targetSplineIndex = e.Index + 1
+        end
+        if(targetSplineIndex == #partnerTable) then
+            targetSplineIndex = 0
+        end
+        if e.Event ~= nil then
+            splineEvent = e.Event
+            SetEntityEvent(me, e.Event)
+        else
+            splineEvent = ""
+        end
+    end
+
+end}
+
+game.states.GOB_WarchiefGrumpy_AfterRaid = State{
+    function()
+        description = [[After raid behaviour. If the other goblin is alive talk to him, if not talk to herself.]]
+
+        modules = {"shared.dialog","shared.util", "shared.character"}
+
+        ------------------------------------------------------
+        -- Local variables
+        local guardPos = Entity("S_DEN_GrumpyPos_f807db88-9848-4ad2-8518-85ae3cd300db")
+        local otherGoblin = Entity("S_GOB_RaiderArrogant_43d953fa-575e-452c-b220-939e6bdcc36b")
+
+        local AD = Dialog("DEN_AttackOnDen_AD_GrumpyAndArrogant_4814144f-26d8-1751-dca9-e3395ba8c926")
+        local soloAD = Dialog("DEN_AttackOnDen_AD_Grumpy_96582819-0bf8-aab2-1e02-9459b0a380a3")
+        ------------------------------------------------------
+
+        ------------------------------------------------------
+        -- Nodes
+        nodes.Action_StandingNearArrogant = Action{
+            function()
+                if not IsInDangerousSurfaceFor(guardPos, me.Character) then
+                    try
+                        MoveTo(guardPos)
+                        LookFrom(guardPos)
+                        if mod.dialog.IsSpeakerAvailableAndNear(otherGoblin, me, 10, true) then
+                            StartAutomatedDialog(AD, true, me, otherGoblin)
+                        end
+                    catch e if ls.CheckType(e, error.MovementFailed) or ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                        DebugText(me, "Error: Movement/AutomatedDialogStartFailed")
+                    end
+
+                    mod.util.SleepRandom(6.0, 10.0)
+                else
+                    SteerTo(guardPos)
+                    Sleep(3.0)
+                end
+            end,
+            CanEnter = function()
+                return not mod.character.IsDefeated(otherGoblin)
+            end
+        }
+
+        nodes.Action_SoloBehaviour = Action{
+            function()
+                if not IsInDangerousSurfaceFor(guardPos, me.Character) then
+                    try
+                        MoveTo(guardPos)
+                        LookFrom(guardPos)
+                        if mod.dialog.IsSpeakerAvailable(me) then
+                            StartAutomatedDialog(soloAD, true, me)
+                        end
+                    catch e if ls.CheckType(e, error.MovementFailed) or ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                        DebugText(me, "Error: Movement/AutomatedDialogStartFailed")
+                    end
+
+                    mod.util.SleepRandom(6.0, 10.0)
+                else
+                    SteerTo(guardPos)
+                    Sleep(3.0)
+                end
+            end,
+            CanEnter = function()
+                return mod.character.IsDefeated(otherGoblin)
+            end
+        }
+        ------------------------------------------------------
+    end}

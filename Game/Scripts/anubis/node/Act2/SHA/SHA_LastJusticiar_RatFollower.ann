@@ -1,0 +1,76 @@
+game.states.SHA_LastJusticiar_RatFollower = State{function()
+    description=[[This rat will follow the player around while the player is in a certain area]]
+
+    modules = {"shared.dialog"}
+
+    params.FollowArea = {type=EParamType.String, default = "",
+        help = [[Area where the rat will follow the player]]}
+
+    params.FollowAD = {type=EParamType.String, default = "",
+        help = [[Optional AD for the rat to play while following the player]]}
+
+    local followArea = Entity(params.FollowArea)
+    local followTarget = nil
+    local followAD = Dialog(params.FollowAD)
+    local firstSpawn = true
+
+    nodes.Follow = Action{
+        function()
+            if GetDistanceTo(me, followTarget) > 2 then
+                MoveTo(followTarget, MovementSpeed.Run, false, false, 1, 2, false)
+            else
+                Sleep(1.0)
+            end
+
+            if followAD ~= nil then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    followAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 6.0,
+                    },
+                    me
+                )
+            end
+        end,
+
+        CanEnter = function()
+            return followTarget ~= nil and IsInTrigger(followTarget, followArea.Trigger)
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            if firstSpawn then
+            local actives = GetActiveCharacters(me, 14.0)
+                for _,char in pairs(actives) do
+                    if IsInTrigger(char, followArea.Trigger) then
+                    followTarget = char
+                    end
+                end
+                firstSpawn = false
+            end
+            Sleep(2.0)
+        end,
+
+        Valid = function()
+            return followTarget == nil
+        end
+    }
+
+    events.EnteredTrigger = function(e)
+        if e.Target == followArea and e.Target.Character.IsPartyMember then
+            if followTarget == nil then
+                followTarget = e.Target
+            elseif GetDistanceTo(me, followTarget) > GetDistanceTo(me, e.Target) then
+                followTarget = e.Target
+            end
+        end
+    end
+
+    events.LeftTrigger = function(e)
+        if e.Target == followTarget and e.Trigger == followArea then
+            followTarget = nil
+        end
+    end
+end}

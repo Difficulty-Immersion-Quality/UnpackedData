@@ -1,0 +1,124 @@
+game.states.WYR_WyrmRock_MessHallWaiter = State{function()
+
+    description = [[A waiter in Mess hall of Wyrm rock]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local posPick = Entity("S_WYR_WyrmRock_MessHallWaiter_PickPos_f8e0684e-babe-47fd-a474-2e1a16912c70")
+    local posThink = Entity("S_WYR_WyrmRock_MessHallWaiter_ThinkingPos_042e9190-e7f0-4a87-9f22-6780cadbb9b4")
+
+    local animPick = Dialog("WYR_WyrmRock_MessHallWaiter_WB_Pick_20e5b499-82a4-9d88-b556-d7581b8d1766")
+    local pickSceneTrigger = Entity("WYR_WyrmRock_MessHallWaiter_WB_Pick_SceneTrigger_84a2f9c9-eaa1-4c4b-952e-47f52d73ffa7")
+
+    local takeOrderPositions = {
+        Entity("S_WYR_WyrmRock_MessHallWaiter_TakeOrderPos_001_8461defd-0d73-40cb-b1cb-6919592c31ce"),
+        Entity("S_WYR_WyrmRock_MessHallWaiter_TakeOrderPos_002_e15a1089-6ded-418b-968d-cf4ac0c34640"),
+        Entity("S_WYR_WyrmRock_MessHallWaiter_TakeOrderPos_003_0a37e000-262c-4bd1-becc-30a52b0f7d7c"),
+        Entity("S_WYR_WyrmRock_MessHallWaiter_TakeOrderPos_004_64a31f0f-fa54-412e-b605-8182a126f004"),
+    }
+
+    local cleanTable_SceneTrigger = Entity("BHVR_WLRD_WyrmRock_WaiterCleanTable_SceneTrigger_516867f9-29eb-4a2b-b282-8c8e642a419d")
+    local cleanTable_Animation = Dialog("BHVR_WRLD_WYR_MessHallWaiter_CleaningTable_60ec25aa-5f75-fc29-08a1-5199fc505121")
+
+    local chop_SceneTrigger = Entity("BHVR_WLRD_WyrmRock_WaiterChopMeat_SceneTrigger_bb7145fc-5504-470e-b0c4-3831814cb73b")
+    local chop_Meat = Entity("Item S_WYR_WyrmRock_WaiterMeat_c6455b38-5020-49b4-972e-823b10bd2bfe")
+    local chop_Knife = Entity("S_WYR_WyrmRock_WaiterKnife_f7f50253-fdc7-49ac-b732-2a9caa83d974")
+    local chop_Animation = Dialog("BHVR_WRLD_GLO_ChopMeat_adf42b52-db3b-61b7-f0a2-830a76bd2da9")
+
+    local ceremonyEndedFlag = Flag("WYR_KillDirectorGortash_State_CeremonyEnded_9aeab401-c087-4f2e-9894-859df23680dc")
+
+    nodes.AfterCeremony = Proxy {
+        game.states.GEN_Wander,
+        params = {
+            trigger = [[S_WYR_WyrmRock_MessHallWaiter_WanderArea_f0bc9084-0764-4092-9951-fc70162a91fc]],
+            wanderMin = 12,
+            wanderMax = 24,
+            sleepMin = 6,
+            sleepMax = 18},
+        Valid = function()
+            return GetFlag(ceremonyEndedFlag)
+        end
+    }
+
+    nodes.Default = Selector{
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+    }
+
+    nodes.Default.CleanTable = Action{
+        function()
+            try
+                StartBehaviorDialog(cleanTable_Animation, cleanTable_SceneTrigger.Trigger, true, me)
+            catch e then
+                mod.util.SleepRandom(2.0, 6.0)
+            end
+        end
+    }
+
+    nodes.Default.Chop = Action{
+        function()
+            try
+                StartBehaviorDialog(chop_Animation, chop_SceneTrigger.Trigger, true, me, chop_Meat, chop_Knife)
+            catch e then
+                mod.util.SleepRandom(2.0, 6.0)
+            end
+        end
+    }
+
+    nodes.Default.Pick = Action{
+        function()
+            try
+                StartBehaviorDialog(animPick, pickSceneTrigger.Trigger, true, me)
+            catch e then
+                mod.util.SleepRandom(2.0, 6.0)
+            end
+        end
+    }
+
+
+    nodes.Default.TakeOrder = Action{
+        function()
+
+            local i, takeOrderPos
+            i, takeOrderPos = mod.util.RandomFrom(takeOrderPositions)
+
+            local moveRes = nil
+            if GetDistanceTo(me, takeOrderPos) > 1.0 then
+                moveRes = MoveTo(takeOrderPos, MovementSpeed.Walk)
+            end
+            if moveRes == nil or moveRes == error.MovementError.None then
+                LookFrom(takeOrderPos)
+                mod.util.SleepRandom(3.0, 9.0)
+            end
+
+            local i, takeOrderPos
+            i, takeOrderPos = mod.util.RandomFrom(takeOrderPositions)
+
+            local moveRes = nil
+            if GetDistanceTo(me, takeOrderPos) > 1.0 then
+                moveRes = MoveTo(takeOrderPos, MovementSpeed.Walk)
+            end
+            if moveRes == nil or moveRes == error.MovementError.None then
+                LookFrom(takeOrderPos)
+                mod.util.SleepRandom(3.0, 9.0)
+            end
+
+        end
+    }
+
+    events.SavegameLoaded = function(ev)
+        if chop_SceneTrigger == nil then
+            chop_SceneTrigger = Entity("BHVR_WLRD_WyrmRock_WaiterChopMeat_SceneTrigger_bb7145fc-5504-470e-b0c4-3831814cb73b")
+            chop_Meat = Entity("Item S_WYR_WyrmRock_WaiterMeat_c6455b38-5020-49b4-972e-823b10bd2bfe")
+            chop_Knife = Entity("S_WYR_WyrmRock_WaiterKnife_f7f50253-fdc7-49ac-b732-2a9caa83d974")
+            chop_Animation = Dialog("BHVR_WRLD_GLO_ChopMeat_adf42b52-db3b-61b7-f0a2-830a76bd2da9")
+        end
+
+        if cleanTable_SceneTrigger == nil then
+            cleanTable_SceneTrigger = Entity("BHVR_WLRD_WyrmRock_WaiterCleanTable_SceneTrigger_516867f9-29eb-4a2b-b282-8c8e642a419d")
+            leanTable_Animation = Dialog("BHVR_WRLD_WYR_MessHallWaiter_CleaningTable_60ec25aa-5f75-fc29-08a1-5199fc505121")
+        end
+    end
+
+end}

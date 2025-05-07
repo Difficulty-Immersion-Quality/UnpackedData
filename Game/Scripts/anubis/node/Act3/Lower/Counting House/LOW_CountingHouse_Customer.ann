@@ -1,0 +1,122 @@
+game.states.LOW_CountingHouse_Customer = State{function()
+    
+    modules = {"shared.dialog", "shared.util"}
+
+    params.idleAD = {type = EParamType.String, required=false, help=[[Idle AD to play.]]}
+    params.idleAnimation = {type = EParamType.String, required=false, help=[[Idle animation to play.]]}
+    params.idleTrigger = {type = EParamType.String, required=false, help=[[Idle trigger to stand at.]]}
+    params.panicFlag = {type = EParamType.String, required=false, help=[[Flag that enables panic state on customers.]]}
+
+    local idleTriggerString = params.idleTrigger
+    local idleTrigger
+
+    local idleAnimation = Animation(params.idleAnimation)
+    local idleAD = Dialog(params.idleAD)
+
+    local annoyedByChitChat = false
+    local annoyedByFlirt = false
+
+    local clercksChitChatAD = Dialog("LOW_CountingHouse_AD_Clerks_ChitChat_8a6f4e3a-2584-4472-881a-2305a896faf1")    
+    local clerkCustomerFlirtAD = Dialog("LOW_CountingHouse_AD_Clerk_Civilian_Convo_a84160a8-26cf-6966-de9a-cca61e8dbdfc")
+    local chitChattingClerk = Entity("S_LOW_CountingHouse_Clerk_02_4fd8e88d-75ca-4fc4-a73c-d8c7ba85b873")
+    local flirtingClerk = Entity("S_LOW_CountingHouse_Clerk_03_af575949-4460-46d8-ba7b-71c9d35738b7")
+    
+    local annoyedByFlirtCustomer = Entity("S_LOW_CountingHouse_Civilian_01_348bb33b-0d35-402a-80ea-4c580a56606e")
+    local annoyedByChitChatCustomers = {Entity("S_LOW_CountingHouse_Civilian_02_cd8b2413-8448-43a7-bfeb-dfecb6e0751e"), 
+                                        Entity("S_LOW_CountingHouse_Civilian_03_a3e04f8b-7727-42e7-96cb-b999503dd31e"),
+                                        Entity("S_LOW_CountingHouse_Civilian_04_7d487dda-ca17-4251-8958-a96c4ee5e2f7"),
+                                        Entity("S_LOW_CountingHouse_Civilian_05_1a31eecd-72c4-48ce-bdda-a8dd291352f7")}
+
+    local panicFlag = Flag(params.panicFlag)
+
+    self.OnInit = function()
+        idleTrigger = Entity(params.idleTrigger)
+        if me == annoyedByFlirtCustomer then
+            annoyedByFlirt = true
+        elseif mod.util.ContainsValue(annoyedByChitChatCustomers, me) then
+            annoyedByChitChat = true
+        end
+    end
+
+    nodes.RunAway = Proxy {
+        CanEnter = function()
+            return GetFlag(panicFlag)
+        end,
+        game.states.LOW_CountingHouse_Customer_Cower,
+        params = {
+            panicFlag = params.panicFlag
+        }
+    }
+      
+    nodes.Idle = Action{        
+        function()
+            LookFrom(idleTrigger)
+            PlayAnimation(idleAnimation,false,true)
+            Sleep(math.random(3,20))
+            if(annoyedByChitChat and not (IsInDialog(chitChattingClerk,false,false,false) and not IsInDialog(chitChattingClerk,true,false,false))) then
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                idleAD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 10 + math.random(1,20)
+                },
+                me
+            )
+            elseif(annoyedByFlirt and not (IsInDialog(flirtingClerk,false) and not IsInDialog(flirtingClerk,true))) then
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                idleAD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 10 + math.random(1,20)
+                },
+                me
+            )
+            end
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, idleTrigger) <= 2.0
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = idleTriggerString
+        }
+    }
+end}
+
+game.states.LOW_CountingHouse_Customer_Cower = State{function ()
+
+    modules = {"shared.moveto"}
+
+    params.panicFlag = {type = EParamType.String, required=false, help=[[Flag that enables panic state on customers.]]}
+
+    local escapeTrigger = Entity("S_LOW_CountingHouse_CivilianEscape_PointTrigger_3da3c148-e1d7-4654-8016-90e12c4349ad")
+    local panicFlag = Flag(params.panicFlag)
+
+    nodes.RunAway = Action{
+        OnEnter = function()
+            ApplyStatus(me, "ANIM_COWER")
+            SetUnicastEntityEvent(me, "ClearPeaceReturn")
+        end,
+
+        function()
+            -- The flag is set in Osiris
+            if(GetFlag(panicFlag)) then
+                mod.moveto.MoveToPoint(escapeTrigger, MovementSpeed.Run, me)
+            else
+                Sleep(2.0)
+            end
+        end,
+
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+        end
+    }
+end}

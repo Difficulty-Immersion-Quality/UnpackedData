@@ -1,0 +1,107 @@
+game.states.PLA_FlamingFist5 = State{
+    function()
+
+        params.friendGoneBehaviour = {type = EParamType.State, help=[[
+            What to do when friend is healed
+        ]]}
+
+        local PLA_FlamingFist6
+        local PLA_FlamingFist6_NearTavern
+        local PLA_FlamingFist6_State_OutOfTrigger = Flag("PLA_FlamingFist6_State_OutOfTrigger_e0576ec6-870e-4a0a-b078-c7eced1297f7")
+        local prayingAnimation = Animation("CUST_Praying_01_7f50198e-dda0-4763-a217-0935865ce76c")
+
+        self.OnInit = function()
+            PLA_FlamingFist6 = FindEntity("S_PLA_FlamingFist6_0ba41cd1-e1f6-4f17-8e92-10ebef850268")
+            PLA_FlamingFist6_NearTavern = FindEntity("S_PLA_FlamingFist6_NearTavern_c0cdaaa9-e75f-43f9-9f4b-2a9a9aa3d84b")
+        end
+
+        nodes.friendGoneBehaviour = Proxy{
+            params.friendGoneBehaviour,
+            CanEnter = function()
+                return GetFlag(PLA_FlamingFist6_State_OutOfTrigger)
+            end
+        }
+
+        nodes.Selector = Selector{
+            function(nodes)
+                return GetWeightedCanEnter(nodes, {[nodes.DoAD] = 1,
+                                                   [nodes.PrayOverFriend] = 4}
+                                          )
+            end,
+            CanEnter = function()
+                return not GetFlag(PLA_FlamingFist6_State_OutOfTrigger)
+            end
+        }
+
+        nodes.Selector.DoAD = Proxy{
+                game.states.GLO_ADManager,
+                params={AD = "PLA_FlamingFist5_AD_386db99e-3e6b-3812-d25e-eeeab36c5e39",
+                        regionBlockFlag = "PLA_FlamingFists_State_BlockAD_b40a237c-de00-4d22-9434-b6e8957dcbd8",
+                        dialogBlockFlag = "PLA_FlamingFists_State_BlockAD_FlamingFist5_bfa3c59e-2765-4d69-9cfa-4746c40f4879"
+                        }
+        }
+
+        nodes.Selector.PrayOverFriend = Action{
+            function()
+                if not IsInDangerousSurfaceFor(PLA_FlamingFist6, PLA_FlamingFist6.Character) then
+                    if GetDistanceTo(me, PLA_FlamingFist6) > 2.0 then
+                        MoveTo(PLA_FlamingFist6, MovementSpeed.Walk, true)
+                    else
+                        SteerTo(PLA_FlamingFist6)
+                        PlayAnimation(prayingAnimation, false, true)
+                        --DebugText(me, "Praying animation")
+                        Sleep(4.0)
+                    end
+                end
+            end
+        }
+
+    end
+
+}
+
+game.states.PLA_FlamingFist5_FriendGone = State{
+    function()
+
+        local PLA_FlamingFist5_WanderTrigger
+        local LookAnimation = Animation("CUST_DebugAsset_CustomAnim_01_95ff9541-9c09-4356-8f50-da327d7a64bc")
+
+        self.OnInit = function()
+            PLA_FlamingFist5_WanderTrigger = FindEntity("S_PLA_FlamingFist5_WanderTrigger_d4b38f10-14a0-45f5-be44-6350acb4bc1e")
+        end
+
+        nodes.Selector = Selector{
+            function(nodes)
+                return GetWeightedCanEnter(nodes, {[nodes.DoAD] = 1,
+                                                   [nodes.Examine] = 4}
+                                          )
+            end,
+        }
+
+        nodes.Selector.DoAD = Proxy{
+                game.states.GLO_ADManager,
+                params={AD = "PLA_FlamingFist5_AD_386db99e-3e6b-3812-d25e-eeeab36c5e39",
+                        regionBlockFlag = "PLA_FlamingFists_State_BlockAD_b40a237c-de00-4d22-9434-b6e8957dcbd8",
+                        dialogBlockFlag = "PLA_FlamingFists_State_BlockAD_FlamingFist5_bfa3c59e-2765-4d69-9cfa-4746c40f4879"
+                        }
+        }
+
+        nodes.Selector.Examine = Action{
+            function()
+                try
+                    Wander(PLA_FlamingFist5_WanderTrigger, (4.0+2.0*math.random()), MovementSpeed.Walk)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    -- Ignore: character will just continue and look around thoughtfully, which is fine.
+                end
+                DebugText(me, "Thoughtfully looking around")
+                PlayAnimation(LookAnimation, true, false)
+                if math.random() < 7.0 then
+                    DebugText(me, "Thoughtfully looking around")
+                    PlayAnimation(LookAnimation, true, false)
+                end
+            end
+        }
+
+    end
+
+}

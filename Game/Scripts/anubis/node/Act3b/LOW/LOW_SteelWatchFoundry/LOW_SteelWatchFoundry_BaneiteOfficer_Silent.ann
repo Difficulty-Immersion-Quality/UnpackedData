@@ -1,0 +1,151 @@
+game.states.LOW_SteelWatchFoundry_BaneiteOfficer_Silent = State{function()
+    description = [[Baneite Officer behaviour.]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+
+    ------------------------------------------------ 
+    local ironThroneDestroyed = Flag("IRN_IronThrone_State_Destroyed_91795368-af06-4b56-9ac1-b78995aa9ea9")
+    local switchExploded = Flag("LOW_SteelWatchFoundry_State_KillSwitchDestroyedIRN_7d083a0a-4f0d-4ebb-aab5-fb45c90b5c95")
+    local goToDoor = Flag("LOW_SteelWatchFoundry_Event_GoToAlarmDoor_64bc125e-52ee-47b6-90f4-1a8691163dea")
+    local doorPosition = Entity("S_LOW_DoorAlarm_AttentionPoint_ceb933c6-e79b-48cd-9fba-5daef27d150c")
+
+    params.threatenTarget = {type = EParamType.String, required = false, default = nil, help = [[Target to look at while playing the anxious animation.]]}
+    local threatenTarget
+    params.anxiousPacing =  {type = EParamType.String, required = false, default = nil, help = [[Animation for when the Baneite knows the Foundry was destroyed.]]}
+    local anxiousPacing
+
+    --patrol parameters
+    params.patrolActions = {type=EParamType.State, required = false, default=nil,
+    help = [[Optional slot for characters to do something while in patrol.
+        This state has higher priority than patrolling and is switched to as soon as its IsSelectable == true]]}
+    params.patrolSpline = {type=EParamType.String, required = false, default=nil,
+    help = [[Spline to be patrolled]]}
+    params.patrolSpeed = {type=EParamType.String, required = false, default = "Walk",
+    help = [[Speed at which to patrol: Stroll, Walk, Run, or Sprint]]}
+    params.patrolReverse = {type=EParamType.Bool, required = false, default = false,
+    help = [[Whether or not to patrol the spline in reverse]]}
+    params.startSplineIndex = {type=EParamType.Int, required = false, default = -1,
+    help = [[Start spline point index or -1 for nearest]]}
+    params.patrolActionsIsSmallInterrupt = {type=EParamType.Bool, required = false, default = true,
+    help = [[Whether the caret should continue spline movement in background if character deactivates during PatrolActions.
+             Almost always safe to leave it to default true value]]}
+    params.shouldPatrol =  {type=EParamType.Bool, required = false, default = false,
+    help = [[Whether or not the character should patrol at all.]]}
+
+
+
+             ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- While he is working in the office he walks around and speakd ADs
+    self.OnInit = function()
+        if params.anxiousPacing ~= nil then
+            anxiousPacing = Animation(params.anxiousPacing)
+        end
+        if params.threatenTarget ~= nil then
+            threatenTarget = FindEntity(params.threatenTarget)
+        end
+    end
+
+    nodes.Action_RunToDoor = Action
+    {
+        function()
+            if mod.moveto.MoveToPoint(doorPosition, MovementSpeed.Sprint, me) then
+                mod.util.SleepRandom(1.0, 4.0)
+                ClearFlag(goToDoor,me)
+            end
+        end,
+        Valid = function()
+            return GetFlag(goToDoor, me)
+        end
+    }
+
+    --if the gondians get incinareted by collars, just wander around
+    nodes.Action_GondiansAreDead = Action
+    {
+        function ()
+            local wanderAnchor = me.Position
+            Wander(10.0, 3.0, MovementSpeed.Walk, wanderAnchor)
+        end,
+
+        Valid = function()
+            return GetFlag(switchExploded)
+        end
+    }
+
+    --if Iron Throne destroyed by the player visiting it, Gondians still alive
+    nodes.Action_IRNdestroyed = Action
+    {
+        function ()
+            if threatenTarget~=nil then
+                LookAtEntity(threatenTarget,5.0)
+            end
+            PlayAnimation(anxiousPacing,false, true)
+            Sleep(5.0)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return GetFlag(ironThroneDestroyed)
+            and (not GetFlag(switchExploded))
+            and anxiousPacing ~= nil
+            and anxiousPacing ~= ""
+        end
+    }
+
+    --silently patrol, if you have a patrol spline defined
+    nodes.Action_Patrol = Proxy
+    {
+        game.states.TEST_Patrol,
+        params = {
+            patrolActions = params.patrolActions,
+            patrolSpline = params.patrolSpline,
+            patrolSpeed = params.patrolSpeed,
+            patrolReverse = params.patrolReverse,
+            startSplineIndex = params.startSplineIndex,
+            patrolActionsIsSmallInterrupt = params.patrolActionsIsSmallInterrupt
+        },
+
+        CanEnter = function()
+            return params.shouldPatrol
+        end
+    }
+
+    --if no patrol spline is defined, stand around
+    nodes.Action_Idle = Action
+    {
+        function()
+            Sleep(3.0)
+        end,
+
+        Valid = function()
+            return not GetFlag(ironThroneDestroyed)
+        end,
+    }
+
+    -- Action - fallback
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+    }
+end}

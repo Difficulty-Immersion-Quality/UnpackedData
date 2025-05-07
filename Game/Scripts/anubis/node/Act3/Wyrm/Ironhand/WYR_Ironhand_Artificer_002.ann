@@ -1,0 +1,68 @@
+game.states.WYR_Ironhand_Artificer_002 = State{function()
+    description = [[]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local defaultPos = "S_WYR_Ironhand_InitPos_Artificer_002_4d5ab559-0c9f-470a-a050-1088ec153927"
+    local stool = "S_WYR_Ironhand_EntranceStool_daa3808d-d1b5-40db-aa3b-aaf60072df93"
+    local stoolZone = "S_WYR_Ironhand_EntranceStoolZone_74fb6ea6-88da-42eb-a866-201206b5d9ce"
+    local lookPos = "S_WYR_Ironhand_EntranceLookOut_4b1310b2-1626-418f-a0aa-28f288fc4638"
+
+    nodes.Default = Proxy {
+        game.states.GLO_TimedActions,
+        params = {
+            canRepeat = false,
+            duration_01 = { 10.0, 15.0 },
+            action_01 = StateRef{game.states.GLO_StandAtTriggerSplit,
+                trigger = defaultPos,
+                speed = "Stroll",
+            },
+            duration_02 = { 10.0, 15.0 },
+            action_02 = StateRef{game.states.GLO_StandAtTriggerSplit,
+                trigger = lookPos,
+                speed = "Stroll",
+            },
+            duration_03 = { 15.0, 30.0 },
+            action_03 = StateRef{game.states.Sit,
+                seat = stool,
+                seatTrigger = stoolZone,
+                sitIdle = StateRef{game.states.WYR_Ironhand_Artificer_002_Sitting},
+            },
+            duration_04 = { 10.0, 15.0 },
+            action_04 = StateRef{game.states.WYR_Ironhand_Artificer_002_Wander
+            },
+        }
+    }
+
+end}
+
+game.states.WYR_Ironhand_Artificer_002_Wander = State{function()
+    modules = { "shared.util" }
+
+    local wanderZone = Entity("S_WYR_Ironhand_EntranceWanderZone_21ee07df-fa8f-40f6-8bdd-925eeffca9b3")
+    local lookPos = Entity("S_WYR_Ironhand_EntranceLookOut_4b1310b2-1626-418f-a0aa-28f288fc4638")
+
+    nodes.Wander = Action {
+        function()
+            local pos = TriggerGetRandomPosition(wanderZone.Trigger)
+            pos = FindValidPosition(pos, 1.0, me)
+            if pos ~= nil then
+                local result = MoveTo(pos, MovementSpeed.Stroll, false, false, 0.1, 1.0, false)
+                if result ~= error.MovementError.None then
+                    DebugText(me, "Can't move to random position")
+                end
+            end
+            mod.util.SleepRandom(3.0, 10.0)
+        end
+    }
+end}
+
+game.states.WYR_Ironhand_Artificer_002_Sitting = State{function()
+    modules = { "shared.util" }
+
+    nodes.Default = Action{
+        function()
+            mod.util.SleepRandom(5.0, 15.0)
+        end
+    }
+end}

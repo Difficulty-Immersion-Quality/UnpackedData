@@ -1,0 +1,335 @@
+game.states.HAV_Isobel = State { function()
+
+    description = [[Isobel's main script. Includes her behaviour in HAV and a proxy to her behaviour in MOO.]]
+
+    modules = { "shared.moveto", "shared.dialog" }
+
+    local atColonyFlag = Flag([[MOO_Isobel_State_AtMoonrise_a95b7f8f-1454-433f-a496-71c9306683ce]])
+    local preparingForMT = Flag([[HAV_TakingIsobel_State_IsobelIsPreparingToGoToMT_610216db-cc3a-4d7e-867d-a3f66943aaaa]])
+    local gaveOintmentFlag = Flag([[HAV_TakingIsobel_Event_GiveOintment_efb6aed5-fd07-433b-b0c5-b980bf77bb2c]])
+    local followUpDoneFlag = Flag([[HAV_TakingIsobel_Event_FollowUpCleanedUp_c2f3dd52-dd3b-4c07-b3ba-cba17b36dfc3]])
+    local receivedBonesFlag = Flag([[SCL_ShadowCurse_Event_GiveBonesToIsobel_26c0ec08-561f-411f-9053-458341c6a7e9]])
+    local finishedResearchFlag = Flag([[SCL_ShadowCurse_Event_BonesResearchProgressed_91936c5f-a3f6-741a-3f1f-ac956ee649f5]])
+    local isobelToRoom = Flag("HAV_TakingIsobel_Event_IsobelToRoom_d1f2df3a-ba92-5599-0b19-b0d9da9c0f5c")
+    local epilogue = Flag("SCE_State_AtEpilogue_3541abb5-6aaf-48c7-bf30-5a13b3abc718")
+    local kneeling = Flag("HAV_Isobel_State_Kneeling_1fb4ab6b-fde7-4c97-84b9-3a7dcaa17189")
+    local reunionFlag = Flag("SCE_IsobelNightsongReunion_State_ReunionHappened_40d1893e-20b2-407d-a131-0e9d0a0bdf04")
+    local inCampFlag = Flag("ISOBEL_08db168b-e9b9-4cf8-92eb-ee30043fed13")
+    local mooAssault = Flag("MOO_Assault_State_InProgress_0f3a8f5d-7402-4220-bebb-d4b21d3db08d")
+
+    local prayerLoopAnim = Animation([[CUST_BarrierChanting_01_Loop_053c0ce0-dfc0-4cbc-bdd6-764226fde026]])
+    local searchAnim = Animation([[CUST_Thinking_03_9407dc5c-7155-40a6-a2ef-43ec37b0eda0]])
+    local anim_KneelingBesideCorpse_Start = Animation("CUST_KneelingBesideCorpse_01_Start_86c1e910-b6a7-40e4-bc17-e91152786fc1")
+    local anim_KneelingBesideCorpse_Loop_01 = Animation("CUST_KneelingBesideCorpse_01_Loop_312687d1-eb1b-4c66-a8fe-433b980c1f4f")
+    local anim_KneelingBesideCorpse_Loop_02 = Animation("CUST_KneelingBesideCorpse_02_Loop_0185a85b-1fb5-41b4-b41b-e4d19ec1ab63")
+    local anim_KneelingBesideCorpse_Loop_03 = Animation("CUST_KneelingBesideCorpse_03_Loop_bf4ddff9-5e50-4edc-8238-5486d17a6ae9")
+    local anim_KneelingBesideCorpse_End = Animation("CUST_KneelingBesideCorpse_01_End_978e3922-2e06-4b5f-8b9b-8cce3ba772d9")
+    local readingAnim = Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716")
+    local reading2Anim = Animation("CUST_Reading_Book_02_51295e0d-d253-4102-8634-f2c7d3443762")
+    local loopingAnim = false
+
+    local flamingSpy = Entity([[S_HAV_FlamingSpy_acb1dd9e-952b-4281-8e30-ec6f671493a6]])
+
+    local spyIsThereOnArrival = false
+    local lookedForSpy = false
+    local atSpy = false
+    local prayerPoint = Entity("S_HAV_IsobelPrayerPoint_61d29a82-e9cd-462e-bbae-92184c783c15")
+    local roomBox = Entity("S_HAV_IsobelRoomFollowUpBox_Room_1ddc9945-3187-4eee-a2f3-8e2c06e5c06f")
+    local dadPoint = Entity("S_HAV_TakingIsobel_DadTrigger_c48f7400-03e5-4c85-a200-5a03afc21957")
+
+    local prayerAD = Dialog([[HAV_Isobel_AD_Prayer_29c4edc5-8264-4f34-69c4-08b1357be848]])
+    local kethericStatueAD = Dialog("HAV_Isobel_AD_LookKetheric_8213542b-c23f-1dd6-4f52-0fa093066953")
+    local canAD = true
+
+    local logs = Entity("S_HAV_IsobelLogs_cc796fe1-cecd-4954-ad35-d5ab079e1fe8")
+
+    local bookReadLightBox = Entity("S_HAV_TakingIsobel_ReadingLightBlock_9a9a017c-a94e-491d-a5d0-babd865150f5")
+    local bookReadLight = Entity("S_HAV_TakingIsobel_BookReadLight_3c4abab2-d1c7-4e79-ae0f-3a8b448d9a6c")
+    local bookReadPoint = Entity("S_HAV_TakingIsobel_ReadPoint_c4794791-3e45-496f-8ad4-b65b29853ff8")
+    
+    local currentBehaviourNode
+
+    local foundBook = false
+    local inChair = false
+
+    -----------------------------------------
+    -- helper functions
+
+    -----------------------------------------
+    -- node section
+
+    --// At SCE
+    nodes.SCEpilogueReunion = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+                trigger = "S_SCE_Isobel_Debrief_IdlePoint_255969ec-7683-4925-98be-f6b5674eba04"
+        },  
+        CanEnter = function()
+            return GetFlag(reunionFlag) and not GetFlag(inCampFlag)
+        end
+    }
+
+    nodes.SCEpilogue = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+                trigger = "S_SCE_IsobelPoint_d51cd5c0-9a39-4f86-9da5-116af810b914"
+        },  
+        CanEnter = function()
+            return GetFlag(epilogue, me) and not GetFlag(reunionFlag)
+        end
+    }
+
+    --// At COL
+    nodes.AtColony = Proxy {
+        game.states.COL_Showdown_Isobel,
+        CanEnter = function()
+            return GetFlag(atColonyFlag)
+        end
+    }
+
+    nodes.MooAssault = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {trigger = "S_HAV_Isobel_MoonriseAssault_83c8bc1a-d38e-4363-a118-9fd825501bde"},
+        Valid = function()
+            return not GetFlag(epilogue, me) and
+                   GetFlag(mooAssault)
+        end
+    }
+
+    --// Default behaviour in HAV, alone in room
+    nodes.InRoom = Selector {
+        function(nodes)
+            if not GetFlag(isobelToRoom) then
+                return nodes.Ritual
+            end
+            if IsInTrigger(flamingSpy, roomBox.Trigger) then
+                if not lookedForSpy then
+                    return nodes.LookForSpy
+                elseif atSpy then
+                    return nodes.AtDefeatedSpy
+                end
+            end
+            if GetFlag(isobelToRoom) and not IsInTrigger(me, roomBox.Trigger) then
+                mod.moveto.MoveToPoint(dadPoint, MovementSpeed.Run, me)
+            end
+            if inChair == true then
+                return nodes.SitAndRead
+            elseif not HasActiveStatus(logs, "BURNING") then
+                return nodes.LightLogs
+            else
+                return GetRandomCanEnter(nodes)
+            end
+        end,
+        Valid = function()
+            return not GetFlag(mooAssault) and 
+                   not GetFlag(atColonyFlag) and
+                   not GetFlag(inCampFlag) and
+                   not GetFlag(epilogue, me)
+        end
+    }
+
+    nodes.InRoom.Ritual = Action {
+        function()
+            if GetDistanceTo(prayerPoint, me) > 1.5 then
+                loopingAnim = false
+                DebugText(me, "Going to prayer point")
+                mod.moveto.MoveTo(prayerPoint, true, 0.0, "Stroll", "", 0.5, true, true)
+            else
+                LookFrom(prayerPoint)
+                if not loopingAnim then
+                    loopingAnim = true
+                    DebugText(me, "Playing loop anim")
+                    PlayAnimation(prayerLoopAnim, false, true)
+                end
+                Sleep(6.0 + 4.0*math.random())
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(prayerAD, { minDelay = 20.0 }, me)
+            end
+        end,
+		CanEnter = function()
+			return not GetFlag(isobelToRoom)
+		end,
+        OnEnter = function()
+            SetEntityEvent(me, "HAV_Isobel_StartRitual")
+        end,
+        OnInterrupt = function()
+            loopingAnim = false
+        end,
+        OnLeave = function()
+            loopingAnim = false
+            SetEntityEvent(me, "HAV_Isobel_FinishSpell")
+        end
+    }
+
+    nodes.InRoom.LightLogs = Action {
+        function()
+            Sleep(0.5)
+            UseItem(logs.Item)
+            Sleep(0.5)
+        end,
+        Valid = function()
+            return not HasActiveStatus(logs, "BURNING")
+        end
+    }
+
+    nodes.InRoom.AtDefeatedSpy = Action {
+        CanEnter = function()
+            return atSpy
+                    and IsInTrigger(flamingSpy, roomBox.Trigger)
+        end,
+        OnEnter = function()
+            atSpy = false
+        end,
+        function()
+            Sleep(1)
+            SteerTo(flamingSpy)
+            Sleep(1)
+            if math.abs(me.Position.Y - flamingSpy.Position.Y) <= 0.5 then
+                loopingAnim = true
+                SetFlag(kneeling)
+                PlayLoopingAnimation(anim_KneelingBesideCorpse_Start, {anim_KneelingBesideCorpse_Loop_01, anim_KneelingBesideCorpse_Loop_02, anim_KneelingBesideCorpse_Loop_03}, anim_KneelingBesideCorpse_End)
+            end
+            while true do
+                Sleep(2)
+                if (GetDistance2DTo(me, flamingSpy) >= 2.0) then
+                    break
+                end
+            end
+        end,
+        Valid = function()
+            return IsInTrigger(flamingSpy, roomBox.Trigger)
+        end,
+        OnLeave = function()
+            if loopingAnim then
+                ClearFlag(kneeling)
+                loopingAnim = false
+                StopAnimation(me)
+            end
+        end,
+    }
+
+    nodes.InRoom.LookForSpy = Action {
+        -- When Isobel arrives in her room, if the spy is defeated and in the room, she will go next to him.
+        -- This reaction should not ping-pong;
+        -- If the corpse is not there initially, or she fails to walk to it -> too bad, but let's just skip AtDefeatedSpy and never enter it
+        CanEnter = function()
+            return lookedForSpy == false
+        end,
+        function()
+            DebugText(me, "Looking For Spy")
+            Sleep(3)
+            lookedForSpy = true
+            if spyIsThereOnArrival and 
+               IsInTrigger(flamingSpy, roomBox.Trigger) and 
+               mod.moveto.MoveToPoint(flamingSpy, MovementSpeed.Run, me, 2.0) then
+                atSpy = true
+            end
+            Sleep(0.5)
+        end
+    }
+
+    nodes.InRoom.SitAndRead = Selector{
+        function(nodes)
+            if not me.IsReposed then
+                return nodes.SitDown
+            else
+                return nodes.Read
+            end
+        end,
+        Valid = function(nodes)
+            return nodes.SitDown.IsSelectable()
+        end,
+        OnLeave = function()
+            inChair = false
+        end
+    }
+
+    nodes.InRoom.SitAndRead.SitDown = Proxy{
+        game.states.Sit,
+        params = {
+            seat = "S_HAV_TakingIsobel_FireChair_1af76fb0-8a2c-4b9c-aeda-686380b365ce",
+            sitOnGroundAsFallback = false,    
+        },
+        OnLeave = function()
+            if me.IsReposed then
+                inChair = true
+            end
+        end
+    }
+
+    nodes.InRoom.SitAndRead.Read = Action{
+        function()
+            PlayAnimation(reading2Anim, true, false)
+        end,
+        OnEnter = function()
+            inChair = false
+        end
+    }
+
+    nodes.InRoom.SitToWarm = Proxy {
+        game.states.Sit,
+        params = {
+            seat = "S_HAV_TakingIsobel_FireChair_1af76fb0-8a2c-4b9c-aeda-686380b365ce",
+            sitOnGroundAsFallback = false
+        }
+    }
+    
+    nodes.InRoom.Read = Action {
+        function()
+            if not HasActiveStatus(bookReadLight, "BURNING") then
+                UseItem(bookReadLight.Item)
+                Sleep(0.5)
+            end
+            if GetDistanceTo(me, bookReadPoint) < 2.0 or
+               mod.moveto.MoveToPoint(bookReadPoint, MovementSpeed.Stroll, me, 1.0) then
+                LookFrom(bookReadPoint)
+                Sleep(1.5)
+                PlayAnimation(searchAnim, true, false)
+                Sleep(3.0)
+            end
+        end,
+        CanEnter = function()
+            StopAnimation(me)
+            return IsInTrigger(bookReadLight, bookReadLightBox.Trigger)
+        end
+    }
+
+
+    nodes.InRoom.ConsiderDad = Action {
+        function()
+            if GetDistanceTo(me, dadPoint) < 2.0 or
+               mod.moveto.MoveToPoint(dadPoint, MovementSpeed.Stroll, me, 1.0) then
+                LookFrom(dadPoint)
+                Sleep(10.0)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(kethericStatueAD, { minDelay = 20.0 }, me)
+            end
+        end,
+        CanEnter = function()
+            StopAnimation(me)
+            return IsInTrigger(bookReadLight, bookReadLightBox.Trigger)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(4.0)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.Deactivated = function(e)
+        currentBehaviourNode = nil
+    end
+
+    events.FlagSet = function(e)
+        if (e.Entity == me) and
+           (e.Flag == Guid([[HAV_TakingIsobel_Event_SpyDefeatedInRoomOnArrival_3409e8d7-7352-491c-9d93-e15b4f2bfce6]])) then
+            spyIsThereOnArrival = true
+        elseif e.Flag == Guid("HAV_TakingIsobel_State_SpyIsPermaDefeated_28387342-a79a-4684-aca9-d71237925347") then
+            SetEntityEvent(me, "HAV_Isobel_FinishSpell")
+        end
+    end
+
+end
+}

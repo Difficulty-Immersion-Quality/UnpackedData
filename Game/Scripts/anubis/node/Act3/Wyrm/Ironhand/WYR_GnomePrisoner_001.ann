@@ -1,0 +1,84 @@
+game.states.WYR_GnomePrisoner_001 = State{function()
+    description = [[Behavior of a gnome in smithy basement: grinding weapons]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local atRack = "S_WYR_Ironhand_GnomePrisoner_001_AtRack_589b6ab0-cde1-45b3-ac28-b6a34c33eb49"
+    local atRackPos = Entity("S_WYR_Ironhand_GnomePrisoner_001_AtRack_589b6ab0-cde1-45b3-ac28-b6a34c33eb49")
+    --local atWorkbench = "S_WYR_Ironhand_InitPos_Prisoner_001_a1d7dfe0-f80f-4b53-8f3d-c2056b933f14"
+    local atWhetstone = "S_WYR_Ironhand_GnomePrisoner_001_AtWhetstone_5c2d33b8-fd49-420a-99ad-0b053645940b"
+    local atWhetstonePos = Entity("S_WYR_Ironhand_GnomePrisoner_001_AtWhetstone_5c2d33b8-fd49-420a-99ad-0b053645940b")
+
+    local takeDialog = Dialog("WYR_Ironhand_WB_TakeFromRack_02_0582b61c-4780-dc8a-18fc-be781bbc16a2")
+    local takeSceneTrigger = Entity("WYR_Ironhand_WB_TakeFromRack_02_SceneTrigger_21c04670-fd73-4cfb-9125-e243e4052443")
+    local sharpenDialog = Dialog("WYR_Ironhand_WB_Sharpen_1648aae3-5cb3-778c-cd8a-0d6d8acc9b01")
+    local sharpenSceneTrigger = Entity("WYR_Ironhand_WB_Sharpen_SceneTrigger_d9ff24cc-f410-48bb-8a4b-7f0c44c67409")
+    local putDialog = Dialog("WYR_Ironhand_WB_PutOnRack_02_afb1dc1a-505f-204f-e72c-48224066f6a0")
+    local putSceneTrigger = Entity("WYR_Ironhand_WB_PutOnRack_02_SceneTrigger_cc17da85-9566-4c9d-b5e2-ff245e38d0e0")
+
+    local choice = {
+        Grab = 1,
+        Work = 2,
+        Drop = 3,
+    }
+    local currentChoice = 1
+
+    nodes.Grab = Selector {
+        CanEnter = function()
+            return currentChoice == choice.Grab
+        end
+    }
+
+    nodes.Grab.Pickup = Action {
+        function()
+            --LookFrom(atRackPos)
+            StartBehaviorDialog(takeDialog, takeSceneTrigger.Trigger, true, me)
+            Sleep(0.5)
+            currentChoice = choice.Work
+        end
+    }
+
+    nodes.Sharpen = Selector {
+        CanEnter = function()
+            return currentChoice == choice.Work
+        end
+    }
+
+    nodes.Sharpen.Work = Action {
+        function()
+            --LookFrom(atWhetstonePos)
+            StartTimer(me, "Timer_WYR_Ironhand_Sharpen_StopBehaviorDialog", mod.math.random(15.0,30.0), 1)
+            StartBehaviorDialog(sharpenDialog, sharpenSceneTrigger.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_Sharpen_StopBehaviorDialog")
+            Sleep(0.5)
+            currentChoice = choice.Drop
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_Sharpen_StopBehaviorDialog")
+        end
+    }
+
+
+    nodes.Drop = Selector {
+        Valid = function()
+            return currentChoice == choice.Drop
+        end
+    }
+
+    nodes.Drop.Drop = Action {
+        function()
+            --LookFrom(atRackPos)
+            StartBehaviorDialog(putDialog, putSceneTrigger.Trigger, true, me)
+            Sleep(0.5)
+            currentChoice = choice.Grab
+        end
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_Ironhand_Sharpen_StopBehaviorDialog" then
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    end
+end}

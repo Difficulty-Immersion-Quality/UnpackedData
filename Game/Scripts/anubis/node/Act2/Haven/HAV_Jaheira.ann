@@ -1,0 +1,294 @@
+game.states.HAV_Jaheira_Protected = State{
+    function()
+
+        
+        modules = { "shared.dialog", "shared.character"}
+
+        local HAV_EnteringHaven_State_GainedAccess = Flag("HAV_EnteringHaven_State_GainedAccess_07c776da-353a-9050-e9be-c42d51a99412")
+        local followUpFlag = Flag("HAV_TakingIsobel_State_CaptureFollowUpInProgress_6b7ba85f-ff9e-41ea-be1f-9008d1d503b0")
+        local toRoomFlag = Flag("HAV_TakingIsobel_Event_IsobelToRoom_d1f2df3a-ba92-5599-0b19-b0d9da9c0f5c")
+        local checkpoint1 = Entity("S_HAV_Checkpoint_JaheiraHome_4ea43f15-e156-4705-b988-9f47266ff58a")
+        local checkpoint2 = Entity("S_HAV_Checkpoint_JaheiraHome2_54db1d5b-11fb-48de-b799-f5c67d02b5c7")
+        local bridge = Entity("S_SCL_HarperBridge_b68e6789-b6d3-4b39-866c-78dcfb37e7f0")
+        local guard = Entity("S_HAV_EnteringHaven_Guard_f48078e6-ec51-49a2-a244-9d0a72af5257")
+        local waitAD = Dialog("HAV_Jaheira_AD_AtCheckpoint_fa80418e-3f58-4b9c-24e0-408924753107")
+        local crossedArms = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+        local harper = Entity("S_HAV_HavenOutcasts_EntranceGuards_Halfling_Melee_c8bc8f03-c91c-42d4-829c-d16bb1df4a67")
+        local harperPoint = Entity("S_HAV_HavenOutcasts_Pos_EntranceGuards_Halfling_Melee_744feafa-89ee-49c8-b9fd-3d3d2081c54f")
+        local harperAD = Dialog("HAV_Jaheira_AD_DiscussingMarcus_2ad4487e-9957-4639-1f16-b1e6c90db3ad")
+        local discussMarcusFlag = Flag("HAV_Jaheira_State_DiscussMarcus_d43d141a-bda9-c1f2-6dce-e22ca308026c")
+        local toGate = Flag("HAV_EnteringHaven_State_JaheiraToGate_397c63c3-47c8-ceb4-fd12-fc848d820c3f")
+
+        nodes.EnteringHaven_Checkpoint = Selector{
+            function(nodes)
+                if not GetFlag(toGate) then
+                    return GetWeightedCanEnter(nodes, {[nodes.StandAt1] = 7,
+                                                       [nodes.DoAD] = 10})
+                else
+                    return nodes.StandAt2
+                end
+            end,
+            CanEnter = function()
+                return not GetFlag(HAV_EnteringHaven_State_GainedAccess)
+            end
+
+        }
+
+        nodes.EnteringHaven_Checkpoint.StandAt1 = Action{
+            function()
+                if not IsInDangerousSurfaceFor(checkpoint1, me.Character) then
+                    if GetDistanceTo(me, checkpoint1) > 2.0 then
+                        if MoveTo(checkpoint1, MovementSpeed.Walk, false, false, 0.0, 2.0, false) then
+                            PlayAnimation(crossedArms, false, true)
+                            LookFrom(checkpoint1)
+                            Sleep(10.0)
+                        else
+                            SteerTo(checkpoint1)
+                            Sleep(2.0)
+                        end
+                        PlayAnimation(crossedArms, false, true)
+                        LookFrom(checkpoint1)
+                        Sleep(10.0)
+                    end
+                else
+                    SteerTo(checkpoint1)
+                    Sleep(5.0)
+                end
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+            
+        }
+
+        nodes.EnteringHaven_Checkpoint.StandAt2 = Action{
+            function()
+                if not IsInDangerousSurfaceFor(checkpoint2, me.Character) then
+                    if GetDistanceTo(me, checkpoint2) > 2.0 then
+                        if MoveTo(checkpoint2, MovementSpeed.Walk, false, false, 0.0, 2.0, false) then
+                            PlayAnimation(crossedArms, false, true)
+                            LookFrom(checkpoint2)
+                            Sleep(10.0)
+                        else
+                            SteerTo(checkpoint2)
+                            Sleep(2.0)
+                        end
+                        PlayAnimation(crossedArms, false, true)
+                        LookFrom(checkpoint2)
+                        Sleep(10.0)
+                    end
+                else
+                    SteerTo(checkpoint2)
+                    Sleep(5.0)
+                end
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+        --[[
+        nodes.EnteringHaven_Checkpoint.Pace1 = Action{
+            function()
+                Sleep(3.0)
+                if MoveTo(checkpoint1, MovementSpeed.Walk, false, false, 0.0, 1.0, false) then
+                    Sleep(0.6)
+                    if MoveTo(checkpoint2, MovementSpeed.Walk, false, false, 0.0, 1.0, false) then
+                        Sleep(0.6)
+                        if MoveTo(checkpoint1, MovementSpeed.Walk, false, false, 0.0, 1.0, false) then
+                            Sleep(0.6)
+                            if MoveTo(checkpoint2, MovementSpeed.Walk, false, false, 0.0, 1.0, false) then
+                                Sleep(0.6)
+                                MoveTo(checkpoint1, MovementSpeed.Walk, false, false, 0.0, 1.0, false)
+                            end
+                        end
+                    end
+                end
+            end,
+            CanEnter = function()
+                return not IsInDangerousSurfaceFor(checkpoint1, me.Character) and
+                       not IsInDangerousSurfaceFor(checkpoint2, me.Character)
+            end
+        }
+
+        
+        nodes.EnteringHaven_Checkpoint.Pace2 = Action{
+            function()
+                Sleep(3.0)
+                if MoveTo(checkpoint1, MovementSpeed.Walk, false, false, 0.0, 1.0, false) then
+                    Sleep(0.6)
+                    if MoveTo(checkpoint2, MovementSpeed.Walk, false, false, 0.0, 1.0, false) then
+                        Sleep(0.6)
+                        if MoveTo(checkpoint1, MovementSpeed.Walk, false, false, 0.0, 1.0, false) then
+                            Sleep(0.6)
+                            MoveTo(checkpoint2, MovementSpeed.Walk, false, false, 0.0, 1.0, false)
+                        end
+                    end
+                end
+            end,
+            CanEnter = function()
+                return not IsInDangerousSurfaceFor(checkpoint1, me.Character) and
+                       not IsInDangerousSurfaceFor(checkpoint2, me.Character)
+            end
+        }]]
+
+        nodes.EnteringHaven_Checkpoint.DoAD = Action{
+            function()
+                SteerTo(bridge, false, 5)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    waitAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0,
+                    },
+                    me
+                )
+            end,
+            CanEnter = function()
+                return mod.dialog.IsSpeakerAvailableAndNear(guard, me, 13.0, false, false)
+            end
+        }
+
+        nodes.TakingIsobel_FollowUp = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = [[S_HAV_IsobelRoomArrivalPoint_1f775852-ddf6-4644-b271-cee665cd2cdb]]
+            },
+            Valid = function()
+                return GetFlag(followUpFlag) and
+                       GetFlag(toRoomFlag) and
+                       GetFlag(HAV_EnteringHaven_State_GainedAccess)
+            end
+        }
+
+        nodes.TakingIsobel_FollowUp2 = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = [[S_HAV_IsobelBalconyArrivalPoint_b4fb428e-3578-469b-a348-3f69dba345a4]]
+            },
+            Valid = function()
+                return GetFlag(followUpFlag) and
+                       not GetFlag(toRoomFlag) and
+                       GetFlag(HAV_EnteringHaven_State_GainedAccess)
+            end
+        }
+
+        nodes.DiscussingMarcus = Action{
+            function()
+                if GetDistanceTo(harper, me)  > 4.5 then
+                    local moveResult = MoveTo(harper, MovementSpeed.Stroll, false, true, 0.0, 4.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        Sleep(2.0)
+                    end
+                else
+                    Sleep(10.0)                      
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        harperAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 30.0,
+                        },
+                        me,
+                        harper)
+                end
+            end,
+            Valid = function()
+                return not GetFlag(followUpFlag) and
+                       GetFlag(HAV_EnteringHaven_State_GainedAccess) and
+                       (GetFlag(discussMarcusFlag) and
+                        GetDistanceTo(harperPoint, harper) < 5.0 and
+                        not mod.character.IsDefeated(harper))
+            end
+        }
+
+        nodes.InnIdle = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = [[S_HAV_Jaheira_InnHome2_68f5d526-225a-4436-abc4-7047911be5d8]]
+            },
+            Valid = function()
+                return not GetFlag(followUpFlag) and
+                       GetFlag(HAV_EnteringHaven_State_GainedAccess) and
+                       not (GetFlag(discussMarcusFlag) and
+                            GetDistanceTo(harperPoint, harper) < 5.0 and
+                            not mod.character.IsDefeated(harper))
+            end
+        }
+    end
+}
+
+game.states.SCE_Jaheira = State{
+    function()
+
+        modules = { "shared.dialog", "shared.character"}
+
+        local epilogue = Flag("SCE_State_AtEpilogue_3541abb5-6aaf-48c7-bf30-5a13b3abc718")
+
+        local mintharaApproachPoint = Entity("S_SCE_Jaheira_AtMinthara_Point_9a161710-c82d-4780-9114-ccb8e0952502")
+        local minthara = Entity("S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b")
+        local jaheiraMintharaDialog = Dialog("SCE_Debrief_AD_JaheiraAndMinthara_76aef292-c912-ae41-78eb-e567bf66beee")
+
+        local approachMinthara = false
+
+        self.OnInit = function()
+            StartTimer(me,"SCE_Jaheira_Minthara",20.0,0)
+            DebugText(me,"Started Minthara check timer")
+        end
+
+        --// Approach Minthara
+        nodes.SCE_ApproachMinthara = Action {
+            function()
+                if mod.dialog.IsSpeakerAvailableAndNear(minthara,me,8.0) then
+                    local moveResult = MoveTo(mintharaApproachPoint,MovementSpeed.Stroll,true)
+
+                    if moveResult == error.MovementError.None then
+                        SteerTo(minthara)
+                        mod.dialog.StartCheckedAutomatedDialogRateLimited(jaheiraMintharaDialog,{waitForCompletion = true,minDelay = 12.0,},me, minthara)
+                    end
+                    approachMinthara = false
+                else
+                    DebugText(me,"Minthara unavailable for AD")
+                end
+            end,
+            OnLeave = function()
+                StartTimer(me,"SCE_Jaheira_Minthara",70.0,0)
+            end,
+            Valid = function()
+                return approachMinthara
+            end
+        }
+
+        --// At SCE
+        nodes.SCE_Idle = Proxy {
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = "S_SCE_JaheiraPoint_88a296f5-6f7b-4e26-a3df-a9291c0f1399",
+                acceptanceRadius = 1.0
+            }
+        }
+
+        events.TimerFinished = function(e)
+            if e.TimerName == "SCE_Jaheira_Minthara" then
+                if GetFlag(epilogue,minthara) and not minthara.Character.IsDead then
+                    approachMinthara = true
+                end
+            end
+        end
+
+        self.CanEnter = function()
+            return GetFlag(epilogue, me)
+        end
+
+    end
+}
+
+game.states.HAV_Jaheira_Hope = State{
+    function()
+
+        nodes.InnIdle = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = [[S_HAV_Jaheira_InnHome2_68f5d526-225a-4436-abc4-7047911be5d8]]
+            },
+        }
+    end
+}

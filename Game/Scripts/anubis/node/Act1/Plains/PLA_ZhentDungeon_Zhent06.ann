@@ -1,0 +1,125 @@
+game.states.PLA_ZhentDungeon_Zhent06 = State{
+    function()
+
+        local PLA_ZhentDungeon_Zhent06_Home
+
+        self.OnInit = function()
+            PLA_ZhentDungeon_Zhent06_Home = FindEntity("S_PLA_ZhentDungeon_Zhent06_Home_3525c183-1163-4477-aafa-d5831b3c6128")
+        end
+
+        nodes.Behaviour = Selector{
+            function(nodes)
+                return GetRandomCanEnter(nodes)
+            end
+        }
+
+        nodes.Behaviour.Brazier1 = Proxy{
+            game.states.PLA_ZhentDungeon_Zhent06_MaintainBrazier,
+            params = {Brazier = "S_PLA_ZhentDungeon_Fire01_17a9d761-9e1f-444b-a33d-5ac82b1842f9",
+                      BrazierBox = "S_PLA_ZhentDungeon_Fire01Box_df04a497-e0c4-497a-98f1-ac3d9e5a540f",
+                      BrazierPokeTrigger = "S_PLA_ZhentDungeon_TimelineScene_PokeFire_01_f6559764-a2ff-40e1-a3fc-4e4cbaec2137"}
+        }
+
+        nodes.Behaviour.Brazier2 = Proxy{
+            game.states.PLA_ZhentDungeon_Zhent06_MaintainBrazier,
+            params = {Brazier = "S_PLA_ZhentDungeon_Fire02_e8369fb1-6a27-4da0-800f-ad3bd7d6b007",
+                      BrazierBox = "S_PLA_ZhentDungeon_Fire02Box_532124e4-d17b-4fe2-b831-853180bd21b2",
+                      BrazierPokeTrigger = "S_PLA_ZhentDungeon_TimelineScene_PokeFire_02_0a79c836-7fbf-4599-8967-f05f5e79d2c0"}
+        }
+
+        nodes.Behaviour.Brazier3 = Proxy{
+            game.states.PLA_ZhentDungeon_Zhent06_MaintainBrazier,
+            params = {Brazier = "S_PLA_ZhentDungeon_Fire03_eb57096f-ed2f-4662-b999-a30b68b58782",
+                      BrazierBox = "S_PLA_ZhentDungeon_Fire03Box_e12e58e1-38e1-40f6-84d1-3944da467000",
+                      BrazierPokeTrigger = "S_PLA_ZhentDungeon_TimelineScene_PokeFire_03_49e5f6ae-a7f6-43a9-9f81-e8baff6f0d21"}
+        }
+
+        nodes.Idle = Action{
+            function()
+                if not IsInDangerousSurfaceFor(PLA_ZhentDungeon_Zhent06_Home, me.Character) then
+                    if GetDistanceTo(me, PLA_ZhentDungeon_Zhent06_Home) > 2.0 then
+                        try
+                            MoveTo(PLA_ZhentDungeon_Zhent06_Home)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            LookAtEntity(PLA_ZhentDungeon_Zhent06_Home, 3.0)
+                            Sleep(2.0)
+                        end
+                    else
+                        LookFrom(PLA_ZhentDungeon_Zhent06_Home)
+                    end
+                else
+                    LookAtEntity(PLA_ZhentDungeon_Zhent06_Home, 3.0)
+                end
+                Sleep(7.0)
+            end
+        }
+        
+        nodes.Behaviour.DoAD = Proxy{
+            game.states.GLO_ADManager,
+            params={
+                AD = [[PLA_ZhentDungeon_Zhent06_AD_8b4d52e6-dfce-693e-6521-abdac761a559]],
+                dialogBlockFlag = [[PLA_ZhentDungeon_State_BlockAD_Zhent06_b2533761-ad35-4193-b0b1-e5cd1e9f484d]],
+                regionBlockFlag = [[PLA_ZhentDungeon_State_BlockAD_Back_4ea4ff84-27d0-42ac-831b-8c8be2ff4e61]],
+            },
+            CanEnter = function()
+                return GetDistanceTo(PLA_ZhentDungeon_Zhent06_Home, me) < 2.5
+            end
+        }      
+
+    end
+}
+
+game.states.PLA_ZhentDungeon_Zhent06_MaintainBrazier = State{
+
+    function()
+
+        params.Brazier = {type = EParamType.String, help=[[
+           The Brazier
+        ]]}
+
+        params.BrazierBox = {type = EParamType.String, help=[[
+            The Brazier's containing box.
+        ]]}
+
+        params.BrazierPokeTrigger = {type = EParamType.String, help=[[
+            The scene trigger for poking the fire behavior
+        ]]}
+
+        local brazier
+        local brazierBox
+        local brazierPokeTrigger
+        local pokingFireDialog = Dialog("BHVR_WRLD_WLD_PokingFire_HUM_F_31be3ac3-6416-c786-8d8b-2c4a77615b33")
+
+        self.OnInit = function()
+            brazier = FindEntity(params.Brazier)
+            brazierBox = FindEntity(params.BrazierBox)
+            brazierPokeTrigger = FindEntity(params.BrazierPokeTrigger)
+        end
+
+        self.CanEnter = function()
+            if not brazier then
+                return IsInTrigger(FindEntity(params.Brazier), FindEntity(params.BrazierBox).Trigger)
+            else
+                return IsInTrigger(brazier, brazierBox.Trigger)
+            end
+        end
+
+        nodes.Action = Action{
+            function()
+                try
+                    StartBehaviorDialog(pokingFireDialog, brazierPokeTrigger.Trigger, true, me)
+                    DebugText(me, "Maintaining Fire")
+                    if not HasActiveStatus(brazier, "BURNING") then
+                        ApplyStatus(brazier, "BURNING", true, -1.0, me)
+                    end
+                    SteerTo(brazier)
+                    Sleep(2.0)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    SteerTo(brazier)
+                    Sleep(3.0)
+                end
+            end
+        }
+
+    end
+}

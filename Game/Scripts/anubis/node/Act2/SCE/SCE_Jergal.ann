@@ -1,0 +1,53 @@
+game.states.SCE_Jergal = State{
+    function()
+
+        modules = { "shared.dialog", "shared.character"}
+
+        params.trigger = { type = EParamType.String, required = true,
+        help = [[Stand trigger.]]}
+
+        local inEpilogue = Flag("SCE_State_AtEpilogue_3541abb5-6aaf-48c7-bf30-5a13b3abc718")
+        local withersDialog = Dialog("SCE_Jergal_AD_477a70c8-5535-b38b-7a76-7a08e8840522")
+        local talkedToWithers = false
+
+        self.OnEnter = function()
+            if not talkedToWithers then
+                StartTimer(me,"SCE_Jergal_AD",10.0,0)
+                DebugText(me,"Started dialog timer")
+            end
+        end
+
+        self.OnLeave = function()
+            StopTimer(me,"SCE_Jergal_AD")
+            DebugText(me,"Stopped dialog timer")
+        end
+
+        self.Valid = function()
+            return GetFlag(inEpilogue, me)
+        end
+
+        nodes.SCE_Idle = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = params.trigger
+            }
+        }
+
+        events.TimerFinished = function(e)
+            if e.TimerName == "SCE_Jergal_AD" then
+                StartTimer(me,"SCE_Jergal_AD",40.0,0)
+                DebugText(me,"Restarted dialog timer")
+                StartAutomatedDialogRateLimitedImmediate(withersDialog,1.0,12.0,me)
+            end
+        end
+
+        events.EntityEvent = function(e)
+            if e.Event == "SCE_TalkedToJergal" then
+                StopTimer(me,"SCE_Jergal_AD")
+                DebugText(me,"Stopped dialog timer")
+                talkedToWithers = true
+            end
+        end
+
+    end
+    }

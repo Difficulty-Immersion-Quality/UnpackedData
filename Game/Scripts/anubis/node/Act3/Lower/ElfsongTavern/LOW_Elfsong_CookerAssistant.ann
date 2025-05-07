@@ -1,0 +1,82 @@
+game.states.LOW_Elfsong_CookerAssistant = State{function ()
+
+    --------------------------------Modules--------------------------------
+    modules = {"shared.dialog", "shared.moveto", "shared.util"}
+
+    --------------------------------Variables--------------------------------
+
+    local cookingPositions = nil
+
+    local lookingAnimation = nil
+
+    local localAD = nil
+
+
+    --------------------------------Nodes--------------------------------
+
+    self.OnInit = function()
+
+        cookingPositions = {
+            Entity("S_LOW_Elfsong_Kitchen_AssistantPoint_001_94d3caea-2da7-461c-9cd1-b63681cd48f9"),
+            Entity("S_LOW_Elfsong_Kitchen_AssistantPoint_002_47751910-2bfb-480e-bb11-b20f80aeda54")
+        }
+        lookingAnimation = Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+        localAD = Dialog("LOW_Elfsong_AD_Cooker_Assistant_4d931342-7bec-b8bd-3855-45ca283dbc00")
+    end
+
+    nodes = Selector{
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.FirstCookingPosition = Action {
+        function()
+            if mod.moveto.MoveToPoint(cookingPositions[1], MovementSpeed.Walk, me, 0.1) then
+                mod.util.SleepRandom(3,5)
+            else
+                mod.util.SleepRandom(6,8)
+            end
+        end
+    }
+
+    nodes.AD = Action {
+        function()
+            helpers.StartAD()
+            Sleep(15 + 25 * math.random())
+        end
+    }
+
+    nodes.SecondCookingPosition = Action {
+        function()
+            if mod.moveto.MoveToPoint(cookingPositions[2], MovementSpeed.Walk, me, 0.1) then
+                LookFrom(cookingPositions[2])
+                try
+                    Sleep(0.1)
+                    PlayAnimation(lookingAnimation)
+                    mod.util.SleepRandom(3,5)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    Sleep(10.0)
+                end
+            else
+                Sleep(15.0)
+            end
+        end
+    }
+
+    --------------------------------Helpers--------------------------------
+
+    helpers.action.StartAD = function()
+        mod.dialog.StartCheckedAutomatedDialog(
+            localAD,
+            {
+                waitForCompletion = true
+            },
+            me
+        )
+
+    end
+
+
+end
+}

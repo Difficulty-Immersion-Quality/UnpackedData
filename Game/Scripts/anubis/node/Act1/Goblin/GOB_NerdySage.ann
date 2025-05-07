@@ -1,0 +1,144 @@
+game.states.GOB_NerdySage = State{function()
+    description = [[Root state for GOB_NerdyGoblinSage goblin]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local fl_RealizedPoison = Flag("GOB_GoblinToast_State_RealizedPoison_0e867c08-b2b9-4f43-8260-168026663e2c")
+    local fl_HasVoloManuscript = Flag("GOB_HasVoloGoblinManuscript_72110c64-d3f6-be69-7a4d-d2156b986964")
+    local anim_Reading = Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716")
+    local dlg_Reading = Dialog("GOB_NerdyGoblinSage_AD_1e0eca09-04b0-d466-4483-275848529f9e")
+
+    local b_CanDoAD = true
+    local s_CanDoADTimer = "GOB_NerdySage.AD.CanDoAD"
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(25.0, 35.0), 0)
+    end
+
+    self.OnInit = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(5.0, 10.0), 0)
+    end
+
+    nodes.AD = Action{
+        function()
+            StartAutomatedDialog(dlg_Reading, true, me)
+            helpers.CanDoADReset()
+        end,
+
+        Valid = function()
+            return b_CanDoAD and not GetFlag(fl_RealizedPoison)
+        end
+    }
+
+    nodes.Reading = Action{
+        function()
+            PlayAnimation(anim_Reading, false, true)
+        end,
+
+        Valid = function()
+            return GetFlag(fl_HasVoloManuscript, me)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Sit = Proxy{
+        game.states.Sit,
+        params = {
+            seat = "S_GOB_NerdySageStool_c4290f5a-a32c-403b-b110-b7297e3ecf99",
+            seatTrigger = "S_GOB_NerdySage_SitTrigger_52e848c0-2f76-44f6-aee2-14680e3195eb",
+            useSeatPositionAsFallBack = false,
+            -- sitAnimationOverride = "Reading animation",
+            sitIdle = StateRef{game.states.GOB_NerdySage_Sitting},
+            nonSitIdle = StateRef{game.states.GOB_NerdySage_NonSitting}
+        }
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}
+
+game.states.GOB_NerdySage_Sitting = State{function()
+
+    modules = { "shared.util" }
+
+    description = [[Behaviour for GOB_NerdyGoblinSage in his chair]]
+
+    nodes.Idle = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}
+
+game.states.GOB_NerdySage_NonSitting = State{function()
+
+    modules = { "shared.util" }
+
+    description = [[Behaviour for GOB_NerdyGoblinSage if his chair was destroyed/stolen]]
+
+    local tr_LookAtFestivities = nil
+    local tr_LookAtDrunkGoblin = nil
+    local tr_SitTrigger = nil
+    local anim_Sigh = Animation("CUST_Sigh_01_c4417442-64dc-4459-ab02-b8284b82972f")
+
+    self.OnInit = function()
+        tr_LookAtFestivities = FindEntity("S_GOB_NerdySage_LookFrom_2_917eb326-a8ba-49c9-b06a-b39ba82d116f")
+        tr_LookAtDrunkGoblin = FindEntity("S_GOB_NerdySage_LookFrom_1_868b1400-e671-45bb-a67b-d7508f649361")
+        tr_SitTrigger = FindEntity("S_GOB_NerdySage_SitTrigger_52e848c0-2f76-44f6-aee2-14680e3195eb")
+    end
+
+    nodes = Selector{
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.LookAtFestivities = Action{
+        function()
+            try
+                MoveTo(tr_LookAtFestivities)
+                LookFrom(tr_LookAtFestivities)
+                PlayAnimation(anim_Sigh)
+                mod.util.SleepRandom(5.0, 12.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Movement failed: tr_LookAtFestivities")
+            end
+        end
+    }
+
+    nodes.LookAtDrunkGoblin = Action{
+        function()
+            try
+                MoveTo(tr_LookAtDrunkGoblin)
+                LookFrom(tr_LookAtDrunkGoblin)
+                mod.util.SleepRandom(5.0, 12.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Movement failed: tr_LookAtDrunkGoblin")
+            end
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            local v_NewPos = TriggerGetRandomPosition(tr_SitTrigger.Trigger)
+            try
+                MoveTo(v_NewPos)
+                mod.util.SleepRandom(5.0, 12.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Movement failed: v_NewPos")
+            end
+        end
+    }
+end}

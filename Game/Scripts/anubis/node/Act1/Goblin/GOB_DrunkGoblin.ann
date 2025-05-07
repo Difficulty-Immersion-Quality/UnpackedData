@@ -1,0 +1,151 @@
+game.states.GOB_DrunkGoblin = State{function()
+    modules = {"shared.dialog", "shared.status", "shared.math", "shared.util"}
+
+    local flagSpared
+
+    local chillingAD
+
+    local goblinState = "defaultState"
+    local goblinFriends = {}
+    local tr_AfterPoisonBattlePosition = Entity("S_GOB_GoblinToast_BattlePosition_Crusher_1d5ebd49-a00a-449f-afb8-89d7fc492330")
+
+    local anim_Urinating = Animation("CUST_Urinating_01_d7b689ac-2183-4c62-a481-eb5db76ac243")
+    local anim_Stretching = Animation("CUST_Stretching_01_9af703b0-c02f-4c17-bfee-7e11f1f80d6b")
+
+    local b_CanDoAD = true
+    local s_CanDoADTimer = "GOB_DrunkGoblin_Chilling"
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(12.0, 18.0), 0)
+    end
+
+    -- Check if the goblins are available for AD
+    helpers.ADAnyGoblinIsAvailable = function()
+        for i, v in ipairs(goblinFriends) do
+            if mod.dialog.IsSpeakerAvailable(v) then
+                return true
+            end
+        end
+        return false
+    end
+
+    self.OnInit = function()
+        chillingAD = Dialog("GOB_DrunkGoblin_AD_SecludedPlace_caebc37e-811e-880d-6769-c7dd6b095afc")
+
+        goblinFriends[1] = FindEntity("S_GOB_PartyingGoblin_000_Ranger_01_69ab2a7d-9035-4e4e-97e5-2d005c9662ee")
+        goblinFriends[2] = FindEntity("S_GOB_PartyingGoblin_001_Ranger_02_4aa22ae0-1f97-42e3-8fd7-474f2f3b7269")
+        goblinFriends[3] = FindEntity("S_GOB_PartyingGoblin_002_Melee_01_bedb5fe5-2fa7-42f4-82c0-dda23883ff7c")
+    end
+
+    nodes.MoveToBattlePosition = Action{
+        function()
+            try
+                --DebugText(me, "MoveToBattlePosition")
+                MoveTo(tr_AfterPoisonBattlePosition, MovementSpeed.Run)
+                LookFrom(tr_AfterPoisonBattlePosition)
+                SetWeaponUnsheathed(me, true, true)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+            end
+        end,
+        Valid = function()
+            return goblinState == "battlePosition" and GetDistance2DTo(me, tr_AfterPoisonBattlePosition) > 1.5
+        end
+    }
+
+    nodes.BattlePosition = Action{
+        function()
+            --DebugText(me, "BattlePosition")
+            LookFrom(tr_AfterPoisonBattlePosition)
+            SetWeaponUnsheathed(me, true, true)
+            Sleep(math.random(6, 10))
+        end,
+        Valid = function()
+            return goblinState == "battlePosition"
+        end
+    }
+
+    -- Chilling at the secluded spot after the fight / beind humiliated
+    nodes.Selector_Chilling = Selector{
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return goblinState == "secludedPlace"
+        end
+    }
+
+    nodes.Selector_Chilling.Urinating = Action{
+        function()
+            PlayAnimation(anim_Urinating, true)
+            Sleep(6.0)
+        end
+    }
+
+    nodes.Selector_Chilling.Talk = Action{
+        function()
+            if b_CanDoAD then
+                StartAutomatedDialog(chillingAD, true, me)
+                helpers.CanDoADReset()
+            else
+                PlayAnimation(anim_Stretching, true)
+                Sleep(4.0)
+            end
+        end
+    }
+
+    nodes.Selector_Chilling.Idle = Action{
+        function()
+            Sleep(6.0)
+        end
+    }
+
+    -- Telling story to friends
+    nodes.Action_PlayStoriesAD= Action{
+        function()
+            if not IsInDialog(me, false) and helpers.ADAnyGoblinIsAvailable() then
+                SetEntityEvent(me, "GOB_DrunkGoblin_Event_StartTellingStoriesAD")
+            end
+            Sleep(60 + 20 * math.random())
+        end,
+        Valid = function()
+            return (not mod.status.AreAllEntitiesDead(goblinFriends) and goblinState == "defaultState")
+        end,
+    }
+
+    -- Fallback
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.FlagSet = function(e)
+        if (e.Flag == Guid("GOB_DrunkGoblin_Quest_GoblinSparedInFight_9d6482a0-69d4-d83a-005e-7a62c302ad46") and goblinState ~= "complaining") then
+            DebugText(me, "I've been spared")
+            goblinState = "complaining"
+        elseif (e.Flag == Guid("GOB_DrunkGoblin_Event_Mocked_a9d88205-e99e-8c95-4270-2617a38291e5") and goblinState ~= "complaining") then
+            DebugText(me, "I've been mocked")
+            goblinState = "complaining"
+        elseif (e.Flag == Guid("GOB_DrunkGoblin_Event_AtSecludedPlace_74094fe2-812d-4ffe-ea07-1495a03b7c2e") and goblinState ~= "secludedPlace") then
+            DebugText(me, "I've arrived")
+            goblinState = "secludedPlace"
+        elseif e.Flag == Guid("GOB_GoblinToast_Event_ToStations_0b555ee8-2b8e-3881-b35e-9811f6baf77a")
+            and goblinState ~= "secludedPlace" then
+            DebugText(me, "Battle Station mode")
+            goblinState = "battlePosition"
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.Event == "GOB_DrunkGoblin_StartedComplaining" and e.TargetEntity == me then
+            DebugText(me, "The fight is over")
+            goblinState = "complaining"
+        end
+    end
+end
+}

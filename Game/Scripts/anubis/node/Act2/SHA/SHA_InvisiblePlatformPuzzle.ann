@@ -1,0 +1,104 @@
+game.states.SHA_InvisiblePlatformPuzzle_Distance =  State{
+    function ()
+        description = [[Hide platform if any character is close]]
+
+        local invisibleFX = nil
+        local activeFXHandle = nil
+
+        params.checkForNearbyPlayers = {type = EParamType.Bool, help=[[
+            Expression for light/dark mechanics.
+        ]]}
+
+        nodes = ImmediateSelector{}
+
+        self.OnInit = function()
+            invisibleFX = PrepareEffect("VFX_Script_DarknessTrial_Platform_01_6614beeb-d9d4-dc5d-70e1-e5b9d85b4d6b")
+        end
+
+        nodes.Action_PlayersNearby = Action{
+            function()
+                if activeFXHandle ~= nil then
+                    StopEffect(activeFXHandle)
+                    activeFXHandle = nil
+                end
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return params.checkForNearbyPlayers
+            end
+        }
+
+        nodes.Action_PlayersNotNearby = Action{
+            function()
+                if invisibleFX ~= nil and activeFXHandle == nil then
+                    activeFXHandle = PlayEffectAt(invisibleFX, me)
+                end
+
+                if activeFXHandle ~= nil then
+                    WaitForInterrupt()
+                else
+                    Sleep(0.1)
+                end
+            end,
+            Valid = function()
+                return not params.checkForNearbyPlayers
+            end
+        }
+
+
+        nodes.Action_Fallback = Action{
+            function()
+                WaitForInterrupt()
+            end
+        }
+
+        events.LevelGameplayStarted = function() -- Restart VFX if loaded from a savegame (same as LevelGameplayStarted() in osiris for effects)
+            if activeFXHandle ~= nil then
+                StopEffect(activeFXHandle)
+                activeFXHandle = PlayEffectAt(invisibleFX, me)
+            end
+        end
+    end
+}
+
+game.states.SHA_InvisiblePlatformPuzzle_Darkness =  State{
+    function ()
+        description = [[Hide platform if any character is close]]
+
+        params.checkForLightExpression = {type = EParamType.Bool, help=[[
+            Expression for light/dark mechanics.
+        ]]}
+
+        nodes = ImmediateSelector{}
+
+        nodes.Action_VisibleByDarkness = Action{
+            function()
+                if not me.Visible then
+                    SetVisible(me, true)
+                end
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return params.checkForLightExpression
+            end
+        }
+
+        nodes.Action_ObscuredByLight = Action{
+            function()
+                if me.Visible then
+                    SetVisible(me, false)
+                end
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return not params.checkForLightExpression
+            end
+        }
+
+        nodes.Action_Fallback = Action{
+            function()
+                WaitForInterrupt()
+            end
+        }
+    end
+}

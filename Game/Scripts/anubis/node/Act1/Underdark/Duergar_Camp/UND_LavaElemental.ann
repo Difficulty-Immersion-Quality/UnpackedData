@@ -1,0 +1,160 @@
+game.states.UND_LavaElemental = State { function()
+    description=[[Behaviour for the lava elemental in Ketheric City]]
+    params.TrailRadius = { type = EParamType.Number, required = false, default = 0.7, help = [[
+        Radius of the Lava trail surface.
+    ]]}
+
+    params.LavaSurfaceLifetime = { type = EParamType.Number, required = false, default = 10, help = [[
+        Lifetime of the Lava surface trail creates. If lava will keep adding to the same surface,
+        it will never go away, unless the lava stops. And then WHOLE surface clears itself.
+    ]]}
+
+    modules = { "shared.math" }
+    modules = {"shared.util"}
+
+
+    local basePosition
+    local prevDropPos
+    local spawnsTrail = false
+    local needMoveFromPuddle = false
+	local trailSpawnCooldown_Combat = 0.25
+    local trailSpawnCooldown_NonCombat = 0.5
+    local trailThresholdPos_Combat = 0.02
+    local trailThresholdPos_NonCombat = 0.1
+
+    local patrolSpline = Spline("S_UND_MonkAmulet_ElementalPatrol_a3bdda4b-035d-4a68-ba8a-455aab3169f7")
+    local bubbleTemplateGuid = Guid("PUZ_UND_LavaBubble_30589104-ccc4-459f-8fa0-84ddb0424f6c")
+    local eatingTime = false
+    nodes.Patrol = Action{
+
+        function()
+            if IsInDangerousSurfaceFor(me.Position, me.Character) then
+                DebugText(me, "I can't stand here")
+            end
+
+            if eatingTime then
+                if IsInSurface(me,SurfaceType.LAVA,10.0) then
+                    DebugText(me,"Lava drinking animation")
+                    Sleep(4.0)
+                end
+                eatingTime=false
+            else
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll, -1)
+            end
+        end
+    }
+
+
+    events.SplineControlPointReached = function(e)
+        eatingTime = true
+    end
+
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "UND_MonkAmulet_SpawnElementalBubble" then
+            DebugText(me, "DEBUG: Spawning personal bubble")
+            local bubblePos = FindSurface(me, 1.0, 3.0, SurfaceType.LAVA)
+
+            if bubblePos ~= nil then
+                local bubbleTemplate = FindTemplate(bubbleTemplateGuid)
+                local bubble = SpawnItem(bubbleTemplate, bubblePos, 0.0)
+                SetUnicastEntityEvent(bubble, "UND_MonkAmulet_BubbleSpawned")
+            end
+        end
+    end
+
+    helpers.StartSpawningTrail = function()
+        if not spawnsTrail and me.Active and not me.Character.IsDead then
+            helpers.StartTrailTimer()
+            prevDropPos = me.Position
+            spawnsTrail = true
+        end
+    end
+
+	helpers.GetDiffBetweenLastPosThreshold = function()
+        local diff = 0
+        if needMoveFromPuddle then
+            -- to avoid surface lifetime refresh and start spawning new surface a little bit further from the existing one
+            diff = params.TrailRadius*2
+        else
+            -- if in combat then diff = trailThresholdPos_Combat, otherwise diff = trailThresholdPos_NonCombat
+            diff = me.IsInCombat and trailThresholdPos_Combat or trailThresholdPos_NonCombat
+        end
+        return diff
+    end
+
+    helpers.StartTrailTimer = function()
+		-- if in combat then time = trailSpawnCooldown_Combat, otherwise time = trailSpawnCooldown_NonCombat
+        local time = me.IsInCombat and trailSpawnCooldown_Combat or trailSpawnCooldown_NonCombat
+        StartRealtimeTimer(me, "Lava_SpawnTrail_Timer", time, 0)
+    end
+
+    helpers.StopSpawningTrail = function()
+        if spawnsTrail then
+            spawnsTrail = false
+            StopTimer(me, "Lava_SpawnTrail_Timer")
+        end
+    end
+
+    self.OnInit = function()
+        spawnsTrail = false
+        basePosition = me.Position
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "Lava_SpawnTrail_Timer" and spawnsTrail then
+            if me.Active and not me.Character.IsDead then
+                if not me.IsInCombat or me.IsInActiveTeamTurn then
+                    if not HasActiveStatus(me,"FROZEN") and HasActiveStatus(me,"SPAWN_LAVA") then
+                        local distDiff = helpers.GetDiffBetweenLastPosThreshold()
+                        if GetDistance2DTo(me, prevDropPos) > distDiff then
+                            CreateSurfaceAt(me.Position, SurfaceType.LAVA, params.TrailRadius, params.LavaSurfaceLifetime)
+                            prevDropPos = me.Position
+                            needMoveFromPuddle = false
+                        end
+                    end
+                end
+                helpers.StartTrailTimer()
+            else
+                helpers.StopSpawningTrail()
+            end
+        end
+    end
+
+    events.StatusApplied = function(e)
+        if e.Status.StatusID == "FROZEN" then
+            helpers.StopSpawningTrail()
+        end
+    end
+
+    events.StatusRemoved = function(e)
+        if e.Status.StatusID == "FROZEN" then
+            helpers.StartSpawningTrail()
+        end
+    end
+
+    events.Dying = function(e)
+        if e.Target == me then
+            helpers.StopSpawningTrail()
+        end
+    end
+
+    events.Activated = function(e)
+        helpers.StartSpawningTrail()
+    end
+
+    events.Deactivated = function(e)
+        helpers.StopSpawningTrail()
+    end
+
+    events.TurnStarted = function(e)
+        if FindSurface(me, params.TrailRadius, params.TrailRadius*2, SurfaceType.LAVA) then
+            needMoveFromPuddle = true
+        end
+        helpers.StartSpawningTrail()
+    end
+
+    events.TurnEnded = function(e)
+        needMoveFromPuddle = false
+    end
+end}

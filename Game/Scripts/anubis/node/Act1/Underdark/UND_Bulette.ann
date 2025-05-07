@@ -1,0 +1,548 @@
+game.states.UND_Bulette = State{
+    function()
+        description = [[This behaviour has to be added to the Bulette helper, not the actual Bulette.]]
+
+        ----------------------------------------------------------------------
+        -- Params
+        params.Arena001 = {type = EParamType.State, required = true, help = [[Arena 001]]}
+
+        params.Arena002 = {type = EParamType.State, required = true, help = [[Arena 002]]}
+
+        params.Arena003 = {type = EParamType.State, required = true, help = [[Arena 003]]}
+
+        params.Arena004 = {type = EParamType.State, required = true, help = [[Arena 004]]}
+
+        params.Arena005 = {type = EParamType.State, required = true, help = [[Arena 005]]}
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- Local params
+
+        local bCanBurrow = true -- Used for the timer
+        local flCanBurrow = Flag("UND_Bulette_State_CanBurrow_e253e789-57b4-452e-8b59-2f92b4011f58") -- Flag is different from bCanBurrow as it also takes into account if the real bulette can
+        local flBurrowing = Flag("UND_Bulette_State_Burrowing_b161423b-a786-457d-a5ef-1bd06410dfe1")
+        local flBeenDead = Flag("UND_Bulette_State_HasBeenPermaDefeated_a7a88648-acfc-443f-80ea-f4195217f7be")
+
+        -- Spline patrols
+        local spBurrowPaths = { Spline("S_UND_Bulette_BurrowSpline_001_45f4adab-f474-48d4-890c-8004df235207"),
+                                Spline("S_UND_Bulette_BurrowSpline_002_4d71ef5f-8f62-4475-a6c0-46cd8ff6750f"),
+                                Spline("S_UND_Bulette_BurrowSpline_003_2795b293-7cb8-4d81-9339-195027ba27ce"),
+                                Spline("S_UND_Bulette_BurrowSpline_004_f3849522-fd7d-42bf-a6c2-896a442ee70a")}
+
+        -- Triggers for when the players approach any of the burrow splines
+        local trBurrowStartTriggers = { Entity("S_UND_Bulette_BurrowTrigger_001_Start_9f825997-a607-4598-a85f-2a8c854c37b6"),
+                                        Entity("S_UND_Bulette_BurrowTrigger_002_Start_c5ca0b54-b66f-420b-bc7b-fb29eb063dec"),
+                                        Entity("S_UND_Bulette_BurrowTrigger_003_Start_67ed5218-236e-4034-ad73-9443bab1e77a"),
+                                        Entity("S_UND_Bulette_BurrowTrigger_004_Start_e0eee0be-bdce-4282-9f61-68542d03863c")}
+
+        local trBurrowEndTriggers = {   Entity("S_UND_Bulette_BurrowTrigger_001_End_23912b6d-59ea-486c-8ec7-832fdfc5a38a"),
+                                        Entity("S_UND_Bulette_BurrowTrigger_002_End_ec43c361-70e5-46e9-99f6-75037e0d60ce"),
+                                        Entity("S_UND_Bulette_BurrowTrigger_003_End_c523c9a3-5d62-4405-bbd0-9dd3931322a6"),
+                                        Entity("S_UND_Bulette_BurrowTrigger_004_End_0314fee2-7d78-4a2f-b359-a122b348d853")}
+        -- Burrow points
+        local trBurrowStartPositions = {Entity("S_UND_Bulette_BurrowPath_001_Start_f353c215-9bf9-41d7-84ee-04c31f81578c"),
+                                        Entity("S_UND_Bulette_BurrowPath_002_Start_6cd353ef-f090-42fa-a3e0-221e17f9d386"),
+                                        Entity("S_UND_Bulette_BurrowPath_003_Start_259a17cb-337c-4677-9762-65fab2a02c39"),
+                                        Entity("S_UND_Bulette_BurrowPath_004_Start_1c0fe121-932e-4d03-92eb-76418e19379f")}
+
+        local trBurrowEndPositions = {  Entity("S_UND_Bulette_BurrowPath_001_End_affb7a87-cc1a-4a8c-bbbf-ba27238450c7"),
+                                        Entity("S_UND_Bulette_BurrowPath_002_End_e4912748-be62-4c50-9a1e-6174ba218b3a"),
+                                        Entity("S_UND_Bulette_BurrowPath_003_End_f10a00df-7ec7-4f20-a58a-59f9cb218609"),
+                                        Entity("S_UND_Bulette_BurrowPath_004_End_d426d8ff-9fc8-4df8-a2f7-0071b9c29041")}
+
+        local bReversedPath = false
+        local trStartPosition = nil
+        local trEndPosition = nil
+
+        local spBurrowPath = nil
+        local trPrevStartTrigger = nil
+        local trPrevEndTrigger = nil
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- Helpers
+        helpers.IsBurrowTrigger = function(trigger)
+            if helpers.IsBurrowStartTrigger(trigger) then
+                return true
+            elseif helpers.IsBurrowEndTrigger(trigger) then
+                return true
+            else
+                return false
+            end
+        end
+
+        helpers.IsBurrowStartTrigger = function(trigger)
+            for i, burrowTrigger in ipairs(trBurrowStartTriggers) do
+                if burrowTrigger == trigger then
+                    return true
+                end
+            end
+
+            return false
+        end
+
+        helpers.IsBurrowEndTrigger = function(trigger)
+            for _, burrowTrigger in ipairs(trBurrowEndTriggers) do
+                if burrowTrigger == trigger then
+                    return true
+                end
+            end
+
+            return false
+        end
+
+        -- Get splines
+        helpers.GetSplineFromStartTrigger = function(startTrigger)
+            for i, burrowTrigger in ipairs(trBurrowStartTriggers) do
+                if burrowTrigger == startTrigger then
+                    return spBurrowPaths[i]
+                end
+            end
+
+            return nil
+        end
+
+        -- Get opposite player triggers
+        helpers.GetEndTriggerFromStart = function(startTrigger)
+            for i, burrowTrigger in ipairs(trBurrowStartTriggers) do
+                if burrowTrigger == startTrigger then
+                    return trBurrowEndTriggers[i]
+                end
+            end
+
+            return nil
+        end
+
+        helpers.GetStartTriggerFromEnd = function(endTrigger)
+            for i, burrowTrigger in ipairs(trBurrowEndTriggers) do
+                if burrowTrigger == endTrigger then
+                    return trBurrowStartTriggers[i]
+                end
+            end
+
+            return nil
+        end
+
+        -- Get positions from triggers
+        helpers.GetStartPosition = function(trigger)
+            local index = -1
+            for i, burrowTrigger in ipairs(trBurrowStartTriggers) do
+                if burrowTrigger == trigger then
+                    return trBurrowStartPositions[i]
+                end
+            end
+
+            return nil
+        end
+
+        helpers.GetEndPosition = function(trigger)
+            for i, burrowTrigger in ipairs(trBurrowEndTriggers) do
+                if burrowTrigger == trigger then
+                    return trBurrowEndPositions[i]
+                end
+            end
+
+            return nil
+        end
+
+        helpers.IsApproachingCombat = function()
+            return  params.Arena001.Valid or
+                    params.Arena002.Valid or
+                    params.Arena003.Valid or
+                    params.Arena004.Valid or
+                    params.Arena005.Valid
+        end
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        --there is some very timing specific case where you can have the bulette and the spawnhelper onstage in
+        --different locations no repro, so we'll just hack it here (see GUS-300969)
+        nodes.BuletteAlive = Selector{
+            Valid = function(node)
+                return not GetFlag(flBeenDead)
+            end
+        }
+
+        -- Nodes
+        nodes.BuletteAlive.Action_Burrow = Action{
+            OnEnter = function()
+                if not HasActiveStatus(me, "UND_BULETTE_BURROWTRAIL") then
+                    ApplyStatus(me, "UND_BULETTE_BURROWTRAIL", false, -1)
+                end
+            end,
+            function()
+                try
+                    DoPatrol(spBurrowPath, bReversedPath, MovementSpeed.Run, -1)
+                catch e if ls.CheckType(e, error.MissingComponent) then
+                    DebugText(me, "Error: MissingComponent on DoPatrol()")
+                    ClearFlag(flBurrowing)
+                end
+            end,
+            OnLeave = function()
+                ClearFlag(flBurrowing)
+                bCanBurrow = false
+
+                -- Handle despawning the bulette helper (mainly for VFX)
+                SetEntityEvent(me, "UND_Bulette_DespawnBurrowTrail")
+            end,
+            CanEnter = function()
+                return  bCanBurrow           and
+                        GetFlag(flCanBurrow) and
+                        GetFlag(flBurrowing) and
+                        not helpers.IsApproachingCombat()
+            end
+        }
+
+        nodes.BuletteAlive.Proxy_Arena005 = Proxy{
+            params.Arena005
+        }
+
+        nodes.BuletteAlive.Proxy_Arena004 = Proxy{
+            params.Arena004
+        }
+
+        nodes.BuletteAlive.Proxy_Arena003 = Proxy{
+            params.Arena003
+        }
+
+        nodes.BuletteAlive.Proxy_Arena002 = Proxy{
+            params.Arena002
+        }
+
+        nodes.BuletteAlive.Proxy_Arena001 = Proxy{
+            params.Arena001
+        }
+
+        nodes.BuletteAlive.Action_Fallback = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return not GetFlag(flBurrowing) and not helpers.IsApproachingCombat()
+            end
+        }
+
+        nodes.BuletteDead = function()
+            SetOnStage(me, false)   --make sure we are removed so we don't cause a blocker
+        end
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- Events
+        events.EnteredTrigger = function(e)
+            -- If the previous visited area is the same as the new one or the bulette is in combat, don't do anything
+            if  not helpers.IsBurrowTrigger(e.Trigger)  or  -- Is a burrow trigger?
+                not bCanBurrow                          or  -- Has burrowed and the timer hasn't finished?
+                not GetFlag(flCanBurrow)                or  -- Can actually burrow? (to address the actual bulette character events)
+                trPrevStartTrigger == e.Trigger         or  -- Did we already walked through this area?
+                trPrevEndTrigger == e.Trigger           or
+                e.Target.IsInCombat                     or  -- If player is in combat, don't spawn
+                helpers.IsApproachingCombat() then          -- Is approaching any combat arena?
+                    return
+            end
+
+            -- Check if it's a start or end trigger and get from where to where the bulette has to move
+            if helpers.IsBurrowStartTrigger(e.Trigger) then
+                trPrevStartTrigger = e.Trigger
+                trPrevEndTrigger = helpers.GetEndTriggerFromStart(e.Trigger)
+
+                spBurrowPath = helpers.GetSplineFromStartTrigger(trPrevStartTrigger)
+                bReversedPath = false
+            else
+                trPrevStartTrigger = helpers.GetStartTriggerFromEnd(e.Trigger)
+                trPrevEndTrigger = e.Trigger
+
+                spBurrowPath = helpers.GetSplineFromStartTrigger(trPrevStartTrigger)
+                bReversedPath = true
+            end
+
+            -- Teleport and MoveTo positions
+            trStartPosition = helpers.GetStartPosition(trPrevStartTrigger)
+            trEndPosition = helpers.GetEndPosition(trPrevEndTrigger)
+
+            -- Teleport to the correct start position (in case the path is reversed)
+            if bReversedPath then
+                TeleportTo(me, trEndPosition)
+            else
+                TeleportTo(me, trStartPosition)
+            end
+
+            -- Set flag and start burrowing
+            SetFlag(flBurrowing)
+            SetOnStage(me, true)
+            Interrupt()
+        end
+
+        events.EntityEvent = function(e)
+            if e.Event == "UND_Bulette_CanBurrowAgain" then
+                bCanBurrow = true
+            end
+        end
+
+        events.SplineControlPointReached = function(e)
+            if e.EndReached then
+                ClearFlag(flBurrowing)
+                Interrupt()
+            end
+        end
+        ----------------------------------------------------------------------
+    end
+}
+
+game.states.UND_BuletteArena = State{
+    function()
+        description = [[Behaviour for the bulette before starting and after finishing combat.]]
+
+        ----------------------------------------------------------------------
+        -- Params
+        params.EncounterFlag = {type = EParamType.String, required = true, help ="Flag for the encounter."}
+        params.SpawnTrigger = {type = EParamType.String, required = true, help ="Check where it should teleport to activate its anubis behaviour."}
+
+        params.EnterSplines = {type = EParamType.String, arrayRange = "1..", required = true, help ="Possible routes from where it will appear."}
+        params.EnterSplinesHelpers = {type = EParamType.String, arrayRange = "1..", required = true, help ="Helpers to decide from where the bulette should come."}
+
+        params.EscapeTriggers = {type = EParamType.String, arrayRange = "1..", required = true, help ="Possible escape routes from where it will disappear."}
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- Local variables
+        local flEncounter = Flag(params.EncounterFlag)
+        local trSpawn = Entity(params.SpawnTrigger)
+        local flApproachArena = Flag("UND_Bulette_State_ApproachArena_3ea89f6f-2ad8-46b7-8330-b4533fd8a983")
+        local flLeaveArena = Flag("UND_Bulette_State_LeaveArena_42194aaa-16f8-4953-a167-1d4dd2f649d6")
+
+        local spEnterArray = {}
+        local trEnterHelpersArray = {} -- trEnterHelpersArray has to be the same size as spEnterArray
+        local trEscapeArray = {}
+
+        local spAccessRoute = nil -- Spline used for going into the arena
+        local trAccessRouteHelper = nil -- Trigger helpers for finding the best approach path
+
+        local bInitApproach = true
+        local bEndApproach = false
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- Helpers
+        helpers.GetMinDistanceToSpline = function(splineHelper)
+            local activeChars = GetActiveCharacters(splineHelper, 30.0)
+            local minDist = 98.0
+
+            if #activeChars == 0 then
+                return minDist
+            end
+
+            for _, char in ipairs(activeChars) do
+                if char.Character.IsPartyMember then
+                    local newDist = GetDistanceTo(char, splineHelper)
+
+                    if newDist < minDist then
+                        minDist = newDist
+                    end
+                end
+            end
+            return minDist
+        end
+
+        -- Get node with the closest character to start the approach from there
+        helpers.GetBestAccessRoute = function()
+            local bestAccessRoute = nil
+            local bestAccessRouteHelper = nil
+            local minDistance = 99.0
+
+            for i, trEnterHelper in ipairs(trEnterHelpersArray) do
+                local dist = helpers.GetMinDistanceToSpline(trEnterHelper)
+
+                if dist < minDistance then
+                    bestAccessRoute = spEnterArray[i]
+                    bestAccessRouteHelper = trEnterHelper
+                    minDistance = dist
+                end
+            end
+
+            -- We are not gonna check for nil values, that way we can get an assert if the spline arrays are empty.
+            return bestAccessRoute, bestAccessRouteHelper
+        end
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- State
+        self.OnInit = function()
+            for _, spline in ipairs(params.EnterSplines) do
+                table.insert(spEnterArray, Spline(spline))
+            end
+
+            for _, splineHelper in ipairs(params.EnterSplinesHelpers) do
+                table.insert(trEnterHelpersArray, Entity(splineHelper))
+            end
+
+            for _, escape in ipairs(params.EscapeTriggers) do
+                table.insert(trEscapeArray, Entity(escape))
+            end
+        end
+
+        self.Valid = function()
+            return GetFlag(flEncounter)
+        end
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- Nodes
+        nodes.Action_ApproachArena = Action{
+            OnEnter = function()
+                if bInitApproach then
+                    if spAccessRoute == nil then
+                        spAccessRoute, trAccessRouteHelper = helpers.GetBestAccessRoute()
+                    end
+                    TeleportTo(me, trAccessRouteHelper, true)
+                    bInitApproach = false
+                end
+
+                if not HasActiveStatus(me, "UND_BULETTE_BURROWTRAIL") then
+                    ApplyStatus(me, "UND_BULETTE_BURROWTRAIL", false, -1)
+                end
+            end,
+            function()
+                try
+                    DoPatrol(spAccessRoute, false, MovementSpeed.Run, -1)
+                catch e if ls.CheckType(e, error.MissingComponent) then
+                    -- If by any chance patrolling fails, immediately spawn it
+                    DebugText(me, "Error: MissingComponent on DoPatrol() when approaching arena")
+                    SetEntityEvent(me, "UND_Bulette_TriggerSpawn")
+                    ClearFlag(flApproachArena)
+                    bEndApproach = true
+                end
+            end,
+            Valid = function()
+                return not bEndApproach
+            end
+        }
+
+        nodes.Action_Fallback = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return bEndApproach and not GetFlag(flLeaveArena)
+            end
+        }
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- Events
+        events.FlagSet = function(e)
+            if e.Flag == flEncounter.Guid then
+                TeleportTo(me, trSpawn, true)
+            end
+        end
+
+        events.SplineControlPointReached = function(e)
+            if e.EndReached and GetFlag(flEncounter) then
+                bEndApproach = true
+                SetEntityEvent(me, "UND_Bulette_TriggerSpawn")
+                ClearFlag(flApproachArena)
+            end
+        end
+        ----------------------------------------------------------------------
+    end
+}
+
+game.states.UND_IdleBulette = State{
+    function()
+        modules = {"shared.util"}
+
+        ----------------------------------------------------------------------
+        -- Local variables
+        local flRunOutOfArenas = Flag("UND_Bulette_State_RunOutOfArenas_2b335f2b-ab46-4648-91e6-a72d07e68f23")
+        local flRetreat = Flag("UND_Bulette_State_Retreat_bae43e65-05e0-4aaf-8549-fc8743185b6c")
+
+        local bUpdateWanderPos = true
+        local vec3Wander
+
+        local fMinWanderTime = 1.0
+        local fMaxWanderTime = 3.0
+        local fMinSleepTime = 2.0
+        local fMaxSleepTime = 4.0
+
+        local vec3SpawnPos = nil
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- Helpers
+        helpers.action.Wander = function()
+            try
+                Wander(20.0, math.random(fMinWanderTime, fMaxWanderTime), MovementSpeed.Walk, vec3Wander)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Error: Wander MovementFailed")
+            end
+
+            mod.util.SleepRandom(fMinSleepTime, fMaxSleepTime)
+        end
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- State
+        self.OnEnter = function()
+            if bUpdateWanderPos then
+                vec3Wander = me.Position
+            end
+
+            if GetFlag(flRunOutOfArenas) then
+                bUpdateWanderPos = false
+            end
+        end
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- Nodes
+        -- Case for when the bulette runs out of places to fight in and stays at that spot.
+        nodes.Action_Wander = Action{
+            function()
+                helpers.Wander()
+            end,
+            CanEnter = function()
+                return GetFlag(flRunOutOfArenas)
+            end
+        }
+
+        nodes.Action_Retreat = Action{
+            function()
+                Sleep(3.0)
+                -- After half a second it could have already retreated. Check again if it has to.
+                if GetFlag(flRetreat) then
+                    UseSpell("Target_Burrow_Bulette", me, me, nil, nil, true, true, true)
+                end
+            end,
+            CanEnter = function()
+                return GetFlag(flRetreat)
+            end
+        }
+
+        -- In case the bulette spawns but doesn't start combat (sees no one to start it with), it will leave after a while skipping the ecncounter
+        nodes.Action_Fallback = Action{
+            function()
+                -- Turn around for 3 seconds to catch knocked down characters
+                if vec3SpawnPos ~= nil then
+                    SteerTo(vec3SpawnPos)
+                end
+                -- Wander for three times and leave
+                Sleep(3.0)
+                for i = 0, 2, 1 do
+                    helpers.Wander()
+                end
+                UseSpell("Target_Burrow_Bulette", me, me, nil, nil, true, true, true)
+                WaitForInterrupt()
+            end
+        }
+        ----------------------------------------------------------------------
+
+        ----------------------------------------------------------------------
+        -- Events
+        events.EntityEvent = function(e)
+            if e.TargetEntity == me and e.Event == "UND_Bulette_TeleportedToHelper" then
+                vec3SpawnPos = me.Position
+            end
+        end
+        ----------------------------------------------------------------------
+    end
+}

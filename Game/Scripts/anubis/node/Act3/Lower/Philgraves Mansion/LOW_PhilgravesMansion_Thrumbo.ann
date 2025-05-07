@@ -1,0 +1,109 @@
+game.states.LOW_PhilgravesMansion_Thrumbo = State{
+    function ()
+
+        modules = {"shared.dialog", "shared.moveto", "shared.util"}
+
+        params.houseSpline = {type=EParamType.String, required = false, help = [[meeting spline GUID]]}
+        local houseSpline = Spline(params.houseSpline)
+        local WanderPos = Entity("S_LOW_ThrumboLocation_a1f7a6d1-d3af-4fcd-a69c-7d6812ba2c50")
+        local NotHidingFlag = Flag("LOW_Thrumbo_Event_StopHiding_9f4d1064-e5b9-41b1-969a-8ee9886eb07c")    
+        local Jar = Entity("S_LOW_UNI_CarrionJar_Heart_13d8bafe-6614-4ae8-be27-2e1e1d294492")
+        local InHouseFlag = Flag("LOW_PhilgravesMansion_State_ZombieInHouse_1b0c0656-5d5a-4d4a-89cd-83949b09dd98")
+        local MovingFlag = Flag("LOW_PhilgravesMansion_ZombieMoving_9fa1155b-8a73-4cd2-8344-ae7faa34cbbb")
+        local AD = Dialog("LOW_PhilgravesMansion_AD_ThrumboVignette_80af4c32-bc14-351e-75c4-47c553b21184")
+        local vomitFlag = Flag("LOW_Thrumbo_Event_TeleportJarFromThrumbo_504e5385-96bd-4215-85de-22b81374382c")
+        local saidLine = false
+        local saveGamePatchedWanderTrigger = false
+        local WanderPosHouse = Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e")
+        events.SavegameLoaded = function(ev)
+            if saveGamePatchedWanderTrigger == false and WanderPos ~= Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e") and GetFlag(InHouseFlag,me) then
+                saveGamePatchedWanderTrigger = true
+                WanderPos = Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e")
+            end
+        end
+
+        events.Activated = function(ev)
+            if saveGamePatchedWanderTrigger == false and WanderPos ~= Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e") and GetFlag(InHouseFlag,me) then
+                saveGamePatchedWanderTrigger = true
+                WanderPos = Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e")
+            end
+        end
+
+        events.FlagSet = function(e)
+            if(e.Flag == vomitFlag.Guid) then
+                local throwUpPos = FindValidPosition(me.Position + me.ForwardDirection * 0.5, 4.0, Jar, false)
+                TeleportTo(Jar, throwUpPos)
+            end
+        end
+
+        nodes.Moving = Proxy {
+            game.states.LOW_PhilgravesMansion_ZombieMoving,
+            params = {
+                houseSpline = params.houseSpline,
+            },
+            Valid = function() 
+                return GetFlag(MovingFlag,me)
+            end,
+            OnLeave = function ()
+                WanderPos = Entity("S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e")
+                AD = Dialog("LOW_PhilgravesMansion_AD_BeggarsConversationEndState_3be8f5f2-3c49-facf-2e1e-727e2510e794")
+            end
+                
+        }
+
+        nodes.IdleInHouse = Action {
+
+            function()
+                if GetDistance2DTo(me, WanderPosHouse) > 5.0 then
+                    mod.moveto.MoveToPoint(WanderPosHouse, MovementSpeed.Walk, me)
+                else
+                    Wander(3.0,math.random(2,4), MovementSpeed.Walk,WanderPosHouse)
+                    Sleep(math.random(10,15))
+                    SetEntityEvent(me,"LOW_PhilgravesMansion_StartBeggarConversation")
+                end
+            end,
+
+            Valid = function()
+                return (GetFlag(InHouseFlag,me))
+            end
+        }
+
+        nodes.IdleOutside = Action {
+
+            function()
+                
+                if GetDistance2DTo(me, WanderPos) > 5.0 then
+                    mod.moveto.MoveToPoint(WanderPos, MovementSpeed.Walk, me)
+                else
+
+                    if not saidLine and not IsInDialog(me,false) then
+                        saidLine = true
+                        Sleep(1)
+                        mod.dialog.StartCheckedAutomatedDialog(
+                            AD,
+                            {
+                                waitForCompletion = true,
+                            },
+                            me)
+                    end
+                    Wander(3.0,math.random(2,4), MovementSpeed.Walk,WanderPos)
+                    Sleep(math.random(10,15))
+                end
+            end,
+
+            Valid = function()
+                return GetFlag(NotHidingFlag) and not GetFlag(MovingFlag,me)
+            end
+        }
+
+        nodes.Hiding = Action {
+            function()
+                WaitForInterrupt()            
+            end,
+
+            Valid = function()
+                return not GetFlag(NotHidingFlag)
+            end
+
+        }
+end}

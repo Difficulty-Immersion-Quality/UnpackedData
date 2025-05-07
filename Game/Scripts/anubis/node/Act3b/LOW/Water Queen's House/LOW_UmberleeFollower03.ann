@@ -1,0 +1,86 @@
+game.states.LOW_UmberleeFollower03 = State{function()
+    description = [[Umberlee Follower 03 behavior]]
+    
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    
+    local startRoutine = Flag("LOW_WaterQueensHouse_Event_TalkedToUmberleeFollower03_94ed88e7-018c-2d10-927a-4c60b953bf47")
+    local waitForOfferings = Flag("LOW_VaultWaveservant_State_WaitingForOfferings_2ab70a62-99ae-4f13-8c88-b582d9d0f214")
+    
+    local offeringsChest = Entity("S_LOW_WaterQueensHouse_OfferingsChest_9f1a218c-c8ba-42da-8370-51e723052dbc")
+
+    local finishOfferings = false
+
+    local offeringsGone = Flag("LOW_WaterQueensHouse_State_OfferingsAreGone_7b4a853d-fff5-4faa-82b6-2e3829eb2851")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    nodes.Wait = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {trigger = [[S_LOW_Umberlee03StartPoint_4b3929e9-e511-4c5d-be30-1ce600a26ab3]]},
+
+        Valid = function()
+            return not GetFlag(startRoutine) or finishOfferings
+        end
+    }
+
+    nodes.OfferingsRoutine = Action{
+        function()         
+            if not offeringsChest.Item.IsOpened and not offeringsChest.Item.IsLocked then          
+                UseItem(offeringsChest.Item)                
+                MoveAllItemsTo(me, offeringsChest, 0, 0, true)  
+                Sleep(1)            
+                if offeringsChest.Item.IsOpened then        
+                    UseItem(offeringsChest.Item)
+                end
+                finishOfferings = true
+                ApplyStatus(me, "BLESS", true, -1, offeringsChest)            
+            else
+                Sleep(5)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(startRoutine) and not finishOfferings and not IsInDialog(me, true) and not offeringsChest.Item.IsDestroyed and not offeringsChest.Item.IsLocked and not GetFlag(offeringsGone)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            finishOfferings = true
+        end,
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+
+    events.FlagSet = function(e)
+        if e.Flag == waitForOfferings.Guid then
+            SetFlag(startRoutine)
+        end
+    end
+
+
+    ------------------------------------------------
+    
+
+end
+}

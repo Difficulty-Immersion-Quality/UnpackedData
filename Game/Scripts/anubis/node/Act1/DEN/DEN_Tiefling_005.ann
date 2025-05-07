@@ -1,0 +1,175 @@
+game.states.DEN_Tiefling_005 = State{function()
+    description = [[Pandima is initially afflicted by a paralysis effect and cannot move. She can be healed by the player.]]
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    -----------------------------------------
+    -- Local variables
+    --Entities
+    local healedSpot = Entity("S_DEN_Tiefling005Standing_bc8086f6-0143-4cbb-98b0-ccb06784ff6f")
+
+    --Animations
+    local stretchAnimation = Animation("CUST_LimberUp_01_bd13cb25-1dfb-4ea5-8218-9e96d11e3117")
+
+    --Flags
+    local healedFlag = Flag("DEN_General_State_PotionTieflingHealed_0dece41d-7a76-193e-1a6b-1efc7e4497ab")
+    local satOnceFlag = Flag("DEN_General_Event_Tiefling005SatOnce_fefb05f4-64af-43e5-b21f-7312edd1d69d")
+    local hostileFlag = Flag("DEN_Tiefling5_State_TurnedHostile_4b77b883-d393-f092-61ab-36439f1c73ac")
+    local bypassFlag = Flag("DEN_DruidAttack_Event_BypassDone_a66b1d52-046d-41e2-909c-e01045126e77")
+    local druidAttackStartedFlag = Flag("DEN_DruidAttack_Event_TieflingsPrepare_6a8c217f-adf6-46d2-8cfd-d2e9a437c3d4")
+    local druidAttackDoneFlag = Flag("DEN_DruidAttack_State_PrepAfterDeathOfDruids_b4754af7-07ec-433c-87d2-e78ef4c79e6e")
+
+    --Dialogs
+
+    local AD = Dialog("DEN_General_AD_TieflingGuard5_b2d00a69-af62-24a1-795f-6dfa7b147bb6")
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.DruidAttack = Proxy{
+        OnEnter = function()
+            EndRepose(me)
+            RemoveStatus(me,"DEN_PANDIMA_PARALYZED")
+        end,
+        game.states.DEN_DruidAttack_GeneralTiefling,
+        params={
+            areaMoveTarget = [[S_DEN_DruidAttack_PrisonDefendArea_61c737ce-3ef6-47ce-b7ef-91d289d348f3]],
+            moveTarget = [[S_DEN_DruidAttack_PrisonDefendArea_61c737ce-3ef6-47ce-b7ef-91d289d348f3]],
+        },
+        Valid = function()
+            return (GetFlag(bypassFlag,me) and GetFlag(druidAttackStartedFlag,me)) and not GetFlag(druidAttackDoneFlag)
+        end
+    }
+
+    nodes.HealedIdle = Action {
+        OnEnter = function()
+            EndRepose(me)
+            StopAnimation(me)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(healedSpot,MovementSpeed.Stroll,me) then
+                LookFrom(healedSpot)
+                PlayAnimation(stretchAnimation)
+
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 40.0
+                    },
+                    me
+                )
+            else
+                SteerTo(healedSpot)
+            end
+            Sleep(math.random(4.0, 7.0))
+        end,
+
+        Valid = function()
+            return GetFlag(healedFlag,me)
+        end
+    }
+
+    nodes.ParalyzedSit = Proxy{
+        CanEnter = function()
+            return (not GetFlag(satOnceFlag)) or (GetFlag(satOnceFlag) and me.IsReposed)
+        end,
+
+        game.states.Sit,
+        params = {
+            seat = "S_DEN_Tiefling005_ParalyzedSeat_54d5ccc0-e453-48f6-89d5-d02a6b884420",
+            useSeatPositionAsFallBack = true,
+            sitIdle = StateRef{game.states.DEN_Tiefling_005_SitParalyzed},
+            --sitAnimationOverride = "CUST_DEN_TieflingGuard5_Sit_Idle_76ff641c-d22e-44bf-926e-7b77880f2fda"
+        },
+
+        Valid = function()
+            return not GetFlag(healedFlag,me) and not HasActiveStatus(me, "KNOCKED_OUT")
+        end,
+    }
+
+    nodes.Fallback = Action{
+        function()
+            ApplyStatus(me, "KNOCKED_DOWN", true, -1, me)
+            WaitForInterrupt()
+        end
+    }
+
+end}
+
+game.states.DEN_Tiefling_005_SitParalyzed = State{function()
+
+    description = [[]]
+
+    modules = {"shared.dialog"}
+
+    -----------------------------------------
+    -- Local variables
+
+    local AD = Dialog("DEN_General_AD_TieflingGuard5_b2d00a69-af62-24a1-795f-6dfa7b147bb6")
+    local sitAnimation = Animation("CUST_DEN_TieflingGuard5_Sit_Idle_76ff641c-d22e-44bf-926e-7b77880f2fda")
+    local satOnceFlag = Flag("DEN_General_Event_Tiefling005SatOnce_fefb05f4-64af-43e5-b21f-7312edd1d69d")
+
+    nodes.Sitting = Action{
+        OnEnter = function()
+            if not HasActiveStatus(me, "DEN_PANDIMA_PARALYZED") then
+                ApplyStatus(me, "DEN_PANDIMA_PARALYZED", true, -1, me)
+            end
+            SetFlag(satOnceFlag)
+        end,
+
+        function()
+            PlayAnimation(sitAnimation, false, true)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 40.0
+                },
+                me
+            )
+            if me.IsInCombat and me.CanActInCombatTeamTurn then
+                EndTurn(me)
+            end
+            Sleep(1)
+        end
+    }
+
+    end}
+
+game.states.DEN_Tiefling_005_ParalyzedCombat = State{function()
+
+    description = [[]]
+
+    -- Local variables
+
+    local sitAnimation = Animation("CUST_DEN_TieflingGuard5_Sit_Idle_76ff641c-d22e-44bf-926e-7b77880f2fda")
+
+    -----------------------------------------
+    -- Nodes
+
+    self.CanEnter = function()
+        if me.IsInCombat then
+            return true
+        end
+    end
+
+    nodes.DefaultCombat = Proxy {
+        CanEnter = function()
+            return not HasActiveStatus(me, "DEN_PANDIMA_PARALYZED")
+        end,
+        game.states.DefaultCombat,
+    }
+
+    nodes.ParalyzedCombatSit = Action {
+        function()
+            PlayAnimation(sitAnimation, false, true)
+            if me.CanActInCombatTeamTurn then
+                EndTurn(me)
+            end
+        end
+    }
+
+end
+}

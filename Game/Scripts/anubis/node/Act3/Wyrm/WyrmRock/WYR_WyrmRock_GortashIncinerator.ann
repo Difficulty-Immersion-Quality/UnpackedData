@@ -1,0 +1,144 @@
+game.states.WYR_WyrmRock_GortashIncinerator = State{function()
+    description = [[]]
+
+    params.distanceShooting = { type = EParamType.Number, default = 18.0,
+        help = [[Distance of shooting for the turret]]}
+
+    params.attackSpell = {type = EParamType.String, required = true,
+        help = [[]]}
+
+    params.attackTrigger = {type = EParamType.String, required = true,
+        help = [[]]}
+
+    local target = nil
+    local warningBeacon = nil
+    local beaconTemplate
+    local beamEffect
+    local beamInstance
+    local attackTrigger = Entity(params.attackTrigger)
+
+    local charging = false
+    local canSendRemoveFromTurnOrderEvent = true
+
+    self.OnInit = function()
+        beamEffect = PrepareEffect("VFX_Beam_WYR_Gortash_Incinerator_Beam_01_28648ac0-d6b3-6dbb-9f41-483a6d9e3591")
+        beaconTemplate = FindTemplate("PUZ_Trap_Gortash_FocusedIncinerator_Helper_ce5de333-9cc1-41e0-99ea-23d6e79aff1d")
+    end
+
+    helpers.CalculateTarget = function()
+
+        local newTarget = nil
+
+        local characters = GetActiveCharacters(me, params.distanceShooting)
+        if #characters > 0 then
+            for i, character in ipairs(characters) do
+                if character.OnStage
+                    and character.Character.IsPartyMember
+                    and not character.Character.IsDead
+                    and IsInTrigger(character, attackTrigger.Trigger)
+                    and not HasActiveStatusWithGroup(character, "SG_Invisible")
+                    and character.IsInCombat then
+                        DebugText(me, "Target found!")
+                        newTarget = character
+                        break
+                end
+            end
+        end
+
+        target = newTarget
+
+    end
+
+    nodes.Seeking = Action{
+        function()
+            -- DebugText(me, "Seeking")
+            helpers.CalculateTarget()
+            if target == nil then
+                if canSendRemoveFromTurnOrderEvent then
+                    if not HasActiveStatus(me, "WYR_GORTASH_INCINERATOR_OVERHEATING") then
+                        SetUnicastEntityEvent(me, "CMB_GortashIncinerator_RemoveFromTurnOrder")
+                        canSendRemoveFromTurnOrderEvent = false
+                    else
+                        Sleep(2.0)
+                        SetTurnActionsCompleted(me, true)
+                    end
+                end
+            else
+                warningBeacon = SpawnItem(beaconTemplate, me.Position + me.ForwardDirection * 2)
+                beamInstance = PlayBeamEffectAt(beamEffect, me, warningBeacon)
+                SetEntityEvent(me, "CMB_GortashIncinerator_AddToTurnOrder")
+                ApplyStatus(me, "WYR_GORTASH_INCINERATOR_CHARGING", true, 6.0)
+                charging = true
+                if me.IsInCombat and me.CanActInCombatTeamTurn then
+                    SetTurnActionsCompleted(me, true)
+                end
+            end
+            Sleep(2.0)
+        end,
+        CanEnter = function()
+            return warningBeacon == nil and not charging
+        end
+    }
+
+    nodes.Shooting = Action{
+        function()
+            -- DebugText(me, "Shooting")
+            if beamInstance ~= nil then
+                StopEffect(beamInstance)
+                beamInstance = nil
+            end
+            ShootZone(params.attackSpell, me, ls.math.Vector3(0, 0, 0),  me.ForwardDirection)
+            Sleep(3.5)
+            SetOnStage(warningBeacon, false)
+            warningBeacon = nil
+            target = nil
+            canSendRemoveFromTurnOrderEvent = true
+        end,
+        CanEnter = function()
+            return warningBeacon ~= nil and not charging and me.IsInCombat
+        end
+    }
+
+    nodes.Waiting = Action {
+        function()
+            Sleep(1.0)
+        end
+    }
+
+	events.Deactivated = function(e)
+        target = nil
+        if beamInstance ~= nil then
+            StopEffect(beamInstance)
+            beamInstance = nil
+        end
+    end
+
+    events.Destroyed = function(e)
+        if e.Entity == me then
+            target = nil
+            if beamInstance ~= nil then
+                StopEffect(beamInstance)
+                beamInstance = nil
+            end
+        end
+    end
+
+    events.StatusRemoved = function(e)
+        if e.Status.StatusID == "WYR_GORTASH_INCINERATOR_CHARGING" then
+            charging = false
+            if beamInstance ~= nil then
+                StopEffect(beamInstance)
+                beamInstance = nil
+            end
+        end
+    end
+
+    -- fixing an incorrect value
+    events.SavegameLoaded = function()
+        if me == Entity("S_WYR_PUZ_Gortash_Office_Incinerator_08_8da32daa-27e6-4b68-95ed-c9ad84b58fda")
+            and attackTrigger == Entity("S_WYR_PUZ_Gortash_Office_Incinerator_01_Box_4b2a8fdf-3e4e-4ce7-be4f-b8c20df0fbcf") then
+            attackTrigger = Entity("S_WYR_PUZ_Gortash_Office_Incinerator_08_Box_e02ebc5f-55ea-4abe-b248-70f337930be6")
+        end
+    end
+
+end}

@@ -1,0 +1,79 @@
+game.states.WYR_PairedADInTrigger = State { function ()
+    description = [[ A generic behaviour for a character to play AD together with another one and stay in trigger. ]]
+
+    modules = { "shared.dialog","shared.moveto","shared.util","shared.params" }
+
+    params.trigger = {type = EParamType.String, required = false, help=[[
+        The trigger at which the character stands.
+    ]]}
+
+    params.pairNPCs = {type = EParamType.String, arrayRange = "1..", required = false, help=[[
+        List of other NPCs to play AD with.
+    ]]}
+
+    params.AD = {type = EParamType.String, required = false, help=[[
+        Two-NPCs AD to play.
+    ]]}
+
+    params.checkSight = {type = EParamType.Bool, required = false, default = false, help=[[
+        Check sight for ADs.
+    ]]}
+
+    params.minDelay = { type = EParamType.Number, required = false, default = 15.0, help = [[
+        Delay in between AD playing.
+    ]]}
+
+    params.pauseBetweenChecks = { type = EParamType.Number, required = false, default = 4.0, help = [[
+        Delay in between AD play checks, and before the first AD will be played.
+    ]]}
+
+    params.cullingDistance = { type = EParamType.Number, required = false, default = 5.0, help = [[
+        The maximum distance that this AD can be heard from other ADs (attenuation distance, default 5 meters)
+    ]]}
+
+    local AD = nil
+    local trigger = nil
+    local pairNPCs = nil
+    local updateRotation = false
+
+    self.OnInit = function()
+        if params.trigger ~= nil then
+            trigger = Entity(params.trigger)
+        end
+        pairNPCs = mod.params.ParamArrayToEntityList(params.pairNPCs)
+        AD = Dialog(params.AD)
+    end
+
+    nodes.PlayADFromTrigger = Action {
+        OnEnter = function()
+            updateRotation = true
+        end,
+        function()
+            if trigger ~= nil then
+                if mod.moveto.MoveToPoint(trigger, MovementSpeed.Walk, me) then
+                    if updateRotation then
+                        LookFrom(trigger)
+                        updateRotation = false
+                    end
+                else
+                    updateRotation = true
+                end
+            end
+            mod.util.SleepRandom(params.pauseBetweenChecks/2, params.pauseBetweenChecks)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                {
+                    waitForCompletion = true,
+                    minDelay = params.minDelay,
+                    cullingDistance = params.cullingDistance,
+                    checkSight = params.checkSight
+                },
+                me,
+                pairNPCs
+            )
+        end,
+        CanEnter = function()
+            return true
+        end
+    }
+end}

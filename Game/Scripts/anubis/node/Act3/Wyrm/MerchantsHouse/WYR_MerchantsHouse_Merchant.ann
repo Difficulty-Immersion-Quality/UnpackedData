@@ -1,0 +1,186 @@
+game.states.WYR_MerchantsHouse_Merchant = State { function ()
+    description = [[ Behaviour for the toymaker Arfur Gregorio in Wyrms Crossing. ]]
+
+    modules = { "shared.dialog","shared.moveto","shared.util" }
+
+    params.prisonIdle = { type = EParamType.State, required = true, help = [[
+        Idle state after the refugees has been housed.
+    ]]}
+
+    params.sharessCaressIdle = { type = EParamType.State, required = true, help = [[
+        State for while refugees are being chased out.
+    ]]}
+
+    params.chasingOutIdle = { type = EParamType.State, required = true, help = [[
+        State for while refugees are being chased out.
+    ]]}
+
+    -- is not used and is left for patching compatibility
+    params.chasedOutIdle = { type = EParamType.State, required = true, help = [[
+        Idle after refugees has been chased out.
+    ]]}
+
+    params.postConflictIdle = { type = EParamType.State, required = true, help = [[
+        Idle after conflict scene has been played out
+    ]]}
+
+    local chasingOutFlag = Flag("WYR_MerchantsHouse_Event_RatsChasingOutRefugges_caec5b7a-b2a9-3cc6-595d-fc1bcf74521f")
+    local inHouseFlag = Flag("WYR_MerchantsHouse_Merchant_State_BackInHouse_15afb6fd-c114-408b-bca9-521f32454c14")    
+    local conflictSceneEndedFlag = Flag("WYR_MerchantsHouse_State_ConflictSceneEnded_5e51e192-d106-4bbb-9e97-ea77d8594b0b")
+    local inPrisonFlag = Flag("WYR_MerchantsHouse_Merchant_State_InPrison_e96b73b9-1e15-75f1-e61d-af9b713d6b25")
+    local inSharessCaressFlag = Flag("WYR_MerchantsHouse_Merchant_State_InSharessCaress_0705f4a6-48c2-afbd-8e4c-a4cf1d2c09e6")
+
+    local conflictTrigger = Entity("S_WYR_MerchantsHouse_Merchant_ConflictPos_012b0dd0-eef8-4106-82d2-f4e940f01cdc")
+    local conflictRefugeeLeader = Entity("S_WYR_MerchantsHouse_RefugeeLeader_7ef493d6-4e5f-490a-96dd-e5bb10446055")
+    local conflictAD = Dialog("WYR_MerchantsHouse_AD_Conflict_75415693-a40f-a705-143d-e0156c6b3fb1")
+
+    -- Patch 7 vars
+    local chasedOutTrigger = Entity("S_WYR_MerchantsHouse_Merchant_ChasedOutPos_624149b9-5e50-4adb-97de-4f4acc2bd6f0")
+    local chasedOutAD = Dialog("WYR_MerchantsHouse_AD_Merchant_AfterChasedOut_975aedf2-50fd-e488-f9a3-516941916aaa")
+    local onChasedOutPatrol = false
+    local canWalkOnSpline = true
+    local patrolSpline = Spline("S_WYR_MerchantsHouse_Merchant_ChasedOutPatrolSpline_a680ce3e-9056-4b00-a316-b2286c585129")
+    local targetSplineIndex = -1
+    local chasedOutNoADAnim = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7")
+
+    nodes.PrisonIdle = Proxy {
+        params.prisonIdle,
+        Valid = function()
+            return GetFlag(inPrisonFlag)
+        end
+    }
+
+    nodes.SharessCaressIdle = Proxy {
+        params.sharessCaressIdle,
+        Valid = function()
+            return GetFlag(inSharessCaressFlag)
+        end
+    }
+
+    nodes.ChasingOutIdle = Proxy {
+        params.chasingOutIdle,
+        Valid = function()
+            return GetFlag(chasingOutFlag) and not GetFlag(inHouseFlag)
+        end
+    }
+
+    -- is not used and is left for patching compatibility
+    nodes.ChasedOutIdle = Proxy {
+        params.chasedOutIdle,
+        Valid = function()
+            return false
+        end
+    }
+
+    --- Patch 7 Start ---
+
+    nodes.ChasedOutPatched = Selector {
+        Valid = function()
+            return GetFlag(inHouseFlag)
+        end
+    }
+
+    nodes.ChasedOutPatched.MoveInside = Action {
+        function()
+            if mod.moveto.MoveToPoint(chasedOutTrigger, MovementSpeed.Stroll, me) then
+                LookFrom(chasedOutTrigger)            
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    chasedOutAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 6.0,
+                        checkSight = false,
+                    },
+                    me                    
+                )
+                Sleep(3)
+                onChasedOutPatrol = true
+            end
+        end,
+        CanEnter = function()
+            return not onChasedOutPatrol
+        end
+    }
+
+    nodes.ChasedOutPatched.Patroling = Action {
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Stroll, targetSplineIndex, false)
+        end,
+        OnLeave = function()
+            if canWalkOnSpline then
+                ShortPatrolInterrupt()
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline 
+        end
+    }
+
+    --
+    nodes.ChasedOutPatched.Complain = Action {
+        function()            
+            LookFrom(patrolSpline)
+            Sleep(1.0)       
+            local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                chasedOutAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 10.0,
+                    checkSight = false,
+                },
+                me                    
+            )
+            if result ~= error.RateLimitedAutomatedDialogError.None then
+                PlayAnimation(chasedOutNoADAnim)
+            else
+                Sleep(2.0)
+            end
+            canWalkOnSpline = true  
+        end,
+        CanEnter = function()
+            return not canWalkOnSpline
+        end,
+        OnLeave = function()
+            canWalkOnSpline = true
+        end,
+        OnInterrupt = function()
+            canWalkOnSpline = true
+        end
+    }
+
+    --- Patch 7 END ---
+
+    nodes.ConflictIdle = Action {
+        function()
+            if mod.moveto.MoveToPoint(conflictTrigger, MovementSpeed.Walk, me) then
+                LookFrom(conflictTrigger)
+            end
+            local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    conflictAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 6.0,
+                        checkSight = false,
+                    },
+                    me,
+                    conflictRefugeeLeader
+                )
+        end,
+        Valid = function()
+            return not GetFlag(conflictSceneEndedFlag)
+        end
+    }
+
+    nodes.PostConflictIdle = Proxy {
+        params.postConflictIdle,
+        Valid = function()
+            return not GetFlag(chasingOutFlag) and not GetFlag(inHouseFlag)
+        end
+    }
+
+    -- Events
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        canWalkOnSpline = false
+    end        
+end}

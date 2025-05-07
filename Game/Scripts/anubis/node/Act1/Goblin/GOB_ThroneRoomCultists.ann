@@ -1,0 +1,78 @@
+game.states.GOB_ThroneRoomCultist = State{function()
+    description = [[Common state for all spectators that surround the Goblin King in his room]]
+
+    params.DefaultTrigger = { type = EParamType.String, required = true,
+        help = [[Default position trigger before the Scrying Event for the spectator]]}
+
+    params.PostTrigger = { type = EParamType.String, required = true,
+        help = [[Default position trigger after the Scrying Event for the spectator]]}
+
+    params.PatrolSpline =  { type = EParamType.String, required = true,
+        help = [[Patrol spline to use after event]]}
+
+    local tr_DefaultTrigger = nil
+    local tr_PostTrigger = nil
+    local GoblinKing
+    local ScryingEndedFlag = Flag("GOB_GoblinKing_Event_ScryingEnded_d4740537-1b80-21d2-f2dc-cc875502139a")
+    local Patrolling = true
+    
+    self.OnInit = function()
+        tr_DefaultTrigger = FindEntity(params.DefaultTrigger)
+        tr_PostTrigger = FindEntity(params.PostTrigger)
+        GoblinKing = FindEntity("S_GOB_GoblinKing_11337af0-6a57-426b-a820-c4b00923dd54")
+    end
+
+
+    nodes.Action_BeforeScrying = Action{
+        function()
+            try
+                if(GetDistance2DTo(me,tr_DefaultTrigger) > 0.2 and not IsInDangerousSurfaceFor(tr_DefaultTrigger,me.Character,0.2)) then
+                    MoveTo(tr_DefaultTrigger)
+                end
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_DefaultTrigger failed")
+            end
+            SteerTo(GoblinKing)
+            Sleep(5.0)
+        end,
+        Valid = function()
+            return not GetFlag(ScryingEndedFlag,nil)
+        end,
+    }
+
+    nodes.Patrol = Proxy{
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = params.PatrolSpline,
+            patrolSpeed = "Walk"
+        },
+        Valid = function()
+            return GetFlag(ScryingEndedFlag,nil) and Patrolling
+        end
+    }
+
+    nodes.Action_LookingAtKing = Action{
+        function()
+            SteerTo(GoblinKing)
+            Sleep(math.random(10,15))
+            Patrolling = true
+        end,
+        Valid = function()
+            return GetFlag(ScryingEndedFlag,nil) and not Patrolling
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if(math.random() < 0.5) then
+            Patrolling = false
+        end
+    end
+
+
+end}

@@ -1,0 +1,122 @@
+game.states.GOB_RaiderHefty = State{function()
+    description = [[Behaviour of Raider Hafty in the Goblin Camp]]
+    modules = {"shared.util"}
+    
+        local crateBusyFlag = Flag("GOB_Raiders_HereticLaughedAt_1d323e7a-a1b0-4887-9f52-6109fccd8beb")
+        local hereticBusyFlag = Flag("GOB_Raiders_CrateBusyInspecting_4bbf99bc-a939-453a-b4c4-e78530c1bb8e")
+        local hereticInCageFlag = Flag("GOB_GoblinHeretic_InPrison_200696a2-d520-bc2c-a7e4-42c354672a07")
+        local crate
+        local heretic
+        local sharpenTrigger, laughingTrigger, inspectingTrigger
+        local drinkingAnimation = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+        local laughingAnimation = Animation("CUST_Laughing_Pointing_01_69417428-3ba8-4a72-b67e-484ab0aa7e4b") --CUST_Mocking_01_313bddc4-712f-4f08-874f-db9af7a6c4a1
+        local inspectingAnimation = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    
+        self.OnInit = function()
+            crate = FindEntity("S_GOB_PreparingRaiders_Crate_b81a4c61-ec32-4451-83f6-a1750c90eaa0")
+            heretic = FindEntity("S_GOB_GoblinHeretic_3af8a55b-903a-43cd-84d3-9cb7ca8f69de")
+            sharpenTrigger = FindEntity("S_GOB_RaiderHefty_SharpenTrigger_579f3725-e650-4e75-9852-1e1142e00b3c")
+            laughingTrigger = FindEntity("S_GOB_PreparingRaiders_LaughTrigger_69f859a3-f413-4cc9-a72f-436b27db1eb8")
+            inspectingTrigger = FindEntity("S_GOB_PreparingRaiders_InspectTrigger_b3704dbe-bd21-4d4d-9ae0-387eb79552ad")
+
+        end
+    
+        nodes.Behavior = Selector{
+        function(nodes)
+            return GetWeightedCanEnter(nodes,{[nodes.Drinking] = 4,
+                                              [nodes.Laughing] = 2,
+                                              [nodes.Inspecting] = 3,
+                                              [nodes.Wait] = 5})
+            end
+        }
+            
+        nodes.Behavior.Drinking = Action{
+            function()
+                if GetDistanceTo(me, sharpenTrigger) > 1.5 then
+                    PlayAnimation(drinkingAnimation, true)
+                end
+                mod.util.SleepRandom(4.0,8.0)
+            end
+        }
+    
+        nodes.Behavior.Laughing = Action{
+            function()
+                if not IsInDangerousSurfaceFor(laughingTrigger, me.Character) then
+                    if GetDistanceTo(me, laughingTrigger) > 0.5 then
+                        try
+                            MoveTo(laughingTrigger)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            DebugText(me,"Move Exception")
+                            Sleep(2.0)
+                        end
+                    end
+                end
+                if GetDistanceTo(me, laughingTrigger) < 1.0 then
+                    LookFrom(laughingTrigger)
+                    PlayAnimation(laughingAnimation, true)
+                end
+                mod.util.SleepRandom(4.0,8.0)
+            end,
+            Valid = function()
+                return GetFlag(hereticInCageFlag,heretic)
+            end,
+            CanEnter = function()
+                return not GetFlag(hereticBusyFlag,heretic) and GetFlag(hereticInCageFlag,heretic)
+            end,
+            OnEnter = function()
+                return SetFlag(hereticBusyFlag,heretic)
+            end,
+            OnLeave = function()
+                ClearFlag(hereticBusyFlag,heretic)
+            end
+        }
+    
+        nodes.Behavior.Inspecting = Action{
+            function()
+                if not IsInDangerousSurfaceFor(inspectingTrigger, me.Character) then
+                    if GetDistanceTo(me, inspectingTrigger) > 0.5 then
+                        try
+                            MoveTo(inspectingTrigger)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            DebugText(me,"Move Exception")
+                            Sleep(2.0)
+                        end
+                    end
+                end
+                if GetDistanceTo(me, inspectingTrigger) < 1.0 then
+                    LookFrom(inspectingTrigger)
+                    PlayAnimation(inspectingAnimation, true)
+                end
+                mod.util.SleepRandom(4.0,8.0)
+            end,
+            Valid = function()
+                return CanSee(me,crate)
+            end,
+            CanEnter = function()
+                return not GetFlag(crateBusyFlag,crate) and CanSee(me,crate)
+            end,
+            OnEnter = function()
+                return SetFlag(crateBusyFlag,crate)
+            end,
+            OnLeave = function()
+                ClearFlag(crateBusyFlag,crate)
+            end
+        }
+    
+        nodes.Behavior.Wait = Action{
+            function()
+                if not IsInDangerousSurfaceFor(sharpenTrigger, me.Character) then
+                    if GetDistanceTo(me, sharpenTrigger) > 0.5 then
+                        try
+                            MoveTo(sharpenTrigger)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            DebugText(me,"Move Exception")
+                            Sleep(2.0)
+                        end
+                    end
+                end
+                LookFrom(sharpenTrigger)
+                mod.util.SleepRandom(4.0,8.0)
+            end
+        }
+    end}

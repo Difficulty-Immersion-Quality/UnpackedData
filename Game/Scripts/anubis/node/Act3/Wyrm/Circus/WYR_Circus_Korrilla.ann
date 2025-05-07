@@ -1,0 +1,60 @@
+game.states.WYR_Circus_Korrilla = State{
+    function()
+
+    modules = {"shared.math", "shared.dialog", "shared.util"}
+    description = [[Behaviour script for Korrilla watching the palyer in WYR Circus]]
+
+    local circusTrigger = Entity("S_WYR_Korrilla_CircusArea_3b843224-2fca-4de3-bb81-0f50cb329b84")
+    local timeToLeave = Flag("GLO_KorrillaTheSpy_Circus_State_TimeToLeave_16f3e3d2-ddaa-4cbb-ba57-4bb257e9f5ca")
+    local disappearSpot = Entity("S_WYR_Korrilla_DisappearSpot_46b5e4de-9064-449a-ab59-2ec3720d8ff4")
+    
+    --Korrilla hides between the tents. When she is done waving, she leaves.
+    nodes.CircusWatching = Action{
+        function()
+                local targetchar = nil
+                local actives = GetActiveCharacters(me,  50)
+                for _,char in pairs(actives) do
+                    if char.Character.IsPlayer then
+                        if targetchar == nil then
+                            targetchar = char
+                        else                        
+                            if GetDistanceTo(me, targetchar) > GetDistanceTo(me, char) then
+                                targetchar = char
+                            end
+                        end
+                    end
+                end
+                if targetchar then
+                    SteerTo(targetchar, false, 20)
+                    LookAtEntity(targetchar, 2.0)
+                end
+                Sleep(2.0)
+        end,
+        Valid = function()
+            return IsInTrigger(me, circusTrigger.Trigger) and not GetFlag(timeToLeave)
+        end
+    }
+
+    nodes.CircusLeaving = Action{
+        function()
+            local moveResult = MoveTo(disappearSpot, MovementSpeed.Walk, true, true, 1.0, 2.0, false)
+
+            if moveResult ~= error.MovementError.None then
+                SetEntityEvent(me, "WYR_Korrilla_AtDisappearPosition")
+            else
+                SetEntityEvent(me, "WYR_Korrilla_AtDisappearPosition")
+            end
+        end,
+        Valid = function()
+            return IsInTrigger(me, circusTrigger.Trigger) and GetFlag(timeToLeave)
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+end}

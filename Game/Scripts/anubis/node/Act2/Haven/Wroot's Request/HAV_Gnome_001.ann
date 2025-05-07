@@ -1,0 +1,158 @@
+game.states.HAV_Gnome_001 = State {function ()
+
+    modules = {"shared.moveto", "shared.math"}
+
+    description = [[Behaviour of Nimble in Haven]]
+
+    local leaveInspectionFlag = Flag("HAV_SavingPrisoners_Event_PrisonersLeaveInspection_6582e781-ba50-4dcc-b88c-cf0bc4c144b1")
+    local inspectionPos = nil
+
+    nodes.WaitForInspection = Action{
+        function()
+            Sleep(math.random(0,2))
+            SetEntityEvent(me, "HAV_SavingPrisoners_AppearedAtHaven_Boat")
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos == nil
+        end
+    }
+
+    nodes.Inspection = Action{
+        function()
+            if mod.moveto.MoveToPoint(inspectionPos,  MovementSpeed.Walk, me) then
+                LookFrom(inspectionPos)
+                SetEntityEvent(me, "HAV_SavingPrisoners_AtInspectionPos")
+                WaitForInterrupt()
+            else
+                SteerTo(inspectionPos)
+            end
+            Sleep(4)
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos ~= nil
+        end
+    }
+
+    nodes.Sitting = Proxy {
+        game.states.Sit,
+        params = {
+            seat = "S_HAV_GnomeSeat_001_0512e833-1334-4825-a1b9-cac53fdd339e",
+            seatTrigger = "S_HAV_GnomeSeatArea_001_f74af439-0d4b-4d6b-becf-e6ac42e96288",
+            sitIdle = StateRef{game.states.HAV_Gnome_001_Sitting},
+            nonSitIdle = StateRef{game.states.HAV_Gnome_001_Standing},
+            useSeatPositionAsFallBack = false,
+            sitOnGroundAsFallback = false
+        }
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if(e.Event == "HAV_SavingPrisoners_SetInspectionPos") then
+                inspectionPos = e.Params[1]
+                Interrupt()
+            end
+        end
+    end
+
+end}
+
+game.states.HAV_Gnome_001_Sitting = State {function ()
+
+    modules = {"shared.dialog", "shared.math"}
+
+    description = [[Behaviour of Nimble in Haven while he is sitting]]
+
+    local drinkingDialog = Dialog("BHVR_WRLD_GLO_MagicPocketsSitAndDrink_c2e8c0bf-d1d0-af01-72c3-e7c244444e2c")
+    local seat = Entity("S_HAV_GnomeSeat_001_0512e833-1334-4825-a1b9-cac53fdd339e")
+    local wulbren = Entity("S_GLO_Wulbren_2d70edbf-1a70-4047-8099-48f3e75d93bf")
+    local nickels = Entity("S_GLO_GnomePrisoner_002_c9a7d921-bef0-4829-8792-d48c529daee5")
+    local AD = Dialog("HAV_WrootRequest_AD_ReturnedPrisoners_b571d8a6-556d-07d1-4a74-707311599249")
+
+    local canAD = true
+
+    local wulbrenDefeatedFlag = Flag("GLO_Wulbren_State_Defeated_1e67b51c-a13d-484b-9bf4-65fbc178b152")
+    local nickelsDefeatedFlag = Flag("MOO_GnomePrisoner002_State_Defeated_fc079d0c-2c74-437c-aa00-fb358d4658a2")
+
+    events.FlagSet = function(e)
+        if e.Flag == wulbrenDefeatedFlag.Guid then
+            wulbren = nil
+        elseif e.Flag == nickelsDefeatedFlag.Guid then
+            nickels = nil
+        end
+    end
+
+    nodes.Default = Action {
+        function()
+            Sleep(4.0 + 8.0 * math.random())
+            StartBehaviorDialog(drinkingDialog, nil, true, me, seat)
+            Sleep(1.0)
+            if(not wulbren and nickels and canAD) then
+                if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailable(nickels) then
+                    StartTimer(me, "HAV_WrootRequest_GnomeADDelay", 30.0, 0)
+                    canAD = false
+                    StartAutomatedDialog(AD, true, nil, me, nickels)
+                end
+            end
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "HAV_WrootRequest_GnomeADDelay" then
+            canAD = true
+        end
+    end
+
+end}
+
+game.states.HAV_Gnome_001_Standing = State {function ()
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    description = [[Behaviour of Nimble in Haven while he is standing]]
+
+    local armsCrossedAnim = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+
+    local position = Entity("S_HAV_GnomePrisonerPos_001_d51e670e-0ee1-438d-8bc7-e0a99f071fb6")
+    local wulbren = Entity("S_GLO_Wulbren_2d70edbf-1a70-4047-8099-48f3e75d93bf")
+    local nickels = Entity("S_GLO_GnomePrisoner_002_c9a7d921-bef0-4829-8792-d48c529daee5")
+    local AD = Dialog("HAV_WrootRequest_AD_ReturnedPrisoners_b571d8a6-556d-07d1-4a74-707311599249")
+
+    local canAD = true
+
+    local wulbrenDefeatedFlag = Flag("GLO_Wulbren_State_Defeated_1e67b51c-a13d-484b-9bf4-65fbc178b152")
+    local nickelsDefeatedFlag = Flag("MOO_GnomePrisoner002_State_Defeated_fc079d0c-2c74-437c-aa00-fb358d4658a2")
+
+    events.FlagSet = function(e)
+        if e.Flag == wulbrenDefeatedFlag.Guid then
+            wulbren = nil
+        elseif e.Flag == nickelsDefeatedFlag.Guid then
+            nickels = nil
+        end
+    end
+
+    nodes.Default = Action {
+        function()
+            if mod.moveto.MoveToPoint(position, MovementSpeed.Walk, me) then
+                LookFrom(position)
+            else
+                SteerTo(position)
+            end
+            PlayAnimation(armsCrossedAnim, false, true)
+            Sleep(4.0)
+            if(not wulbren and nickels and canAD) then
+                if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailable(nickels) then
+                    StartTimer(me, "HAV_WrootRequest_GnomeADDelay", 30.0, 0)
+                    canAD = false
+                    StartAutomatedDialog(AD, true, nil, me, nickels)
+                end
+            end
+        end,
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "HAV_WrootRequest_GnomeADDelay" then
+            canAD = true
+        end
+    end
+
+end}

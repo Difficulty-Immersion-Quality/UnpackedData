@@ -1,0 +1,152 @@
+game.states.PLA_ZhentDungeon_Zhent07 = State{
+    
+    function()
+
+        modules = {"shared.items"}
+
+        local explosivesRight = {}
+        local explosivesLeft = {}
+        local explosiveMiddle
+
+        local inspectAnimation = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+        local dropAnimation = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+
+        local explosivesActiveFlag = Flag("PLA_ZhentDungeon_CombatTraps_State_Active_2badbd06-c41e-4210-85f5-c021b6f54d07")
+
+        local PLA_ZhentDungeon_Zhent07_Home
+
+
+        helpers.action.handleExplosive = function(explosive, position)
+            if not mod.items.SafeIsDestroyed(explosive) then
+                if IsInInventoryOf(explosive, me) then
+                    try
+                        MoveTo(position)
+                        TeleportTo(explosive, position)
+                        PlayAnimation(dropAnimation)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        SteerTo(position)
+                        Sleep(2.0)
+                    end
+                elseif not explosive.Item.IsInInventory then
+                    if GetDistanceTo(explosive, position) > 2.0 then
+                        if CanSee(me, explosive) then
+                            PickUp(explosive)
+                        else
+                            Wander(position, 3.0, false)
+                        end
+                    else
+                        try
+                            MoveTo(explosive)
+                            SteerTo(explosive)
+                            DebugText(me, "Inspecting explosive")
+                            PlayAnimation(inspectAnimation)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            SteerTo(position)
+                            Sleep(2.0)
+                        end
+                    end
+                end
+            end
+        end
+
+        self.OnInit = function()
+            
+            local tempExplosives  =  {FindEntity("S_PLA_ZhentDungeon_Defense_ProximityExplosive_000_8738875b-3226-4dea-abdb-ea6130aa5385"),
+                                      FindEntity("S_PLA_ZhentDungeon_Defense_ProximityExplosive_001_29426765-9764-4ae6-a231-b3dc270db9c9"),
+                                      FindEntity("S_PLA_ZhentDungeon_Defense_ProximityExplosive_002_ebbba95b-0423-4d2a-b7ef-2ced78b098aa"),
+                                      FindEntity("S_PLA_ZhentDungeon_Defense_ProximityExplosive_003_821be27b-97ab-4108-8a0c-2e34eb452fdd"),
+                                      FindEntity("S_PLA_ZhentDungeon_Defense_ProximityExplosive_004_dd3d0fb6-eb71-499e-ab25-e425ae96ca10"),
+                                      FindEntity("S_PLA_ZhentDungeon_Defense_ProximityExplosive_005_117a61b5-f6be-4926-b466-fc4f28dc6299"),
+                                      FindEntity("S_PLA_ZhentDungeon_Defense_ProximityExplosive_006_78c6e701-ea3a-4133-ba4f-200e77254f0c")}
+
+                for i=1, 3, 1 do
+                    explosivesRight[i] = {tempExplosives[i], tempExplosives[i].Position}
+                end
+
+                for i=4, 6, 1 do
+                    explosivesLeft[i-3] = {tempExplosives[i], tempExplosives[i].Position}
+                end
+
+                explosiveMiddle = {tempExplosives[7], tempExplosives[7].Position}
+            
+                PLA_ZhentDungeon_Zhent07_Home = FindEntity("S_PLA_ZhentDungeon_Zhent07_Home_1ae849ae-82d0-488d-976f-9c3da1ae3fc6")
+
+            end
+
+        nodes.Behaviour = Selector{
+            function(nodes)
+                local nextNode = GetRandomCanEnterNoRepeat(nodes)
+                if nextNode == nil then
+                    return nodes.Rest
+                else
+                    return nextNode
+                end
+            end
+        }
+
+        nodes.Behaviour.DoAD = Proxy{
+            game.states.GLO_ADManager,
+            params={
+                AD = [[PLA_ZhentDungeon_Zhent07_AD_daa60cf6-4fb5-9763-7163-a5fd910f1796]],
+                dialogBlockFlag = [[PLA_ZhentDungeon_State_BlockAD_Zhent07_158a3e16-d0a8-43ba-96dd-41c68a6cfc63]],
+                regionBlockFlag = [[PLA_ZhentDungeon_State_BlockAD_Back_4ea4ff84-27d0-42ac-831b-8c8be2ff4e61]],
+            },
+            CanEnter = function()
+                return GetDistanceTo(PLA_ZhentDungeon_Zhent07_Home, me) < 2.5
+            end
+        }
+
+        nodes.Behaviour.Rest = Action{
+            function()
+                if not IsInDangerousSurfaceFor(PLA_ZhentDungeon_Zhent07_Home, me.Character) then
+                    if GetDistanceTo(me, PLA_ZhentDungeon_Zhent07_Home) > 2.0 then
+                        try
+                            MoveTo(PLA_ZhentDungeon_Zhent07_Home)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            LookAtEntity(PLA_ZhentDungeon_Zhent07_Home, 3.0)
+                            Sleep(2.0)
+                        end
+                    else
+                        LookFrom(PLA_ZhentDungeon_Zhent07_Home)
+                    end
+                else
+                    LookAtEntity(PLA_ZhentDungeon_Zhent07_Home, 3.0)
+                end
+                Sleep(7.0) -- Character takes some time off.
+            end
+
+        }
+
+        nodes.Behaviour.ExplosivesRight = Action{
+            function()
+                for _, e in ipairs(explosivesRight) do
+                    helpers.handleExplosive(e[1],e[2])
+                end
+            end,
+            Valid = function()
+                return not GetFlag(explosivesActiveFlag)
+            end
+        }
+
+        nodes.Behaviour.ExplosivesLeft = Action{
+            function()
+                for _, e in ipairs(explosivesLeft) do
+                    helpers.handleExplosive(e[1],e[2])
+                end
+            end,
+            Valid = function()
+                return not GetFlag(explosivesActiveFlag)
+            end
+        }
+
+        nodes.Behaviour.ExplosiveMiddle = Action{
+            function()
+                helpers.handleExplosive(explosiveMiddle[1], explosiveMiddle[2])
+            end,
+            Valid = function()
+                return not GetFlag(explosivesActiveFlag)
+            end
+        }
+
+    end
+}

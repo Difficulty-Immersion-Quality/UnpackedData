@@ -1,0 +1,858 @@
+game.states.HAG_Hag = State{function ()
+
+    local ArrivedAtSwamp = false
+    local HAG_Hag_State_HagInLair = Flag("HAG_Hag_State_HagInLair_b1559527-2aa5-41e1-bab2-89ace2bf450c")
+
+    events.EntityEvent = function(ev)
+        if (ev.TargetEntity == me)  and (ev.Event == "DEN_HagTrader_Event_LeftDen") then
+                ArrivedAtSwamp = true
+        end
+    end
+
+    nodes.State_Den = Proxy{
+        game.states.HAG_Hag_Den,
+        Valid = function()
+            return not ArrivedAtSwamp and not GetFlag(HAG_Hag_State_HagInLair)
+        end
+    }
+
+    nodes.State_Swamp = Proxy{
+        game.states.HAG_Hag_Swamp,
+        Valid = function()
+            return
+                ArrivedAtSwamp and
+                not GetFlag(HAG_Hag_State_HagInLair)
+        end
+    }
+
+
+    nodes.State_Lair= Proxy{
+        game.states.HAG_Hag_Lair,
+        Valid = function()
+            return GetFlag(HAG_Hag_State_HagInLair)
+        end
+    }
+
+end
+}
+
+
+game.states.HAG_Hag_Den = State{function ()
+
+    local stopsitting = false
+    local brewingPos = Entity("S_DEN_HagBrewingPos_c98f075a-1178-4fea-9e16-e5ba4ab01424")
+    local browsingPos = Entity("S_DEN_HagMixingPos_85addd99-2d67-4466-be0f-8d089e74750d")
+    local CUST_InspectClose_01 = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local CUST_TendingToFlowers_01 = Animation("CUST_TendingToFlowers_01_f50058cb-0b06-4bb7-b834-e16adc905395")
+    local tendingToFlowersDialog = Dialog("HAG_BHVR_WRLD_TendFlowers_HumanForm_e13ea909-3b63-3ebb-d713-1c5ed702c276")
+    local tendingToFlowersTrigger = Entity("S_BHVR_WRLD_DEN_HagTendsToFlowers_f020daf8-470b-4c5b-8598-4317141bb07e")
+
+    nodes.Selector_Den = Selector{
+        function(nodes)
+            if me.IsReposed then
+               if not stopsitting and
+                  nodes.Action_Sit.IsSelectable() then
+                return nodes.Action_Sit
+               else 
+                return GetWeightedCanEnter(nodes, {
+                    [nodes.Action_Browse]= 25,
+                    [nodes.Action_Mix] = 50})
+               end
+            else
+                return
+                    GetWeightedCanEnter(nodes, {
+                        [nodes.Action_Browse]= 25,
+                        --[nodes.Action_Sit]= 25,
+                        [nodes.Action_Mix] = 50
+            })
+            end
+        end
+
+    }
+
+    events.TimerFinished = function(ev)
+        if (ev.TimerName == "DEN_Hag_SittingDown") then
+            stopsitting = true
+        end
+    end
+
+    nodes.Selector_Den.Action_Sit = Proxy{
+        game.states.Sit,
+        params = {seat = "S_DEN_HagSeat_3d6777f6-8284-42d5-8d42-fa9251673cbd",
+                  seatTrigger = "S_DEN_HagSeatArea_445fb6ef-39f6-432a-a1d3-46da65b95749"
+                  }
+                  ,
+        OnEnter = function()
+            StartTimer(me, "DEN_Hag_SittingDown", 70.0, 0)
+        end,
+        OnLeave = function()
+            stopsitting = false
+            StopTimer(me, "DEN_Hag_SittingDown")
+        end
+        ,
+        Valid = function()
+            return not stopsitting
+        end
+    }
+
+    nodes.Selector_Den.Action_Mix = Action{function()
+            try
+                StartBehaviorDialog(tendingToFlowersDialog, tendingToFlowersTrigger.Trigger, true, me)
+                Sleep(2.0)            
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(brewingPos, 3.0)
+            end
+            Sleep(10.0)
+
+        end,
+
+        Valid = function()
+            -- TODO replace with brewingpos
+            return not IsInDangerousSurfaceFor(brewingPos, me.Character)
+        end
+    }
+
+    nodes.Selector_Den.Action_Browse = Action{function()
+        try
+            MoveTo(browsingPos)
+            LookFrom(browsingPos)
+            PlayAnimation(CUST_InspectClose_01, true, false)
+            Sleep(2.0)
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            LookAtEntity(browsingPos, 3.0)
+        end
+        Sleep(10.0)
+
+    end,
+
+    Valid = function()
+        -- TODO: replace with browsingPos
+        return not IsInDangerousSurfaceFor(browsingPos, me.Character)
+    end
+    }
+
+end
+}
+ 
+
+game.states.HAG_Hag_Swamp = State{function ()
+
+    modules = {"shared.dialog"}
+
+    local HAG_HagTablePoint_Leaves = Entity("S_HAG_HagTablePoint_Leaves_eb8cac4a-19eb-4beb-8f06-5e52ef609ccf")
+    local HAG_Hagspawn_SurrogateMother = Entity("S_HAG_Hagspawn_SurrogateMother_08c970d7-3138-45e8-8965-68eadf4b07cd")
+    local HAG_Hagspawn_State_InitialSceneDone = Flag("HAG_Hagspawn_State_InitialSceneDone_ddd2ea7d-9ffd-27b6-4b7d-e6cd90b9db56")
+    local HAG_Hag_FlowerPoint = Entity("S_HAG_Hag_FlowerTend_PointTrigger_b675e2b8-4767-43f2-8a9e-98837fe43747")
+    local HAG_Hag_FlowerPoint_Hag = Entity("S_HAG_HagFlowerPoint_3674ed44-07ef-4ebc-a35d-457d079b64d0")
+    local HAG_Hag_FlowerScene = Entity("HAG_BHVR_WRLD_TendFlowers_TimelineSceneTrigger_002_b114775f-62a3-49e3-bf16-7438a9b69288")
+    local HAG_Hag_FlowerScene_Hag = Entity("HAG_BHVR_WRLD_TendFlowers_TimelineSceneTrigger_003_0f0c09ae-0b0d-4d25-9369-a50dc9b0bbb8")
+    local HAG_Hag_TablePoint_Clean = Entity("HAG_BHVR_WRLD_CleaningTable_Hag_TimelineSceneTrigger_001_d7c52c2d-b4f0-4e5a-b4c5-c298ff5307f2")
+    local HAG_Hag_TablePoint_Clean_Human = Entity("HAG_BHVR_WRLD_CleaningTable_HUM_F_TimelineSceneTrigger_7485bc97-7638-4ef5-a6fc-a12e9b922edd")
+    local HAG_Hag_ShelfPoint = Entity("S_HAG_Hag_ShelfPoint_8fbb76a9-7332-4a1f-b4a7-d5d92dbc0b18")
+    local HAG_Hag_WindowPoint = Entity("S_HAG_Hag_WindowPoint_bbf2abb7-4bd5-4d8a-a922-a147105bbd60")
+    local HAG_Hag_FirePoint_Hag = Entity("S_HAG_BHVR_WRLD_Hag_PokingFire_TimelineSceneTrigger_7f7bd07a-d444-4358-9059-492c0bfac84e")
+    local HAG_Hag_FirePoint_Human = Entity("S_HAG_BHVR_WRLD_Hag_PokingFire_TimelineSceneTrigger_7f7bd07a-d444-4358-9059-492c0bfac84e")
+    local HAG_Hag_Campfire = Entity("S_HAG_Hag_Campfire_56ea0191-c6a6-4cf0-9d8c-d5f8c174e917")
+    local HAG_HagTeapotPoint = Entity("S_HAG_HagTeapotPoint_8dc30331-6c7e-470b-be53-1ef171bcc212")
+    local HAG_TeaPot = Entity("S_HAG_TeaPot_d9a88eba-83d8-4a06-aa62-745e67b2285a")
+    local HAG_HagTeapotBox = Entity("S_HAG_HagTeapotBox_177c1600-5ef0-4ed1-ae19-2f4b67cb8168")
+    local HAG_HagTeapotPourPoint = Entity("S_HAG_HagTeapotPourPoint_35122ae2-9266-4b52-874e-53c1ee3f47cf")
+    local HAG_Hagspawn_MotherChairBox = Entity("S_HAG_Hagspawn_MotherChairBox_c1095437-960e-4491-9aa6-13167ab91898")
+    local currentState = "Action_FlowerPot"
+    local isHagFlag = Flag("HAG_Hag_Event_DropDisguise_30c887ff-c8b4-6442-dc43-4602df81d315")
+    local HAG_Hag_StareFromDoorPoint = Entity("S_HAG_HagLair_Point_StareFromDoor_7886c53b-f001-45f1-a475-25ff91122da8")
+
+    local cleaningTable_Hag = Dialog("HAG_BHVR_WRLD_CleaningTable_Hag_7c0685d4-9914-1299-1c9c-cd388f0149d1")
+    local cleaningTable_Human = Dialog("BHVR_WRLD_GLO_CleaningTable_HUM_F_20d178f8-7192-919d-fa8a-3119c507bf4d")
+    local tendingFlowers_Hag = Dialog("HAG_BHVR_WRLD_TendFlowers_HagForm_66b8f065-52cc-c6b3-d571-110bcfe43054")
+    local tendingFlowers_Human = Dialog("HAG_BHVR_WRLD_TendFlowers_HumanForm_e13ea909-3b63-3ebb-d713-1c5ed702c276")
+    local pokeFire_Hag = Dialog("BHVR_WRLD_WLD_Hag_PokingFire_d1a21f39-4005-0625-16d2-4ac8f49d2ede")
+    local CUST_StudyingShelves_01 = Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+    local CUST_StudyingShelves_01_Start = Animation("CUST_StudyingShelves_01_Start_c65065b3-29ff-4c7c-a69d-4d97aa1bc32f")
+    local CUST_StudyingShelves_01_Loop = Animation("CUST_StudyingShelves_01_Loop_06c3a6fc-bc6f-4d15-83ab-6303be83b9e7")
+    local CUST_StudyingShelves_01_End = Animation("CUST_StudyingShelves_01_End_fffeb2f4-f015-4e1a-afed-a331c74ff7c1")
+    local CUST_TendingToFlowers_01 = Animation("CUST_TendingToFlowers_01_f50058cb-0b06-4bb7-b834-e16adc905395")
+    local CUST_BrewingTea_01 = Animation("CUST_BrewingTea_01_940a7251-e9c6-43c0-a8fb-22bf611073a5")
+    local CUST_ChoppingLeaves_01 = Animation("CUST_ChoppingLeaves_01_e87e9e8c-81e4-4c03-a890-c8394a323a7f")
+
+    nodes.Action_Brew_ReturnTeaPot = Action{function()
+
+        MoveItem(HAG_TeaPot, HAG_HagTeapotBox)
+        Sleep(1.0)
+
+    end,
+    Valid = function()
+        return not IsInTrigger(HAG_TeaPot, HAG_HagTeapotBox.Trigger) and
+                CanSee(me, HAG_TeaPot)
+    end
+    }
+
+    nodes.Action_Brew_ReturnTeaPotFromInventory = Action{function()
+
+        MoveTo(HAG_HagTeapotPoint)
+        Sleep(0.5)
+        TeleportTo(HAG_TeaPot, HAG_HagTeapotBox)
+
+    end,
+    Valid = function()
+        return IsInInventoryOf(HAG_TeaPot, me) and
+               not IsInDangerousSurfaceFor(HAG_HagTeapotPoint, me.Character)
+    end
+    }
+
+    nodes.Selector_Swamp = Selector{
+        function(nodes)
+            local nextAction
+            if not GetFlag(HAG_Hagspawn_State_InitialSceneDone) then
+                if nodes.Action_FlowerPot.IsSelectable() then
+                    return nodes.Action_FlowerPot
+                else
+                    return nodes.Action_Idle
+                end
+            else
+                if currentState == "Selector_Tea" then
+                    nextAction = FindWeightedRandomSelectable (nodes, {--[nodes.Action_Brew] = 2,
+                                                                       [nodes.Action_Leaves] = 4,
+                                                                       [nodes.Action_FlowerPot] = 4,
+                                                                       [nodes.Action_AD] = 5
+                                                                       })
+                elseif currentState == "Action_Leaves" then
+                    nextAction = FindWeightedRandomSelectable (nodes, {--[nodes.Action_Brew] = 4,
+                                                                       [nodes.Action_Leaves] = 4,
+                                                                       [nodes.Action_FlowerPot] = 4,
+                                                                       [nodes.Action_AD] = 5
+                                                                      })
+                elseif currentState == "Action_FlowerPot" then
+                    nextAction = FindWeightedRandomSelectable (nodes, {--[nodes.Action_Brew] = 3,
+                                                                       [nodes.Action_Leaves] = 2,
+                                                                       [nodes.Action_FlowerPot] = 5,
+                                                                       [nodes.Action_AD] = 5,
+                                                                       [nodes.Action_Table] = 4
+                                                                      })
+                elseif currentState == "Action_Table" then
+                    nextAction = FindWeightedRandomSelectable (nodes, {[nodes.Action_FlowerPot] = 4,
+                                                                       [nodes.Action_AD] = 3,
+                                                                       [nodes.Action_Table] = 5,
+                                                                       [nodes.Action_Shelf] = 4,
+                                                                       [nodes.Action_Window] = 2,
+                                                                      })
+                elseif currentState == "Action_Shelf" then
+                    nextAction = FindWeightedRandomSelectable (nodes, {[nodes.Action_FlowerPot] = 2,
+                                                                       [nodes.Action_AD] = 3,
+                                                                       [nodes.Action_Table] = 4,
+                                                                       [nodes.Action_Shelf] = 1,
+                                                                       [nodes.Action_Window] = 3,
+                                                                       [nodes.Action_Fire] = 2
+                                                                      })
+                elseif currentState == "Action_Window" then
+                    nextAction = FindWeightedRandomSelectable (nodes, {[nodes.Action_AD] = 3,
+                                                                       [nodes.Action_Table] = 2,
+                                                                       [nodes.Action_Shelf] = 4,
+                                                                       [nodes.Action_Window] = 2,
+                                                                       [nodes.Action_Fire] = 4
+                                                                      })
+                elseif currentState == "Action_Fire" then
+                    nextAction = FindWeightedRandomSelectable (nodes, {[nodes.Action_AD] = 2,
+                                                                       [nodes.Action_Shelf] = 3,
+                                                                       [nodes.Action_Window] = 3,
+                                                                       [nodes.Action_Fire] = 5
+                                                                      })
+                end
+                if nextAction ~= nil then
+                    return nextAction
+                else
+                    return nodes.Action_Idle
+                end
+            end
+        end
+    }
+
+    nodes.Selector_Swamp.Action_Idle = Action{  --Fallback in case all of the actions are blocked.
+        function()
+            Sleep(3.0)
+        end
+    }
+
+    nodes.Selector_Swamp.Action_AD = Proxy{
+        game.states.HAG_Hag_Swamp_AD,
+        Valid = function()
+            return
+                mod.dialog.IsSpeakerAvailableAndNear(HAG_Hagspawn_SurrogateMother, me, 10.0, true)
+        end
+    }
+
+    --[[
+    nodes.Selector_Swamp.Action_Brew = Action{function()
+
+        try
+            MoveTo(HAG_HagTeapotPoint, MovementSpeed.Stroll, false, false, 0.5, 1.0, true, PathClimbingMode.DynamicOnly)
+            LookFrom(HAG_HagTeapotPoint)
+            PlayAnimation(CUST_BrewingTea_01)
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            LookAtEntity(HAG_HagTeapotPoint, 3.0)
+        end
+        Sleep(10.0)
+
+    end
+    ,
+    Valid = function()
+        return not IsInDangerousSurfaceFor(HAG_HagTeapotPoint, me.Character) and
+                IsInTrigger(HAG_TeaPot, HAG_HagTeapotBox.Trigger)
+    end,
+        OnEnter = function()
+            currentState = "Selector_Tea"
+        end
+    }]]
+
+
+    nodes.Selector_Swamp.Action_Fire = Action{
+        function()
+            if GetFlag(isHagFlag) then 
+                try
+                StartBehaviorDialog(pokeFire_Hag , HAG_Hag_FirePoint_Hag.Trigger, true, me)
+                    if not HasActiveStatus(HAG_Hag_Campfire, "BURNING") then
+                    ApplyStatus(HAG_Hag_Campfire, "BURNING", true, -1.0, me)
+                end
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(HAG_Hag_FirePoint, 3.0)
+                
+                end
+            else
+                try
+                StartBehaviorDialog(pokeFire_Hag , HAG_Hag_FirePoint_Human.Trigger, true, me)
+                    if not HasActiveStatus(HAG_Hag_Campfire, "BURNING") then
+                    ApplyStatus(HAG_Hag_Campfire, "BURNING", true, -1.0, me)
+                end
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(HAG_Hag_FirePoint, 3.0)
+                end
+            end
+            Sleep(3.0)
+        end,
+
+        Valid = function()
+            return not IsInDangerousSurfaceFor(HAG_Hag_FirePoint_Hag, me.Character)
+        end,
+
+        OnEnter = function()
+            currentState = "Action_Fire"
+        end
+    }
+
+    nodes.Selector_Swamp.Action_Window = Action{
+        function()
+            try
+                MoveTo(HAG_Hag_WindowPoint, MovementSpeed.Stroll, false, false, 0.5, 1.0, true, PathClimbingMode.DynamicOnly)
+                LookFrom(HAG_Hag_WindowPoint)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(HAG_Hag_WindowPoint, 3.0)
+            end
+            Sleep(6.0)
+        end,
+        Valid = function()
+            return not IsInDangerousSurfaceFor(HAG_Hag_WindowPoint, me.Character)
+        end,
+        OnEnter = function()
+            currentState = "Action_Window"
+        end
+    }
+
+    nodes.Selector_Swamp.Action_Shelf = Action{
+        function()
+            try
+                MoveTo(HAG_Hag_ShelfPoint, MovementSpeed.Stroll, false, false, 0.5, 1.0, true, PathClimbingMode.DynamicOnly)
+                LookFrom(HAG_Hag_ShelfPoint)
+                PlayLoopingAnimation(CUST_StudyingShelves_01_Start, { CUST_StudyingShelves_01_Loop }, CUST_StudyingShelves_01_End)
+                Sleep(37.0)
+                StopAnimation(me)
+                Sleep(5.0) --TODO: hard-coded animation sleep fix
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(HAG_Hag_ShelfPoint, 3.0)
+            end
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return not IsInDangerousSurfaceFor(HAG_Hag_ShelfPoint, me.Character)
+        end,
+        OnEnter = function()
+            currentState = "Action_Shelf"
+        end
+    }
+
+    nodes.Selector_Swamp.Action_Table = Action{
+        function()
+                if GetFlag(isHagFlag) then 
+                    try
+                        StartBehaviorDialog(cleaningTable_Hag, HAG_Hag_TablePoint_Clean.Trigger, true, me)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(HAG_Hag_TablePoint_Clean, 3.0)
+                    end
+                else
+                    try
+                        StartBehaviorDialog(cleaningTable_Human, HAG_Hag_TablePoint_Clean_Human.Trigger, true, me)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(HAG_Hag_TablePoint_Clean, 3.0)
+                    end
+            end
+            Sleep(3.0)
+        end,
+        Valid = function()
+            return not IsInDangerousSurfaceFor(HAG_Hag_TablePoint_Clean, me.Character)
+        end,
+        OnEnter = function()
+            currentState = "Action_Table"
+        end
+    }
+
+    nodes.Selector_Swamp.Action_FlowerPot = Action{
+        function()
+            Sleep(0.5)
+            if GetFlag(isHagFlag) then 
+                if GetDistanceTo(HAG_Hag_FlowerPoint_Hag, me) > 2.0 then
+                    MoveTo(HAG_Hag_FlowerPoint_Hag, MovementSpeed.Stroll, false, false, 0.5, 1.0, true, PathClimbingMode.DynamicOnly)
+                end
+                try
+                StartBehaviorDialog(tendingFlowers_Hag, HAG_Hag_FlowerScene_Hag.Trigger, true, me)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(HAG_HagFlowerScene, 3.0)
+                end
+            else
+                if GetDistanceTo(HAG_Hag_FlowerPoint, me) > 2.0 then
+                    MoveTo(HAG_Hag_FlowerPoint, MovementSpeed.Stroll, false, false, 0.5, 1.0, true, PathClimbingMode.DynamicOnly)
+                end
+                try
+                StartBehaviorDialog(tendingFlowers_Human, HAG_Hag_FlowerScene.Trigger, true, me)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(HAG_HagFlowerScene, 3.0)
+                end
+            end
+            Sleep(0.5)
+        end,
+        Valid = function()
+            return not IsInDangerousSurfaceFor(HAG_Hag_FlowerPoint, me.Character)
+        end,
+        OnEnter = function()
+            currentState = "Action_FlowerPot"
+        end
+    }
+
+    nodes.Selector_Swamp.Action_Leaves = Action{function()
+        try
+            MoveTo(HAG_HagTablePoint_Leaves, MovementSpeed.Stroll, false, false, 0.5, 1.0, true, PathClimbingMode.DynamicOnly)
+            LookFrom(HAG_HagTablePoint_Leaves)
+            PlayAnimation(CUST_ChoppingLeaves_01)
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            LookAtEntity(HAG_HagTablePoint_Leaves, 3.0)
+        end
+        Sleep(10.0)
+    end,
+    Valid = function()
+        return not IsInDangerousSurfaceFor(HAG_HagTablePoint_Leaves, me.Character)
+    end,
+    OnEnter = function()
+        currentState = "Action_Leaves"
+    end
+    }
+end
+}
+
+game.states.HAG_Hag_Swamp_AD = State{function ()
+
+
+    local HAG_HagHouse = Entity("S_HAG_HagHouse_fae45ba1-2da5-4ab7-b24b-8bf7539a3c64")
+    local HAG_Hagspawn_SurrogateMother = Entity("S_HAG_Hagspawn_SurrogateMother_08c970d7-3138-45e8-8965-68eadf4b07cd")
+    local HAG_Hagspawn_AD_HagSurrogateMotherStartScene = Dialog("HAG_Hagspawn_AD_HagSurrogateMotherStartScene_f0b0eeac-2db6-66f6-d910-0e704c238895")
+    local HAG_HagSpawn_Quest_SurrogateReleased = Flag("HAG_HagSpawn_Quest_SurrogateReleased_dafa0dd7-c2bb-be04-6881-ed81a87373fd")
+
+    nodes.StartScene_ReturnHome = Action{function()
+        local validPos
+        try
+            validPos = FindValidPosition(HAG_HagHouse, 5.0, me)
+            MoveTo(validPos)
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            Sleep(0.5) --If this fails, the selector will run again, but in case it selects this again, we don't want MoveTos every frame.
+        end
+    end
+    ,
+    CanEnter = function()
+        return not IsInTrigger(me, HAG_HagHouse.Trigger)
+    end
+    }
+
+
+    nodes.StartScene_NoBrothers = Action{function()
+        Sleep(2.0)
+        StartAutomatedDialog(HAG_Hagspawn_AD_HagSurrogateMotherStartScene, true, me, HAG_Hagspawn_SurrogateMother)
+    end
+    ,
+    Valid = function()
+        return IsInTrigger(me, HAG_HagHouse.Trigger)
+    end
+    ,
+    OnLeave = function()
+        if IsInDialog(me, true) and not IsInDialog(me, false) then
+            SetEntityEvent(me, "ForceStopDialog")
+        end
+    end
+    }
+
+    self.Valid = function()
+        return not IsInDialog(HAG_Hagspawn_SurrogateMother, true) and
+                not HAG_Hagspawn_SurrogateMother.Character.IsInteractionDisabled and
+                not HAG_Hagspawn_SurrogateMother.IsInCombat and
+                not HAG_Hagspawn_SurrogateMother.Character.IsDead and
+                not GetFlag(HAG_HagSpawn_Quest_SurrogateReleased)
+    end
+
+end
+}
+
+
+game.states.HAG_Hag_Lair = State{function ()
+
+    local HAG_Lair_HagSpot = Entity("HAG_Lair_HagSpot_fdd01e3a-b187-4109-8444-195574033955")
+
+    nodes.Action_Idle = Action{function()
+
+        try
+            MoveTo(HAG_Lair_HagSpot)
+            LookFrom(HAG_Lair_HagSpot)
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            LookAtEntity(HAG_Lair_HagSpot, 3.0)
+       end
+        Sleep(2.0)
+
+    end
+    ,
+    Valid = function()
+        return not IsInDangerousSurfaceFor(HAG_Lair_HagSpot, me.Character)
+    end
+    }
+
+    nodes.Action_Idle_Fallback = Action{function()
+        Sleep(2.0)
+    end
+    ,
+    }
+
+end
+}
+
+--Maybe move the combat behaviour to a separate file?
+
+game.states.HAG_Hag_Combat= State{function ()
+
+    local HAG_Hag_State_ReadyForLair = Flag("HAG_Hag_State_ReadyForLair_658c4d09-b278-42dd-8f72-b98ec3efd0d5")
+    local HAG_Hag_State_HagInLair = Flag("HAG_Hag_State_HagInLair_b1559527-2aa5-41e1-bab2-89ace2bf450c")
+    local HAG_HagSpawn_Quest_SurrogateReleased = Flag("HAG_HagSpawn_Quest_SurrogateReleased_dafa0dd7-c2bb-be04-6881-ed81a87373fd")
+    local HAG_Hagspawn_State_InitialSceneDone = Flag("HAG_Hagspawn_State_InitialSceneDone_ddd2ea7d-9ffd-27b6-4b7d-e6cd90b9db56")
+    local HAG_HagSpawn_SurrogateMother_State_InLair = Flag("HAG_HagSpawn_SurrogateMother_State_InLair_400601e6-9c76-4d93-a4bf-d561de28cc10")
+    local HAG_Hag_AD_TeleportSurrogateMother = Dialog("HAG_Hag_AD_TeleportSurrogateMother_d32494d4-0658-adb7-4433-82486e723607")
+    local HAG_Hagspawn_SurrogateMother = Entity("S_HAG_Hagspawn_SurrogateMother_08c970d7-3138-45e8-8965-68eadf4b07cd")
+    local HAG_Hagspawn_State_SkipAD = Flag("HAG_Hagspawn_State_SkipAD_58c3b07f-db26-4101-996d-752f24767e7c")
+
+
+    local pauseFlee = false
+
+    events.EntityEvent = function(ev)
+        if (ev.TargetEntity == me) and (ev.Event == "HAG_Hag_PauseFlee") then
+            if ev.Params[1] then
+                assert("Pause Flee event true")
+            else
+                assert("Pause Flee event false")
+            end
+            pauseFlee = ev.Params[1]
+        end
+    end
+
+    nodes = Selector{
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.GetMayrina = Action{function()
+        LookAtEntity(HAG_Hagspawn_SurrogateMother, 3.0)
+        Sleep(1.5)
+        if IsInDialog(HAG_Hagspawn_SurrogateMother, false) then
+            SetEntityEvent(HAG_Hagspawn_SurrogateMother, "ForceStopDialog")
+            Sleep(0.5)
+        end
+        if not GetFlag(HAG_Hagspawn_State_SkipAD, nil) then
+            if me.IsInCombat then
+                SetFlag(Flag("HAG_Hag_State_InCombatWhileLeavingWithMayrina_dcc3ae1c-b5df-4b1a-82d8-ea94e9f3a37c"))
+            end
+            StartAutomatedDialog(HAG_Hag_AD_TeleportSurrogateMother, true, me, HAG_Hagspawn_SurrogateMother)
+        else
+            SetFlag(Flag("HAG_Hag_State_TeleportSurrogateMotherToLair_3da9b42e-a6e8-471f-9f12-87c2c8cf3885"))
+        end
+        Sleep(1.5)
+    end,
+    OnEnter = function()
+        SetHasOsirisDialog(me, false)
+    end,
+    OnLeave = function()
+        SetHasOsirisDialog(me, true)
+    end,
+    Valid = function()
+        return (GetFlag(HAG_Hagspawn_State_InitialSceneDone, nil) or
+                (not GetFlag(HAG_Hag_State_HagInLair, nil) and
+                 GetFlag(HAG_Hag_State_ReadyForLair, nil) and
+                 (not me.IsInCombat or me.CanActInCombatTeamTurn))) and
+               not GetFlag(HAG_HagSpawn_SurrogateMother_State_InLair, nil) and
+               not HAG_Hagspawn_SurrogateMother.Character.IsDead and
+               not IsInDialog(HAG_Hagspawn_SurrogateMother, true) and
+               not GetFlag(HAG_HagSpawn_Quest_SurrogateReleased, nil) and
+               CanSee(me, HAG_Hagspawn_SurrogateMother) and
+               not HasActiveStatus(me, "SILENCED")
+    end
+    }
+
+    nodes.FleeToLair = Proxy{
+        game.states.HAG_Hag_Combat_FleeToLair,
+        Valid = function()
+            return
+             not pauseFlee and
+             not GetFlag(HAG_Hag_State_HagInLair, nil) and
+             GetFlag(HAG_Hag_State_ReadyForLair, nil) and
+             (not me.IsInCombat or me.CanActInCombatTeamTurn)
+        end
+    }
+
+    nodes.InLair = Proxy{
+        game.states.HAG_Hag_Combat_InLair,
+        Valid = function()
+            return GetFlag(HAG_Hag_State_HagInLair, nil) and
+                   me.IsInCombat and
+                   me.CanActInCombatTeamTurn
+        end
+    }
+
+    nodes.DefaultCombat = Proxy{
+        game.states.DefaultCombat,
+        Valid = function()
+           return (me.IsInCombat and
+                   (not me.CanActInCombatTeamTurn or
+                    not GetFlag(HAG_Hag_State_HagInLair, nil))) or
+                  (GetFlag(HAG_Hag_State_HagInLair, nil) and
+                   (pauseFlee or
+                    not GetFlag(HAG_Hag_State_ReadyForLair, nil))) --Interrupt the normal combat behaviour when it's time to run or do lair things.
+        end
+    }
+
+end
+}
+
+
+game.states.HAG_Hag_Combat_FleeToLair= State{
+function ()
+
+    local HAG_LairEntranceEvent_Event_DropIllusion = Flag("HAG_LairEntranceEvent_Event_DropIllusion_a5ec3b10-5876-4a19-8cc6-59fd8dc31982")
+
+    local HAG_Hagspawn_SurrogateMother =Entity("S_HAG_Hagspawn_SurrogateMother_08c970d7-3138-45e8-8965-68eadf4b07cd")
+    local HAG_HagHouse = Entity("S_HAG_HagHouse_fae45ba1-2da5-4ab7-b24b-8bf7539a3c64")
+    local HAG_HagLairAccess_CrateIllusion = Entity("S_HAG_HagLairAccess_CrateIllusion_66b0ba70-059e-47ec-81c7-8434ab263f79")
+    local HAG_HagLair_PortalToLair = Entity("S_HAG_HagLair_PortalToLair_b9e148b4-7b9b-45e5-bef4-f0673fffc93e")
+    local HAG_HagLair_ToTeaHouse = Entity("S_HAG_HagLair_ToTeaHouse_96663c68-8d9b-4793-ad30-89fd08efd77a")
+    local HAG_Hag_AD_TeleportSurrogateMother = Dialog("HAG_Hag_AD_TeleportSurrogateMother_d32494d4-0658-adb7-4433-82486e723607")
+    local HAG_Hag_State_SaidGoodbye = Flag("HAG_Hag_State_SaidGoodbye_8214a1b0-07b1-1242-f9e5-0699edf5f1fc")
+    local HAG_Fireplace = Entity("S_HAG_Fireplace_e622c423-b381-4006-b539-55a7492f912f")
+
+
+    --Allows normal combat behaviour to resume.
+    events.TimerFinished = function(e)
+        if e.TimerName == "HAG_Hag_PauseFlee" then
+            SetEntityEvent(me, "HAG_Hag_PauseFlee", false)
+        end
+    end
+
+    self.OnEnter = function()
+        SetHasOsirisDialog(me, false)
+    end
+    
+    self.OnLeave = function()
+        SetHasOsirisDialog(me, true)
+    end   
+
+    nodes.ReturnToHouse = Action{
+        function()
+            local safeLocation = FindValidPosition(HAG_HagHouse, 5.0, me)
+            try
+                MoveTo(safeLocation, MovementSpeed.Run, false, true, 1.0, 5.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                StartTimer(me, "HAG_Hag_PauseFlee", 5.0, 0)
+                SetEntityEvent(me, "HAG_Hag_PauseFlee", true)
+            end
+        end,
+        Valid = function()
+            return not IsInTrigger(me, HAG_HagHouse.Trigger)
+        end
+    }
+
+    nodes.FleeToLair = Action{
+        function()
+            Sleep(1.0)
+            if not GetFlag(HAG_LairEntranceEvent_Event_DropIllusion, nil) then
+                if IsInTrigger(me, HAG_HagHouse.Trigger) then
+                    try
+                        UseSpell("Target_HAG_ClearIllusion", HAG_HagLairAccess_CrateIllusion, nil, nil, nil, true, true)
+                        Sleep(0.5)
+                    catch e if ls.CheckType(e, error.UseSpellFailed) then
+                        StartTimer(me, "HAG_Hag_PauseFlee", 5.0, 0)
+                        SetEntityEvent(me, "HAG_Hag_PauseFlee", true)
+                    end
+                    SetEntityEvent(me, "HAG_LairEntrance_Event_IllusionDispelCast")
+                else
+                    try
+                        MoveTo(HAG_HagLairAccess_CrateIllusion, MovementSpeed.Run, false, true, 1.0, 5.0)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        StartTimer(me, "HAG_Hag_PauseFlee", 5.0, 0)
+                        SetEntityEvent(me, "HAG_Hag_PauseFlee", true)
+                    end
+                end
+            else
+                RemoveStatus(HAG_Fireplace, "BURNING")
+                if not GetFlag(HAG_Hag_State_SaidGoodbye, nil) then
+                    StartAutomatedDialog(HAG_Hag_AD_TeleportSurrogateMother, true, me)
+                end
+                try
+                    UseItem(HAG_HagLair_PortalToLair.Item)
+                catch e if ls.CheckType(e, error.UseItemFailed) then
+                    DebugText(me, "Failed to use item")
+                    SetEntityEvent(me, "HAG_Hag_HagEscape_PastBrambles")
+                    StartTimer(me, "HAG_Hag_PauseFlee", 5.0, 0)
+                    SetEntityEvent(me, "HAG_Hag_PauseFlee", true)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Failed to reach trigger")
+                    StartTimer(me, "HAG_Hag_PauseFlee", 5.0, 0)
+                    SetEntityEvent(me, "HAG_Hag_PauseFlee", true)
+                end
+            end
+        end,
+        Valid = function()
+                return IsInTrigger(me, HAG_HagHouse.Trigger)
+        end
+    }
+
+end,
+}
+
+game.states.HAG_Hag_Combat_InLair = State{
+function ()
+
+    modules = {"shared.character" }
+ 
+    local HAG_HagLair_QueueMotherDeathReaction = Flag("HAG_HagLair_QueueMotherDeathReaction_63d848de-a770-4690-7caa-c6e4432f7a97")
+    local HAG_HagLair_AttackedCage = Flag("HAG_HagLair_AttackedCage_51a4833f-45ea-4eb1-9c9e-32f46ad6fe14")
+    local HAG_HagLair_OpenedCage = Flag("HAG_HagLair_PenOpened_caa8579f-036d-4884-87df-89ef6fd6b91b")
+    local HAG_HagLair_SpawnDoubles_Phase2 = Flag("HAG_CMB_SpawnDoubles_Phase2_7fa148bd-ec06-4cd2-b16c-311bdf11d794")
+    local HAG_HagLair_MayrinaIllusion_Fake = Flag("HAG_CMB_MayrinaIllusion_Fake_7afe79e6-eef9-4f63-a1ca-7bb2b1570850")
+    local HAG_HagLair_MayrinaIllusion_Real = Flag("HAG_CMB_MayrinaIllusion_Real_289009b8-4d9f-403f-aa56-102f1b64dc6d")
+    local HAG_HagLair_AD_SummonVictims = Dialog("HAG_HagLair_AD_SummonVictims_65915e0d-7b96-3a31-66f3-584fdd758854")
+    local HAG_HagLair_AD_HagCackles = Dialog("HAG_HagLair_AD_HagCackles_726c595a-b3e3-3ba7-043c-11db987fd5a6")
+    local HAG_Hag_SummonedVictims = Flag("HAG_Hag_SummonedVictims_755d8269-7864-b72c-f355-b00aa02cd17e")
+    local HAG_HagLair_AD_HagAttacksCage = Dialog("HAG_HagLair_AD_HagAttacksCage_723bbe17-8549-2e7a-aaea-49dbc23df590")
+    local HAG_Hagspawn_SurrogateMother = Entity("S_HAG_Hagspawn_SurrogateMother_08c970d7-3138-45e8-8965-68eadf4b07cd")
+    local HAG_HagLair_WomanSpot = Entity("S_HAG_HagLair_WomanSpot_b18b7488-dbad-433e-b89b-af06a0bc415e")
+    local HAG_HagLair_GrenadeHelper = Entity("S_HAG_MayrinaCage_Helper_a8258f6a-a97d-4201-8734-89e5e6aa7e4f")
+    local Quest_HAG_GrenadeFire
+
+    local HAG_Hag_MaskedVictim1 = Entity("S_HAG_Hag_MaskedVictim1_d2832662-4a12-4565-bfe2-094b93ae8af8")
+    local HAG_Hag_MaskedVictim2 = Entity("S_HAG_Hag_MaskedVictim2_535f23bc-2d27-4c40-a1f3-1cf58bfd1698")
+    local HAG_Hag_MaskedVictim3 = Entity("S_HAG_Hag_MaskedVictim4_74dcb337-e6d1-4329-ac2b-5a3723346159")
+    local HAG_Hag_MaskedVictim4 = Entity("S_HAG_Hag_MaskedVictim3_d7707fd3-301b-49a3-b7f1-2fb92cfa9805")
+    local HAG_MaskedVictimBox = Entity("S_HAG_MaskedVictimBox_f0bece7b-6f6d-4a6c-b545-b9002136df20")
+
+    self.OnInit = function()
+        Quest_HAG_GrenadeFire = FindTemplate("LOOT_HAG_Throwable_Goo_Ball_A_Fire_A_a0b56e94-bd59-4cfd-af1b-bb07ff95f931")
+
+    end
+
+    nodes.SurrogateMotherDeathReaction_InCage = Action{function()
+        Sleep(0.5)
+        StartAutomatedDialog(HAG_HagLair_AD_HagAttacksCage, true, me)
+        Sleep(1.0)
+        ClearFlag(HAG_HagLair_QueueMotherDeathReaction, me)
+    end,
+
+
+    Valid = function()
+        return GetFlag(HAG_HagLair_QueueMotherDeathReaction, me) and
+                GetFlag(HAG_HagLair_AttackedCage, me) and
+                not HasActiveStatus(me, "SILENCED")
+    end
+    }
+
+    nodes.SetCageOnFire = Action{function()
+        local grenade
+        Sleep(0.5)
+        StartAutomatedDialog(HAG_HagLair_AD_HagAttacksCage, false, me)
+        Sleep(2.0)
+        grenade = GetFirstItemByTemplateInInventory(me, Quest_HAG_GrenadeFire)
+        if grenade then
+            try
+                UseSpell("Throw_Throw", HAG_HagLair_GrenadeHelper.Position, grenade)
+                SetFlag(HAG_HagLair_AttackedCage, me)
+                Sleep(4.0)
+            catch e if ls.CheckType(e, error.UseSpellFailed) then
+                Sleep(4.0)
+                SetFlag(HAG_HagLair_AttackedCage, me)
+            end
+        end
+        -- EndTurn(me)
+    end,
+    Valid = function()
+        return not GetFlag(HAG_HagLair_AttackedCage, me) and
+                not GetFlag(HAG_HagLair_OpenedCage, nil) and
+                not HAG_Hagspawn_SurrogateMother.Character.IsDead and
+                IsInTrigger(HAG_Hagspawn_SurrogateMother,  HAG_HagLair_WomanSpot.Trigger) and
+                TemplateIsInInventory(me, FindTemplate("LOOT_HAG_Throwable_Goo_Ball_A_Fire_A_a0b56e94-bd59-4cfd-af1b-bb07ff95f931"))
+    end
+    }
+
+    nodes.SummonVictims = Action{function()
+        Sleep(1.0)
+        StartAutomatedDialog(HAG_HagLair_AD_SummonVictims, true, me)
+        SetFlag(HAG_Hag_SummonedVictims, nil)
+        Sleep(5.0)
+        EndTurn(me)
+    end,
+    --[[Note: If any of these can become false after they've been true, add them to the Valid
+    of the nodes.DefaultCombat above so the Default Combat behaviour is interrupted]]
+    CanEnter = function()
+        return (not mod.character.IsDefeated(HAG_Hag_MaskedVictim1) or
+                not mod.character.IsDefeated(HAG_Hag_MaskedVictim2) or
+                not mod.character.IsDefeated(HAG_Hag_MaskedVictim3) or
+                not mod.character.IsDefeated(HAG_Hag_MaskedVictim4)) and
+               not GetFlag(HAG_Hag_SummonedVictims, nil) and
+               me.CanSpeak
+    end
+    }
+
+    nodes.InvisibleInCombat = Action{function()
+        StartAutomatedDialog(HAG_HagLair_AD_HagCackles, true, me)
+        EndTurn(me)
+    end,
+    CanEnter = function()
+            return  HasActiveStatus(me, "INVISIBLE") and
+                    GetFlag(HAG_HagLair_SpawnDoubles_Phase2, nil)
+    end
+
+    }
+
+
+    nodes.DefaultCombat = Proxy{
+        game.states.DefaultCombat,
+        Valid = function()
+            return (not GetFlag(HAG_HagLair_QueueMotherDeathReaction, me) or
+                    not GetFlag(HAG_HagLair_AttackedCage, me) or
+                    HasActiveStatus(me, "SILENCED")) and -- Don't react to Mayrina's death
+                   (GetFlag(HAG_HagLair_AttackedCage, me) or 
+                    GetFlag(HAG_HagLair_OpenedCage, nil) or
+                    HAG_Hagspawn_SurrogateMother.Character.IsDead or
+                    not IsInTrigger(HAG_Hagspawn_SurrogateMother, HAG_HagLair_WomanSpot.Trigger) or
+                    not TemplateIsInInventory(me, FindTemplate("LOOT_HAG_Throwable_Goo_Ball_A_Fire_A_a0b56e94-bd59-4cfd-af1b-bb07ff95f931"))) --And don't attack the cage
+           end,
+        }
+end
+}

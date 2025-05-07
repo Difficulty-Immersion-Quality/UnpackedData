@@ -1,0 +1,48 @@
+game.states.SHA_Trap_SharStatue = State {function()
+    description = [[Trapped statues of Shar that shoot a projectile when the trap is triggered]]
+
+    params.TrapZone = {type = EParamType.String, default = "",
+        help = "GUID for a trigger volume. Creatures stepping into this trigger will set off the trap"}
+
+    params.ProjectileOrigin = {type = EParamType.String, default = "",
+        help = "GUID for a point trigger. This is where the trap projectile is fired from"}
+
+    local trapProjectile = "Projectile_SHA_StatueTurret_RayOfSickness_Trap"
+    local target = nil
+
+    local trapZone = Entity(params.TrapZone)
+    local projectileOrigin = Entity(params.ProjectileOrigin)
+
+    local sharTag = Tag("SHAR_486e4a27-e6f9-40a5-9dd1-108a1d0f60eb")
+
+    local trapsDeactivated = Flag("SHA_Traps_State_Deactivated_21c0898a-21d5-4ed8-9c4d-bf392784a7a5")
+
+    nodes.Turret = Action{
+        function()
+            ShootProjectileAt(trapProjectile, me, me.ForwardDirection, target)
+            target = nil
+            Sleep(0.5)
+        end,
+
+        Valid = function()
+            return target ~= nil 
+        end
+    }
+
+    nodes.Sleep = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return target == nil
+        end
+    }
+
+    events.EnteredTrigger = function(e)
+        if e.Trigger == trapZone and e.Target.IsCharacter and 
+            not GetFlag(trapsDeactivated) and not IsTagged(e.Target, sharTag) then
+                target = e.Target
+        end
+    end
+end}

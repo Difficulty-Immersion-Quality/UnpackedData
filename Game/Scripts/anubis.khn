@@ -1,0 +1,120 @@
+local __config = require 'larian.anubis.config'
+local __env = require 'larian.anubis.env'
+local __expression = require 'larian.anubis.expression'
+local __instance = require 'larian.anubis.instance'
+local __module = require 'larian.anubis.module'
+local __prototype = require 'larian.anubis.prototype'
+local __socket = require 'larian.anubis.socket'
+local __stub = require 'larian.anubis.stub'
+local __util = require 'larian.util'
+
+local ActionCollections = ls.Class("larian.anubis.ActionCollections", function(self)
+    self.collections = {}
+end)
+
+function ActionCollections:__pairs()
+    return pairs(self.collections)
+end
+
+function ActionCollections:__ipairs()
+    return ipairs(self.collections)
+end
+
+function ActionCollections.__newindex(_, name, _)
+    __util.Assert("Direct assignment to game.actions.%s is not allowed. Assign to game.actions.%s.<name>", name, name)
+end
+
+function ActionCollections:__index(name)
+    local result = self.collections[name]
+
+    if result == nil then
+        result = __util.OrderedMap()
+        self.collections[name] = result
+    end
+
+    return result
+end
+
+local game = {
+    configs = {},
+    roots = {},
+    states = {},
+    expressions = {},
+    actions = ActionCollections()
+}
+
+local constellations = {
+    configs = {},
+    roots = {},
+    states = {},
+    expressions = {}
+}
+
+local function LoadStates(game, namespaceMap, nodes, modules)
+    local env = __env.MakeGlobal(namespaceMap, ls.anubis.game.GetSelf)
+
+    modules = __module.Load(modules, env)
+
+    __stub.Load(game, nodes)
+
+    for _, stub in pairs(game.expressions) do
+        __expression.Unstub(stub, modules, env)
+    end
+
+    __prototype.Parse(game, modules, env)
+end
+
+local import = ls.anubis.Import()
+
+import.LoadAnubisStates = function(namespaceMap, nodes, modules)
+    LoadStates(game, namespaceMap, nodes, modules)
+    return game
+end
+
+import.LoadConstellationStates = function(namespaceMap, nodes, modules)
+    LoadStates(constellations, namespaceMap, nodes, modules)
+    return constellations
+end
+
+import.LoadAnubisConfigs = function(configPath)
+    return __config.LoadAnubis(game, configPath)
+end
+
+import.LoadConstellationConfigs = function(configPath)
+    return __config.LoadConstellation(constellations, configPath)
+end
+
+import.InstantiateAnubis = function(builder, configName, globalConfigParams)
+    local config = game.configs[configName]
+
+    if config == nil then
+        return ls.anubis.EInstantiateResult.NoConfig
+    end
+
+    try
+        __instance.Instantiate(builder, config.root, globalConfigParams)
+    catch e then
+        __util.Rethrow(e, "While instantiating config %s", configName)
+    end
+
+    return ls.anubis.EInstantiateResult.Success
+end
+
+import.InstantiateConstellation = function(builder, configName, globalConfigParams)
+    local config = constellations.configs[configName]
+
+    if config == nil then
+        return ls.anubis.EInstantiateResult.NoConfig
+    end
+
+    try
+        __instance.InstantiateConstellation(builder, config.root, globalConfigParams)
+        __socket.Instantiate(builder, config.inputs, config.outputs, config.connections)
+    catch e then
+        __util.Rethrow(e, "While instantiating config %s", configName)
+    end
+
+    return ls.anubis.EInstantiateResult.Success
+end
+
+return import

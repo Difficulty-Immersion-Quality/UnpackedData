@@ -1,0 +1,250 @@
+game.states.DEN_CapturedGoblin_Griefling = State {function ()
+
+    modules = { "shared.moveto", "shared.dialog"}
+
+    description = [[Behaviour of the grieving tiefling who will try to kill the captured goblin]]
+
+    local DeadLover = Entity("S_DEN_DeadLover_0126a6b5-3452-47db-a3e5-525b7deca82f")
+    local GriefADBox = Entity("S_DEN_GriefADBox_ea43389b-e1da-4c84-95de-e14379ac1100")
+    local GriefPoint = Entity("S_DEN_GriefPoint_0fee3fd4-0dc4-47ca-a3e3-8473f3d447ee")
+
+    local transitSpline = Spline("S_DEN_GrieflingTransitSpline_3b43e6db-1dd9-4269-8560-3a6e8b2c5941")
+    local targetSplineIndex = -1
+    local avengePoint = Entity("S_DEN_AvengePoint_3ac11305-c3f9-4653-8308-5c02d38a9b1d")
+
+    local postAvengeIdlePoint = Entity("S_DEN_GrieflingIdlePoint_5866b097-227b-401c-88b6-ec8e52dd5685")
+    local Goblin = Entity("S_DEN_CapturedGoblin_783d7572-a846-455f-b686-247a95263ebb")
+    local Friend = Entity("S_DEN_GrieflingFriend_c3334ee5-38dc-4197-aacc-4aa55803ff52")
+    local PrisonSub = Entity("S_DEN_Prison_Sub_f46dfea0-d7bf-4af7-aa5b-26edca7a8043")
+    local GriefFlag = Flag("DEN_CapturedGoblin_State_Grieve_93f4f48a-6edd-93a1-2704-b13691df0bb4")
+    local AvengeFlag = Flag("DEN_CapturedGoblin_State_Avenge_0b50db9b-3055-a749-a58b-472d904faa72")
+    local TransitFlag = Flag("DEN_CapturedGoblin_State_InTransit_94643524-4461-c684-049c-b38cc2f5670a")
+    local avengeReadyFlag = Flag("DEN_CapturedGoblin_State_AvengeReady_236cb4d5-3df3-44f9-98ae-f7bac01b667a")
+    local FoiledFlag = Flag("DEN_CapturedGoblin_Event_Foiled_99ff0e4d-0ce5-7164-4d81-b00edd7906a8")
+    local ResolvedFlag = Flag("DEN_CapturedGoblin_State_Resolved_df392d3d-95e0-7009-2942-d0418a3e344b")
+    local GoblinShotFlag = Flag("DEN_CapturedGoblin_Event_GoblinShot_1ccc6b3f-7255-de5f-75ee-296962b85e5c")
+
+    local GriefAnimLoop = Animation("CUST_Grieving_01_Loop_c0fb5414-51c8-451a-a86a-e76052b0b9a6")
+    local GriefAnimStart = Animation("CUST_Grieving_01_Start_fab9a94e-e2c4-41d1-b8ea-60fe1b8cf161")
+    local GriefAnimEnd = Animation("CUST_Grieving_01_End_20246776-f8ca-422b-91d6-00c9aec312b3")
+    local ThreatAnim = Animation("CUST_ThreateningWithXB_01_Loop_cb6691f2-51f7-466d-b0bf-747a4042b7d3")
+    local GoblinTag = Tag("GOBLIN_608597d9-bf00-4ede-aabe-767457280925")
+    local GuardsAD = Dialog("DEN_CapturedGoblin_AD_Guards_cfa86226-091b-06e1-dbeb-61af5caacc53")
+    local canTransitAD = false
+
+    helpers.PlayerInBox = function()
+        local characters = GetActiveCharacters(GriefADBox, 14)
+        for _,v in pairs(characters) do
+            if (v.Character.IsPartyMember and IsInTrigger(v, GriefADBox.Trigger)) then
+                return true
+            end
+        end
+        return false
+    end
+
+    helpers.action.AnimAt = function(target,anim)
+        SteerTo(target)
+        try
+            PlayAnimation(anim,false,true)
+        catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+            DebugText(me, "PlayAnimationFailed")
+        end
+    end
+
+    self.OnInit = function()
+        SetWeaponUnsheathed(me,true)
+    end
+
+    events.LeftCombat = function(e)
+        if(e.Entity == me and GetFlag(GriefFlag) and not me.Character.IsDead) and not GetFlag(AvengeFlag) then
+            SetFlag(AvengeFlag,nil)
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == AvengeFlag.Guid then
+            SetFlag(TransitFlag,nil)
+            StartTimer(me,"DEN_CapturedGoblin_State_Transit",3.0,0)
+        end
+    end
+
+    nodes.Shoot = Action {
+        function()
+            if mod.moveto.MoveToPoint(avengePoint,  MovementSpeed.Run, me) then
+                helpers.AnimAt(Goblin,ThreatAnim)
+                if (GetDistance2DTo(me,Goblin) > 15 or not Goblin.Visible) then
+                    SetFlag(FoiledFlag,nil)
+                end
+                UseSpell("Projectile_DEN_GoblinShot",Goblin,nil,nil,nil,true,true)
+                Sleep(2.0)
+            else
+                SteerTo(Goblin)
+            end
+            Sleep(1)
+        end,
+
+        Valid = function()
+            return GetFlag(GoblinShotFlag) and not (GetFlag(FoiledFlag) or Goblin.Character.IsDead)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Resolution = Action {
+        function()
+            if mod.moveto.MoveToPoint(postAvengeIdlePoint,  MovementSpeed.Walk, me) then
+                LookFrom(postAvengeIdlePoint)
+
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                GuardsAD,
+                {
+                    waitForCompletion = false,
+                    fallbackSoloDialog = GuardsAD,
+                    minDelay = math.random(20.0, 30.0),
+                },
+                me,
+                Friend
+            )
+
+            else
+                SteerTo(postAvengeIdlePoint)
+            end
+            Sleep(1)
+        end,
+
+        Valid = function()
+            return GetFlag(ResolvedFlag)
+        end
+    }
+
+
+    nodes.Avenge = Action {
+        function()
+            if(not GetFlag(FoiledFlag,nil) and (Goblin.Character.IsDead or not IsInTrigger(Goblin,PrisonSub.Trigger) or
+                not (Goblin.Visible and IsTagged(Goblin,GoblinTag)))) then
+                    SetFlag(FoiledFlag,nil)
+            end
+
+            if mod.moveto.MoveToPoint(avengePoint, MovementSpeed.Run, me) then
+                SetWeaponUnsheathed(me, true)
+                helpers.AnimAt(Goblin,ThreatAnim)
+
+                Sleep(6.0)
+                if GetFlag(avengeReadyFlag) then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        GuardsAD,
+                        {
+                            waitForCompletion = false,
+                            fallbackSoloDialog = GuardsAD,
+                            minDelay = math.random(20.0, 30.0),
+                        },
+                        me,
+                        Friend,
+                        Goblin
+                    )
+                end
+
+            Sleep(1.0)
+            else
+                SteerTo(avengePoint)
+            end
+            Sleep(1)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return GetFlag(AvengeFlag)
+        end
+    }
+
+    nodes.InTransit = Action {
+        OnEnter = function()
+            SetWeaponUnsheathed(me,true)
+        end,
+
+        function()
+            try
+                DoPatrol(transitSpline, false, MovementSpeed.Run, targetSplineIndex)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                DebugText("Failed Spline")
+            end
+            if canTransitAD then
+                mod.dialog.StartCheckedAutomatedDialog(
+                    GuardsAD,
+                    {
+                        waitForCompletion = false,
+                        fallbackSoloDialog = GuardsAD,
+                    },
+                    me,
+                    Friend
+                )
+                canTransitAD = false
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(TransitFlag) or GetFlag(AvengeFlag) --Check Avenge as a fallback just in case
+        end
+    }
+
+    nodes.Grieve = Action {
+        function()
+            if mod.moveto.MoveToPoint(GriefPoint,  MovementSpeed.Run, me) then
+                SetWeaponUnsheathed(me,false)
+                SteerTo(DeadLover)
+                PlayLoopingAnimation(GriefAnimStart, {GriefAnimLoop}, GriefAnimEnd, false)
+
+                if helpers.PlayerInBox() then
+
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    GuardsAD,
+                    {
+                        waitForCompletion = false,
+                        fallbackSoloDialog = GuardsAD,
+                        minDelay = math.random(20.0, 30.0),
+                    },
+                    me,
+                    Friend
+                )
+
+                end
+            else
+                SteerTo(GriefPoint)
+            end
+            Sleep(2.0)
+
+        end,
+
+        Valid = function()
+            return GetFlag(GriefFlag,nil)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.PreGatesAttack = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        if e.Event == "DEN_GrieflingTransitEnd" then
+            if not GetFlag(AvengeFlag) then
+                SetFlag(AvengeFlag)
+            end
+        elseif e.Event == "DEN_GrieflingTransitAD" then
+            canTransitAD = true
+        end
+    end
+
+
+end}

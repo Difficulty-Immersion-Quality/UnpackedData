@@ -1,0 +1,51 @@
+game.states.MOO_ExecutionWatcher = State{function ()
+   description = [[Behaviour for during and after the execution scene]]
+
+    modules = {"shared.moveto"}
+--------------------------------PARAMS--------------------------------
+    params.watchingDone = {type = EParamType.State, help=[[
+		What the character does when the execution is over.
+    ]]}
+    params.watching = {type = EParamType.State, help=[[
+        What the character does while the execution is happening.
+    ]]}
+    params.returnTrigger = {type = EParamType.String, help=[[
+        The trigger at which the character returns to after execution.
+    ]]}
+--------------------------------LOCAL--------------------------------
+    local executionOverFlag = Flag("MOO_GroundFloor_State_ExecutionOver_1560c0ae-5fec-4e7c-a6e7-35e9c33bbbeb")
+    local returnPoint = Entity(params.returnTrigger)
+    local arrived = false
+--------------------------------NODES--------------------------------
+    nodes.Watching = Proxy{
+        params.watching,
+        Valid = function()
+            return not GetFlag(executionOverFlag)
+        end
+    }
+
+    nodes.Leaving = Action{
+        function()
+            Sleep(math.random() + math.random())
+            mod.moveto.MoveTo(returnPoint, true, 2.0, "Walk", "MOO_Execution_DoneWithExecution")
+            Sleep(0.5)
+        end,
+    Valid = function()
+        return not arrived
+    end
+    }
+
+    nodes.WatchingDone = Proxy{params.watchingDone}
+--------------------------------EVENTS--------------------------------
+    events.EntityEvent = function(e)
+        if e.TargetEntity ~= me then
+            return
+        end
+
+        if e.Event == "MOO_Execution_DoneWithExecution" then
+            arrived = true
+        end
+    end
+
+end
+}

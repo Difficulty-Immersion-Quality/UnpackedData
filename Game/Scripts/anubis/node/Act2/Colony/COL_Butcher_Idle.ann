@@ -1,0 +1,190 @@
+
+game.states.COL_Butcher_Idle = State{function ()
+
+    modules = { "shared.math", "shared.util", "shared.moveto", "shared.dialog"}
+
+    -----------------------------------------
+    -- Local variables
+    local waitPileTime = 8.0
+    local waitTableTime = 25.0
+
+    local moveToTable = Entity("S_COL_Kitchen_Butcher_Stand_Table_Point_9d6f4363-a0a6-46f4-ab48-8ea2b098c3cc")
+    local steerToTable = Entity("S_COL_Kitchen_Butcher_LookAt_Table_Point_0e1ed70d-66bf-48af-af2b-cc727b5be5c5")
+
+    local tableBehaviorDialog = Dialog("BHVR_COL_Morgue_Butcher_Chopping_bc02daf1-2a5d-57fd-c546-f505ce29eb47")
+    local tableBehaviorTrigger = Entity("COL_Kitchen_Butcher_SceneTrigger_ButcherPos001_916d01c8-ff24-43cc-add5-354125411add")
+    local doingTableBehavior = false
+
+    local moveToPile = Entity("S_COL_Kitchen_Butcher_Stand_Pile_Point_50c5c1ca-f170-4884-ab1e-3b272169e6cc")
+    local steerToPile = Entity("S_COL_Kitchen_Butcher_LookAt_Pile_Point_3abf4946-3071-47ba-b664-7baca0784e84")
+    local animationPile = Animation("CUST_PickUpThrall_01_f4131b8b-1873-48e2-b04f-2536be80f26c")
+
+    local idleAD = Dialog("COL_Morgue_AD_Butcher_Idle_a684b099-bc0e-c223-f8bd-fe4d05ffc55f")
+
+    local moveToPoint = nil
+    local steerToPoint = nil
+    local sleepAnimation = nil
+
+    local waiting = false
+    local doingAnimation = false
+    local interruptWait = false
+    local animationTransition = false
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        if moveToTable ~= nil then
+            moveToPoint = moveToTable
+        end
+
+        StartTimer(me,"COL_Butcher_ADTimer",5,0)
+    end
+
+    self.OnEnter = function()
+        UnpauseTimer(me,"COL_Butcher_ADTimer")
+    end
+
+    self.OnLeave = function()
+        PauseTimer(me,"COL_Butcher_ADTimer")
+    end
+
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.WaitingAtStop = Action {
+        function()
+            if not waiting and not doingTableBehavior then
+                if (moveToPoint == moveToTable) then
+                    steerToPoint = steerToTable
+                    sleepAnimation = animationTable
+                    StopTimer(me,"COL_Butcher_WaitTimer")
+                    StartTimer(me,"COL_Butcher_WaitTimer",waitTableTime,0)
+                    DebugText(me,"Timer started for [1] at table",waitTableTime)
+                else
+                    steerToPoint = steerToPile
+                    sleepAnimation = animationPile
+                    StopTimer(me,"COL_Butcher_WaitTimer")
+                    StartTimer(me,"COL_Butcher_WaitTimer",waitPileTime,0)
+                    DebugText(me,"Timer started for [1] at pile",waitPileTime)
+                end
+
+                waiting = true
+            end
+
+            if sleepAnimation == animationTable then
+                SetWeaponUnsheathed(me,true,true)
+                if not animationTransition then
+                    if not doingTableBehavior then
+                        StartBehaviorDialog(tableBehaviorDialog, tableBehaviorTrigger.Trigger,false,me)
+                    end
+                else
+                    if doingTableBehavior then
+                        DebugText(me,"Graceful stopping world behavior")
+                        BehaviorDialogRequestGracefulStop(me,false,tableBehaviorDialog)
+                        Sleep(2.0)
+                    else
+                        moveToPoint = moveToPile
+                    end
+                end
+            else
+                if steerToPoint ~= nil then
+                    SteerTo(steerToPoint)
+                end
+                
+                if not animationTransition then
+                    PlayAnimation(animationPile,true,false)
+                else
+                    DebugText(me,"Stopping animation")
+                    StopAnimation(me)
+                    moveToPoint = moveToTable
+                end
+            end
+        end,
+        OnLeave = function()
+            animationTransition = false
+            waiting = false
+        end,
+        Valid = function()
+            return moveToPoint ~= nil and IsInTrigger(me,moveToPoint.Trigger)
+        end
+    }
+
+    nodes.MoveToTrigger = Action{
+        function()
+        if not IsInDangerousSurfaceFor(moveToPoint, me.Character) and not IsInDialog(me,true,true) then
+            local moveResult = MoveTo(moveToPoint)
+
+            if moveResult == error.MovementFailed then
+                SteerTo(trigger)
+                Sleep(2.0)
+            end
+        else
+            SteerTo(moveToPoint)
+        end
+    end,
+    OnEnter = function()
+        SetWeaponUnsheathed(me,false,false)
+    end,
+    OnLeave = function()
+        mod.moveto.CancelMoveTo()
+    end
+    }
+
+    -----------------------------------------
+    -- Events
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "COL_Butcher_WaitTimer") then
+            DebugText(me,"Timer finished")
+            animationTransition = true
+            --interruptWait = true
+        elseif(e.TimerName == "COL_Butcher_ADTimer") then
+            StartTimer(me,"COL_Butcher_ADTimer",math.random(18,26),0)
+
+            if mod.dialog.IsSpeakerAvailable(me) then
+                StartAutomatedDialogRateLimitedImmediate(idleAD,1.0,12.0,me)
+            end
+        end
+    end
+
+    events.DialogActorJoined = function(e)
+        if e.Actor == me and not e.Instance.Automated then
+            DebugText(me,"Entered dialog")
+            PauseTimer(me,"COL_Butcher_ADTimer")
+
+            StopAnimation(me)
+
+            if waiting then
+                PauseTimer(me,"COL_Butcher_WaitTimer")
+            else
+                mod.moveto.CancelMoveTo()
+                Interrupt()
+                DebugText(me,"Cancelled move")
+            end
+        end
+
+        if e.Actor == me and e.Instance.DialogUUID == tableBehaviorDialog.Guid then
+            doingTableBehavior = true
+            SetWeaponUnsheathed(me,true,true)
+        end
+    end
+
+    events.DialogActorLeft = function(e)
+
+        if e.Actor == me and not e.Instance.Automated then
+            DebugText(me,"Left dialog")
+            UnpauseTimer(me,"COL_Butcher_ADTimer")
+
+            if waiting then
+                UnpauseTimer(me,"COL_Butcher_WaitTimer")
+                DebugText(me,[[Timer resumed, returned to looking.]])
+            end
+        end
+
+        if e.Actor == me and e.Instance.DialogUUID == tableBehaviorDialog.Guid then
+            doingTableBehavior = false
+        end
+    end
+
+end}

@@ -1,0 +1,80 @@
+game.states.HAV_CursedFist = State{function()
+
+    modules = {"shared.util","shared.math","shared.moveto","shared.dialog"}
+
+    local bed = Entity("S_HAV_AncientFist_Bed_106b3b92-d916-44b2-b003-7efd8e8d2bcd")
+    local basementBed = Entity("S_HAV_AncientFist_BasementBed_5cb4111d-8230-4bed-93b3-ace8b770bcc8")
+
+    local HAV_Mood_Siege = Flag("HAV_Mood_State_Siege_b509af8b-a331-47ac-8230-3b8c5ef9956b")
+    local itemReturned = Flag("SCL_AncientFist_ItemReturned_9db703c7-de9a-4f1e-8338-46c0efcbc20f")
+    local healedWithMagic = Flag("SCL_AncientFist_HealedWithMagic_c95f93bd-ae9c-4607-9aa4-e6825abff455")
+    local AD = Dialog("HAV_CursedFist_AD_CursedFistSinging_210298d7-5fe7-446d-77bb-a28bbd8c0ca5")
+    local catatonic = "SCL_ANCIENTFIST_CATATONIC"
+    local activeCombat = Flag("HAV_TakingIsobel_State_AttackInProgress_9b6706d3-9df8-45d7-86c8-e5b675d77e99")
+
+    nodes.Siege = Action{
+    function()
+        if not me.IsReposedLying then
+            RemoveStatus(me, catatonic)    
+            UseItem(basementBed.Item,true,true,true,true)
+            Sleep (2.0)
+            if not GetFlag(healedWithMagic) and not GetFlag(itemReturned) then
+                ApplyStatus(me, catatonic)
+            end
+        end
+        Sleep(2.0)
+    end,
+    Valid = function()
+        return GetFlag(HAV_Mood_Siege)
+    end
+    }
+
+    nodes.InBed = Action{
+    function()
+        if not me.IsReposedLying then
+            RemoveStatus(me, catatonic)
+            UseItem(bed.Item,true,true,true,true)
+            Sleep (2.0)
+            if not GetFlag(healedWithMagic) and not GetFlag(itemReturned) then
+                ApplyStatus(me, catatonic)
+            end
+        end
+        Sleep(10.0)
+    end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    helpers.RestartTimer = function()
+        local duration = math.random()*4.0+7.0
+        StartTimer(me, "HAV_StartNewDialogue", duration, 0)
+    end
+
+    events.Activated = function()
+        if HasActiveStatus(me, catatonic) then
+            helpers.RestartTimer()
+        end
+    end
+
+    events.Deactivated = function()
+        StopTimer(me, "HAV_StartNewDialogue")
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "HAV_StartNewDialogue" then
+            if mod.dialog.IsSpeakerAvailable(me) and me.IsReposed and not GetFlag(activeCombat) then
+                if HasActiveStatus(me, catatonic) then
+                    StartAutomatedDialogRateLimitedImmediate(AD, 4.0, 5.0, me)
+                end
+            end
+            if HasActiveStatus(me, catatonic) then
+                helpers.RestartTimer()
+            end
+        end
+    end
+
+end}

@@ -1,0 +1,76 @@
+game.states.PLA_ZhentDungeon_Zhent05 = State{
+
+
+    function ()
+
+        local PLA_ZhentShipment_Agent_001
+        local PLA_ZhentDungeon_SurvivorChair
+        local PLA_ZhentDungeon_EscapeTrigger5_Questioning
+        local PLA_ZhentDungeon_SurvivorChairBox
+        local PLA_ZhentDungeon_State_TrapDialogueInProgress = Flag("PLA_ZhentDungeon_State_TrapDialogueInProgress_fbe1f682-fea0-44f6-ab2a-d454cc151c12")
+
+        self.OnInit = function()
+            PLA_ZhentShipment_Agent_001 = FindEntity("S_PLA_ZhentShipment_Agent_001_fd9b4edd-7828-4e22-85a9-ead2ba9d29e4")
+            PLA_ZhentDungeon_SurvivorChair = FindEntity("S_PLA_ZhentDungeon_SurvivorChair_fe75ec47-b188-41e9-97a4-b1166931c2ec")
+            PLA_ZhentDungeon_EscapeTrigger5_Questioning = FindEntity("S_PLA_ZhentDungeon_EscapeTrigger5_Questioning_2f19306f-a0cc-4fd4-a24b-791d4d67b94c")
+            PLA_ZhentDungeon_SurvivorChairBox = FindEntity("S_PLA_ZhentDungeon_SurvivorChairBox_3673c9b2-86f8-44d8-a82e-a4c633af0db3")
+        end
+
+        nodes.PunchPrisoner = Selector{
+            function(nodes)
+                if IsInTrigger(me, PLA_ZhentDungeon_EscapeTrigger5_Questioning.Trigger) then
+                    return nodes.Punch
+                else
+                    return nodes.GoToPunch
+                end
+            end,
+            Valid = function()
+                return CanCast(me.Character, "Target_PLA_ZhentDungeon_Punch") and
+                       PLA_ZhentShipment_Agent_001.IsReposedConstrained and
+                       IsInTrigger(PLA_ZhentDungeon_SurvivorChair, PLA_ZhentDungeon_SurvivorChairBox.Trigger) and
+                       PLA_ZhentShipment_Agent_001.OnStage and
+                       IsInTrigger(PLA_ZhentShipment_Agent_001, PLA_ZhentDungeon_SurvivorChairBox.Trigger) and
+                       not GetFlag(PLA_ZhentDungeon_State_TrapDialogueInProgress)
+            end
+        }
+
+        nodes.PunchPrisoner.GoToPunch=Action{
+            function()
+                try
+                    MoveTo(PLA_ZhentDungeon_EscapeTrigger5_Questioning)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    LookAtEntity(PLA_ZhentDungeon_EscapeTrigger5_Questioning, 3.0)
+                    Sleep(2.0)
+                end
+            end
+        }
+
+        nodes.PunchPrisoner.Punch=Action{
+            function()
+                UseSpell("Target_PLA_ZhentDungeon_Punch", PLA_ZhentShipment_Agent_001)
+                Sleep(3.0)
+            end
+        }
+
+        nodes.Pack = Proxy{
+            game.states.PLA_ZhentDungeon_ZhentsPacking,
+            params = {homeB = [[S_PLA_ZhentDungeon_EscapeTrigger5_1b_fa339265-8d7c-4981-aa26-63ca45261cf4]],
+                      dialogBlockFlag = [[PLA_ZhentDungeon_State_BlockAD_Zhent05_d98ca482-f19c-4c26-ae9d-4ca58df16df2]],
+                      home = [[S_PLA_ZhentDungeon_EscapeTrigger5_1_773b7b2e-dcfd-44bf-9c98-956a3ff5fc27]],
+                      AD = [[PLA_ZhentDungeon_Zhent05_AD_Idle_0a05e8c2-fc6f-dcaa-657f-61141bfae6cb]],
+                      regionBlockFlag = [[PLA_ZhentDungeon_State_BlockAD_f2d6834a-a9ef-4328-9ed1-a1cb84226d8c]],
+                      trapNegotiationBehaviour = StateRef{game.states.GLO_StandAtTrigger,
+                        trigger = "S_PLA_ZhentDungeon_EscapeTrigger5_WatchTrap_b832a9b9-bf7f-4cdf-9c62-1940e6d5e910"}
+                    },
+                Valid = function()
+                    return not (CanCast(me.Character, "Target_PLA_ZhentDungeon_Punch") and
+                                PLA_ZhentShipment_Agent_001.IsReposedConstrained and
+                                IsInTrigger(PLA_ZhentDungeon_SurvivorChair, PLA_ZhentDungeon_SurvivorChairBox.Trigger) and
+                                PLA_ZhentShipment_Agent_001.OnStage and
+                                IsInTrigger(PLA_ZhentShipment_Agent_001, PLA_ZhentDungeon_SurvivorChairBox.Trigger) and
+                                not GetFlag(PLA_ZhentDungeon_State_TrapDialogueInProgress))
+                end
+            }
+
+    end
+}

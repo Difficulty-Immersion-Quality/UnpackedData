@@ -1,0 +1,148 @@
+game.states.GOB_Festivities_FistFight = State{function ()
+    description = [[State where goblin takes part as crowd around Fist Fight with the Drunk Goblin]]
+
+    modules = { "shared.util", "shared.params", "shared.dialog", "shared.math" }
+
+    params.NonFistFightState = { type = EParamType.State, required = true,
+        help = [[Behaviour while there's no Fist Fight event]]}
+
+    params.RunToPos = { type = EParamType.Bool, default = true,
+        help = [[Should the character run or walk to see the fight]]}
+
+    params.FistFightPos = { type = EParamType.String, required = true,
+        help = [[Position for cheering during Fist Fight]] }
+
+    params.DrunkGoblin = {type = EParamType.String, required = false, default = "S_GOB_DrunkGoblin_0c3404d4-af6f-4c3c-8873-101a79cc4d86",
+        help = [[Drunk Goblin NPC]]}
+
+    params.CanInitiateAD = { type = EParamType.Bool, required = false, default = false,
+        help = [[Wheather or not character should initiate AD]]}
+
+    params.ADPartner = { type = EParamType.String, required = false, default = "",
+        help = [[Partner of the Main Speaker]]}
+
+    params.CheeringAnimations = {type = EParamType.String, arrayRange = "1..", required = true, help=[[
+        Cheering animations to play at random
+    ]]}
+
+    local fl_FistFightInProgress = Flag("GOB_DrunkGoblin_Event_FistFight_c1248900-1056-45a8-aabf-2d5eb8a8d3ee")
+    local fl_GoblinsAreCheering = Flag("GOB_DrunkGoblin_State_GoblinsAreCheering_45ac1c47-bf41-4758-a02b-d5a8702f2919")
+
+    local ms_MovementSpeed = nil
+    local tr_FistFightPos = nil
+    local bl_GotToFistFightPos = false
+    local ch_DrunkGoblin = nil
+    local anim_Cheers = { Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0"),
+                          Animation("CUST_Cheering_02_5e23b082-f75a-4daa-86e1-ab73ec6d30b7"),
+                          Animation("CUST_Cheering_03_34ac373e-2928-4d83-8427-13f34573c64a") }
+    local dist_ToDrunkGoblinMin = 6.0
+    local dist_ToDrunkGoblinMax = 8.0
+
+    local b_CanDoAD
+    local s_CanDoADTimer = "GOB_FistFight_Goblin.AD.CanDoAD"
+
+    local bl_CanInitiateAD = params.CanInitiateAD
+    local ch_ADParther = Entity(params.ADPartner)
+    local dlg_FistFightAD = Dialog("GOB_DrunkGoblin_AD_FistFight_3086e7df-4d93-68b8-62cd-979a88ae1111")
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == dlg_FistFightAD.Guid then
+            if bl_CanInitiateAD then
+                StartTimer(me, s_CanDoADTimer, mod.math.random(4.0, 6.0), 0)
+            end
+        end
+    end
+
+    self.OnInit = function()
+        if params.RunToPos then
+            ms_MovementSpeed = MovementSpeed.Run
+        else
+            ms_MovementSpeed = MovementSpeed.Walk
+        end
+        tr_FistFightPos = FindEntity(params.FistFightPos)
+        ch_DrunkGoblin = FindEntity(params.DrunkGoblin)
+
+        anim_Cheers = mod.params.ParamArrayToAnimationsList(params.CheeringAnimations)
+        b_CanDoAD = true
+    end
+
+    nodes.NonFistFightState = Proxy{
+        params.NonFistFightState,
+
+        Valid = function()
+            return not GetFlag(fl_GoblinsAreCheering)
+        end
+    }
+
+    nodes.FistFight_MoveToPos = Action{
+        function()
+            try
+                MoveTo(tr_FistFightPos, ms_MovementSpeed)
+                bl_GotToFistFightPos = true
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_FistFightPos)")
+            end
+        end,
+
+        Valid = function()
+            return bl_GotToFistFightPos == false
+        end
+    }
+
+    nodes.FistFight_Comment = Action{
+        function()
+            StartAutomatedDialog(dlg_FistFightAD, false, me, ch_ADParther)
+            b_CanDoAD = false
+        end,
+
+        CanEnter = function()
+            return b_CanDoAD and bl_CanInitiateAD and not IsInDialog(me, false) and not IsInDialog(ch_ADParther, false)
+        end
+    }
+
+    nodes.FistFight_MoveToDrunkGoblin = Action{
+        function()
+            try
+                MoveInRange(ch_DrunkGoblin, dist_ToDrunkGoblinMin, dist_ToDrunkGoblinMax, ms_MovementSpeed)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveInRange(ch_DrunkGoblin)")
+            end
+        end,
+
+        Valid = function()
+            local dist_ToDrunkGoblin = GetDistance2DTo(me, ch_DrunkGoblin)
+            return bl_GotToFistFightPos == true and dist_ToDrunkGoblin > dist_ToDrunkGoblinMax + 0.5
+        end
+    }
+
+    nodes.FistFight_Animation = Action{
+        function()
+            SteerTo(ch_DrunkGoblin)
+            LookAtEntity(ch_DrunkGoblin, 3.0)
+            PlayAnimation(anim_Cheers[math.random(#anim_Cheers)])
+            mod.util.SleepRandom(1.0, 4.0)
+        end,
+
+        Valid = function()
+            return GetFlag(fl_FistFightInProgress)
+        end
+    }
+
+    nodes.FistFight_Waiting = Action{
+        function()
+            SteerTo(ch_DrunkGoblin)
+            LookAtEntity(ch_DrunkGoblin, 3.0)
+            Sleep(2.0)
+        end,
+
+        Valid = function()
+            return not GetFlag(fl_FistFightInProgress)
+        end
+    }
+end}

@@ -1,0 +1,223 @@
+game.states.WYR_WyrmRock_Battlestations = State
+{
+    function ()
+
+        description = [[Battlestations logic for battle stations in Wyrm Rock fortress]]
+
+        params.guardPos = {
+            type=EParamType.String,
+            required = false,
+            default = nil,
+            help = [[Position this characters stands at during Battlestations state.]]
+        }
+        params.altGuardPos = {
+            type = EParamType.String,
+            required = false,
+            default = nil,
+            help = [[Fallback position this characters stands at during Battlestations state.]],
+        }
+
+        params.WYRWyrmRockIdle = {
+            type = EParamType.State,
+            required = false,
+            default = nil,
+            help = [[Behaviour of this Wyrm Rock Fortress guard before getting pulled into Battlestations.]]
+        }
+
+        local battleStationsFlag = Flag("WYR_WyrmRock_Event_ToBattleStations_60b1788c-5206-4a94-bb28-783809d3bcf8")
+        local battleStationsDisabled = false
+
+        nodes.BattleStations = Proxy
+        {
+            game.states.WYR_WyrmRock_BattleStations_Guarding,
+            params = {
+                guardPos = params.guardPos,
+                altGuardPos = params.altGuardPos,
+            },
+            Valid = function()
+                return GetFlag(battleStationsFlag) and not battleStationsDisabled
+            end
+        }
+
+        nodes.WyrmRockIdle = Proxy{
+            params.WYRWyrmRockIdle,
+            Valid = function()
+                return not GetFlag(battleStationsFlag) and params.WYRWyrmRockIdle~=nil
+            end
+        }
+
+        nodes.Idle = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return not GetFlag(battleStationsFlag) and params.WYRWyrmRockIdle == nil
+            end
+        }
+
+    end,
+}
+
+game.states.WYR_WyrmRock_BattleStations_Guarding = State
+{
+    function()
+
+        params.guardPos = {
+            type = EParamType.String,
+            required = false,
+            default = nil,
+            help = [[Position this characters stands at during Battlestations state.]],
+        }
+        params.altGuardPos = {
+            type = EParamType.String,
+            required = false,
+            default = nil,
+            help = [[Fallback position this characters stands at during Battlestations state.]],
+        }
+
+        local guardPos = Entity(params.guardPos)
+        local altGuardPos = Entity(params.altGuardPos)
+
+        self.OnEnter = function()
+            SetWeaponUnsheathed(me, true, true)
+        end
+
+        self.OnLeave = function()
+            if not me.IsInCombat then
+                SetWeaponUnsheathed(me, false)
+            end
+        end
+
+        nodes.Standing = Action{
+            function()
+                if not IsInDangerousSurfaceFor(guardPos, me.Character) and (GetDistanceTo(me, guardPos) > 1.0) then
+                    local moveResult = MoveTo(guardPos, MovementSpeed.Run, false, false, 0.5, 1.5, false)
+                    if moveResult ~= error.MovementError.None then
+
+                        if moveResult == error.MovementError.InvalidPath or moveResult == error.MovementError.Blocked
+                          and altGuardPos ~= nil then
+                            DebugText(me, "Blocked, moving to alt position")
+
+                            if not IsInDangerousSurfaceFor(altGuardPos, me.Character) and (GetDistanceTo(me, altGuardPos) > 1.0) then
+                                local moveResult = MoveTo(altGuardPos, MovementSpeed.Run, false, false, 0.5, 1.5, false)
+                                if moveResult ~= error.MovementError.None then
+                                    SteerTo(guardPos)
+                                else
+                                    LookFrom(altGuardPos)
+                                end
+                            else
+                                LookFrom(altGuardPos)
+                            end
+
+                        else
+                            SteerTo(guardPos)
+                            Sleep(1.0)
+                        end
+                    else
+                        LookFrom(guardPos)
+                    end
+                else
+                    LookFrom(guardPos)
+                end
+                Sleep(1.0)
+            end,
+
+            Valid = function()
+                return guardPos ~= nil
+            end
+        }
+
+        nodes.Fallback = Action {
+            function()
+                DebugText(me, "Fallback Node instead of Guarding!")
+                Sleep(6.0)
+            end
+        }
+
+    end
+}
+
+game.states.WYR_WyrmRock_BattleStations_Combat = State
+{
+    function()
+
+        params.canRaiseAlarm = {
+            type = EParamType.Bool,
+            required = false,
+            default = false,
+            help = [[This guard can raise the alarm]]
+        }
+
+        local canRaiseAlarm = params.canRaiseAlarm
+        local mustRaiseAlarm = false
+        local raisedAlarm = false
+
+        local warnedAboutAlarm = false
+
+        local battleStationsFlag = Flag("WYR_WyrmRock_Event_ToBattleStations_60b1788c-5206-4a94-bb28-783809d3bcf8")
+
+        local alarmWarningAD = Dialog("WYR_WyrmRock_AlarmWarning_AD_7e7d5cc1-250c-ef79-4886-7edcee9173be")
+        local playingHornAnim = Animation("CUST_PlayingHorn_01_6a141d35-effe-4c7f-9585-bb153e4c1230")
+
+        self.Valid = function()
+            return not GetFlag(battleStationsFlag)
+                and canRaiseAlarm
+                and me.CanActInCombatTeamTurn
+                and not HasAppliedStatus(me, "SILENCED")
+        end
+
+        nodes.WarnAboutAlarm = Action
+        {
+            function()
+                StartAutomatedDialog(alarmWarningAD, true, me)
+                warnedAboutAlarm = true
+                EndTurn(me)
+            end,
+            CanEnter = function()
+                return not warnedAboutAlarm
+            end
+        }
+
+        nodes.RaiseAlarm = Action
+        {
+            function()
+                DebugText(me, "I'm sounding the alarm!")
+                PlayAnimation(playingHornAnim, true, false)
+                raisedAlarm = true
+                SetEntityEvent(me, "WYR_WyrmRock_RaisedAlarm")
+                EndTurn(me)
+            end,
+            CanEnter = function()
+                return mustRaiseAlarm
+            end
+        }
+
+        events.TurnEnded = function()
+
+            if warnedAboutAlarm then
+                mustRaiseAlarm = true
+            end
+
+            if raisedAlarm then
+                SetFlag(battleStationsFlag, nil)
+            end
+
+        end
+
+        events.LeftCombat = function(e)
+
+            if e.Entity == me then
+                warnedAboutAlarm = false
+                mustRaiseAlarm = false
+            end
+
+        end
+
+        events.SavegameLoaded = function()
+            if me == Entity("S_WYR_WyrmRock_ArmouryQuartermaster_831fbc36-b0df-4248-9c39-50906b715d25") and canRaiseAlarm then
+                canRaiseAlarm = false
+            end
+        end
+
+    end
+}

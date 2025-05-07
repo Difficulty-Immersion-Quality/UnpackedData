@@ -1,0 +1,77 @@
+game.states.LOW_OskarsBeloved_Doorman = State{function()
+    description = [[Character that will speak only if players are a bit far away]]
+    modules = {"shared.dialog", "shared.util","shared.character"}
+    -----------------------------------------
+
+    params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+        The AD to play.
+    ]]}
+
+    local checking = true
+    local playersNear = false
+    local AD = Dialog(params.AD)
+    local doormanInterrupt = Entity("S_LOW_ComplainingDoormanTrigger_afbec02e-0596-45ca-be37-7b2282fb8307")
+    
+    nodes.Talking = Action {
+
+
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD, 
+                {minDelay = 7 + math.random(0.0, 3.0)}, 
+                me)
+
+        end,
+
+        Valid = function()
+            return not playersNear and not checking
+        end
+    }
+
+
+    nodes.StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_ComplainingDoormanTrigger_afbec02e-0596-45ca-be37-7b2282fb8307"
+        },
+ 
+
+        Valid = function()
+            return playersNear and not checking
+        end
+    }
+
+    nodes.Checking = Action {
+
+        function()
+            playersNear = false
+            local actives = GetActiveCharacters(me, 10.0)
+            for _,char in pairs(actives) do
+                if char.Character.IsPlayer and CanSee(me,char) then
+                    playersNear = true
+                end
+            end
+            checking = false
+        end,
+
+         
+        Valid = function()
+            return checking
+        end,
+
+        OnLeave = function()
+            StartTimer(me, "LOW_OskarsBeloved_DoormanCheck", 7.0, 0)
+        end
+
+    }
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "LOW_OskarsBeloved_DoormanCheck" then
+            checking = true
+        end
+    end
+
+
+
+end
+}

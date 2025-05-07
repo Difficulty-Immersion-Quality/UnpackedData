@@ -1,0 +1,67 @@
+game.states.HAV_HarperGuard_001 = State{function()
+
+    description = [[]]
+
+    modules = { "shared.math" }
+
+    params.PatrolSpline = { type = EParamType.String, required = true,
+        help = [[Spline for patrolling]]}
+
+    local spl_Patrol = Spline(params.PatrolSpline)
+    local b_Stop = false
+
+    events.SplineControlPointReached = function(e)        
+        if (e.Index == 0 or e.Index == 2) then
+            b_Stop = true
+        end
+    end
+
+    nodes.Patrol = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = params.PatrolSpline,            
+        },
+
+        Valid = function()
+            return not b_Stop
+        end
+    }
+
+    nodes.PatrolStop = Action {
+        function()                        
+            Sleep(6.0)
+            b_Stop = false
+        end
+    }
+
+    nodes.Default = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+end}
+
+game.states.HAV_HarperGuard_001_ProtectedState = State{function()
+
+    description = [[Standing guard in the inn somewhere, or specifically near Isobel's door, if the player warned Jaheira and Isobel about Marcus.]]
+
+    local guardFlag = Flag([[HAV_TakingIsobel_Event_HarperGuardIsobel_7316cac0-c33c-4bb7-94b4-62c7eb10de86]])
+
+    nodes.ProtectedState_GuardIsobel = Proxy {
+        CanEnter = function()
+            return GetFlag(guardFlag)
+        end,
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_HAV_IsobelGuardPoint_a0ff52f4-53b9-48dd-ad67-4326a65bd939]],
+        }        
+    }
+
+    nodes.ProtectedState_Default = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_HAV_HarperGuard_001_DefaultPosition_d2bec405-af95-4826-a539-5396917f332f]],
+        }
+    }
+end}

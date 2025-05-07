@@ -1,0 +1,93 @@
+game.states.WYR_MerchantsHouse_Thug = State { function ()
+    description = [[ 
+        Generic states for all of the thugs at Merchants House.
+     ]]
+
+    modules = { "shared.math" }
+
+    params.conflictIdle = { type = EParamType.State, required = true, help = [[
+        The idle during the conflict scene, before situation has been resolved.
+    ]]}
+
+    params.chasedOutIdle = { type = EParamType.State, required = true, help = [[
+        Idle after refugees has been chased out.
+    ]]}
+
+    params.canKnockOut = {type=EParamType.Bool, required = false, default = true, help = [[
+        If the character can attack during the chase out to knock out refugees.
+    ]]}
+
+    local chasingOutFlag = Flag("WYR_MerchantsHouse_State_ThugsChasedOutRefuges_caec5b7a-b2a9-3cc6-595d-fc1bcf74521f")
+    local chasedOutFlag = Flag("WYR_MerchantsHouse_Refugees_State_ChasedOut_9aaac7f5-98b3-4b07-948c-eeb3159bcae8")
+    local refugee = Entity("S_WYR_MerchantsHouse_RefugeeLeader_7ef493d6-4e5f-490a-96dd-e5bb10446055")
+
+    nodes.ConflictIdle = Proxy {
+        params.conflictIdle,
+        Valid = function()
+            return not GetFlag(chasingOutFlag)
+        end
+    }
+
+    nodes.ChasingOutIdle = Action {
+        function()
+            SteerTo(refugee)            
+            SetWeaponUnsheathed(me, true, false)    
+            Sleep(mod.math.random(3, 4))
+            -- Realtime combat simulation
+            if params.canKnockOut and
+                not refugee.Character.IsDead and 
+                refugee.OnStage and
+                not HasActiveStatus(refugee, "KNOCKED_OUT")
+                and not GetFlag(chasedOutFlag)
+            then
+                try
+                    Attack(refugee, true, false)
+                    Sleep(1)
+                catch e if ls.CheckType(e, error.AttackFailed) then
+                    DebugText(me, "AttackFailed")
+                    Sleep(2)
+                end
+            else
+                WaitForInterrupt()
+            end
+        end,
+        Valid = function()
+            return GetFlag(chasingOutFlag) and not GetFlag(chasedOutFlag)
+        end
+    }
+
+    nodes.ChasedOutIdle = Proxy {
+        params.chasedOutIdle,
+        Valid = function()
+            return GetFlag(chasedOutFlag) and GetFlag(chasingOutFlag)
+        end
+    }
+end}
+game.states.WYR_MerchantsHouse_ThugLeader_AfterChasedOut = State { function ()
+    description = [[ 
+        Behaviour for the leader of the thugs to play after she chases out refugees, before she leaves.
+    ]]
+
+    modules = { "shared.dialog","shared.moveto","shared.util" }
+
+    local trigger = Entity("S_WYR_MerchantsHouse_RatsLeader_ChasedOutPos_278d54a5-35bb-486c-a070-df3077b4b633")
+    local merchant = Entity("S_WYR_MerchantsHouse_Merchant_b2a50d09-709a-483c-9818-acebcff2b977")
+    local reportAD = Dialog("WYR_MerchantsHouse_AD_DoneChasingOut_7d240c62-28b8-4cd9-a166-e44b27015c13")
+
+    local reporeted = false
+
+    nodes.ReportAndLeave = Action {
+        function()
+            Sleep(1.0)
+            if mod.moveto.MoveToPoint(trigger, MovementSpeed.Walk, me) then
+                if mod.dialog.IsSpeakerAvailableAndNear(merchant, me, 15.0, false) and not reporeted then
+                    LookFrom(trigger)
+                    Sleep(1.0)
+                    reporeted = true
+                    mod.dialog.StartCheckedAutomatedDialog(reportAD, {waitForCompletion = true}, me)
+                end                
+            end
+            WaitForInterrupt()
+        end
+    }
+end}

@@ -1,0 +1,148 @@
+game.states.GOB_Festivities_GoblinKid = State{function()
+    description = [[Goblin kids near the body of dead adventurer.]]
+
+    modules = { "shared.math", "shared.params", "shared.dialog", "gustav.Act1.ZhentShipment"}
+
+    -----------------------------------------
+    -- params section
+    params.baseTrigger = {type = EParamType.String, required = true, help=[[
+        Base trigger near adventurer's dead body
+    ]]}
+
+    params.isKidsLeader = { type = EParamType.Bool, required = false, default = false, help = [[
+        This kid is start AD for the company
+    ]]}
+
+    params.otherKids = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[
+        Required for starting AD (so only needed if isKidsLeader == true)
+    ]]}
+
+    params.delayTimeAD = { type = EParamType.Number, required = false, default = 10.0, help = [[
+        Pause in seconds between ADs play
+    ]]}
+
+    params.syncedAnims = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[
+        Anims that should not be played at the same time
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local deadBody = nil
+    local baseTrigger = nil
+    local otherKids = {}
+    local kidsAD = nil
+    local canKick = true
+    local movedToBaseTrigger = false
+    local syncedAnims = {}
+    local animationIndex = 1
+    local corpseMovedFlag = Flag("GOB_Festivities_Event_CorpseShoved_cba2b424-30dc-4039-b7a9-6dc8f05c3763")
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        kidsAD = Dialog("GOB_Festivities_AD_Kids_0085f5c2-cef3-2fff-432c-12b28f5a865d")
+        deadBody = FindEntity("S_GOB_GeneralFestivities_DeadBody_f8d0a86d-4df7-443c-81fd-b267703b48ab")
+        if params.otherKids ~= nil then
+            otherKids = mod.params.ParamArrayToEntityList(params.otherKids)
+        end
+        if params.syncedAnims ~= nil then
+            syncedAnims = mod.params.ParamArrayToAnimationsList(params.syncedAnims)
+        end
+        baseTrigger = FindEntity(params.baseTrigger)
+    end
+
+    self.OnLeave = function()
+        movedToBaseTrigger = false
+        mod.ZhentShipment.RemoveAbstraction(me)
+    end
+
+    -----------------------------------------
+    -- helpers
+    helpers.GetAnimationToPlay = function()
+        if #otherKids > 0 then
+            for i, character in ipairs(otherKids) do
+                SetEntityEvent(character, "GOB_Festivites_Event_DesyncAnimation")
+            end
+        end
+        local anim = syncedAnims[animationIndex]
+        animationIndex = helpers.IncrLoopIndex(animationIndex, #syncedAnims)
+        return anim
+    end
+
+    helpers.IncrLoopIndex = function(index, max)
+        return index < max and index+1 or 1
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.BodyNear = Selector {
+        Valid = function()
+            return GetDistance2DTo(baseTrigger, deadBody) < 5 and deadBody.OnStage and not GetFlag(corpseMovedFlag)
+        end
+    }
+
+    nodes.BodyNear.MoveToBase = Action {
+        function()
+            mod.ZhentShipment.RemoveAbstraction(me)
+            try
+                MoveTo(baseTrigger, MovementSpeed.Walk)
+                movedToBaseTrigger = true
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+                Sleep(3.0)
+            end
+        end,
+        Valid = function()
+            return not movedToBaseTrigger
+        end
+    }
+
+    nodes.BodyNear.StartAd = Action {
+        function()
+            LookFrom(baseTrigger)
+            mod.ZhentShipment.ApplyAbstracion(me)
+            Sleep(mod.math.random(1, 3))
+            local waitingForAD = false
+            if kidsAD ~= nil and params.isKidsLeader then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    kidsAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = params.delayTimeAD,
+                        checkSight = false,
+                        cullingDistance = 10.0
+                    },
+                    me,
+                    table.unpack(otherKids)
+                )
+            end
+            Sleep(mod.math.random(1, params.delayTimeAD*0.7))
+            if canKick then
+                local anim = helpers.GetAnimationToPlay()
+                try
+                    PlayAnimation(anim)
+                    Sleep(5)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed "..tostring(anim))
+                    Sleep(5)
+                end
+            end
+        end
+    }
+
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "GOB_Festivites_Event_DesyncAnimation" then
+                animationIndex = helpers.IncrLoopIndex(animationIndex, #syncedAnims)
+                canKick = false
+            end
+        end
+    end
+end}

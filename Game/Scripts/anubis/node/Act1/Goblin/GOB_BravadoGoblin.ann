@@ -1,0 +1,155 @@
+game.states.GOB_BravadoGoblin = State
+{
+    function ()
+        modules = { "shared.dialog", "shared.math" }
+
+        params.partner01 = { type = EParamType.String, required = false, default = "", help = [[first partner]]}
+        params.partner02 = { type = EParamType.String, required = false, default = "", help = [[second partner]]}
+        params.AD = { type = EParamType.String, required = false, default = "", help = [[Bravado near a dead body]]}
+        params.defaultPositionTrigger = { type = EParamType.String, required = true, help = [[default position]]}
+        params.canUrinate = { type = EParamType.Bool, required = false, default = false, help = [[this goblin can urinate]]}
+        params.canLookDown = { type = EParamType.Bool, required = false, default = false, help = [[this goblin can look down]]}
+        params.canTalk = { type = EParamType.Bool, required = false, default = false, help = [[this goblin can initiate a dialog]]}
+        params.canThrow = { type = EParamType.Bool, required = false, default = true, help = [[this goblin can throw rocks]]}
+
+        local AD
+        local canTalk = false
+        local partner01
+        local partner02
+        local floorHoleTrigger
+        local defaultPositionTrigger
+        local canUrinate = false
+        local canLookDown = false
+        local canThrow = false
+
+        local anim_Eating = Animation("CUST_Eating_01_Loop_0dae0f54-095c-489e-b611-6c42302f96d8")
+        local anim_Drinking = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+        local anim_Throwing = Animation("CUST_ThrowingPebbles_03_e8cb6221-778b-4fce-bf0b-44ea56a60ca9")
+        local anim_Urinating = Animation("CUST_Urinating_01_18439556-7d24-4965-865c-2958511408d2")
+        local anim_LookingDown = Animation("CUST_Leaning_Forward_01_5487ae28-60dc-4eea-b60c-0c00749c8281")
+
+        self.OnInit = function()
+            AD = Dialog(params.AD)
+            partner01 = FindEntity(params.partner01)
+            partner02 = FindEntity(params.partner02)
+            floorHoleTrigger = FindEntity("S_GOB_Bravado_FloorHole_a4fecca8-e645-41ee-9208-d3caeea2dfe2")
+            defaultPositionTrigger = FindEntity(params.defaultPositionTrigger)
+            canUrinate = params.canUrinate
+            canLookDown = params.canLookDown
+            canTalk = params.canTalk
+            canThrow = params.canThrow
+        end
+
+        nodes.Behavior = Selector{
+            function(nodes)
+                return FindRandomSelectable(nodes)
+            end
+        }
+
+        nodes.Behavior.Talk = Action {
+            function()
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 24.0,
+                    },
+                    me,
+                    partner01,
+                    partner02
+                )
+                Sleep(math.random(3.0, 5.0))
+            end,
+            CanEnter = function()
+                return canTalk
+            end
+        }
+
+        nodes.Behavior.Eating = Action
+        {
+            function()
+                Sleep(math.random(2.0, 4.0))
+                LookFrom(defaultPositionTrigger)
+                PlayAnimation(anim_Eating, true)
+                Sleep(math.random(3.0, 5.0))
+            end,
+            Valid = function()
+                return not IsInDialog(me, false)
+            end,
+        }
+
+        nodes.Behavior.Drinking = Action
+        {
+            function()
+                Sleep(math.random(2.0, 4.0))
+                LookFrom(defaultPositionTrigger)
+                PlayAnimation(anim_Drinking, true)
+                Sleep(math.random(2.0, 4.0))
+            end,
+            Valid = function()
+                return not IsInDialog(me, false)
+            end,
+        }
+
+        nodes.Behavior.Throwing = Action
+        {
+            function()
+                Sleep(math.random(2.0, 4.0))
+                SteerTo(floorHoleTrigger)
+                PlayAnimation(anim_Throwing, true)
+                LookFrom(defaultPositionTrigger)
+                Sleep(math.random(4.0, 4.0))
+            end,
+            Valid = function()
+                return canThrow and not IsInDialog(me, false)
+            end,
+        }
+
+        nodes.Behavior.Urinating = Action
+        {
+            function()
+                Sleep(math.random(2.0, 4.0))
+                SteerTo(floorHoleTrigger)
+                PlayAnimation(anim_Urinating, true)
+                LookFrom(defaultPositionTrigger)
+                Sleep(math.random(2.0, 4.0))
+            end,
+            Valid = function()
+                return canUrinate and not IsInDialog(me, false)
+            end,
+        }
+
+        nodes.Behavior.LookingDown = Action
+        {
+            function()
+                Sleep(math.random(2.0, 4.0))
+                SteerTo(floorHoleTrigger)
+                PlayAnimation(anim_LookingDown, true)
+                LookFrom(defaultPositionTrigger)
+                Sleep(math.random(2.0, 4.0))
+            end,
+            Valid = function()
+                return canLookDown and not IsInDialog(me, false)
+            end,
+        }
+
+        nodes.Behavior.Fallback = Action
+        {
+            function()
+                LookFrom(defaultPositionTrigger)
+                Sleep(6.0)
+            end,
+            Valid = function()
+                return not canTalk
+            end
+        }
+
+        nodes.Fallback = Action
+        {
+            function()
+                Sleep(6.0)
+            end
+        }
+
+    end
+}

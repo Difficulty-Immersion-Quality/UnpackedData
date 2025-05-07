@@ -1,0 +1,59 @@
+game.states.MOO_Docks_Tadpole = State{function ()
+    description = [[Tadpole behaviour whan the vat is destroyed]]
+    
+    modules = { "shared.moveto" }
+
+    params.TargetHole1 = {type=EParamType.Bool, required=false, default=true, help=[[Focus on targetting hole 1, else target hole 2]]}
+
+    local hole1 = Entity("S_MOO_DockHolePoint_001_181ac0f2-30a3-40be-864d-0b8a773bdfe0")
+    local hole2 = Entity("S_MOO_DockHolePoint_002_eee9a903-8664-4c81-b0f9-f6135758b59a")
+    local attemptCount = 0
+    local targetHole
+    local digVFX
+
+    self.OnInit = function()
+        digVFX = PrepareEffect("VFX_Script_Stub_Poof_01_f0cf792a-0f74-d17e-ad0d-6052a6131416")
+        if params.TargetHole1 then
+            targetHole = hole1
+        else
+            targetHole = hole2
+        end
+    end
+
+    nodes.FleeToHole = Action {
+        function()
+            if mod.moveto.MoveToPoint(targetHole,  MovementSpeed.Sprint, me) then
+                PlayEffectAt(digVFX, targetHole)
+                SetOnStage(me, false)
+                WaitForInterrupt()
+            else
+                if attemptCount < 3 then
+                    if targetHole == hole1 then
+                        targetHole = hole2
+                    else
+                        targetHole = hole1
+                    end
+
+                    try
+                        FleeFrom(RelationType.All, 5.0)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me,"Failed FleeFrom All")
+                    end
+                    attemptCount = attemptCount + 1
+                    DeugText(me, "Attempt " .. attemptCount)
+                else
+                    DebugText(me, "Failed to escape to hole, fleeing.")
+                    try
+                        FleeFrom(RelationType.All, 5.0)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me,"Failed FleeFrom All")
+                    end
+                    PlayEffectAt(digVFX, me)
+                    SetOnStage(me, false)
+                end
+            end
+        end
+    }
+
+end
+}

@@ -1,0 +1,201 @@
+game.states.DEN_Trainer = State { function()
+
+    description = [[Trainer's behaviour. Used by Asharak and Wyll.]]
+
+    modules = { "shared.dialog" }
+
+    -----------------------------------------
+    -- params section
+    params.trainingAD = {type = EParamType.String,
+        required = false,
+        default = [[DEN_WyllRecruitment_AD_Training_37896f70-0057-f2a8-c4f5-92990bc30c5f]],
+        help = [[AD used by the trainer. By default it's set to Wyll's AD, so it needs to be updated for Asharak.]]
+    }
+
+    params.trainingAnim = {type = EParamType.String,
+        required = false,
+        default = [[CUST_WyllTeaching_01_edbc592f-5818-441d-8bd0-39d1c99959c9]],
+        help = [[Anim used by the trainer. By default it's set to Wyll's anim, so it needs to be updated for Asharak.]]
+    }
+
+    -----------------------------------------
+    -- local state section
+    local trainingAD = Dialog(params.trainingAD)
+    local trainingAnim = Animation(params.trainingAnim)
+    local trainees = {
+        Entity("S_DEN_Trainee_001_1f839ad2-2bcb-47d2-8de9-db7a1fb5d67f"),
+        Entity("S_DEN_Trainee_002_bd7f31a6-98e8-46cd-97be-4347fa45d387"),
+        Entity("S_DEN_Trainee_003_71bdc11d-b488-427d-8453-632e91178c7e")
+    }
+    local trainee = nil
+    local traineeIndex = 1
+    local answerFlag = Flag("DEN_Trainer_Event_HasKidAnswer_757ca284-645d-d79d-c02e-e52970dc7e5f")
+    local trainerFlag = Flag("DEN_Trainer_State_IsTrainer_bf719cf2-08db-40ef-8e92-f0b112f5c883")
+    local animatingFlag = Flag([[DEN_Trainer_State_AnimatingForKids_46053c10-3977-4036-975d-8bce2a65bc0c]])
+    local steerTo = Entity("S_DEN_TrainerSteerTo_71ab619b-abc0-460b-a23e-b96b48f088cb")
+
+    local phaseTwoFlag = Flag("DEN_Trainer_State_Phase2_c5ea911c-895b-52fe-370b-9269196a6fec")
+    local phaseThreeFlag = Flag("DEN_Trainer_State_Phase3_f325ac2c-0c7e-3b59-461a-1968ad98e942")
+    local trainingPhase = 1
+
+    local scaredFlag = Flag("DEN_Trainer_State_TraineesAreScared_b50848b6-8bbe-907c-b65a-c7f03bd797ad")
+
+    --spline
+    local spline = Spline("S_DEN_TrainingSpline_ee392c79-a825-44c3-a65a-0696d0cda3ee")
+    local canWalkOnSpline = true
+    local targetSplineIndex = 0
+    local isReversed = false
+
+    -----------------------------------------
+    -- helper functions
+    helpers.CanTalkToKid = function()
+        if (traineeIndex == 1) or
+            (isReversed and math.random (1, 100) < 70) or
+            (not isReversed and math.random (1, 100) < 50) then
+            return true
+        end
+        return false
+    end
+
+    helpers.SetAnswerFlag = function()
+        if (traineeIndex == 1) or
+            (isReversed and math.random (1, 100) < 60) or
+            (not isReversed and math.random (1, 100) < 40) then
+            SetFlag(answerFlag)
+        end
+    end
+
+    -----------------------------------------
+    -- state node functions
+    self.Valid = function()
+        return not me.Character.IsPlayer 
+                and CheckCurrentGameLevel("WLD_Main_A") 
+                and GetFlag(trainerFlag, me)
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.Walk = Action {
+        function()
+            while IsInDialog(me, false) do
+                Sleep(1)
+            end
+            try
+                DoPatrol(spline, isReversed, MovementSpeed.Stroll, targetSplineIndex)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                DebugText(me, "Error in StartPatrol")
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    nodes.Wait = Action {
+        CanEnter = function()
+            return GetFlag(scaredFlag)
+        end,
+        function()
+            SteerTo(steerTo)
+            Sleep(1)
+            if canAD then
+                StartTimer(me, "DEN_Trainer_ADTimer", 45.0, 0)
+                canAD = false
+                StartAutomatedDialog(trainingAD, true, me)
+            end
+            Sleep(4)
+            canWalkOnSpline = true
+        end,
+    }
+
+    nodes.TalkToKid = Action {
+        OnEnter = function()
+            ClearFlag(answerFlag)
+        end,
+        function()
+            SteerTo(trainee)
+            if helpers.CanTalkToKid() then
+                Sleep(1)
+                helpers.SetAnswerFlag()
+                if mod.dialog.IsSpeakerAvailableAndNear(trainee, me, 10.0, true) then
+                    StartAutomatedDialog(trainingAD, true, me)
+                    if GetFlag(answerFlag) then
+                        SetEntityEvent(trainee, "DEN_Trainer_Event_SetCanTalk")
+                        Sleep(2)
+                    end
+                end
+            else
+                SetFlag(animatingFlag, me)
+                SetEntityEvent(trainee, "DEN_Trainer_Event_WatchTrainer")
+                PlayAnimation(trainingAnim, true, false)
+                ClearFlag(animatingFlag, me)
+            end
+            Sleep(3)
+            canWalkOnSpline = true
+        end,
+        OnLeave = function()
+            ClearFlag(animatingFlag, me)
+        end
+    }
+
+
+    -----------------------------------------
+    -- event section
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_Trainer_ADTimer" then
+            if IsInDialog(me, false) then
+                StartTimer(me, "DEN_Trainer_ADTimer", 45.0, 0)
+            else
+                canAD = true
+            end
+        end
+    end
+
+    -- spline point reached
+    events.SplineControlPointReached = function(e)
+        if me.Active then
+            -- Spline patrol logic
+            if e.EndReached then
+                if isReversed then
+                    isReversed = false
+                else
+                    isReversed = true
+                end
+            end
+            targetSplineIndex = e.NewIndex
+
+            -- Training phase
+            if e.Index == 0 then
+                ClearFlag(phaseTwoFlag)
+                ClearFlag(phaseThreeFlag)
+                if trainingPhase == 1 then
+                    trainingPhase = 2
+                elseif trainingPhase == 2 then
+                    trainingPhase = 3
+                    SetFlag(phaseTwoFlag)
+                else
+                    trainingPhase = 1
+                    SetFlag(phaseThreeFlag)
+                end
+            end
+
+            -- AD with kid
+            traineeIndex = e.Index + 1
+            trainee = trainees[traineeIndex]
+            ShortPatrolInterrupt()
+            canWalkOnSpline = false
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DEN_Trainer_Event_GetRandomTrainee" then
+                if trainees and (#trainees > 0) then
+                    SetEntityEvent(trainees[math.random(#trainees)], "DEN_Trainer_Event_RandomTrainee")
+                end
+            end
+        end
+    end
+
+end}

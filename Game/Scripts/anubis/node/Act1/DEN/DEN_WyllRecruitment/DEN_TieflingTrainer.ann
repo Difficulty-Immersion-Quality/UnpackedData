@@ -1,0 +1,325 @@
+game.states.DEN_TieflingTrainer = State { function()
+
+    description = [[Asharak's main behaviour file.]]
+
+    modules = { "shared.math" }
+
+    -----------------------------------------
+    -- local state section
+    local watchPoint = Entity("S_DEN_TrainerPoint_8b56581e-8e85-41ac-a32e-dcecffaa7fa5")
+    local randomTrainee = nil
+    local watchingStartAnim = Animation([[CUST_ArmsCrossed_01_Start_dafd0bbc-012a-403c-aabe-4963aca9cf25]])
+    local watchingLoopAnim = Animation([[CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71]])
+    local watchingEndAnim = Animation([[CUST_ArmsCrossed_01_End_ae43ea68-fc1b-456a-88ce-0e1d504e1d40]])
+    local limberUpAnim = Animation([[CUST_LimberUp_01_bd13cb25-1dfb-4ea5-8218-9e96d11e3117]])
+    local animIsLooping = false
+
+    -----------------------------------------
+    -- node section
+    nodes = ImmediateSelector {
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end
+    }
+
+    nodes.TrainKids = Proxy {
+        game.states.DEN_Trainer,
+        params = {
+            trainingAD = [[DEN_Thieflings_AD_TrainerLessons_c2701fbb-c24b-dab4-0eaf-821d7a0f2cfb]],
+            trainingAnim = [[CUST_Teaching_01_a7904689-893d-482e-924f-2d097d04cb11]]
+        }
+    }
+
+    nodes.WatchTraining = Action {
+        function()
+            SetEntityEvent(me, "DEN_Trainer_Event_GetRandomTrainee")
+            if (GetDistance2DTo(me, watchPoint) > 1.5) and not IsInDangerousSurfaceFor(watchPoint, me.Character) then
+                try
+                    MoveTo(watchPoint)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(2.0)
+                end
+            end
+            Sleep(1)
+            if mod.math.CoinToss(0.5) then
+                
+                if (randomTrainee ~= nil) and CanSee(me, randomTrainee) then
+                    SteerTo(randomTrainee, false, 15)
+                    Sleep(3)
+                end
+                if mod.math.CoinToss(0.5) then
+                    animIsLooping = true
+                    PlayLoopingAnimation(watchingStartAnim, {watchingLoopAnim}, watchingEndAnim, false)
+                    Sleep(13)
+                else
+                    animIsLooping = false
+                    PlayAnimation(limberUpAnim, true, false)
+                    Sleep(math.random(2, 4))
+                end
+                if animIsLooping then
+                    StopAnimation(me)
+                    animIsLooping = false
+                    Sleep(math.random(2, 4))
+                end
+            else
+                if (randomTrainee ~= nil) and CanSee(me, randomTrainee) then
+                    LookAtEntity(randomTrainee, math.random(6, 12))
+                end
+            end
+            Sleep(2)
+        end,
+        OnLeave = function()
+            if animIsLooping then
+                StopAnimation(me)
+                animIsLooping = false
+            end
+        end
+    }
+
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.Event == "DEN_Trainer_Event_RandomTrainee" then
+            randomTrainee = e.TargetEntity
+        end
+    end
+
+end}
+
+game.states.DEN_AttackOnDen_Trainer = State {function ()
+    description = [[Patrolling the gate area, or standing as leader if Zevlor is dead.]]
+
+    modules = {"shared.dialog"}
+
+    local tieflingLeader = Entity("S_DEN_TieflingLeader_475200ee-cc3c-4dbe-84b1-1820c02ea26a")
+    local barricadeAD = Dialog([[DEN_AttackOnDen_AD_TrainerAtBarricade_c727c65d-d587-bcda-902b-aff4e4dc5d9e]])
+    local barricadePartner = Entity([[S_DEN_Tiefling_004_c9562174-44af-4ffa-9e5e-da58538f23d8]])
+    local gatekeeperAD = Dialog([[DEN_AttackOnDen_AD_TrainerAndGatekeeper_6a213aab-7d1d-d282-6506-2016d94b7b36]])
+    local gateKeeperPartner = Entity([[S_DEN_Gatekeeper_847717b3-82eb-45a7-b875-78665c12ce9a]])
+    local oilBarrelsAD = Dialog([[DEN_AttackOnDen_AD_TrainerAtOilBarrels_701bd58f-bc60-8776-d940-60921852b662]])
+    local oilBarrelPartner1 = Entity([[S_GLO_IrritatedTiefling_65ad9da0-0efb-4cc3-bf82-c006f43dda6c]])
+    local oilBarrelPartner2 = Entity([[S_DEN_Tiefling_005_e5319db6-ea86-43cc-9fd0-5ec1e0eab492]])
+
+    --Patrol
+    local patrolSpline = Spline("S_DEN_GatePatrolSpline_1bb8fb45-bec1-49a7-ab8c-15e79eb389be")
+    local canWalkOnSpline = true
+    local splineEvent = ""
+
+    nodes.IsLeader = Selector{
+        Valid = function()
+            return tieflingLeader.Character.IsDead
+        end
+    }
+
+    nodes.IsLeader.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_LeaderPos_05334587-5b2e-4b09-8fc0-220329fe9687]]
+        }
+    }
+
+    nodes.IsNotLeader = Selector{
+        Valid = function()
+            return not tieflingLeader.Character.IsDead
+        end
+    }
+
+    nodes.IsNotLeader.BarricadeAD = Action {
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+
+        function()
+            Sleep(1)
+            mod.dialog.StartCheckedAutomatedDialog(
+                barricadeAD,
+                {
+                    waitForCompletion = true
+                },
+                me,
+                barricadePartner
+            )
+            Sleep(2)
+            splineEvent =  ""
+        end,
+    
+        Valid = function()
+            return splineEvent == "DEN_AttackOnDen_AsharakAndKaldani" 
+        end,
+
+        OnInterrupt = function()
+            splineEvent =  ""
+        end
+    }
+
+    nodes.IsNotLeader.GatekeeperAD = Action {
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+
+        function()
+            Sleep(1)
+            mod.dialog.StartCheckedAutomatedDialog(
+                gatekeeperAD,
+                {
+                    waitForCompletion = true
+                },
+                me,
+                gateKeeperPartner
+            )
+            Sleep(2)
+            splineEvent =  ""
+        end,
+       
+        Valid = function()
+            return splineEvent == "DEN_AttackOnDen_AsharakAndGatekeeper"
+        end,
+
+        OnInterrupt = function()
+            splineEvent =  ""
+        end
+    }
+
+    nodes.IsNotLeader.OilBarrelsAD = Action {
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+
+        function()
+            Sleep(1)
+            mod.dialog.StartCheckedAutomatedDialog(
+                oilBarrelsAD,
+                {
+                    waitForCompletion = true
+                },
+                me,
+                oilBarrelPartner1,
+                oilBarrelPartner2
+            )
+            Sleep(2)
+            splineEvent =  ""
+        end,
+
+        Valid = function()
+            return splineEvent == "DEN_AttackOnDen_AsharakAtOilBarrels"
+        end,
+
+        OnInterrupt = function()
+            splineEvent =  ""
+        end
+    }
+
+    nodes.IsNotLeader.Patrolling = Action {
+        OnEnter = function()
+            splineEvent = ""
+        end,
+        function()            
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end
+    }
+
+    nodes.IsNotLeader.AtLocation = Action {
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+        function()
+            LookFrom(patrolSpline)
+            Sleep(15)
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnInterrupt = function()
+            canWalkOnSpline = true
+        end
+    }
+
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+end}
+
+game.states.DEN_PostDruidAttack_Trainer = State {function ()
+    description = [[Making preparations in Zevlor's cave with him if he's alive.]]
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    local tieflingLeader = Entity("S_DEN_TieflingLeader_475200ee-cc3c-4dbe-84b1-1820c02ea26a")
+
+    local caveMapPoint = Entity("S_DEN_LeaderCaveMapPoint_6bc6d195-3f02-4b3c-8cfc-0b118fd2706f")
+    local caveBookPoint = Entity("S_DEN_LeaderCaveBookPoint_3cd6c095-0af1-4d8f-aaf0-d4ece8e6d662")
+
+    --Animations
+    local caveMapAnims = {
+        Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba"),
+        Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    }
+    local caveBookAnims = {
+        Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716"),
+        Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+    }
+
+    helpers.action.AnimAtCavePoint = function(randLo,randHi,point,table)
+        local loopCount = math.random(randLo,randHi)
+        for i = 1, loopCount, 1 do
+            if mod.moveto.MoveToPoint(point,MovementSpeed.Stroll,me) then
+                LookFrom(point)
+                Sleep(math.random(1, 2))
+                try
+                    PlayAnimation(table[math.random(#table)],true,false)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    Sleep(1)
+                end
+            end
+        end
+        Sleep(math.random(1, 3))
+    end
+
+    nodes.IsLeader = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return tieflingLeader.Character.IsDead
+        end
+    }
+
+    nodes.IsLeader.CheckMaps = Action {
+        function()
+            helpers.AnimAtCavePoint(3,4,caveMapPoint,caveMapAnims)
+        end
+    }
+
+    nodes.IsLeader.CheckBooks = Action {
+        function()
+            helpers.AnimAtCavePoint(1,1,caveBookPoint,caveBookAnims)
+        end
+    }
+
+    nodes.IsNotLeader = Selector{
+        CanEnter = function()
+            return not tieflingLeader.Character.IsDead
+        end
+    }
+
+    nodes.IsNotLeader.AtMap = Action{
+        function()
+            helpers.AnimAtCavePoint(2,3,caveMapPoint,caveMapAnims)
+            Sleep(5)
+        end
+    }
+end}

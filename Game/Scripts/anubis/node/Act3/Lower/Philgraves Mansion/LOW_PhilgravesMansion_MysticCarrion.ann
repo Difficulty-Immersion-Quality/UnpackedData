@@ -1,0 +1,105 @@
+game.states.LOW_PhilgravesMansion_MysticCarrion = State{function()
+    description = [[Mystic carrion, repeating lines solo and wandering around]]
+    modules = {"shared.dialog", "shared.util"}
+
+    local ADing = false
+    local AD = Dialog("LOW_PhilgravesMansion_AD_MysticCarrionWorking_b4f655dd-d419-4c2c-9c3c-2876594d116f")
+    local wispPos = Entity("S_LOW_PhilgravesMansion_WispPos_001_eccae386-f09b-43a0-af6c-87949e91d9e2")
+    local wanderTrigger = Entity("S_LOW_PhilgravesMansion_WanderCarrionTrigger_d97e258a-86e3-463c-82c0-f52bd77caedb")
+    local wispEffect = nil
+    local activeEffect = nil
+    local notSpottingFlag = Flag("LOW_PhilgravesMansion_State_CarrionNotSpotting_223ba810-bd5e-4a07-801b-2a84c8eedd04")
+    local wispPositions = {
+    
+        Entity("S_LOW_PhilgravesMansion_WispPos_001_eccae386-f09b-43a0-af6c-87949e91d9e2"),
+        Entity("S_LOW_PhilgravesMansion_WispPos_002_494462c4-c9e5-44e3-b3dc-06d32b0433af"),
+        Entity("S_LOW_PhilgravesMansion_WispPos_003_7c95b73e-8c85-4d27-a495-8bc1b70fc9dc")
+    }
+
+    self.OnInit = function()
+        wispEffect = PrepareEffect("VFX_Status_DeadWillOWisp_BodyFX_01_eec97bb7-95a5-0aeb-ae32-34291bff1693")
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+
+
+    nodes.TalkingAlone= Action {
+
+        function()
+            activeEffect = PlayEffectAt(wispEffect, wispPos)
+
+            Sleep(2)
+            if GetDistanceTo(me, wispPos) > 8.0 and GetFlag(notSpottingFlag) then
+                try
+                    MoveTo(wispPos, MovementSpeed.Walk,false,false,5.0,7.0,false)
+                end
+            end
+            SteerTo(wispPos)
+
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true,
+                },
+                me)
+
+            if activeEffect ~= nil then
+                StopEffect(activeEffect)
+                activeEffect = nil
+            end
+
+            wispPos = wispPositions[math.random(#wispPositions)]
+
+            if GetFlag(notSpottingFlag) then
+                Wander(5.0,math.random(3,6),MovementSpeed.Walk,wanderTrigger)
+            end
+
+            Sleep(math.random(4,7))
+        end,
+        OnLeave = function()
+            if activeEffect ~= nil then
+                StopEffect(activeEffect)
+                activeEffect = nil
+            end
+        end,
+        Valid = function()
+            return not GetFlag(Flag("LOW_FatherCarrion_State_HasBeenKilled_34a30ab8-c0e4-44a1-b2b4-31a5cc65bcea"))
+        end 
+
+    }
+
+    nodes.FallbackStandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_FatherCarrionTeleportTo_5681db68-1e7c-4f82-8a07-e62a33ce17ea"
+        }
+    }
+
+    events.Died = function(e)
+        if e.Target == me and activeEffect ~= nil then
+            StopEffect(activeEffect)
+            activeEffect = nil
+            
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me and activeEffect ~= nil then
+            StopEffect(activeEffect)
+            activeEffect = nil
+        end
+    end
+    
+    events.DialogStarted = function(ev)
+        if not ev.Instance.Automated and activeEffect ~= nil then
+            StopEffect(activeEffect)
+            activeEffect = nil
+            
+        end
+    end
+
+
+end
+}

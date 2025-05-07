@@ -1,0 +1,277 @@
+game.states.LOW_SharGrotto_SharCultist = State {function ()
+    
+    modules = { "shared.dialog" }
+
+    params.lookAt = {type=EParamType.String, default = "",
+    help = [[Where cultist should look at]]}
+
+    params.clusterSpot = {type=EParamType.String, default = "",
+    help = [[Where cultist should gather]]}
+
+    params.gossipAD = {type=EParamType.String, default = "",
+    help = [[What the cultist should be saying]]}
+
+    params.pledgeAD = {type=EParamType.String, default = "",
+    help = [[What the cultist should be saying]]}
+
+    params.fealtyAnim = {type=EParamType.String, default = "",
+    help = [[What animation to use to kneel/bow to Shadowheart]]}
+
+    params.PostRestActivity = {type = EParamType.State, help=[[
+        Activity to partake in after a long rest
+    ]]}
+
+    local lookAt = Entity(params.lookAt)
+    local clusterSpot = Entity(params.clusterSpot)
+
+    local gossipAD = Dialog(params.gossipAD)
+    local pledgeAD = Dialog(params.pledgeAD)
+
+    local fealtyAnim = Animation(params.fealtyAnim)
+
+    local viconiaDefeated = Flag("LOW_Grotto_State_ViconiaDefeated_8e27eb4e-8d52-4966-8aa4-e658ff595097")
+    local pontiffArrives = Flag("LOW_SharGrotto_State_OfferFealty_9a7b540c-8f3e-4ea8-bde7-01e67e3e2020")
+    local ActivityFlag = Flag("LOW_SharGrotto_State_CultistActivity_ed215bbf-787d-4b2f-811e-7e9aec032c2d")
+
+    events.FlagSet = function(e)
+        if e.Flag == ActivityFlag.Guid then
+            Interrupt()
+        end
+        if e.Flag == pontiffArrives.Guid then
+            Interrupt()
+        end
+        if e.Flag == viconiaDefeated.Guid then
+            Interrupt()
+        end
+    end
+
+    nodes.PostRestActivity = Proxy{
+        params.PostRestActivity,
+
+        Valid = function()
+            return GetFlag(ActivityFlag)
+        end
+    }
+
+    nodes.OfferLoyalty = Action {
+        function()
+            if not IsInDangerousSurfaceFor(clusterSpot, me.Character) and GetDistanceTo(me, clusterSpot) > 2 then
+                local moveResult = MoveTo(clusterSpot, MovementSpeed.Walk, false, true, 2.0, 3.0, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                end
+            end
+            LookAtEntity(lookAt, 3.0)
+                if fealtyAnim ~= nil then
+                    DebugText(me, "Fealty Anim")
+                    PlayAnimation(fealtyAnim, true)
+                end
+                if mod.dialog.IsSpeakerAvailable(me) and pledgeAD ~= nil then
+                    Sleep(math.random(3,20))
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(pledgeAD, {minDelay = math.random(20, 30)}, me)
+                    Sleep(3.0)
+                end
+            Sleep(4.0)
+        end,
+        Valid = function()
+            return GetFlag(pontiffArrives)
+        end
+    }
+
+    nodes.MoveToCluster = Action {
+        function()
+            LookAtEntity(lookAt, 3.0)
+            if not IsInDangerousSurfaceFor(clusterSpot, me.Character) and GetDistanceTo(me, clusterSpot) > 2 then
+                local moveResult = MoveTo(clusterSpot, MovementSpeed.Walk, false, true, 2.0, 3.0, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                end
+            end
+            LookAtEntity(lookAt, 3.0)
+                if mod.dialog.IsSpeakerAvailable(me) and gossipAD ~= nil then
+                    Sleep(math.random(3,20))
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(gossipAD, {minDelay = math.random(20, 30)}, me)
+                    Sleep(3.0)
+                end
+            Sleep(4.0)
+        end,
+        Valid = function()
+            return GetFlag(viconiaDefeated) and not GetFlag(pontiffArrives)
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+    
+end
+}
+
+game.states.LOW_SharGrotto_SharCultist_Prayer = State {function ()
+    
+    params.prayPos = {type=EParamType.String, default = "",
+    help = [[Where cultist be at]]}
+    params.prayLookAt = {type=EParamType.String, default = "",
+    help = [[Where cultist be at]]}
+    params.prayAnim = {type=EParamType.String, default = "",
+    help = [[Pray animation]]}
+
+    local lookAt = Entity(params.prayLookAt)
+    local prayPos = Entity(params.prayPos)
+
+    local prayAnim = Animation(params.prayAnim)
+
+    nodes.Pray = Action {
+        function()
+            if not IsInDangerousSurfaceFor(prayPos, me.Character) and GetDistanceTo(me, prayPos) > 0.5 then
+                local moveResult = MoveTo(prayPos, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                end
+            end
+            if GetDistanceTo(me, prayPos) < 0.5 then
+                LookAtEntity(lookAt, 3.0)
+                if prayAnim ~= nil then
+                    PlayAnimation(prayAnim, false, true)
+                end
+                Sleep(6.0)
+            end
+        end
+
+    }
+
+
+end
+}
+
+
+game.states.LOW_SharGrotto_SharCultist_LeadPrayer = State {function ()
+
+    modules = { "shared.dialog" }
+
+    local lookAtCenter = Entity("S_LOW_CenterPoint_80aff997-4f1c-4cd9-af23-092d32ae010a")
+    local sermonPos = Entity("S_LOW_SermonPos_304426ec-a5bc-4346-a13c-cb59644d856d")
+    local SermonAD = Dialog("LOW_SharGrotto_AD_JusticiarSermon_f0d3cdab-5bcb-e686-3e58-1dd26ab54142")
+
+    local cultistsPraying = Flag("LOW_SharGrotto_State_CultistsPraying_daa525da-ebae-4a39-87b0-31e36790e6e7")
+
+    local prayPos = Entity("S_LOW_JusticiarPrayer_72ccaf1c-db8e-4ee3-8582-b9bcb9967e95")
+
+    local prayAnim = Animation("CUST_Praying_01_7f50198e-dda0-4763-a217-0935865ce76c")
+
+    nodes.SharranSermon = Action {
+        function()
+            if not IsInDangerousSurfaceFor(sermonPos, me.Character) and GetDistanceTo(me, sermonPos) > 0.5 then
+                local moveResult = MoveTo(sermonPos, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                end
+            end
+            if GetDistanceTo(me, sermonPos) < 0.5 then
+                LookAtEntity(lookAtCenter, 1.0)
+                if mod.dialog.IsSpeakerAvailable(me) then
+                    StartAutomatedDialog(SermonAD , true, me)
+                    Sleep(3.0)
+                end
+            end
+        end,
+        Valid = function()
+            return GetFlag(cultistsPraying)
+        end
+    }
+
+    nodes.Pray = Action {
+        function()
+            if not IsInDangerousSurfaceFor(prayPos, me.Character) and GetDistanceTo(me, prayPos) > 0.5 then
+                local moveResult = MoveTo(prayPos, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                end
+            end
+            if GetDistanceTo(me, sermonPos) < 0.5 then
+                LookAtEntity(lookAtCenter, 3.0)
+                PlayAnimation(prayAnim, false, true)
+                Sleep(3.0)
+            end
+        end
+
+    }
+
+end
+}
+
+
+game.states.LOW_SharGrotto_SharCultist_SortIntel = State {function ()
+
+    params.lookAtShelf = {type=EParamType.String, default = "",
+    help = [[What shelf to look at]]}
+    params.shelfPos = {type=EParamType.String, default = "",
+    help = [[Shelf position]]}
+    params.lookAtTable = {type=EParamType.String, default = "",
+    help = [[Where cultist should look at]]}
+    params.tablePos = {type=EParamType.String, default = "",
+    help = [[Table Position]]}
+    params.fetchAnim = {type=EParamType.String, default = "",
+    help = [[Fetch animation]]}
+    params.fetchedAnim = {type=EParamType.String, default = "",
+    help = [[Fetched animation]]}
+
+    local lookAtShelf = Entity(params.lookAtShelf)
+    local shelfPos = Entity(params.shelfPos)
+    local lookAtTable = Entity(params.lookAtTable)
+    local tablePos = Entity(params.tablePos)
+
+    local fetchAnim = Animation(params.fetchAnim)
+    local fetchedAnim = Animation(params.fetchedAnim)
+
+    nodes.FetchDocument = Action {
+        function()
+            if fetchAnim ~= nil then
+                if not IsInDangerousSurfaceFor(shelfPos, me.Character) and GetDistanceTo(me, shelfPos) > 0.5 then
+                    local moveResult = MoveTo(shelfPos, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        Sleep(3.0)
+                    else
+                        SteerTo(lookAtShelf)
+                        LookAtEntity(lookAtShelf, 3.0)
+                        PlayAnimation(fetchAnim,true, false)
+                        if not IsInDangerousSurfaceFor(tablePos, me.Character) and GetDistanceTo(me, tablePos) > 0.5 then
+                            local moveResult = MoveTo(tablePos, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                            if moveResult ~= error.MovementError.None then
+                                DebugText(me, "Error: MoveTo failed")
+                                Sleep(3.0)
+                            else
+                                SteerTo(lookAtTable)
+                                LookAtEntity(lookAtTable, 3.0)
+                                PlayAnimation(fetchedAnim,true, false)
+                                Sleep(math.random(1,5))
+                            end
+                        end    
+                    end
+                end
+            else
+                if not IsInDangerousSurfaceFor(tablePos, me.Character) and GetDistanceTo(me, tablePos) > 0.5 then
+                    local moveResult = MoveTo(tablePos, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        Sleep(3.0)
+                    else
+                        LookAtEntity(lookAtTable, 3.0)
+                        WaitForInterrupt()
+                    end
+                end
+            end
+        end
+    }
+
+end
+}
+

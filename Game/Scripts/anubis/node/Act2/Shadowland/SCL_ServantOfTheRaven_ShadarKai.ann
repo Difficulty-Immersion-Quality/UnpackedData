@@ -1,0 +1,72 @@
+game.states.SCL_ServantOfTheRaven_ShadarKai = State{function()
+    local tr_homeTrigger
+    local ch_Raven
+    local flag_SwDDone = Flag("SCL_ServantOfTheRaven_State_DialogUnlocked_7d5cc6c3-ea5c-4c5d-bfd7-bfe5d65f02de")
+    local d_AD = Dialog("SCL_ServantOfTheRaven_AD_Idle_f6c2d33b-33f3-e95e-35f4-8d06929d91c6")
+
+    modules = {"shared.util","shared.dialog"}
+
+    self.OnInit = function()
+        tr_homeTrigger = FindEntity("S_SCL_ServantOfTheRaven_ShadarKai_HomeTrigger_038366db-8137-447c-b2aa-c55b4fbb521a")
+        ch_Raven = FindEntity("S_SCL_ServantOfTheRaven_Raven_3e4d4ec4-e687-42dd-8149-47cf10a42b39")
+    end
+
+    nodes.State_SwD = Action{
+        function()
+            --Maybe play anim, if we'll get one
+            LookFrom(tr_homeTrigger)
+        end,
+        Valid = function()
+            return not GetFlag(flag_SwDDone)
+        end
+    }
+
+	nodes.State_Waiting = Selector {
+		function(nodes)
+			return GetWeightedCanEnter(nodes,{[nodes.Action_SayAD] = 4,
+												[nodes.Action_Wander] = 8,
+                                                [nodes.Action_Idle] = 10})
+		end
+    }
+
+    nodes.State_Waiting.Action_SayAD = Action {
+		function()
+			if GetDistanceTo(me, tr_homeTrigger) > 1.0 then
+				try
+					MoveTo(tr_homeTrigger)
+				catch e if ls.CheckType(e, error.MovementFailed) then
+					LookFrom(tr_homeTrigger)
+					Sleep(2.0)
+				end
+			end
+            LookFrom(tr_homeTrigger)
+            if mod.dialog.IsSpeakerAvailable(me) then
+                if mod.dialog.IsSpeakerAvailableAndNear(ch_Raven, me, 20.0, false) then
+                    StartAutomatedDialog(d_AD,true,me,ch_Raven)
+				end
+			end
+		end,
+		OnLeave = function()
+			DialogRequestStop(me,d_AD)
+		end
+    }
+
+    nodes.State_Waiting.Action_Wander = Action{
+        function()
+            try
+                Wander(2.0,3.0, MovementSpeed.Stroll,tr_homeTrigger)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                LookFrom(tr_homeTrigger)
+                Sleep(2.0)
+            end
+            LookFrom(tr_homeTrigger)
+            Sleep(8.0)
+        end,
+    }
+
+    nodes.State_Waiting.Action_Idle = Action{
+        function()
+            Sleep(5.0)
+        end
+    }
+end}

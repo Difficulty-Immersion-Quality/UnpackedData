@@ -1,0 +1,187 @@
+game.states.GOB_Branding = State{function()
+    modules = {"shared.dialog","shared.util"}
+    
+    -- Behaviour params
+    params.customBehaviour = {type = EParamType.State, required = false, default = nil, help = "Custom goblin behaviour"}
+    params.brandingAD = {type = EParamType.String, required = false, default = nil, help = "Branding AD"}
+    params.sermonPoint = {type = EParamType.String, help = "Goblin position during priest's sermon"}
+    params.sermonAD = {type = EParamType.String, required = false, default = nil, help = "Post-sermon AD"}
+
+
+    -- Local params
+    local brandingAD
+    local brandingAnimation
+    -- local brandingEffect
+    local brandingPoint
+    local gettingBrandFlag = Flag("GOB_GoblinBranding_GettingBrand_ad1413b8-71bb-4542-b863-e13fd4fc8e85")
+
+    local priest
+    local priestFinishedSermonFlag = Flag("GOB_GoblinPriest_FinishedSermon_2095924c-f85f-878d-2f4a-75b7640a14dd")
+
+    local playBrandAnimation = false
+    local branded = false
+    local listenSermon = false
+    local getBrand = false
+    local disperse = false
+    local posListenSermon
+    local sermonAD
+    local cheerAnims = {}
+
+    local raidFlag = Flag("GOB_DrowCommander_Event_RaidersSortie_26816b01-2d64-b50c-3bf6-bffd7dc5f0b9")
+    local priestLeftBrandingFlag = Flag("GOB_GoblinPriest_State_LeftBranding_163689dc-25b3-73c6-ca56-0266475286f3")
+    local brandedTag
+    
+    -- State nodes
+    self.OnInit = function()
+        brandingAD = Dialog(params.brandingAD)
+        posListenSermon = FindEntity(params.sermonPoint)
+        sermonAD = Dialog(params.sermonAD)
+        brandingAnimation = Animation("CUST_Being_Branded_01_45066551-8fc8-4705-bcc7-620063e507fd")
+       -- brandingEffect = PrepareEffect("VFX_Script_Stub_Poof_01_f0cf792a-0f74-d17e-ad0d-6052a6131416")
+        brandingPoint = FindEntity("S_GOB_BrandingPoint_7dc06493-4add-4048-a7cb-ef8b7711faf9")
+
+        priest = FindEntity("S_GOB_GoblinPriest_b983c336-9a14-4e9b-adb9-4689e7e0afa9") 
+
+        cheerAnims = { Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0"),
+            Animation("CUST_Cheering_02_5e23b082-f75a-4daa-86e1-ab73ec6d30b7"),
+            Animation("CUST_Cheering_03_34ac373e-2928-4d83-8427-13f34573c64a") }
+
+        brandedTag = Tag("BRANDED_ABSOLUTE_310f7186-bb0b-4905-b8f6-dfc2fe62570a")
+    end
+
+    -- Nodes
+    -- [[Branding process]]
+    nodes.Action_ListenSermon = Action{
+        function()
+            -- Stay and listen to priest
+            try
+                MoveTo(posListenSermon)
+                SteerTo(priest)
+                PlayAnimation(cheerAnims[math.random(#cheerAnims)])
+                mod.util.SleepRandom(5.0,7.0)
+                if GetFlag(priestFinishedSermonFlag,nil) then
+                    if mod.dialog.IsSpeakerAvailable(me) and sermonAD ~= nil then
+                        mod.util.SleepRandom(1.0,1.5)
+                        try
+                            StartAutomatedDialog(sermonAD,true,me)
+                        catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                            DebugText(me,"Debug : AD failed")
+                        end
+                    end
+                    listenSermon = false
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception, couldn't go to sermon position")
+                listenSermon = false
+            end
+        end,
+        Valid = function()
+            return branded and listenSermon and not GetFlag(raidFlag, nil) and not GetFlag(priestLeftBrandingFlag,nil)
+        end,
+    }
+
+    nodes.Action_GetBrandAnimation = Action{
+        function()
+            if not IsInDialog(me) and not IsInDialog(priest) then 
+                try
+                    MoveTo(brandingPoint)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Move Exception, couldn't reach priest")
+                end
+                if GetDistanceTo(me, brandingPoint) < 1 then
+                    SteerTo(priest)
+                    SetEntityEvent(priest, "GOB_GoblinPriest_Event_ApplyBrand")
+                    PlayAnimation(brandingAnimation)
+                    --PlayEffectAt(brandingEffect,me)
+                end
+                AddTag(me,brandedTag)
+                ClearFlag(gettingBrandFlag, me)
+                branded = true
+                listenSermon = true
+                playBrandAnimation = false
+            end
+        end,
+        Valid = function()
+            return playBrandAnimation and not IsInDialog(priest,true) and not GetFlag(raidFlag, nil) and not GetFlag(priestLeftBrandingFlag,nil)
+        end,
+    }
+
+    nodes.Action_GetBrandDialog = Action{
+        function()
+            -- Move to priest
+            try
+                MoveTo(brandingPoint)
+                LookFrom(brandingPoint)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception, couldn't reach priest")
+                SetEntityEvent(priest, "GOB_GoblinPriest_Event_ForceNextGoblin")
+                getBrand = false
+            end
+
+            -- Start AD with priest
+            if brandingAD ~= nil and mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailable(priest) then
+                try
+                StartAutomatedDialog(brandingAD, true, priest, me)
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    DebugText(me,"Debug : AD failed")
+                end
+            end
+            Sleep(0.5)
+            playBrandAnimation = true
+            getBrand = false
+        end,
+        Valid = function()
+            return getBrand and not IsInDialog(priest,true) and not GetFlag(raidFlag, nil) and not GetFlag(priestLeftBrandingFlag,nil)
+        end,
+        OnLeave = function()
+            if brandingAD ~= nil then
+                DialogRequestStop(me,brandingAD)
+            end
+        end
+    }
+
+    -- Custom behaviour proxy
+    nodes.Proxy_CustomBehaviour = Proxy{
+        params.customBehaviour,
+        Valid = function()
+            return disperse
+        end
+    }
+
+    nodes.Action_Disperse = Action{
+        function()
+            mod.util.SleepRandom(1.0,2.0)
+            disperse = true
+        end,
+        Valid = function()
+            return not getBrand and not listenSermon
+        end
+    }
+
+    -- Fallback
+    nodes.Action_Fallback = Action{
+        function()
+            Sleep(2.0)
+        end
+    }
+
+    -- Events
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "GOB_GoblinPriest_GetBrand" then
+            SetFlag(gettingBrandFlag, me)
+            getBrand = true
+            disperse = false
+        elseif e.TargetEntity == me and e.Event == "GOB_GoblinPriest_StartSermon" then
+            listenSermon = true
+            disperse = false
+        end
+    end
+    events.FlagSet = function(e)
+        if e.Flag == priestLeftBrandingFlag.Guid then
+            ClearFlag(gettingBrandFlag, me)
+            getBrand = false
+            listenSermon = false
+        end
+    end
+end
+}

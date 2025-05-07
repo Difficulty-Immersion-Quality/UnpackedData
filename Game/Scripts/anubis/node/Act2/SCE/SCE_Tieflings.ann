@@ -1,0 +1,138 @@
+game.states.SCE_Cerys = State{
+    function()
+        params.Patrol = { type = EParamType.State,required = true, help = [[Patrol state.]]}
+
+        local inEpilogue = Flag("SCE_State_AtEpilogue_3541abb5-6aaf-48c7-bf30-5a13b3abc718")
+        local doAnim = false
+        local randomAnims = {
+            Animation([[CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef]]),
+            Animation([[CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba]])
+        }
+
+        nodes.DoAnim = Action{
+            function()
+                Sleep(math.random(2,4))
+
+                if not IsInDialog(me,true) then --not doing an AD
+                    local randomAnim = randomAnims[math.random(#randomAnims)]
+                    PlayAnimation(randomAnim,true,false)
+                    Sleep(1.0)
+                end
+
+                doAnim = false
+            end,
+            CanEnter = function()
+                return doAnim
+            end
+        }
+
+        nodes.Patrol = Proxy {
+            params.Patrol
+        }
+
+        -----------------------------------------
+        -- Events
+        events.SplineControlPointReached = function(e)
+            if e.Event == "Sleep" then
+                doAnim = true
+            end
+        end
+
+    end
+}
+
+game.states.SCE_StandAtTriggerAndAnimate = State{
+    function()
+        modules = { "shared.params" }
+
+        params.StandTrigger = { type = EParamType.String, required = true, help = [[Point to stand at.]]}
+        params.RandomAnimations = {type = EParamType.String, arrayRange = "0..", required = true, help=[[Random animations to play.]]}
+
+        local doAnim = false
+        local randomAnims
+
+        self.OnInit = function()
+            if params.RandomAnimations ~= nil and #params.RandomAnimations > 0 then
+                randomAnims = mod.params.ParamArrayToAnimationsList(params.RandomAnimations)
+            end
+        end
+
+        nodes.DoAnim = Action{
+            function()
+                Sleep(2.0)
+
+                if not IsInDialog(me,true) then --not doing an AD
+                    --DebugText(me,"Select anim")
+                    if randomAnims ~= nil then
+                        local randomAnim = randomAnims[math.random(#randomAnims)]
+                        if randomAnim ~= nil then
+                            try
+                                --DebugText(me,"Start anim")
+                                PlayAnimation(randomAnim,true,false)
+                            catch e then
+                                DebugText(me,"Error: [1]",e)
+                            end
+                        else
+                            DebugText(me,"Randomanim == nil")
+                        end
+                    else 
+                        DebugText(me,"Randomanims == nil")
+                    end
+                    Sleep(1.0)
+                end
+                
+                doAnim = false
+            end,
+            CanEnter = function()
+                return doAnim
+            end,
+            OnLeave = function()
+                doAnim = false
+            end
+        }
+
+        nodes.StandAtTrigger = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = params.StandTrigger,
+                acceptanceRadius = 1.0
+            },
+            OnEnter = function()
+                StartTimer(me,"SCE_DoRandomAnimation",math.random(5,15),0)
+            end,
+            OnLeave = function()
+                StopTimer(me,"SCE_DoRandomAnimation")
+            end
+        }
+
+        events.TimerFinished = function(e)
+            if e.TimerName == "SCE_DoRandomAnimation" then
+                doAnim = true
+            end
+        end
+
+    end
+}
+
+game.states.SCE_Ide = State{
+    function()
+        modules = {"shared.moveto"}
+
+        local sitAnimLoop = Animation("CUST_SittingGroundListening_01_Loop_e3dca236-9064-4613-8d5f-2b8b40f3294d")
+
+        local sitTrigger = Entity("S_SCE_IdePoint_15b5da8b-37ae-43b9-95b7-a551969f29bb")
+
+        nodes.Sit = Action{
+            function()
+                if GetDistanceTo(me,sitTrigger) > 1.0 then
+                    if mod.moveto.MoveToPoint(sitTrigger,MovementSpeed.Walk,me) then
+                        LookFrom(sitTrigger)
+                    end
+                end
+                
+                PlayAnimation(sitAnimLoop,false,true)
+                Sleep(8.0)
+            end
+        }
+    end
+}

@@ -1,0 +1,214 @@
+game.states.GOB_Festivities_Goblin = State{function ()
+
+    description = [[Basic behaviour of Festivities Goblins: booze, Volo poem, banter]]
+
+    modules = { "gustav.Act1.Goblins", "shared.dialog", "shared.math", "shared.params", "shared.util" }
+
+    params.DefaultPos = { type = EParamType.String, required = true,
+        help = [[Default goblin's position near the table when Volo's on stage]]}
+
+    params.DefaultPosNoVolo = { type = EParamType.String, required = false, default = nil,
+        help = [[Default goblin's position near the table when Volo's not on stage]]}
+
+    params.Volo = {type = EParamType.String, required = false, default = "S_GLO_Volo_2af25a85-5b9a-4794-85d3-0bd4c4d262fa",
+        help = [[Volo NPC]]}
+
+    params.BanterAD = { type = EParamType.String, required = false, default = "",
+        help = [[Banter between Festivities goblins]] }
+
+    params.BanterPartners = { type = EParamType.String, arrayRange = "..", required = false, default = {},
+        help = [[Partner goblins to start AD with for Festivities goblins]] }
+
+    local tr_DefaultPos = nil
+    local dlg_BanterAD = Dialog(params.BanterAD)
+    local ch_BanterPartners = {}
+    local f_AtTableADMaxDist = 3.0
+    local fl_Absence = Flag("GOB_Festivities_Behaviour_Absent_ed2fbbf4-42b3-4845-865d-39827dedb503")
+    local fl_BarrelPoisoned = Flag("GLO_GoblinHuntPoison_Quest_BeerPoisoned_0c261a18-68f7-4a4b-9e91-b0b5ef50f474")
+    local fl_RefilledPoison = Flag("GOB_GoblinToast_RefilledWithPoison_edc32909-4505-4b60-bf85-edf264901ee9")
+    local fl_NoMoreRefills = Flag("GOB_GoblinToast_Event_NoMoreRefills_5929d40e-8867-2fc6-a0d9-6ab1a7a49696")
+
+    local fl_VoloOnStage = Flag("GOB_VoloBallad_State_OnStage_0bc1d7d7-9129-4c6e-188d-054640cea3b9")
+    local ch_Volo = nil
+
+    local tg_GOBLIN = Tag("GOBLIN_608597d9-bf00-4ede-aabe-767457280925")
+    local b_CanPlayGoblinAnimations = false
+
+    local anim_Mocking = Animation("CUST_Mocking_01_313bddc4-712f-4f08-874f-db9af7a6c4a1")
+    local anim_Drinking = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+    local anim_Eating = Animation("CUST_Eating_01_Loop_0dae0f54-095c-489e-b611-6c42302f96d8")
+    local anim_ThrowPebble = { Animation("CUST_ThrowingPebbles_01_4605ab7e-a16a-4269-ba1e-9354097ddca5"),
+        Animation("CUST_ThrowingPebbles_02_490888cb-5a1f-4667-875c-99c76cb104eb"),
+        Animation("CUST_ThrowingPebbles_03_e8cb6221-778b-4fce-bf0b-44ea56a60ca9") }
+
+    local s_ThrowStone = "GOB_FestiveGoblin_ThrowsStone"
+
+
+    local b_CanDoAD = false
+    local s_CanDoADTimer = "GOB_Festivities_Goblin.AD.CanDoAD"
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(30.0, 40.0), 0)
+    end
+
+    helpers.action.LookFromDefPos = function()
+        if GetFlag(fl_VoloOnStage) then
+            SteerTo(ch_Volo)
+            LookAtEntity(ch_Volo, 3.0)
+        else
+            LookFrom(tr_DefaultPos)
+        end
+    end
+
+
+    self.OnInit = function()
+        b_CanPlayGoblinAnimations = IsTagged(me, tg_GOBLIN)
+
+        if GetFlag(fl_VoloOnStage) or params.DefaultPosNoVolo == nil then
+            tr_DefaultPos = FindEntity(params.DefaultPos)
+        else
+            tr_DefaultPos = FindEntity(params.DefaultPosNoVolo)
+        end
+        ch_BanterPartners = mod.params.ParamArrayToEntityList(params.BanterPartners)
+        ch_Volo = FindEntity(params.Volo)
+        helpers.CanDoADReset()
+    end
+
+    events.FlagSet = function(ev)
+        if ev.Flag == fl_VoloOnStage.Guid then
+            tr_DefaultPos = FindEntity(params.DefaultPos)
+        end
+    end
+    events.FlagCleared = function(ev)
+        if ev.Flag == fl_VoloOnStage.Guid and params.DefaultPosNoVolo ~= nil then
+            tr_DefaultPos = FindEntity(params.DefaultPosNoVolo)
+        end
+    end
+
+    nodes = Selector{
+        function(nodes)
+            if GetFlag(fl_RefilledPoison, me) then
+                return nodes.DrinkAndEat
+            else
+                return FindWeightedRandomSelectable(nodes, {
+                    [nodes.MockVolo] = 5,
+                    [nodes.DrinkAndEat] = 30,
+                    [nodes.Banter] = 25,
+                    [nodes.Default] = 40
+                })
+            end
+        end
+    }
+
+    nodes.MockVolo = Action{
+        function()
+            try
+                MoveInRange(ch_Volo, 3.0, 4.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveInRange(ch_Volo)")
+            end
+            SteerTo(ch_Volo)
+            LookAtEntity(ch_Volo, 1.0)
+            -- Remove until done properly
+            --UseSpell("Projectile_FOR_GnomeGoblin_ThrowRock", ch_Volo, nil, nil, nil, true, true)
+            if b_CanPlayGoblinAnimations then
+                DebugText(me, "I'm throwing rock at Volo")
+                SetEntityEvent(ch_Volo, s_ThrowStone)
+                PlayAnimation(anim_ThrowPebble[math.random(#anim_ThrowPebble)])
+                PlayAnimation(anim_Mocking)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(fl_VoloOnStage) and not IsInDialog(ch_Volo, true)
+        end
+    }
+
+    nodes.DrinkAndEat = Selector{
+    }
+
+    nodes.DrinkAndEat.MoveTo = Action{
+        function()
+            try
+                MoveTo(tr_DefaultPos, MovementSpeed.Walk, true, false, 0.0, 1.0)
+                helpers.LookFromDefPos()
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_DefaultPos)")
+            end
+        end,
+
+        CanEnter = function()
+            return GetDistanceTo(me, tr_DefaultPos) > 1.0
+        end
+    }
+
+    nodes.DrinkAndEat.DrinkAndEat = Selector{
+        function(nodes)
+            if GetFlag(fl_RefilledPoison, me) then
+                return nodes.Drink
+            else
+                return FindRandomSelectable(nodes)
+            end
+        end
+    }
+
+    nodes.DrinkAndEat.DrinkAndEat.Eat = Action{
+        function()
+            helpers.LookFromDefPos()
+            mod.Goblins.RepeatAnimationRandomTimes(anim_Eating, 2, 3.0)
+        end
+    }
+
+    nodes.DrinkAndEat.DrinkAndEat.Drink = Action{
+        function()
+            helpers.LookFromDefPos()
+            if GetFlag(fl_BarrelPoisoned) and GetFlag(fl_RefilledPoison, me) then
+                PlayAnimation(anim_Drinking)
+                SetEntityEvent(me, "GOB_GoblinToast_DrinkPoisonedBeer")
+                ClearFlag(fl_RefilledPoison, me)
+            else
+                mod.Goblins.RepeatAnimationRandomTimes(anim_Drinking, 2, 3.0)
+            end
+        end,
+
+        Valid = function()
+            return not GetFlag(fl_NoMoreRefills)
+        end
+    }
+
+    nodes.Banter = Action{
+        function()
+            mod.dialog.StartAutomatedDialogWithWait(dlg_BanterAD, me, ch_BanterPartners)
+            helpers.CanDoADReset()
+            mod.util.SleepRandom(3.0, 7.0)
+        end,
+
+        CanEnter = function()
+            if not b_CanDoAD or not dlg_BanterAD then return false end
+
+            for _, partner in ipairs(ch_BanterPartners) do
+                if GetFlag(fl_Absence, partner) or
+                        not mod.dialog.IsSpeakerAvailableAndNear(partner, me, f_AtTableADMaxDist, true) then
+                    return false
+                end
+            end
+            return true
+        end
+    }
+
+    nodes.Default = Action{
+        function()
+            try
+                MoveTo(tr_DefaultPos)
+                --helpers.LookFromDefPos()
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo tr_DefaultPos")
+            end
+        end
+    }
+end}

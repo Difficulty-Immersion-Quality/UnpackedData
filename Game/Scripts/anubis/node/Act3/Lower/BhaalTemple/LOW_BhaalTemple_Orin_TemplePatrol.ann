@@ -1,0 +1,119 @@
+game.states.LOW_BhaalTemple_Orin_TemplePatrol =
+    State {
+    function()
+        description =
+            [[ 
+        Simple patrol for Orin near the altar to give the players a chance to rescue companion.
+    ]]
+
+        modules = {"shared.math", "shared.util"}
+
+        -----------------------------------------
+        -- local state section
+        local patrolSpline = Spline("S_LOW_BhaalTemple_Orin_AltarPatrolSpline_b12040f3-a443-4237-bc3a-e7f686e73256")
+        local abducteeCheckingAnim = Animation("CUST_TendingToSleepingCharacter_01_df2974dc-34cd-4463-a53e-225510701f1b")
+        local talkToMinionsAnim = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+        local talkToMinionsAD = Dialog("LOW_BhaalTemple_OrinPatrol_AD_TalkWithMinions_34ca6db6-5f16-2fc6-0d5d-14d1c56f023a")
+        local toyWithAbducteeAD = Dialog("LOW_BhaalTemple_OrinPatrol_AD_ToyWithAbductee_7296c0e4-f167-d171-aa0e-b8f71f149c66")
+        local minion1 = Entity("S_LOW_BhaalTemple_NightBlade_01_7a82cf11-57a2-4796-8b3a-d3409c0cbe9e")
+        local minion2 = Entity("S_LOW_BhaalTemple_DeathsHead_02_adf3d591-4442-4543-86fd-9ca5b1cb73d2")
+        local altarEntity = Entity("S_LOW_BhaalTemple_TempleAltar_64b08f01-5e3f-4ca2-9603-4e8c85c80e8e")
+        local inTempleFlag = Flag("LOW_BhaalTemple_State_OrinInTemple_494df8e1-a986-4744-958f-b33880dd5bb2")
+
+        local targetSplineIndex = -1
+        local canWalkOnSpline = true
+        local splineEvent = nil
+
+
+
+        -----------------------------------------
+        -- node section
+        nodes.Idle = Action {
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return not GetFlag(inTempleFlag)
+            end
+        }
+
+        nodes.Patroling =
+            Action {
+            function()
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll, targetSplineIndex, false)
+            end,
+            OnLeave = function()
+                if canWalkOnSpline then
+                    ShortPatrolInterrupt()
+                end
+            end,
+            Valid = function()
+                return canWalkOnSpline and GetFlag(inTempleFlag)
+            end
+        }
+
+        nodes.PatrolPointIdle =
+            Selector {
+            function(nodes)
+                if splineEvent == "LOW_BhaalTemple_SplineEvent_Altar" then                    
+                    return nodes.CheckAltar
+                elseif splineEvent == "LOW_BhaalTemple_SplineEvent_Minions" then
+                    return nodes.TalkToMinions
+                else
+                    return nodes.Waiting
+                end
+            end,
+            Valid = function()
+                --return not canWalkOnSpline and splineEvent ~= "" and splineEvent ~= nil and GetFlag(inTempleFlag)
+                return not canWalkOnSpline and GetFlag(inTempleFlag)
+            end,
+            OnLeave = function()
+                splineEvent = ""
+            end
+        }
+
+        nodes.PatrolPointIdle.CheckAltar =
+            Action {
+            function()
+                LookFrom(patrolSpline)
+                PlayAnimation(abducteeCheckingAnim, false)
+                StartAutomatedDialog(toyWithAbducteeAD, false, me)                
+                mod.util.SleepRandom(20, 25)
+                --Sleep(mod.math.random(10, 20))
+                canWalkOnSpline = true
+            end
+        }
+
+        nodes.PatrolPointIdle.TalkToMinions =
+            Action {
+            function()                
+                LookFrom(patrolSpline)
+                StartAutomatedDialog(talkToMinionsAD, false, minion1, minion2, me)
+                --PlayAnimation(talkToMinionsAnim, false)
+                Sleep(mod.math.random(30, 35))
+                canWalkOnSpline = true
+            end
+        }
+
+        nodes.PatrolPointIdle.Waiting =
+            Action {
+            function()
+                LookFrom(patrolSpline)
+                Sleep(mod.math.random(4, 8))
+                canWalkOnSpline = true
+            end
+        }
+
+        -----------------------------------------
+        -- event section
+        events.SplineControlPointReached = function(e)
+            targetSplineIndex = e.NewIndex
+            if e.Event ~= nil and e.Event ~= "" then
+                canWalkOnSpline = false
+                splineEvent = e.Event
+            else
+                splineEvent = ""
+            end
+        end
+    end
+}

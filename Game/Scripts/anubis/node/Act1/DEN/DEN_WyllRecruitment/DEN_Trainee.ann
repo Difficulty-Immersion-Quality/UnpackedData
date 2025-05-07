@@ -1,0 +1,302 @@
+game.states.DEN_Trainee = State{ function()
+
+    description = [[Kid trainees behaviour]]
+
+    modules = { "shared.dialog" }
+
+    -----------------------------------------
+    -- params section
+    params.trainingBox = {type = EParamType.String,
+        required = true,
+        help = [[Default box or poly trigger in which to stand while training]]
+    }
+    params.AD = {type = EParamType.String,
+        required = true,
+        help = [[AD while Asharak is the trainer]]
+    }
+    params.wyllAD = {type = EParamType.String,
+        required = true,
+        help = [[AD while Wyll is the trainer]]
+    }
+    params.otherKid = {type = EParamType.String,
+        required = false,
+        help = [[Kid with whom to share an AD]]
+    }
+    params.otherKidBox = {type = EParamType.String,
+        required = false,
+        help = [[Required if otherKid isn't nil]]
+    }
+
+    params.trainingDummy = {type = EParamType.String, 
+        required = true, 
+        help = [[Dummy the kid is supposed to be training on]]
+    }
+
+    params.trainingTrigger = {type = EParamType.String,
+        required = true,
+        help = [[World behaviour trigger for the trainee]]
+    }
+
+
+    -----------------------------------------
+    -- local state section
+
+    local trainingBox = Entity(params.trainingBox)
+    local AD = Dialog(params.AD)
+    local wyllAD = Dialog(params.wyllAD)
+
+    local otherKid = nil
+    local otherKidBox = nil
+
+    local trainer = nil
+    local trainerIsWyll = false
+    local canAD = true
+    local watchTrainer = false
+
+    local hasOtherKidFlag = Flag("DEN_Thieflings_Event_HasOtherKid_b1d5b1a4-9d81-825e-910e-4bf96c8566dc")
+    local scaredFlag = Flag("DEN_Trainer_State_TraineesAreScared_b50848b6-8bbe-907c-b65a-c7f03bd797ad")
+
+    local slashBehaviour = Dialog("BHVR_WRLD_DEN_TrainingAttack_02_a766b855-d3f2-13e5-ef0d-d9cd7f65011c")
+    local jabBehaviour = Dialog("BHVR_WRLD_DEN_TrainingAttack_01_513c333c-9c46-497e-c16d-122a3253e228")
+    local scratchBehaviour = Dialog("BHVR_WRLD_DEN_TrainingDefence_02_bcc2e801-2dc4-31a3-87e3-562660ec239b")
+    local biteBehaviour = Dialog("BHVR_WRLD_DEN_TrainingDefence_01_3871c1f5-0e88-9aff-6f3e-40eb56c33416")
+    local learningAnim = Animation([[CUST_ObserveMagicTrick_01_076d15de-f0bf-4fec-9b74-7c8d8cca5841]]) -- A REQUEST FOR A BETTER ANIMATION WAS MADE // GUS-167158
+    local phaseAnims = {}
+
+    local trainingTrigger = Entity(params.trainingTrigger)
+
+    local trainingDummy = Entity(params.trainingDummy)
+
+    local trainerAnimFlag = Flag([[DEN_Trainer_State_AnimatingForKids_46053c10-3977-4036-975d-8bce2a65bc0c]])
+    local phaseTwoFlag = Flag("DEN_Trainer_State_Phase2_c5ea911c-895b-52fe-370b-9269196a6fec")
+    local phaseThreeFlag = Flag("DEN_Trainer_State_Phase3_f325ac2c-0c7e-3b59-461a-1968ad98e942")
+    local currentPhase = 1
+
+    -----------------------------------------
+    -- helper functions
+    helpers.SetCurrentPhase = function()
+        --trainer controls these flags during his patrol
+        if GetFlag(phaseTwoFlag) then
+            currentPhase = 2
+        elseif GetFlag(phaseThreeFlag) then
+            currentPhase = 3
+        else
+            currentPhase = 1
+        end
+    end
+
+    helpers.GetAnimation = function()
+        helpers.SetCurrentPhase()
+        local currentAnimSet = phaseAnims[currentPhase]
+        local currentAnim = currentAnimSet[math.random(#currentAnimSet)]
+        return currentAnim[1], currentAnim[2], currentAnim[3]
+    end
+
+    helpers.GetAD = function()
+        if trainerIsWyll then
+            return wyllAD
+        else
+            return AD
+        end
+    end
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        if params.otherKid then
+            otherKid = Entity(params.otherKid)
+            otherKidBox = Entity(params.otherKidBox)
+        end
+
+        --true = requires the sword, so use SetWeaponUnsheathed first
+        table.insert(phaseAnims, {{biteBehaviour, trainingTrigger, false}, {slashBehaviour, trainingTrigger, true}, {jabBehaviour, trainingTrigger, true}, {scratchBehaviour, trainingTrigger, false}})
+        table.insert(phaseAnims, {{slashBehaviour, trainingTrigger, true}, {jabBehaviour, trainingTrigger, true}})
+        table.insert(phaseAnims, {{scratchBehaviour, trainingTrigger, false}, {biteBehaviour, trainingTrigger, false}})
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.Scared = Action {
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(scaredFlag)
+        end,
+    }
+
+    nodes.Training = Selector {
+        Valid = function()
+            return (trainer ~= nil) and not trainer.Character.IsDead
+        end,
+    }
+
+    nodes.Waiting = Action {
+        function()
+            Sleep(math.random (3, 12))
+            Wander(2.0, 1.0, MovementSpeed.Run, trainingBox)
+        end
+    }
+
+    nodes.Training.WatchTrainer = Action {
+        CanEnter = function()
+            return watchTrainer
+        end,
+        OnEnter = function()
+            watchTrainer = false
+        end,
+        function()            
+            SteerTo(trainer)
+            PlayAnimation(learningAnim, true, false)
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(trainerAnimFlag, trainer)
+        end
+    }
+
+    nodes.Training.AD = Action {
+        OnEnter = function()
+            ClearFlag(hasOtherKidFlag, me)
+        end,
+        function()
+            --can talk with trainer
+            Sleep(1)
+            if IsInTrigger(me, trainingBox.Trigger) then
+                if not GetFlag(trainerAnimFlag, trainer) and mod.dialog.IsSpeakerAvailableAndNear(trainer, me, 10.0, true) then
+                    SetDoNotFace(me, true)
+                    if otherKid and (mod.dialog.IsSpeakerAvailable(otherKid) and IsInTrigger(otherKid, otherKidBox.Trigger)) then
+                        SetDoNotFace(otherKid, true)
+                        SetFlag(hasOtherKidFlag, me)
+                        DebugText(me, "Start dual AD")
+                        StartAutomatedDialog(helpers.GetAD(), false, me, trainer, otherKid)
+                    else
+                        DebugText(me, "Start solo AD")
+                        StartAutomatedDialog(helpers.GetAD(), false, me, trainer)
+                    end
+                end
+                Sleep(math.random(2,5))
+            end
+            canAD = false
+        end,
+        Valid = function()
+            return canAD
+        end,
+        OnLeave = function()
+            SetDoNotFace(me, false)
+            if otherKid then
+                SetDoNotFace(otherKid, false)
+            end
+        end
+    }
+
+    nodes.Training.AttackDummy = Action {
+        function()
+            if (not IsInTrigger(me, trainingBox.Trigger)) and (not IsInDangerousSurfaceFor(trainingBox, me.Character)) then
+                try
+                    MoveTo(trainingBox)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(2.0)
+                end
+            else
+                local behaviour, trigger, setUnsheathed = helpers.GetAnimation()
+                DebugText(me, "Table Lookup successful")
+                Sleep(math.random (3, 5))
+                LookFrom(trainingBox)
+                SetWeaponUnsheathed(me, setUnsheathed)
+                StartBehaviorDialog(behaviour, trigger.Trigger, true, me, trainingDummy)
+                BehaviorDialogRequestGracefulStop(me, true, behaviour)
+                if setUnsheathed then
+                    SetWeaponUnsheathed(me, false)
+                end
+            end
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    -- timers
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_Trainee_ADTimer" then
+            canAD = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DEN_Trainer_Event_SetCanTalk" then
+                canAD = true
+            elseif e.Event == "DEN_Trainer_Event_WatchTrainer" then
+                watchTrainer = true
+            end
+        end
+        if e.Event == "DEN_Trainer_Event_IsTrainer" then
+            if IsTagged(e.TargetEntity, Tag("REALLY_WYLL_5f40def5-d3ec-4698-a367-01a339888956")) then
+                trainerIsWyll = true
+            else
+                trainerIsWyll = false
+            end
+            trainer = e.TargetEntity
+            canAD = false
+        elseif e.Event == "DEN_AttackOnDen_StopTrainee" then
+            trainer = nil
+        end
+    end
+
+    events.Dying = function(e)
+        if (trainer ~= nil) and (e.Target == trainer) then
+            trainer = nil
+        end
+    end
+
+end}
+
+game.states.DEN_AttackOnDen_Trainee = State {function ()
+
+    modules = { "shared.dialog" }
+
+    description = [[Bickering with Trainee003 while guarding one hideout entrance.]]
+    local AD = Dialog([[DEN_AttackOnDen_AD_BickeringTrainees_9841635d-1240-6989-cd99-81d78c9a999e]])
+    local trainee003 = Entity([[S_DEN_Trainee_003_71bdc11d-b488-427d-8453-632e91178c7e]])
+    local canAD = true
+
+    nodes.AD = Action{
+        CanEnter = function()
+            return canAD
+        end,
+
+        OnEnter = function()
+            canAD = false
+        end,
+
+        function()
+            Sleep(4)
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true
+                },
+                me,
+                trainee003
+            )
+        end,
+
+        OnLeave = function()
+            StartTimer(me, "DEN_AttackOnDen_Trainee_ADTimer", math.random(50, 70), 0)
+        end
+    }
+
+    nodes.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_AttackTraineePos_001_96a1ee7f-fe95-4351-adc2-02cafea71f9a]]
+        }
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_AttackOnDen_Trainee_ADTimer") then 
+            canAD = true
+        end
+    end
+
+end}

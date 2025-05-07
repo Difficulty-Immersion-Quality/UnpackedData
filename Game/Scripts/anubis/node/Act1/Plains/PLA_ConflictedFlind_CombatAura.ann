@@ -1,0 +1,53 @@
+game.states.PLA_ConflictedFlind_CombatAura = State { function ()
+
+    description = [[Turning ON and OFF aura effect like
+        Pack Tactics and Bloodthirst on incapacitaion]]
+
+    -----------------------------------------
+    -- params section
+    params.combatAuraStatus = {type = EParamType.String, required = true, help=[[
+        Aura status name
+    ]]}
+
+    local needsToReapplyStatus = false
+
+    self.CanEnter = function()
+        return false
+    end
+
+    -----------------------------------------
+    -- event section
+    events.EnteredCombat = function(e)
+        if e.Entity == me and not HasActiveStatus(me, params.combatAuraStatus) then
+            ApplyStatus(me, params.combatAuraStatus, true, -1)
+        end
+    end
+
+    events.LeftCombat = function(e)
+        if e.Entity == me and HasActiveStatus(me, params.combatAuraStatus) then
+            RemoveStatus(me, params.combatAuraStatus)
+            needsToReapplyStatus = false
+        end
+    end
+
+    events.StatusApplied = function(e)
+        if me.Active and
+            HasActiveStatus(me, params.combatAuraStatus) and
+            (e.Status.StatusID == "INCAPACITATED" or e.Status.StatusID == "KNOCKED_DOWN")
+        then
+            RemoveStatus(me, params.combatAuraStatus)
+            needsToReapplyStatus = true
+        end
+    end
+
+    events.StatusRemoved = function(e)
+        if me.Active and
+            needsToReapplyStatus and
+            not HasActiveStatus(me, params.combatAuraStatus) and
+            not (HasActiveStatus(me, "INCAPACITATED") or HasActiveStatus(me, "KNOCKED_DOWN"))
+        then
+            needsToReapplyStatus = false
+            ApplyStatus(me, params.combatAuraStatus, true, -1)
+        end
+    end
+end}

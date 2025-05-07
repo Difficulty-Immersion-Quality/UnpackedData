@@ -1,0 +1,198 @@
+game.states.CRA_ScaredBoar = State{function ()
+
+    local CRA_ScaredBoar_PullBackPoint = Entity("S_CRA_ScaredBoar_PullBackPoint_5830bed4-bef1-4fc3-8bce-222bb53e4bc7")
+    local CRA_Escape_Event_BoarFlee = Flag("CRA_Escape_Event_BoarFlee_99d54ccd-255f-f5d0-4b7e-6cb16f560882")
+
+    local pullBackFinished = false
+    local fleeAfterDialog = false
+    local fleeAfterCombat = false
+    local playerSpottedInFront = false
+    local playerSpottedBehind = false
+
+
+    -- Flee when a player sneaks behind the boar and the boar sees them there, or
+    -- after the dialog
+    nodes.Flee = Action{function()
+        -- The dialog shows the boar running away -> don't run away in game (the boar is in a dead end, so he'd pop away anyway)
+        if fleeAfterDialog then
+            SetOnStage(me, false)
+        else
+            SetFlag(Flag("GEN_DisappearOutOfSight_5dc33889-cbfb-c3d2-9e4e-8d826bf8566f"), me)
+        end
+        -- Wait for Osiris to start fleeing (and taking over/deactivating Anubis), or until being off-stage deactivated us
+        WaitForInterrupt()
+    end
+    ,
+    CanEnter = function()
+        return
+          (not playerSpottedInFront and
+           playerSpottedBehind) or
+          fleeAfterDialog or
+          fleeAfterCombat
+    end
+    }
+
+    -- When a player is in front for the first time, go to the edge of the cliff
+    nodes.PullBack = Action{function()
+        local moveSuccessful = false
+        if not IsInDangerousSurfaceFor(CRA_ScaredBoar_PullBackPoint, me.Character) then
+            try
+                MoveTo(CRA_ScaredBoar_PullBackPoint, MovementSpeed.Run)
+                moveSuccessful = true
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(1.0)
+            end
+            if moveSuccessful then
+                LookFrom(CRA_ScaredBoar_PullBackPoint)
+            end
+        else
+            LookAtEntity(CRA_ScaredBoar_PullBackPoint, 3.0)
+            Sleep(1.0)
+        end
+        pullBackFinished = moveSuccessful
+    end
+    ,
+    CanEnter = function()
+        return
+            playerSpottedInFront and
+            not pullBackFinished
+    end
+    ,
+    Valid = function()
+        return
+            not pullBackFinished
+    end
+    }
+
+    -- Idling while at the rock (start position)
+    nodes.IdleAtRock = Proxy{
+        game.states.CRA_ScaredBoar_Idling,
+        params = {
+            homeTrigger = "S_CRA_ScaredBoar_RockPoint_a398337d-08e7-41f1-9c36-d7bfbb1b9524",
+            InvalidateEvent1 = "CRA_ScaredBoar_SpottedPlayer_InFront",
+            InvalidateEvent2 = "CRA_ScaredBoar_SpottedPlayer_Behind"
+        }
+        ,
+        Valid = function()
+            return
+                not playerSpottedInFront and
+                not playerSpottedBehind and
+                not fleeAfterDialog
+        end
+        }
+
+    nodes.IdleAtBack = Proxy{
+        game.states.CRA_ScaredBoar_Idling,
+        params = {
+            homeTrigger = "S_CRA_ScaredBoar_PullBackPoint_5830bed4-bef1-4fc3-8bce-222bb53e4bc7",
+            InvalidateEvent1 = "CRA_ScaredBoar_SpottedPlayer_Behind"
+        }
+        ,
+        Valid = function()
+            return
+                not fleeAfterDialog
+        end
+    }
+
+    -- spot events from Osiris
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "CRA_ScaredBoar_SpottedPlayer_InFront" then
+                playerSpottedInFront = true
+            elseif e.Event == "CRA_ScaredBoar_SpottedPlayer_Behind" then
+                playerSpottedBehind = true
+            end
+        end
+    end
+
+    -- Flee from dialog
+    events.FlagSet = function(e)
+        if e.Entity == me then
+            if e.Flag == CRA_Escape_Event_BoarFlee.Guid then
+                fleeAfterDialog = true
+            end
+        end
+    end
+
+    -- flee after combat
+    events.LeftCombat = function(e)
+        if e.Entity == me then
+            fleeAfterCombat = true
+        end
+    end
+
+end
+}
+
+--
+game.states.CRA_ScaredBoar_Idling = State{function ()
+
+    params.homeTrigger = {type = EParamType.String, required = false, default = nil, help=[[
+        The trigger to walk to and look from.
+    ]]}
+
+    params.InvalidateEvent1 = {type = EParamType.String, required = true, help=[[
+        When this event gets sent to the character, this state becomes invalid
+    ]]}
+
+    params.InvalidateEvent2 = {type = EParamType.String, required = false, default = nil, help=[[
+        When this event gets sent to the character, this state becomes invalid
+    ]]}
+
+    local stateValid = true
+
+    self.Valid = function()
+        return stateValid
+    end
+
+    helpers.GetRandomSteerTo = function()
+        local fwddir = me.ForwardDirection
+        local angle = math.random() * 60.0 - 30.0
+        if angle < 0.0 then
+            angle = angle - 20.0
+        else
+            angle = angle + 20.0
+        end
+        angle = math.rad(angle)
+        -- our coordinates are (x, z, y) (middle coordinate is up/down)
+        local rot1 = ls.math.Vector3(math.cos(angle), 0, -math.sin(angle))
+        local rot2 = ls.math.Vector3(0, 1, 0)
+        local rot3 = ls.math.Vector3(math.sin(angle), 0, math.cos(angle))
+        local lookdir = ls.math.Vector3(
+            rot1 * fwddir,
+            rot2 * fwddir,
+            rot3 * fwddir
+        )
+        return me.Position + lookdir
+    end
+
+    local homeTrigger = Entity(params.homeTrigger)
+
+    nodes.Idle = Action{function()
+        if not IsInDangerousSurfaceFor(homeTrigger, me.Character) then
+            try
+                MoveTo(homeTrigger)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+            end
+            LookFrom(homeTrigger)
+        else
+            LookAtEntity(homeTrigger, 3.0)
+        end
+        Sleep(1.0 + math.random() * 1.5)
+        local steerTo = helpers.GetRandomSteerTo()
+        SteerTo(steerTo)
+        Sleep(1.0 + math.random() * 2.0)
+    end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if (e.Event == params.InvalidateEvent1) or (e.Event == params.InvalidateEvent2) then
+                stateValid = false
+            end
+        end
+    end
+
+
+end
+}

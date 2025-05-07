@@ -1,0 +1,166 @@
+local __enum = require 'larian.anubis.enum'
+local __function = require 'larian.anubis.function'
+local __module = require 'larian.anubis.module'
+local __util = require 'larian.util'
+
+local __m = {}
+
+-- Prototypes
+
+__m.MakeConfigSocketRef = function(...)
+    local kwargs = __util.KWArgs("SocketRef", ...)
+
+    local configPath
+    try
+        configPath = kwargs.TakeRequired(1, "configPath", "string")
+    catch e then
+        __util.Rethrow(e, "While processing SocketRef")
+    end
+
+    return {
+        type = __enum.Ref.ConfigSocket,
+        configPath = configPath,
+    }
+end
+
+__m.MakeConfigExtSocket = function(...)
+    local kwargs = __util.KWArgs("ExtSocket", ...)
+
+    local sockets
+    try
+        sockets = kwargs.TakeRequired(1, "sockets", "table")
+    catch e then
+        __util.Rethrow(e, "While processing ExtSocket")
+    end
+
+    local description = kwargs.TakeOptional("description", "", "socket description", "string")
+
+    return {
+        type = __enum.Ref.ConfigExtSocket,
+        sockets = sockets,
+        description = description,
+    }
+end
+
+-- Instances
+
+__m.Instantiate = function(builder, inputs, outputs, connections)
+    -- External inputs
+    for name, extSocket in pairs(inputs) do
+        for _, intSocket in pairs(extSocket.sockets) do
+            builder.ExposeInputSocket(name, intSocket.configPath)
+        end
+    end
+
+    -- External outputs
+    for name, extSocket in pairs(outputs) do
+        for _, intSocket in pairs(extSocket.sockets) do
+            builder.ExposeOutputSocket(name, intSocket.configPath)
+        end
+    end
+
+    -- Internal connections
+    for _, connection in pairs(connections) do
+        builder.AddConnectionByConfigPath(connection[1].configPath, connection[2].configPath)
+    end
+end
+
+local function MakeSocketSpec(kwargs)
+    local spec = {}
+
+    kwargs = __util.KWArgs("Sockets", kwargs)
+
+    spec.help = kwargs.TakeOptional("help", "", "editor param description", "string")
+    spec.internal = kwargs.TakeOptional("internal", false, "internal sockets are not exposed to the config or higher-level nodes", "boolean")
+
+    kwargs.Validate()
+
+    return spec
+end
+
+__m.PrototypeBuilder = ls.Class("larian.anubis.sockets.PrototypeBuilder", function(self, data)
+    __util.AssertType(data, __function.PrototypeBuilder)
+
+    local specs = {}
+
+    self.Set = function(name, kwargs)
+        try
+            specs[name] = MakeSocketSpec(kwargs)
+        catch e then
+            __util.Rethrow(e, "While processing inputs/outputs.%s specification", name)
+        end
+    end
+
+    self.MakeRef = function(key)
+        __util.Assert(specs[key] ~= nil, "Accessing non-existent inputs/outputs.%s", key)
+
+        return {
+            type = __enum.Ref.Socket,
+            name = key
+        }
+    end
+
+    self.Finalize = function()
+        return specs
+    end
+end)
+
+function __m.PrototypeBuilder:__newindex(name, kwargs)
+    return self.Set(name, kwargs)
+end
+
+function __m.PrototypeBuilder:__index(key)
+    return self.MakeRef(key)
+end
+
+__m.Instance = ls.Class('ls.anubis.sockets.Instance', function(self)
+    local _entries = {}
+
+    self.InitInputs = function(builder, prototypes, connections, nodeId, stateConfigPath)
+        for name, spec in pairs(prototypes) do
+            local configPath = stateConfigPath .. ".inputs." .. name
+            local inputSocket = builder.AddInputSocket(name, nodeId, configPath)
+            _entries[name] = inputSocket
+
+            local outputSockets = connections[name]
+            if outputSockets ~= nil then
+                for _, outputSocket in pairs(outputSockets) do
+                    builder.AddConnection(outputSocket, inputSocket)
+                end
+            end
+        end
+    end
+
+    self.InitOutputs = function(builder, prototypes, connections, stateConfigPath)
+        for name, spec in pairs(prototypes) do
+            local configPath = stateConfigPath .. ".outputs." .. name
+            local outputSocket = builder.AddOutputSocket(configPath)
+            _entries[name] = outputSocket
+
+            local inputSockets = connections[name]
+            if inputSockets ~= nil then
+                for _, inputSocket in pairs(inputSockets) do
+                    builder.AddConnection(outputSocket, inputSocket)
+                end
+            end
+        end
+    end
+
+    self.Get = function(name)
+        return _entries[name]
+    end
+
+    self.Resolve = function(ref)
+        return _entries[ref.name]
+    end
+end)
+
+function __m.Instance:__newindex(name, value)
+    self.Set(name, value)
+end
+
+function __m.Instance:__index(name)
+    return self.Get(name)
+end
+
+return __m

@@ -1,0 +1,41 @@
+game.states.LOW_Prison_RandomPatrol = State { function ()
+    description = [[NPCs move randomly between points. Can align with them and wait predefined times there.]]
+
+    modules = {"shared.moveto","shared.util" }
+
+    params.patrolPoints = {type=EParamType.String, arrayRange = "..", required = true, help=[[Set of patrol points.]]}
+    params.patrolPointsSetup = {type = EParamType.Vector3, arrayRange = "..", required = true, 
+        help = [[Array size must match that of the patrolPoints. These are X,Y,Z vectors. Format: X = minWait, Y = addedRandomRange, Z = align with patrol point {0 = don't align}. E.g. vector {15, 10.5, 1.0} => NPC will wait between 15 and 25.5 seconds and NPC will align.]]}
+    params.alignWithPatrolPoints = {type=EParamType.Bool, required = false, default = true, help=[[Enforces align with the rotation of all patrol points.]]}
+    
+    local currentIndex = 1
+    local lastIndex = -1
+    
+    self.OnInit = function()
+        --safety checks
+        if #params.patrolPoints ~= #params.patrolPointsSetup then
+            assert("Mismatch between arrays in RandomPatrol behav (" .. me.Name .. ")")
+        end
+    end
+
+    nodes.Patrol = Action{function()
+        local dest = Entity(params.patrolPoints[currentIndex])
+        if mod.moveto.MoveToPoint(dest, MovementSpeed.Walk, me, nil, nil) then
+            if params.alignWithPatrolPoints or params.patrolPointsSetup[currentIndex].Z == 1.0 then
+                LookFrom(dest, false)
+            end 
+        else
+            SteerTo(dest)
+        end
+        mod.util.SleepRandom(params.patrolPointsSetup[currentIndex].X, params.patrolPointsSetup[currentIndex].X + params.patrolPointsSetup[currentIndex].Y)
+        
+        currentIndex = math.random(1, #params.patrolPoints)        
+        if currentIndex == lastIndex then
+            currentIndex = currentIndex + 1
+        end
+        if currentIndex > #params.patrolPoints then
+            currentIndex = 1
+        end
+    end
+    }
+end}

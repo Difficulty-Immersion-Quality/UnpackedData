@@ -1,0 +1,232 @@
+game.states.PLA_ZhentDungeon_Zhents = State{function ()
+
+    params.packingBehaviour = {type = EParamType.State, default = StateRef{game.states.PLA_ZhentDungeon_ZhentsPacking},
+     help = [[ Packing behaviour ]]}
+
+    params.backPosition = {type = EParamType.String, required=false, default=nil, help=[[
+        Trigger to which the character falls back.
+    ]]}
+
+    local PLA_ZhentDungeon_State_FallBack = Flag("PLA_ZhentDungeon_State_FallBack_7a94f079-2bc8-495e-99f2-5b04b03a7d1d")
+
+
+    nodes.Action_FallBack = Proxy{
+        game.states.PLA_ZhentDungeon_ZhentsFallBack,
+        params = {backPosition = params.backPosition
+                 },
+        Valid = function()
+            return GetFlag(PLA_ZhentDungeon_State_FallBack, nil)
+        end,
+    }
+
+    nodes.Action_Packing = Proxy{
+        params.packingBehaviour,
+        Valid = function()
+            return not GetFlag(PLA_ZhentDungeon_State_FallBack, nil)
+        end,
+    }
+
+end
+}
+
+game.states.PLA_ZhentDungeon_ZhentsFallBack = State{function ()
+
+    params.backPosition = {type = EParamType.String, required=false, default=nil, help=[[
+        Trigger to which the character falls back.
+    ]]}
+
+    local backPosition = Entity(params.backPosition)
+    local fallingBackFlag = Flag([[PLA_ZhentDungeon_State_ZhentFallingBack_23e80cd7-cf99-4f3b-8085-80a188058a93]])
+
+    nodes.Action_FallBack = Action{function()
+        SetWeaponUnsheathed(me, true, true)
+        if GetDistanceTo(backPosition, me) > 1.5 then
+            SetFlag(fallingBackFlag, me)
+            if not IsInDangerousSurfaceFor(backPosition, me.Character) then
+                try
+                    MoveTo(backPosition, MovementSpeed.Sprint, false, true)
+                    ClearFlag(fallingBackFlag, me)
+                    LookFrom(backPosition)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(1.0)
+                    SetEntityEvent(me, "PLA_ZhentDungeon_FailedToMoveToBackPosition")
+                    return
+                end
+            else
+                LookAtEntity(backPosition, 3.0)
+            end
+            ClearFlag(fallingBackFlag, me)
+        end
+        Sleep(3.0)
+    end,
+    OnLeave = function()
+        SetWeaponUnsheathed(me, false)
+    end
+    }
+end
+}
+
+game.states.PLA_ZhentDungeon_ZhentsPacking = State{function()
+
+    params.AD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play.
+    ]]}
+
+    params.regionBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks the ADs for the entire group of characters (prevents overlap)
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks this specific AD from happening (prevents repetition)
+    ]]}
+
+    params.partner1 = {type = EParamType.String,  required=false, default=nil, help=[[
+        First Dialog Partner, if any
+    ]]}
+
+    params.partner2 = {type = EParamType.String,  required=false, default=nil, help=[[
+        Second Dialog Partner, if any
+    ]]}
+
+    params.home = {type = EParamType.String, required=false,  default=nil, help=[[
+        Home trigger.
+    ]]}
+
+    params.homeB = {type = EParamType.String,  required=false, default=nil, help=[[
+        Other home trigger while packing
+    ]]}
+
+    params.trapNegotiationBehaviour = {type = EParamType.State, required=false, default = nil,
+    help = [[ What to do when the players have walked into a trap after persuading the Zhentarim to surrender the box. ]]}
+
+    local PLA_ZhentDungeon_State_TrapDialogueInProgress
+
+    self.OnInit = function()
+        PLA_ZhentDungeon_State_TrapDialogueInProgress = Flag("PLA_ZhentDungeon_State_TrapDialogueInProgress_fbe1f682-fea0-44f6-ab2a-d454cc151c12")
+    end
+
+    nodes.trapNegotiationBehaviour = Proxy{
+        params.trapNegotiationBehaviour,
+        CanEnter = function()
+            return params.trapNegotiationBehaviour and
+                   GetFlag(PLA_ZhentDungeon_State_TrapDialogueInProgress)
+        end
+
+    }
+
+    nodes.Selector_Packing = Selector{
+        function(nodes)
+            if params.homeB then
+                return
+                    GetWeightedCanEnter(nodes, {
+                        [nodes.Action_Idle1] = 3,
+                        [nodes.Action_Idle2] = 3,
+                        [nodes.Action_AD]= 4
+                    })
+            else
+                return
+                    GetWeightedCanEnter(nodes, {
+                        [nodes.Action_Idle1] = 3,
+                        [nodes.Action_AD]= 2
+                    })
+            end
+        end,
+        Valid = function()
+            return not params.trapNegotiationBehaviour or
+                   not GetFlag(PLA_ZhentDungeon_State_TrapDialogueInProgress)
+        end
+    }
+
+    nodes.Selector_Packing.Action_AD = Proxy{
+        game.states.GLO_ADManager,
+        params={
+            AD = params.AD,
+            regionBlockFlag = params.regionBlockFlag,
+            dialogBlockFlag = params.dialogBlockFlag,
+            partners = {params.partner1, params.partner2}
+        }
+    }
+
+    nodes.Selector_Packing.Action_Idle1 = Proxy{
+        game.states.PLA_ZhentDungeon_ZhentsPacking_Idle,
+        params={
+            home = params.home}
+    }
+
+    nodes.Selector_Packing.Action_Idle2 = Proxy{
+        game.states.PLA_ZhentDungeon_ZhentsPacking_Idle,
+        params={
+            home = params.homeB},
+    }
+
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+
+end
+}
+
+
+game.states.PLA_ZhentDungeon_ZhentsPacking_Idle = State{function()
+
+    params.home = {type = EParamType.String, required=false, default=nil, help=[[
+        Home trigger.
+    ]]}
+
+    local anims = {
+        {
+            Animation("CUST_Packing_01_Start_cb183e2d-5be7-406e-8990-885a44a33e95"),
+            Animation("CUST_Packing_01_2f29380f-3a19-4f8f-ab25-7b755027b323"),
+            Animation("CUST_Packing_01_End_e384ef07-e888-4123-bf68-23908cd90394")
+        },
+        {
+            Animation("CUST_Packing_02_Start_110c143c-8af7-45f9-be01-498581792d58"),
+            Animation("CUST_Packing_02_85243b92-d545-4326-9438-3b3599317773"),
+            Animation("CUST_Packing_02_End_c1643636-2e0e-4400-9f8c-1180564594fe")
+        },
+        {
+            Animation("CUST_Packing_03_Start_014ab809-ed48-4e2e-abf6-f457157f2e09"),
+            Animation("CUST_Packing_03_c2cfb792-5281-4445-9cc7-b6fe1e4ee099"),
+            Animation("CUST_Packing_03_End_ad571e91-ccb4-46b1-882c-7955ae856f64")
+        },
+    }
+
+    local nextAnim
+    local nextAnimName
+    local home
+
+    self.OnInit = function()
+        home = FindEntity(params.home)
+    end
+
+
+    nodes.Action_Idle = Action{function()
+        if GetDistanceTo(home, me) > 1.5 then
+            StopAnimation(me)
+            if not IsInDangerousSurfaceFor(home, me.Character) then
+                try
+                    MoveTo(home)
+                    LookFrom(home)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(1.0)
+                    return
+                end
+            else
+                LookAtEntity(home, 3.0)
+            end
+        end
+
+        try
+            nextAnim = anims[math.random(1,#anims)]
+            nextAnimName = tostring(nextAnim[2])
+            PlayLoopingAnimation(nextAnim[1], {nextAnim[2]}, nextAnim[3])
+        catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+            DebugText(me, "Loop animation " .. nextAnimName .. " play failed.")
+        end
+
+        Sleep(math.random()*4.0+math.random()*4.0+3.0) -- Peaked distribution
+
+    end
+    }
+end
+}

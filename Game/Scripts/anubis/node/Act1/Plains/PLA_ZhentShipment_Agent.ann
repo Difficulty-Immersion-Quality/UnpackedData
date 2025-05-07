@@ -1,0 +1,538 @@
+game.states.PLA_ZhentShipment_Agent = State { function()
+    description = [[
+        Behaviour tree for the Zhents Agents in  ZhentsShipment situation.FindEntity
+        They are guarding chest in the cave. After gnolls death they move to the Zhentarims Hideout.
+    ]]
+
+    modules = { "shared.math", "shared.dialog", "shared.params", "gustav.Act1.ZhentShipment" }
+
+    -----------------------------------------
+    -- params section
+    params.isStartsAD = { type = EParamType.Bool, required = false, default = false, help = [[
+        (AD) Is character is a main agent and so he starts the ADs
+    ]]}
+
+    params.otherAgent = {type = EParamType.String, required = false, help=[[
+        (AD) Partner for the AD (only needed if characters starts ADs)
+    ]]}
+
+    params.delayTimeAD = { type = EParamType.Number, required = false, default = 36.0, help = [[
+        (AD) Pause in seconds between ADs play
+    ]]}
+
+    params.restAnims = {type = EParamType.String, arrayRange = "1..", required = true, help=[[
+        Animation to play between throwing fire flasks and speaking ADs
+    ]]}
+
+    params.alchFireThrowTarget = {type = EParamType.String, required = false, default = nil, help=[[
+        Target at which Zhents will throw alchemist fire
+    ]]}
+
+    params.basePositionTrigger = { type = EParamType.String, required = true, help = [[
+        Base position trigger to look from
+    ]]}
+
+    params.defensePositionTrigger = { type = EParamType.String, required = true, help = [[
+        Defense position on top of a ledge
+    ]]}
+
+    params.coverPositionTrigger = { type = EParamType.String, required = true, help = [[
+        Cover position near the entrance
+    ]]}
+
+    params.afterFightBehaviour = {type = EParamType.State, required = true, help = [[
+        State for the Zhents's behaviour after gnolls are gone
+    ]]}
+
+    params.agentsADOutOfFlasks = {type = EParamType.String, required = false, help = [[
+        One-shot AD to play when no flasks left
+    ]]}
+
+    params.agentsADLowOnFlasks = {type = EParamType.String, required = false, help = [[
+        One-shot AD to play when low on flasks
+    ]]}
+
+    params.backPosition = {type = EParamType.String, required=false, default=nil, help=[[
+        Trigger to which the character falls back.
+    ]]}
+
+    params.attackedByPlayerAD = { type = EParamType.String, required = false, help = [[
+        AD to play after zhents provoked gnolls
+    ]]}
+    -----------------------------------------
+    -- local state section
+
+    -- state vars
+    local searchedForEntities = false
+    local arrivedAtDefensePos = false
+    local threwBeforeDefensePos = false
+    local arrivedAtCoverPos = false
+    local isOutOfFlasks = false
+    -- throwing vars
+    local needToThrowAlchFire = false
+    local flaskCooldownTimerStarted = false
+    local skipNextThrow = false
+    local flasksTemplate = nil
+    local alchFireThrowTarget = nil
+    -- AD vars
+    local canAD = true
+    local agentsADCave = nil
+    local agentsADHideout = nil
+    local agentsADOllyDead = nil
+    local agentsADLowOnFlasks = nil
+    local agentsADOutOfFlasks = nil
+    local otherAgent = nil
+    local gnollTarget = nil
+    local attackedByPlayerAD = nil
+    -- position triggers
+    local basePositionTrigger = nil
+    local coverPositionTrigger = nil
+    local defensePositionTrigger = nil
+    -- object vars
+    local gnollWhoDamaged = nil
+    local restAnims = nil
+    local zarys = nil
+    local flaskToPickUp = nil
+    local rushIntoFireTargetTrigger = nil
+    local packingAnim = Animation("CUST_Packing_02_85243b92-d545-4326-9438-3b3599317773")
+    local nervousAnim = Animation("CUST_Nervous_01_7f6248f6-1419-44d8-83f9-d4548475b665")
+    -- flags
+    local zhentsLeftCaveFlag = Flag("PLA_ZhentDungeon_State_GnollZhentsPresent_2fe0f447-2276-a930-90c0-ab99b4dc8a2a")
+    local bothAgentsAliveFlag = Flag("PLA_ZhentShipment_State_BothAgentsAreAlive_d7404f8a-8101-90c1-3105-0b49cddf7e1f")
+    local alchFireThrowFlag = Flag("PLA_ZhentShipment_State_ZhentsThrowAlchFire_ce92177b-1162-4dc2-980f-ec64f3085c7a")
+    local gnollsGoneStateFlag = Flag("PLA_ConflictedFlind_State_Gone_4152beef-e7d1-e10f-7b06-62584d3571f2") -- cleared on state change
+    local defendPositionsFlag = Flag("PLA_ZhentShipment_State_OnDefensePositions_7ffc9c16-cffd-4fa1-8d76-32ceedbe3cc4")
+    local coverPositionsFlag = Flag("PLA_ZhentShipment_State_OnCoverPositions_4b302512-e44f-4960-b13b-03b0afc5b8ff")
+    local flasksDepletingFlag = Flag("PLA_ZhentShipment_State_CanThrowActualFlasks_dd620c49-a2c2-4f2b-9f09-a894e78ddc2f")
+    local agreedToHelpFlag = Flag("PLA_ZhentShipment_State_AgreedToHelpInBattle_185140b4-9dec-49d7-abad-e6e628cdf4cd")
+    local provokeFlag = Flag("PLA_ZhentShipment_Event_ProvokeGnolls_b7fe3fee-61ce-7d8d-64a6-519f0dc610cb")
+    local agentsAttackGnollFlag = Flag("PLA_ZhentShipment_Event_AgentsAttackGnolls_e9e42b1f-91ec-0779-013a-639bc8bc3f5e")
+    local PLA_ZhentDungeon_State_FallBack = Flag("PLA_ZhentDungeon_State_FallBack_7a94f079-2bc8-495e-99f2-5b04b03a7d1d")
+
+    ---------------------------------------------
+    -- Local functions
+    helpers.FindEntities = function()
+        if not searchedForEntities then
+            searchedForEntities = true
+            if params.alchFireThrowTarget ~= nil then
+                alchFireThrowTarget = FindEntity(params.alchFireThrowTarget)
+            end
+            if params.otherAgent ~= nil then
+                otherAgent = FindEntity(params.otherAgent)
+            end
+            zarys = Entity("S_PLA_ZhentDungeon_Zhent02_8a064abd-3582-4a32-a9f8-748ad60f63ca")
+            basePositionTrigger = Entity(params.basePositionTrigger)
+            defensePositionTrigger = Entity(params.defensePositionTrigger)
+            coverPositionTrigger = Entity(params.coverPositionTrigger)
+            flasksTemplate = FindTemplate("GRN_FireFlask_A_0b1aa718-fe45-4e4c-8811-ced51c581075")
+            rushIntoFireTargetTrigger = FindEntity("S_PLA_ConflictedFlind_BehindFireTrigger_850796f3-766e-4955-acf7-1490796ebe5a")
+        end
+    end
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        helpers.FindEntities()
+        skipNextThrow = params.isStartsAD
+        agentsADCave = Dialog("PLA_ZhentShipment_AD_BetweenAgents_f09276eb-9c83-5755-edf0-d9cc723e98c2")
+        agentsADHideout = Dialog("PLA_ZhentDungeon_AD_ZhentShipmentAgents_67d1553c-a673-c4c0-6979-c129c813ed95")
+        agentsADOllyDead = Dialog("PLA_ZhentDungeon_AD_ZhentShipmentAgents_OllyDead_cf2112f6-6e61-ad9d-ae7e-ba561e2cb03c")
+        if params.agentsADOutOfFlasks then
+            agentsADOutOfFlasks = Dialog(params.agentsADOutOfFlasks)
+        end
+        if params.agentsADLowOnFlasks then
+            agentsADLowOnFlasks = Dialog(params.agentsADLowOnFlasks)
+        end
+        if params.attackedByPlayerAD then
+            attackedByPlayerAD = Dialog(params.attackedByPlayerAD)
+        end
+        restAnims = mod.params.ParamArrayToAnimationsList(params.restAnims)
+    end
+
+    self.OnEnter = function()
+        StopTimer(me, "PLA_ZhentShipment_Agent_ADTimer")
+        canAD = true
+    end
+
+    self.OnLeave = function()
+        gnollTarget = nil
+        needToThrowAlchFire = false
+    end
+
+    -----------------------------------------
+    -- node section
+
+    nodes.InCave = Selector{
+        Valid = function()
+            return not GetFlag(zhentsLeftCaveFlag)
+        end
+    }
+
+    nodes.InCave.AfterFight = Proxy{
+        params.afterFightBehaviour,
+        CanEnter = function()
+            return GetFlag(gnollsGoneStateFlag)
+        end
+    }
+
+    nodes.InCave.BeingDamagedByNeutralGnoll = Action{
+        function()
+            if gnollWhoDamaged.Character ~= nil and not gnollWhoDamaged.Character.IsDead and CanSee(me, gnollWhoDamaged) then
+                try
+                    Attack(gnollWhoDamaged, false, false)
+                catch e if ls.CheckType(e, error.AttackFailed) then
+                    DebugText(me, "AttackFailed")
+                end
+                Sleep(1)
+            else
+                gnollWhoDamaged = nil
+            end
+        end,
+        CanEnter = function()
+            return gnollWhoDamaged ~= nil and 
+                (GetFlag(defendPositionsFlag) or GetFlag(coverPositionsFlag)) and 
+                not GetFlag(gnollsGoneStateFlag)
+        end
+    }
+
+    nodes.InCave.DefendingPosition = Selector{
+        Valid = function()
+            return GetFlag(defendPositionsFlag) and not GetFlag(gnollsGoneStateFlag) and gnollWhoDamaged == nil
+        end
+    }
+
+    nodes.InCave.DefendingPosition.ProvokeGnolls = Action{
+        function()
+            Sleep(0.5)
+            if mod.dialog.IsSpeakerAvailable(me) then
+                StartAutomatedDialog(attackedByPlayerAD, false, me)
+            end
+            if alchFireThrowTarget ~= nil then
+                mod.ZhentShipment.ThrowFireFlask(me, TriggerGetRandomPosition(alchFireThrowTarget.Trigger))
+            end
+            threwBeforeDefensePos = true
+        end,
+        CanEnter = function()
+            return not threwBeforeDefensePos and GetFlag(provokeFlag) and attackedByPlayerAD ~= nil
+        end
+    }
+
+    nodes.InCave.DefendingPosition.MoveAndPlay = Action{
+        function()
+            if GetDistance2DTo(me, defensePositionTrigger) > 2 then
+                try
+                    MoveTo(defensePositionTrigger, MovementSpeed.Run)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "MovementFailed")
+                    Sleep(3)
+                end
+            else
+                if not arrivedAtDefensePos then
+                    arrivedAtDefensePos = true
+                    SetEntityEvent(me, "PLA_ZhentShipment_Event_AtDefensePosition")
+                end
+                LookFrom(defensePositionTrigger)
+                try
+                    local randomAnim = restAnims[math.random(1,#restAnims)]
+                    PlayAnimation(randomAnim)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (restAnim)")
+                    Sleep(3)
+                end
+            end
+        end,
+        CanEnter = function()
+            return threwBeforeDefensePos or not GetFlag(provokeFlag) or attackedByPlayerAD == nil
+        end
+    }
+
+    nodes.InCave.CoverPosition = Action{
+        function()
+            if GetDistance2DTo(me, coverPositionTrigger) > 2 then
+                try
+                    MoveTo(coverPositionTrigger, MovementSpeed.Run, true, false, 0.5, 0.95)
+                    LookFrom(coverPositionTrigger)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "MovementFailed")
+                    Sleep(3)
+                end
+            else
+                LookFrom(coverPositionTrigger)
+                try
+                    local randomAnim = restAnims[math.random(1,#restAnims)]
+                    PlayAnimation(randomAnim)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (restAnim)")
+                    Sleep(3)
+                end
+            end
+        end,
+        Valid = function()
+            return GetFlag(coverPositionsFlag) and not GetFlag(gnollsGoneStateFlag) and gnollWhoDamaged == nil
+        end
+    }
+
+    nodes.InCave.BeforeFight = Selector{
+        Valid = function()
+            return not GetFlag(defendPositionsFlag) and not GetFlag(gnollsGoneStateFlag) and not GetFlag(coverPositionsFlag)
+        end
+    }
+
+    nodes.InCave.BeforeFight.PickupFlask = Action{
+        function()
+            try
+                PickUpItem(flaskToPickUp)
+            catch e if ls.CheckType(e, error.PickUpItemFailed) then
+                DebugText(me, "PickUpItemFailed")
+                Sleep(2)
+                SetEntityEvent(flaskToPickUp, "PLA_ZhentShipment_Event_FlaskUnreachable")
+            end
+            flaskToPickUp = nil
+        end,
+        Valid = function()
+            return flaskToPickUp ~= nil
+        end
+    }
+
+    nodes.InCave.BeforeFight.MoveToBase = Action {
+        function()
+            try
+                MoveTo(basePositionTrigger, MovementSpeed.Walk, true, false, 0.1, 0.5)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed")
+                Sleep(3)
+            end
+            LookFrom(basePositionTrigger)
+        end,
+        CanEnter = function()
+            return searchedForEntities and GetDistance2DTo(me, basePositionTrigger) >= 1
+        end,
+        Valid = function()
+            return flaskToPickUp == nil
+        end
+    }
+
+    nodes.InCave.BeforeFight.NearBaseTrigger = Selector{
+        CanEnter = function()
+            return not searchedForEntities or GetDistance2DTo(me, basePositionTrigger) < 1
+        end
+    }
+
+    nodes.InCave.BeforeFight.NearBaseTrigger.ADOutOfFlasks = Action{
+        function()
+            if mod.dialog.IsSpeakerAvailable(me) then
+                if mod.dialog.IsSpeakerAvailableAndNear(otherAgent, me, 20.0, false) then
+                    StartAutomatedDialog(agentsADOutOfFlasks, true, me, otherAgent)
+                else
+                    StartAutomatedDialog(agentsADOutOfFlasks, true, me)
+                end
+            end
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return params.isStartsAD and
+                canAD and
+                isOutOfFlasks and
+                GetFlag(bothAgentsAliveFlag) and
+                not GetFlag(agentsAttackGnollFlag)
+        end
+    }
+
+    nodes.InCave.BeforeFight.NearBaseTrigger.Talk = Action{
+        function()
+            LookFrom(basePositionTrigger)
+            local justBeforeGnollsAttack = GetFlag(agreedToHelpFlag) and not GetFlag(flasksDepletingFlag)
+            if not justBeforeGnollsAttack and mod.dialog.IsSpeakerAvailable(me) then
+                if GetFlag(bothAgentsAliveFlag) and
+                    mod.dialog.IsSpeakerAvailableAndNear(otherAgent, me, 15.0, false)
+                then
+                    local ad = GetFlag(flasksDepletingFlag) and agentsADLowOnFlasks or agentsADCave
+                    StartAutomatedDialog(ad, false, me, otherAgent)
+                end
+            end
+            StartTimer(me,"PLA_ZhentShipment_Agent_ADTimer", params.delayTimeAD, 0)
+            canAD = false
+        end,
+        CanEnter = function()
+            return params.isStartsAD and
+                canAD and
+                not isOutOfFlasks and
+                not GetFlag(agentsAttackGnollFlag)
+        end,
+        Valid = function()
+            return not needToThrowAlchFire
+        end
+    }
+
+    nodes.InCave.BeforeFight.NearBaseTrigger.ThrowAlchemistFire = Action{
+        function()
+            if TemplateIsInInventory(me, flasksTemplate) then
+                Sleep(mod.math.random(0.1, 0.5))
+                try
+                    local target = gnollTarget or TriggerGetRandomPosition(alchFireThrowTarget.Trigger)
+                    if target == nil then
+                        target = alchFireThrowTarget.Position
+                    end
+                    mod.ZhentShipment.ThrowFireFlask(me, target)
+                catch e if ls.CheckType(e, error.UseSpellFailed) then
+                    DebugText(me, tostring(e))
+                end
+            else
+                SetEntityEvent(me, "PLA_ZhentShipment_Event_NoFlasksInPocket")
+            end
+            needToThrowAlchFire = false
+        end,
+        Valid = function()
+            return needToThrowAlchFire and flaskToPickUp == nil
+        end,
+        OnLeave = function()
+            gnollTarget = nil
+            needToThrowAlchFire = false
+        end
+    }
+
+    nodes.InCave.BeforeFight.NearBaseTrigger.Rest = Action{
+        function()
+            LookFrom(basePositionTrigger)
+            Sleep(mod.math.random(0.5, 2))
+            try
+                local randomAnim = restAnims[math.random(1,#restAnims)]
+                PlayAnimation(randomAnim)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (restAnim)")
+                Sleep(2)
+            end
+        end,
+        Valid = function()
+            return not needToThrowAlchFire and
+                (not params.isStartsAD or not canAD or GetFlag(agentsAttackGnollFlag))
+        end
+    }
+
+    -- After gnolls are defeated Zhentarim agents are moving to their hideout
+    nodes.InHideout = Selector{
+        Valid = function()
+            return GetFlag(zhentsLeftCaveFlag)
+        end
+    }
+
+
+    nodes.InHideout.FallBack = Proxy{
+        game.states.PLA_ZhentDungeon_ZhentsFallBack,
+        params = {backPosition = params.backPosition
+                 },
+        Valid = function()
+            return GetFlag(PLA_ZhentDungeon_State_FallBack, nil)
+        end,
+    }
+
+    nodes.InHideout.Talking = Action{
+        function()
+            Sleep(3)
+            if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailableAndNear(zarys, me, 15.0, false) then
+                if (bothAgentsAliveFlag and GetFlag(bothAgentsAliveFlag)) and
+                    otherAgent ~= nil and
+                    agentsADHideout ~= nil
+                then
+                    if mod.dialog.IsSpeakerAvailableAndNear(otherAgent, me, 15.0, false) then
+                        StartAutomatedDialog(agentsADHideout, true, me, otherAgent, zarys)
+                        StartTimer(me,"PLA_ZhentShipment_Agent_ADTimer", params.delayTimeAD, 0)
+                        canAD = false
+                    else -- other agent not available, try again after 5 seconds
+                        Sleep(5)
+                    end
+                elseif agentsADOllyDead ~= nil then
+                    StartAutomatedDialog(agentsADOllyDead, true, me, zarys)
+                    StartTimer(me,"PLA_ZhentShipment_Agent_ADTimer", params.delayTimeAD, 0)
+                    canAD = false
+                else -- edge case or params missing
+                    Sleep(5)
+                    StartTimer(me,"PLA_ZhentShipment_Agent_ADTimer", params.delayTimeAD, 0)
+                    canAD = false
+                end
+            else -- zarys not available
+                Sleep(5)
+                StartTimer(me,"PLA_ZhentShipment_Agent_ADTimer", params.delayTimeAD, 0)
+                canAD = false
+            end
+        end,
+        Valid = function()
+            return canAD and params.isStartsAD and
+                   not GetFlag(PLA_ZhentDungeon_State_FallBack, nil)
+        end
+    }
+
+    nodes.InHideout.Idle = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return (not canAD or not params.isStartsAD) and
+                   not GetFlag(PLA_ZhentDungeon_State_FallBack, nil)
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.TimerFinished = function(e)
+        if e.TimerName == "PLA_ZhentShipment_Agent_ADTimer" then
+            DebugText(me, "Start AD timer")
+            if not IsInDialog(me, true) then
+                canAD = true
+            else
+                StartTimer(me,"PLA_ZhentShipment_Agent_ADTimer", params.delayTimeAD, 0)
+            end
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_ZhentShipment_Event_LeftCave" then
+                canAD = true
+            elseif e.Event =="PLA_ZhentShipment_Event_PrepareThrow" and me.Active then
+                DebugText(me, "PLA_ZhentShipment_Event_PrepareThrow")
+                needToThrowAlchFire = true
+                if e.Params[1] then
+                    gnollTarget = e.Params[1]
+                end
+            elseif not isOutOfFlasks and e.Event == "PLA_ZhentShipment_Event_OutOfFlasks" and me.Active then
+                DebugText(me, "PLA_ZhentShipment_Event_OutOfFlasks")
+                isOutOfFlasks = true
+                canAD = true
+            elseif not isOutOfFlasks and e.Event == "PLA_ZhentShipment_Event_PickupFlask" and me.Active and e.Params[1] ~= nil then
+                flaskToPickUp = e.Params[1]
+            end
+        end
+        if e.Event == "PLA_ZhentShipment_Event_AgentDamagedByGnoll" and gnollWhoDamaged == nil then
+            if e.Params[1] then
+                gnollWhoDamaged = e.Params[1]
+            end
+        end
+    end
+
+    events.FlagCleared = function(e)
+        helpers.FindEntities()
+        if e.Flag == alchFireThrowFlag.Guid then
+            needToThrowAlchFire = false
+            gnollTarget = nil
+        end
+    end
+
+    events.Damaged = function(e)
+        if (GetFlag(defendPositionsFlag) or GetFlag(coverPositionsFlag)) and not GetFlag(gnollsGoneStateFlag) then
+            if not me.IsInCombat and gnollWhoDamaged == nil then
+                if e.Source ~= nil and ls.CheckType(e.Source, ls.anubis.game.Entity) then
+                    if mod.ZhentShipment.IsGnoll(e.Source) then
+                        gnollWhoDamaged = e.Source
+                    end
+                end
+            end
+        end
+    end
+end}

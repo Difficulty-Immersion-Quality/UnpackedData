@@ -1,0 +1,167 @@
+game.states.LOW_VaultWaveservant = State{function()
+    description = [[Vault Waveservant behavior]]
+
+    modules = {"shared.moveto"}
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    
+    local startRoutine = Flag("LOW_VaultWaveservant_State_InOfferingsRoutine_f3338bef-df48-45bd-ad28-3885d0181892")
+    local waitForOfferings = Flag("LOW_VaultWaveservant_State_WaitingForOfferings_2ab70a62-99ae-4f13-8c88-b582d9d0f214")
+
+    local offerings = Entity("S_LOW_WaterQueensHouse_OfferingsChest_9f1a218c-c8ba-42da-8370-51e723052dbc")
+    local vault = Entity("S_LOW_WaterQueensHouse_OfferingsPile_30fe6e14-ac7f-49cc-814d-fe0f79b2ecd4")
+
+    local waitingSpot = Entity("S_LOW_WaterQueensHouse_VaultWaveservantSpot_64a93216-7007-491a-b7a7-ca1857f7926c")
+
+    local guardSpot = Entity("S_LOW_VaultWaveservant_GuardVault_3bb34301-2b34-43d5-9321-d53d571bff40")
+    local alarmed = Flag("LOW_WaterQueensHouse_State_VaultWaveservantAlarmed_77fe7e6f-50e9-40bb-97a9-3a04a923070b")
+
+    local vaultEntrance = Entity("S_LOW_WaterQueensHouse_OfferingsVaultEntrance_838dc8ba-2660-4120-bdc3-1b81fa943b22")
+
+    local offeringsGone = Flag("LOW_WaterQueensHouse_State_OfferingsAreGone_7b4a853d-fff5-4faa-82b6-2e3829eb2851")
+
+    local haveOfferings = false
+    local attemptsToVault = 0
+    local tryAgainLater = false
+
+    local checkedOfferings = false
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    nodes.TakeOfferings = Action{
+        function()
+            if (checkedOfferings and not haveOfferings) then
+                Sleep(1)
+                MoveAllItemsTo(offerings, me, 0, 0, false)
+                haveOfferings = true
+                checkedOfferings = false
+            end
+            
+            if not GetFlag(offeringsGone) and mod.moveto.MoveToPoint(offerings, MovementSpeed.Walk, me, 1, true) then
+                if not offerings.Item.IsOpened and not offerings.Item.IsLocked then
+                    UseItem(offerings.Item)            
+                    Sleep(1)
+                    if offerings.Item.IsOpened then        
+                        UseItem(offerings.Item)
+                    end
+                    Sleep(1)                 
+                    MoveAllItemsTo(offerings, me, 0, 0, false)
+                    haveOfferings = true
+                else
+                    Sleep(3)
+                end
+            else 
+                mod.moveto.MoveToPoint(waitingSpot, MovementSpeed.Walk, me, 1, true)
+            end
+        end,
+        Valid = function()
+            return GetFlag(startRoutine) and not haveOfferings and not GetFlag(waitForOfferings) and not GetFlag(alarmed) and not offerings.Item.IsDestroyed
+        end
+    }
+
+    nodes.BringOfferings = Action{
+        function()
+            if mod.moveto.MoveToPoint(vault, MovementSpeed.Walk, me, 1, true) then
+                MoveAllItemsTo(me, vault, 0, 0, false) 
+                Sleep(1)
+                haveOfferings = false
+            else 
+                if moveResult == MovementError.Blocked then
+                    mod.moveto.MoveToPoint(vaultEntrance, MovementSpeed.Walk, me)
+                    Sleep(10)
+                    attemptsToVault = attemptsToVault + 1
+                end
+            end
+            if attemptsToVault >= 2 then
+                attemptsToVault = 0
+                tryAgainLater = true
+            end
+        end,
+        Valid = function()
+            return GetFlag(startRoutine) and haveOfferings and not GetFlag(waitForOfferings) and not GetFlag(alarmed)
+        end
+    }
+
+    nodes.WaitForNothing = Action{
+        function()
+            if mod.moveto.MoveToPoint(waitingSpot, MovementSpeed.Walk, me, 0.5) then
+                LookFrom(waitingSpot)
+            end
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return offerings.Item.IsDestroyed and not GetFlag(alarmed)
+        end
+    }
+
+    nodes.WaitForOfferings = Action{
+        function()
+            checkedOfferings = false
+            if mod.moveto.MoveToPoint(waitingSpot, MovementSpeed.Walk, me, 0.5) then
+                LookFrom(waitingSpot)
+            end
+            Sleep(30)
+            tryAgainLater = false
+            if not GetFlag(offeringsGone) and not offerings.Item.IsOpened and not offerings.Item.IsLocked and mod.moveto.MoveToPoint(offerings, MovementSpeed.Walk, me, 0.5) then
+                UseItem(offerings.Item)            
+                Sleep(1)
+                UseItem(offerings.Item)
+                checkedOfferings = true
+            end
+        end,
+
+        Valid = function()
+            return (GetFlag(waitForOfferings) or tryAgainLater) and not GetFlag(alarmed)
+        end
+    }
+
+    nodes.GuardVault = Action{
+        function()
+            if not mod.moveto.MoveToPoint(guardSpot, MovementSpeed.Run, me, 1, true) then
+                SteerTo(guardSpot)
+                Sleep(2.0)
+                return false
+            end
+            LookFrom(guardSpot)
+            PlayAnimation(Animation("CUST_Investigating_LookingAround_03_41d0a2ea-f16e-435c-bbf3-a8499b873fd5"), true, false)
+            Sleep(3)
+        end,
+        Valid = function()
+            return GetFlag(alarmed)
+        end
+    }
+
+    
+
+    nodes.Sleep = Action{
+        function()
+            Sleep(3)
+        end,
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+    
+
+end
+}

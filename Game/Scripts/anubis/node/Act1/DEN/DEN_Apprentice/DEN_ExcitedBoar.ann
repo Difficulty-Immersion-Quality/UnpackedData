@@ -1,0 +1,123 @@
+game.states.DEN_ExcitedBoar = State { function ()
+
+    description = [[The boar walks around in the pond. He wants to mate.]]
+
+    modules = { "shared.dialog" }
+
+    -----------------------------------------
+    -- Local variables
+    local servant = Entity("S_DEN_BirdSender_30ee2bc0-0e69-4999-8d1c-8335c439cecf")
+    local botheringIsAllowed = Flag("DEN_SacredPond_State_BirdLeft_9858f80e-2973-41cf-9118-24c9a1e0c743")
+    local doBotherServant = false
+    local botherThreshold = 30
+    local doPatrolActions = false
+
+    local animBox = Entity("S_DEN_ExcitedBox_e563714c-2e73-47ec-87cc-e5467d53db7c")
+
+    local AD = Dialog("DEN_DruidPet_AD_004_bed241ca-d852-e8fc-34af-574baf246257")
+    local canAD = true
+
+    -----------------------------------------
+    -- State nodes
+
+    self.CanEnter = function()
+        return doPatrolActions
+    end
+
+    self.OnLeave = function()
+        doPatrolActions = false
+    end
+
+    -----------------------------------------
+    -- Helper functions
+    helpers.PassedThreshold = function()
+        if (math.random (1, 100) < botherThreshold) then
+            botherThreshold = 30 --reset
+            return true
+        else
+            botherThreshold = botherThreshold + 10
+            return false
+        end
+    end
+
+    helpers.CanEnterBotheringAction = function()
+        return
+            helpers.PassedThreshold() and
+            not servant.Character.IsDead and
+            not servant.IsInCombat and
+            not IsInDialog(servant, true) and
+            CanSee(me, servant) and
+            GetFlag(botheringIsAllowed)
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes.BotherServant = Action {
+        CanEnter = function()
+            return doBotherServant
+        end,
+        function()
+            SteerTo(servant)
+            Sleep(1)
+            SetEntityEvent(servant, "DEN_ExcitedBoar_BotherServant")
+            while doBotherServant do
+                try
+                    MoveTo(servant, MovementSpeed.Run)
+                    Wander(2.5, 3.0, MovementSpeed.Run, servant)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(2.0)
+                end
+                if servant.Character.IsDead then
+                    doBotherServant = false
+                    break
+                end
+            end
+            while IsInDialog(me, false) do
+                Sleep(1)
+            end
+        end,
+        OnLeave = function()
+            doBotherServant = false
+            doPatrolActions = false
+        end
+    }
+
+    nodes.Grind = Action {
+        function()
+            if not IsInTrigger(me, animBox.Trigger) then
+                for i = 1, 2, 1 do
+                    Sleep(math.random(3,8))
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        AD, 
+                        {minDelay = math.random(40.0, 60.0)}, 
+                        me
+                    )
+                end
+                Sleep(math.random(8,12))
+            else
+                Sleep(math.random(4,11))
+            end
+            Sleep(math.random(2,5))
+            doPatrolActions = false
+        end,
+    }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "DEN_ExcitedBoar_BotherServant"then
+            doBotherServant = helpers.CanEnterBotheringAction()
+        end
+        doPatrolActions = true
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DEN_ExcitedBoar_StopBothering" then
+                doPatrolActions = false
+                doBotherServant = false
+            end
+        end
+    end
+
+end}

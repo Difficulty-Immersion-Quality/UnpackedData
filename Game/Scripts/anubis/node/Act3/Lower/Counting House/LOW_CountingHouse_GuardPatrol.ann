@@ -1,0 +1,212 @@
+game.states.LOW_CountingHouse_GuardPatrol = State{function()
+
+    modules = {"shared.dialog"}
+
+    params.idleAD = {type=EParamType.String, required = false, default=nil, help=[[Idle AD]]}
+    local idleAD = Dialog(params.idleAD)
+
+    params.convoPartner = {type=EParamType.String, required = false, default=nil, help=[[Conversation partner in case of the idle AD involving 2 cashguards]]}
+    local convoPartner = Entity(params.convoPartner)
+    
+    params.patrolSpline = {type=EParamType.String, required = false, default=nil, help=[[Patrol spline]]}
+    local guardPatrolSpline = params.patrolSpline
+
+    params.guardSpot = {type=EParamType.String, required = false, default=nil, help=[[Guard spot]]}
+    local guardSpotString = params.guardSpot
+    local guardSpot = Entity(params.guardSpot)
+
+    params.alarmFlag = {type=EParamType.String, required = false, default=nil, help=[[Alarm flag]]}
+    local alarmFlag = params.alarmFlag
+
+    -- Some counting house guards need to react to alarm going off in 2 areas
+    params.extraAlarmFlag = {type=EParamType.String, required = false, default=nil, help=[[Alarm flag]]}
+    local extraAlarmFlag = params.extraAlarmFlag
+
+    params.patrolState = { type = EParamType.State, required = false, default = nil,
+        help= [[Gen Patrol]]}
+
+    local alarmTrigger_1 = Entity("LOW_CountingHouse_AlarmTrigger_01_b3e441b6-20d5-4636-a020-f5f6eecb67c3")
+    local alarmTrigger_2 = Entity("LOW_CountingHouse_AlarmTrigger_02_043185d3-8847-483b-8489-4e4836609709")
+    local alarmTrigger_3 = Entity("LOW_CountingHouse_AlarmTrigger_03_394efb40-9525-4cbd-ba1e-b331c66a65f9")
+    local alarmTrigger_4 = Entity("LOW_CountingHouse_AlarmTrigger_04_0f4f5c73-a7b6-448f-aa8a-22a4201c942e")
+    local alarmTrigger_5 = Entity("LOW_CountingHouse_AlarmTrigger_05_a50c346d-0130-4045-a813-3bb897f968a3")
+    local alarmTrigger_6 = Entity("LOW_CountingHouse_AlarmTrigger_06_59f7dc45-3380-452e-868e-ffa99da92f49")
+    local alarmTrigger_7 = Entity("LOW_CountingHouse_AlarmTrigger_07_65b761b3-0fdd-4aa1-b73d-c7ed6eb5e8b2")
+    local alarmTrigger_8 = Entity("LOW_CountingHouse_AlarmTrigger_08_7af1db03-977c-4eb4-9548-c65e33a62c96")
+    local alarmTrigger_9 = Entity("LOW_CountingHouse_AlarmTrigger_09_fbb96ef4-1d00-473b-bc2a-656a6cf5c89d")
+
+    local alarmTrigger_3_FallbackPointTrigger = Entity("LOW_CountingHouse_AlarmTrigger_03_AlternativeAlarmedGuardsPoint_195c385e-763d-46e2-ab52-17fa6a8a2540")
+
+    local alarmTriggerDestination
+    local alarmTriggersPerAlarmFlag = {}
+    local alertedGuardsFaction = Guid("ACT3_LOW_CountingHouse_HostileGuards_c58d9d05-9dff-4a1a-9c14-21c703671c41")
+    local keepWeaponUnsheathed = false
+
+    self.OnInit = function()
+        alarmTriggersPerAlarmFlag["LOW_CountingHouse_State_AlarmTriggered_UpperArea_169ce3f4-8e11-4ac2-a3ac-30aafe5f41db"] = {alarmTrigger_1,alarmTrigger_2,alarmTrigger_3,alarmTrigger_4}
+        alarmTriggersPerAlarmFlag["LOW_CountingHouse_State_AlarmTriggered_LowerArea_5635184f-98e9-438b-8b80-249d38ba07c3"] = {alarmTrigger_5}
+        alarmTriggersPerAlarmFlag["LOW_CountingHouse_State_AlarmTriggered_DocksArea_1d666df4-54b5-4d44-b28a-f67f4c769888"] = {alarmTrigger_6,alarmTrigger_7,alarmTrigger_8,alarmTrigger_9}
+    end
+
+    self.OnEnter = function()
+        if(keepWeaponUnsheathed) then
+            SetWeaponUnsheathed(me,true)
+        end
+    end
+
+    nodes.AlarmActive = Action{
+
+        function()
+            if(alarmTriggerDestination ~= nil) then
+                try
+                    MoveTo(alarmTriggerDestination, MovementSpeed.Run, false, false, 1.5, 2.5)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Can't move alarm to trigger")
+                    -- Due to the narrow door frame send guards to alternative point in case the door is obstructed
+                    if(alarmTriggerDestination == alarmTrigger_3) then
+                        MoveTo(alarmTrigger_3_FallbackPointTrigger, MovementSpeed.Run, false, false, 1.5, 5.0)
+                    end
+                    Sleep(2.0)
+                    return
+                end
+            end
+        end,
+
+        Valid = function()
+            return (alarmFlag ~= nil and GetFlag(Flag(alarmFlag))) or (extraAlarmFlag ~= nil and GetFlag(Flag(extraAlarmFlag)))
+        end
+    }
+
+    nodes.GuardSpotAD = Action{
+
+        CanEnter = function()
+            return idleAD ~= nil and guardSpotString ~= "S_LOW_CountingHouse_DummyGuardSpot_58b4cc2e-cfda-418a-a4c0-9bb8d86f0712"
+        end,
+
+        function()
+            LookFrom(guardSpot)
+            Sleep(math.random(1,10))
+            Sleep(math.random(1,2))
+            if(convoPartner ~= nil and mod.dialog.IsSpeakerAvailable(convoPartner)) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    idleAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 40
+                    },
+                    me,
+                    convoPartner
+                )
+            elseif(convoPartner == nil) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    idleAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 40
+                    },
+                    me
+                )
+            end
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, guardSpot) <= 2.0
+        end
+    }
+
+    nodes.GuardSpot = Proxy {
+        
+        CanEnter = function()
+            return guardSpotString ~= "S_LOW_CountingHouse_DummyGuardSpot_58b4cc2e-cfda-418a-a4c0-9bb8d86f0712"
+        end,
+
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = guardSpotString
+        }
+    }
+    
+    nodes.Patrol = Proxy {
+        CanEnter = function()
+            return guardPatrolSpline ~= "S_LOW_CountingHouse_DummyPatrolSpline_d9cb176a-111b-4f83-80d3-7b3e8d76c081"
+        end,
+        params.patrolState
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(5.0)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "LOW_CountingHouse_AlarmTriggerUsed" then
+            local alarmTriggerUsed = e.Params[1]
+            if alarmFlag ~= nil then
+                local alarmTriggers = alarmTriggersPerAlarmFlag[alarmFlag]
+                if alarmTriggers ~= nil and helpers.existsInTable(alarmTriggers,alarmTriggerUsed) then
+                    alarmTriggerDestination = nil
+                    alarmTriggerDestination = alarmTriggerUsed
+                end
+            end
+            if extraAlarmFlag ~= nil and alarmTriggerDestination == nil then
+                local alarmTriggers = alarmTriggersPerAlarmFlag[extraAlarmFlag]
+                if alarmTriggers ~= nil and helpers.existsInTable(alarmTriggers,alarmTriggerUsed) then
+                    alarmTriggerDestination = nil
+                    alarmTriggerDestination = alarmTriggerUsed
+                end
+            end
+        end
+    end
+
+    events.BaseFactionChanged = function(e)
+        if(e.NewFaction == alertedGuardsFaction) then
+            SetWeaponUnsheathed(me,true)
+            keepWeaponUnsheathed = true
+        end
+    end
+
+    helpers.existsInTable = function(table,target)
+        for i,e in ipairs(table) do
+            if e == target then
+                return true
+            end
+        end
+        return false
+    end
+end}
+
+game.states.LOW_CountingHouse_GuardPatrolADs = State { function ()
+
+    modules = {"shared.dialog"}
+
+    params.idleAD = {type=EParamType.String, required = false, default=nil, help=[[Idle AD]]}
+    local idleAD = Dialog(params.idleAD)
+
+    local tryPatrolAD = false
+
+    self.Valid = function()
+        return idleAD ~= nil and tryPatrolAD == true
+    end
+
+    nodes.AD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                idleAD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 10
+                },
+                me
+            )
+            tryPatrolAD = false
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if(math.random(1,10) <= 3) then
+            tryPatrolAD = true
+        end
+    end
+
+end}

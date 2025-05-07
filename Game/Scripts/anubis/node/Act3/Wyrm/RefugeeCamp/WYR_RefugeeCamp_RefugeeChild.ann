@@ -1,0 +1,102 @@
+game.states.WYR_RefugeeCamp_RefugeeChild = State{
+function ()
+    description = [[
+        A behaviour for a refugee child playing among the other kids in a group tag game.
+    ]]
+
+    modules = {"shared.dialog", "shared.math"}
+
+    params.TagAD = {type = EParamType.String, required=false, default=nil, help=[[
+        The AD to play when the kid tags someone.
+    ]]}
+
+    local tagFlag = Flag("WYR_RefugeeCamp_State_RefugeeChildTagged_a4e5e24e-c8e4-4baf-ad58-63acbf5abd7c")
+    local tagAD = nil
+    local childArray = {
+        Entity("S_WYR_RefugeeCamp_RefugeeChild_01_ab237788-d58f-434f-bcda-4ba0e56b0291"),
+        Entity("S_WYR_RefugeeCamp_RefugeeChild_02_9c53fa6c-fe75-4ecb-9755-776dbde97a0e"),
+        Entity("S_WYR_RefugeeCamp_RefugeeChild_03_eb54aa92-8123-42a0-9b4a-10545565f380"),
+        Entity("S_WYR_RefugeeCamp_RefugeeChild_04_0514bca7-a892-470a-a3f0-5318ffb67824")
+    }
+    local nearbyChild = nil
+    local wasTagged = false
+
+    -- Helpers
+    helpers.FindNearbyChild = function()
+        local nearbyDistance = 99999999999
+        nearbyChild = nil
+        local nextDistance = 0
+        for _, nextChild in pairs(childArray) do
+            if nextChild ~= me then
+                nextDistance = GetDistanceTo(me, nextChild)
+                if nextDistance < nearbyDistance then
+                    nearbyDistance = nextDistance
+                    nearbyChild = nextChild
+                end
+            end
+        end
+    end
+
+    helpers.action.TagNearbyChild = function()
+        mod.dialog.StartCheckedAutomatedDialog(
+            tagAD, { waitForCompletion = false }, me
+        )        
+        ClearFlag(tagFlag, me)
+        SetFlag(tagFlag, nearbyChild)
+        nearbyChild = nil
+    end
+
+    -- State nodes
+    self.OnInit = function()
+        tagAD = Dialog(params.TagAD)  
+    end 
+
+    -- Nodes
+    nodes.WaitAfterTagged = Action {
+        function()
+            Sleep(mod.math.random(2.0, 3.5))
+            wasTagged = false
+        end,
+        CanEnter = function() 
+            return GetFlag(tagFlag, me) and wasTagged
+        end,
+    }
+
+    nodes.FollowChild = Action {
+        function()
+            helpers.FindNearbyChild()
+            if nearbyChild ~= nil then
+                if GetDistanceTo(nearbyChild, me) > 2.0 then
+                    MoveTo(nearbyChild, MovementSpeed.Run, false, false, 0.2, 0.6)
+                else
+                    MoveTo(nearbyChild, MovementSpeed.Sprint, false, false, 0.1, 0.6)
+                    helpers.TagNearbyChild()
+                end
+            else
+                ClearFlag(tagFlag, me)
+            end
+        end,
+        Valid = function()
+            return GetFlag(tagFlag, me) and not wasTagged
+        end,
+    }
+
+    nodes.RunAway = Proxy{
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = "S_WYR_RefugeeCamp_RefugeeChild_Spline_89a36605-ac2c-47d6-957c-54db87908d2b",
+            patrolSpeed = "Run",
+            patrolReverse = true
+        },
+        Valid = function()
+            return not GetFlag(tagFlag, me)
+        end
+    }
+
+    -- Events        
+    events.FlagSet = function(ev)
+        if(ev.Flag == tagFlag.Guid and ev.Entity == me) then
+            wasTagged = true
+        end
+    end
+end}

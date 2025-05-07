@@ -1,0 +1,269 @@
+local __util = require 'larian.util'
+local __function = require 'larian.anubis.function'
+local __enum = require 'larian.anubis.enum'
+local __expression = require 'larian.anubis.expression'
+local __type = require 'larian.anubis.type'
+
+local __m = {}
+
+local function validateValueScalar(isDefault, value, type_)
+    if ls.CheckType(value, __enum.Ref.Expression) then
+        __util.Throw("Expressions are not supported when passed as elements of array params: %s", value)
+    elseif type_ == ls.anubis.enums.EParamType.Int then
+        __util.AssertType(value, "int")
+    elseif type_ == ls.anubis.enums.EParamType.Number then
+        __util.AssertType(value, "number")
+    elseif type_ == ls.anubis.enums.EParamType.Bool then
+        __util.AssertType(value, "boolean")
+    elseif type_ == ls.anubis.enums.EParamType.String then
+        if not isDefault or value ~= nil then
+            __util.AssertType(value, "string")
+        end
+    elseif type_ == ls.anubis.enums.EParamType.Vector3 then
+        if not isDefault or value ~= nil then
+            __util.AssertType(value, ls.math.Vector3)
+        end
+    elseif type_ == ls.anubis.enums.EParamType.State then
+        if value ~= nil then
+            __util.AssertTypedTable(value, __enum.Ref.State)
+        end
+    else
+        __util.Throw("Unknown param type %s", type_)
+    end
+end
+
+local function validateValueArray(isDefault, value, type_, min, max)
+    if isDefault and value == nil then
+        __util.Assert(
+            max < 0,
+            "Expected a table, but default value = nil. This is only allowed when max array range is infinity"
+        )
+        return
+    end
+
+    __util.AssertType(value, "table")
+    __util.Assert(
+        getmetatable(value) == nil,
+        "Complex values (with metatables) are not supported. Value was: (%s) %s",
+        __util.GetTypeName(value), value
+    )
+
+    maxIndex = 0
+
+    for i, v in pairs(value) do
+        __util.Assert(
+            __util.IsInt(i),
+            "Only array tables are supported (no key=value) entries, but got key %s in table %s",
+            i, value
+        )
+
+        try
+            validateValueScalar(isDefault, v, type_)
+        catch e then
+            __util.Rethrow(e, "While validating argument item #%d", i)
+        end
+
+        maxIndex = math.max(i, maxIndex)
+    end
+
+    if min == max then
+        __util.Assert(min == maxIndex, "Expected %d item count, but got table of size %d", min, maxIndex)
+    elseif max >= 0 then
+        __util.Assert(
+            min <= maxIndex and maxIndex <= max,
+            "Expected [%d, %d] item count, but got table of size %d",
+            min, max, maxIndex
+        )
+    else
+        __util.Assert(min <= maxIndex, "Expected at least %d items, but got table of size %d", min, maxIndex)
+    end
+end
+
+local function parseRange(range)
+    local start, _, min, max = string.find(range, "^(%d*)%.%.(%d*)$")
+
+    __util.Assert(
+        start ~= nil,
+        "Invalid arrayRange= string format. Expected [min]..[max] (like ..5, or 1..2, or 5..), got %s",
+        range
+    )
+
+    return min == "" and 0 or tonumber(min), max == "" and -1 or tonumber(max)
+end
+
+local function validateValue(isDefault, value, type_, range)
+    if range == nil then
+        if __util.CheckType(value, __enum.Ref.Expression) then
+            __util.Assert(
+                value.expression.result == type_,
+                "Expression passed have result type %s, but expected param value type is %s",
+                value.expression.result, type_
+            )
+        else
+            validateValueScalar(isDefault, value, type_)
+        end
+    else
+        local min, max = 0, 0
+
+        if type(range) == "number" then
+            min = range
+            max = range
+        else
+            min, max = parseRange(range)
+        end
+
+        validateValueArray(isDefault, value, type_, min, max)
+    end
+end
+
+__m.MakeParamSpec = function(kwargs)
+    local spec = {}
+
+    kwargs = __util.KWArgs("Params", kwargs)
+
+    spec.type = kwargs.TakeRequired("type", "type", ls.anubis.enums.EParamType)
+
+    spec.help = kwargs.TakeOptional("help", "", "editor param description", "string")
+    spec.arrayRange = kwargs.TakeOptional("arrayRange", nil, "allowed array range", "nil", "number", "string")
+    spec.default = kwargs.TakeOptional("default")
+    spec.required = kwargs.TakeOptional("required", spec.default == nil, "mandatory param indication", "boolean")
+    local onChange = kwargs.TakeOptional("OnChange", nil, "change reaction function", "nil", "function")
+    kwargs.TakeOptional("default_value_provider", nil, "value type for string", "nil", "string")
+
+    if spec.required then
+        __util.Assert(spec.default == nil, "Parameter default can't be given for explicitly required parameter")
+    else
+        if __util.CheckType(spec.default, __enum.Prototype.Type) then
+            spec.default = __type.ResolveVariable(spec.default, {})
+        end
+
+        try
+            validateValue(true, spec.default, spec.type, spec.arrayRange)
+        catch e then
+            __util.Rethrow(e, "While validating default= value %s", spec.default)
+        end
+    end
+
+    __util.Assert(
+        spec.arrayRange == nil or spec.type ~= ls.anubis.enums.EParamType.State,
+        "State arrays are not supported yet"
+    )
+
+    if onChange ~= nil then
+        spec.OnChange = __function.MakePrototype(data, onChange)
+    end
+
+    kwargs.Validate()
+
+    return spec
+end
+
+__m.MakeConfigRef = function(name)
+    return {
+        type = __enum.Ref.ConfigParam,
+        name = name
+    }
+end
+
+__m.PrototypeBuilder = ls.Class("larian.anubis.prototype.PrototypeBuilder", function(self, data)
+    __util.AssertType(data, __function.PrototypeBuilder)
+
+    local specs = {}
+
+    self.Set = function(name, kwargs)
+        try
+            specs[name] = __m.MakeParamSpec(kwargs)
+        catch e then
+            __util.Rethrow(e, "While processing params.%s specification", name)
+        end
+    end
+
+    self.MakeRef = function(key)
+        __util.Assert(specs[key] ~= nil, "Accessing non-existent params.%s", key)
+
+        return {
+            type = __enum.Ref.Param,
+            name = key
+        }
+    end
+
+    self.Finalize = function()
+        return specs
+    end
+end)
+
+function __m.PrototypeBuilder:__newindex(name, kwargs)
+    return self.Set(name, kwargs)
+end
+
+function __m.PrototypeBuilder:__index(key)
+    return self.MakeRef(key)
+end
+
+__m.Instance = ls.Class('ls.anubis.params.Instance', function(self)
+    local _entries = {}
+
+    self.Init = function(builder, data, prototypes, values, env, global)
+        for name, spec in pairs(prototypes) do
+            local value = values[name]
+
+            if __util.CheckType(value, __enum.Ref.ConfigParam) then
+                value = global[value.name]
+            end
+
+            __util.Assert(value ~= nil or not spec.required, "Parameter %s is missing, but required", name)
+
+            if value == nil then
+                value = spec.default
+            else
+                validateValue(false, value, spec.type, spec.arrayRange)
+            end
+
+            if __util.CheckType(value, __enum.Ref.Expression) then
+                local reaction = spec.OnChange and __function.MakeInstance(data, spec.OnChange, env.callback)
+
+                value = __expression.Resolve(builder, value, reaction)
+            end
+
+            _entries[name] = value
+        end
+    end
+
+    self.Get = function(name)
+        local value = _entries[name]
+
+        if ls.CheckType(value, ls.anubis.Expression) then
+            try
+                value = value.Evaluate()
+            catch e then
+                __util.Rethrow(e, "While evaluating expression in params.%s", name)
+            end
+        end
+
+        return value
+    end
+
+    self.Resolve = function(ref)
+        __util.AssertTypedTable(ref, __enum.Ref.Param)
+
+        local value = _entries[ref.name]
+
+        __util.Assert(
+            not ls.CheckType(value, ls.anubis.Expression),
+            "Can't resolve static params.%s that has value of an Expression",
+            ref.name
+        )
+
+        return value
+    end
+end)
+
+function __m.Instance:__newindex(name, _)
+    __util.Throw("params.%s is read-only", name)
+end
+
+function __m.Instance:__index(name)
+    return self.Get(name)
+end
+
+return __m

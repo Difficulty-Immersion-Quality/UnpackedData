@@ -1,0 +1,77 @@
+game.states.HAV_TieflingSurvivors_Mattis_Alert = State {function ()
+
+    description = [[Behaviour of Mattis in Haven]]
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    local alertFlag = Flag("HAV_Mood_State_Alert_b073eeb9-1d29-449f-baf5-74307e63d085")
+    local alertPosition = Entity("S_HAV_TieflingSurvivors_MattisPositionAfterGhoulAttack_79a97dc8-7ec3-4cbd-a728-d6f2bd0f369c")
+    local AD = Dialog("HAV_TieflingSurvivors_KidsAfterGhoulAttack_AD_f99e1fcf-0f08-6d3f-8c4c-1d471e0f080f")
+    local Umi = Entity("S_DEN_Trainee_001_1f839ad2-2bcb-47d2-8de9-db7a1fb5d67f")
+    local Ide = Entity("S_DEN_Trainee_002_bd7f31a6-98e8-46cd-97be-4347fa45d387")
+
+
+    nodes.MoveTo = Action{
+        function()
+            mod.moveto.MoveToPoint(alertPosition,MovementSpeed.Walk,me)
+        end,
+
+        CanEnter = function()
+            return GetDistance2DTo(me,alertPosition)>3 
+        end
+    }
+
+    nodes.AlertIdle = Action {
+        function()
+            LookFrom(alertPosition)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(AD, {minDelay = 30.0, waitForCompletion = true},me, Ide, Umi)
+            Sleep(6.0)
+        end,
+        CanEnter = function()
+            return not (Umi.Character.IsDead or Ide.Character.IsDead)
+                   and GetDistance2DTo(me,Ide)<=5
+                   and GetDistance2DTo(me,Umi)<=5
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(6)
+        end
+    }
+
+end
+}
+
+game.states.HAV_TieflingSurvivors_Kids_Alert = State {function ()
+
+params.alertPosition = {type = EParamType.String, required=true, help=[[Position to which kids move when they discuss their plans to resque Mol (or when the HAV mood is grim)]]}
+
+modules = {"shared.moveto", "shared.dialog"}
+
+local alertPosition = Entity(params.alertPosition)
+
+
+nodes.MoveTo = Action{
+    function()
+        mod.moveto.MoveToPoint(alertPosition,MovementSpeed.Walk,me)
+    end,
+
+    CanEnter = function()
+        return GetDistance2DTo(me,alertPosition)>1 
+    end
+}
+
+nodes.AlertIdle = Action {
+    function()
+        LookFrom(alertPosition)
+        Sleep(6)
+    end,
+    CanEnter = function()
+        return true
+    end
+}
+
+
+end
+}

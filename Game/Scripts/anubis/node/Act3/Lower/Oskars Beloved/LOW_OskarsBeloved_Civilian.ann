@@ -1,0 +1,113 @@
+game.states.LOW_OskarsBeloved_Civilian = State{function()
+    description = [[Characters with only repeated AD in Jannath's estate]]
+    modules = {"shared.dialog", "shared.util","shared.moveto","shared.character"}
+    -----------------------------------------
+    -- Nodes
+
+    params.OtherSpeaker = {type = EParamType.String, required=false, default=nil, help=[[
+        The other NPC to talk to
+    ]]}
+
+    params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+        The AD to play.
+    ]]}
+
+    params.WanderPos = {type = EParamType.String, required=false, default=nil, help=[[
+        The position of the trigger to wander.
+    ]]}
+
+    params.StartADFlag = {type = EParamType.String, required=false, default=nil, help=[[
+        GUID of the condition before starting to talk.
+    ]]}
+
+    params.Chair = {type = EParamType.String, required=false, default=nil, help=[[
+        The chair where this character will sit.
+    ]]}
+
+
+    local chairEntity = Entity(params.Chair)
+    local sitting = false
+    local otherCivilian = Entity(params.OtherSpeaker)
+    local wanderPos = Entity(params.WanderPos)
+    local AD = Dialog(params.AD)
+    local StartADFlag = Flag(params.StartADFlag)
+
+
+    nodes.Sit= Action{
+
+        function()
+
+            if mod.moveto.MoveToPoint(chairEntity,MovementSpeed.Walk, me) and chairEntity ~= nil  then
+                UseItem(chairEntity.Item)
+            end
+
+        end,
+
+        Valid = function()
+            return not sitting and chairEntity ~= nil
+        end
+    }
+
+    nodes.Talking = Action {
+
+        function()
+
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD, 
+                {minDelay = math.random(5.0, 10.0)}, 
+                me,
+                otherCivilian
+            )
+        end,
+
+        CanEnter = function()
+            return not mod.character.IsDefeated(otherCivilian) and AD ~= nil and (StartADFlag == nil or GetFlag(StartADFlag))
+        end
+    }
+
+    nodes.BeingTalkedTo = Action {
+
+        function()
+           WaitForInterrupt()
+        end,
+
+        CanEnter = function()
+            return not mod.character.IsDefeated(otherCivilian) and AD == nil
+        end
+    }
+
+
+    nodes.NotTalking_Wander = Action {
+
+        function()
+            Wander(8.0,5.0,MovementSpeed.Walk,wanderPos)
+            Sleep(math.random(3, 9))
+        end,
+
+        Valid = function()
+            return WanderPos ~= nil
+        end
+    }
+
+    nodes.NotTalking_Sleep = Action {
+
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return WanderPos == nil
+        end
+    }
+
+
+    
+    events.UseStarted = function(e)
+        if(e.Object == chairEntity and e.User == me) then
+            sitting = true
+        end
+    end
+
+
+end
+}

@@ -1,0 +1,181 @@
+game.states.GOB_PriestConqueringGod_002 = State{function ()
+
+    description = [[Behaviour for S_GOB_PriestConqueringGod_002]]
+
+    --modules = { }
+
+    local fl_InGoblinCamp = Flag("FOR_PriestConqueringGod_InGoblinCamp_27c25c69-600e-4665-8def-cd1c54be08f5")
+    local fl_GoToOwlbearCave = Flag("FOR_PriestsConqueringGod_Global_GoToOwlbearCave_8ec1f489-609b-a15d-56d7-b16ffb2f9a2f")
+    local fl_BehaviourMoveToOwlbear = Flag("FOR_PriestsConqueringGod_Behaviour_MoveToOwlbear_b64fdbcf-8a96-4b8c-bdac-0de0368b8bc8")
+
+    local fl_AtCaveEntrance = Flag("FOR_PriestConqueringGod_AtCaveEntrance_05807f2c-e34d-4ee5-8a70-7fd1578cefab")
+    local fl_InOwlbearCave = Flag("FOR_PriestConqueringGod_InOwlbearCave_80f06963-ea5c-4e8f-a7bb-b98d6ad8a764")
+
+    local ch_OtherPriest = nil
+    local ch_SickPriest = nil
+    local ch_Owlbear = nil
+    local tr_GoblinCampPos = nil
+    local tr_OwlbearCaveEntrancePos = nil
+    local tr_OwlbearCavePos = nil
+    local pos_Owlbear = nil
+    local pos_ValidOwlbear = nil
+
+    --local anim_Idle = Animation("CUST_KneelingBesideCorpse_01_Loop_312687d1-eb1b-4c66-a8fe-433b980c1f4f")
+    local anim_KneelingBesideCorpse_Start = Animation("CUST_KneelingBesideCorpse_01_Start_86c1e910-b6a7-40e4-bc17-e91152786fc1")
+    local anim_KneelingBesideCorpse_Loop_01 = Animation("CUST_KneelingBesideCorpse_01_Loop_312687d1-eb1b-4c66-a8fe-433b980c1f4f")
+    local anim_KneelingBesideCorpse_Loop_02 = Animation("CUST_KneelingBesideCorpse_02_Loop_0185a85b-1fb5-41b4-b41b-e4d19ec1ab63")
+    local anim_KneelingBesideCorpse_Loop_03 = Animation("CUST_KneelingBesideCorpse_03_Loop_bf4ddff9-5e50-4edc-8238-5486d17a6ae9")
+    local anim_KneelingBesideCorpse_End = Animation("CUST_KneelingBesideCorpse_01_End_978e3922-2e06-4b5f-8b9b-8cce3ba772d9")
+
+    self.OnInit = function()
+        ch_OtherPriest = FindEntity("S_FOR_PriestConqueringGod_001_2c9b967d-fbaa-43c0-9461-3e1598b5fbe1")
+        ch_SickPriest = FindEntity("S_FOR_PriestConqueringGod_003_21507c79-dfea-421a-b149-4b5646d3941d")
+        ch_Owlbear = FindEntity("S_FOR_OwlBear_e903a41f-8ef7-46dc-a847-7d0ec2804d08")
+        tr_GoblinCampPos = FindEntity("S_GOB_PriestsOfTheConqueringGod_GoblinCampPoint_002_5277cd72-d223-4f6c-a8b6-f35c685f0309")
+        tr_OwlbearCaveEntrancePos = FindEntity("S_FOR_PriestsOfTheConqueringGod_OwlbearCaveEntrance_002_5af1d33b-c479-4212-bc31-a5b4c8f261f1")
+        tr_OwlbearCavePos = FindEntity("S_FOR_PriestsOfTheConqueringGod_OwlbearCavePoint_002_2196f2ff-bd77-46c3-8213-b9e6dc496e42")
+    end
+
+    nodes.GoblinCamp = Proxy{
+        game.states.GOB_Festivities_AfterPoison,
+
+        params = {
+            AfterPoisonBattlePosition = [[S_GOB_PriestsOfTheConqueringGod_BattlePosition_002_de585955-4a22-45ca-95a8-38d4b2d28c0e]],
+            AfterPoisonInvestigationPoint = [[S_GOB_GoblinToast_AfterPoisonFirstInvestigation_PriestsOfTheConqueringGod_002_2709e76b-9e61-496c-babf-9cb6feb15d5c]],
+            CanPlayInvestigatingAnimation = true,
+            NonPoisonState = StateRef{game.states.GOB_Festivities_Toast,
+                ToastPos = [[S_GOB_GoblinToast_PriestsOfTheConqueringGod_002_3e4c5a2a-d2aa-4cf9-b5ec-e6a1e82b9562]],
+                NonToastState = StateRef{game.states.GOB_Festivities_Absence,
+                    NonAbsenceState = StateRef{game.states.GOB_Festivities_Goblin,
+                        DefaultPos = [[S_GOB_PriestsOfTheConqueringGod_GoblinCampPoint_002_5277cd72-d223-4f6c-a8b6-f35c685f0309]],
+                        DefaultPosNoVolo = [[S_GOB_PriestsOfTheConqueringGod_GoblinCampPoint_002_5277cd72-d223-4f6c-a8b6-f35c685f0309]]
+                    }
+                }
+            }
+        },
+
+        Valid = function()
+            return GetFlag(fl_InGoblinCamp, me)
+        end
+    }
+
+    nodes.MoveToOwlbear = Action{
+        function()
+            if pos_Owlbear ~= nil and GetDistanceTo(me, pos_Owlbear) > 3.0 then
+                pos_ValidOwlbear = FindValidPosition(pos_Owlbear,3.0,me,true)
+                SetHasOsirisDialog(me,false)
+                try
+                    MoveInRange(pos_ValidOwlbear,1.5,3.0,MovementSpeed.Run)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "Failed MoveInRange(pos_ValidOwlbear)")
+                end
+                SetHasOsirisDialog(me,true)
+                SteerTo(ch_Owlbear)
+                LookAtEntity(ch_Owlbear, 3.0)
+            end
+            SetHasOsirisDialog(me,true)
+            Sleep(5.0)
+        end,
+        Valid = function()
+            return GetFlag(fl_BehaviourMoveToOwlbear, me)
+        end,
+        OnLeave = function()
+            SetHasOsirisDialog(me,true)
+        end
+    }
+
+    nodes.OwlbearCave = Action{
+        function()
+            if not IsInDangerousSurfaceFor(tr_OwlbearCavePos, me.Character) then
+                if GetDistanceTo(me, tr_OwlbearCavePos) > 2.0 then
+                    SetHasOsirisDialog(me,false)
+                    try
+                        MoveTo(tr_OwlbearCavePos,MovementSpeed.Run)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me, "Failed MoveTo(tr_OwlbearCavePos)")
+                        LookAtEntity(tr_OwlbearCavePos, 3.0)
+                        Sleep(2.0)
+                    end
+                    SetHasOsirisDialog(me,true)
+                    LookFrom(tr_OwlbearCavePos)
+                else
+                    LookFrom(tr_OwlbearCavePos)
+                end
+            else
+                LookAtEntity(tr_OwlbearCavePos, 3.0)
+            end
+            Sleep(5.0)
+        end,
+        Valid = function()
+            return GetFlag(fl_InOwlbearCave,me) and not GetFlag(fl_BehaviourMoveToOwlbear, me)
+        end
+    }
+
+    nodes.OwlbearCave_MoveToCaveEntrance = Action{
+        function()
+            if not IsInDangerousSurfaceFor(tr_OwlbearCaveEntrancePos, me.Character) then
+                if GetDistanceTo(me, tr_OwlbearCaveEntrancePos) > 2.0 then
+                    SetHasOsirisDialog(me,false)
+                    try
+                        MoveTo(tr_OwlbearCaveEntrancePos,MovementSpeed.Run)
+                        if not GetFlag(fl_AtCaveEntrance, me) then
+                        SetFlag(fl_AtCaveEntrance, me)
+                    end
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me, "Failed MoveTo(tr_OwlbearCaveEntrancePos)")
+                        LookAtEntity(tr_OwlbearCaveEntrancePos, 3.0)
+                        Sleep(2.0)
+                    end
+                    SetHasOsirisDialog(me,true)
+                end
+            else
+                LookAtEntity(tr_OwlbearCaveEntrancePos, 3.0)
+            end
+            if GetDistanceTo(me, tr_OwlbearCaveEntrancePos) < 2.5 then
+                LookFrom(tr_OwlbearCaveEntrancePos)
+                if not GetFlag(fl_AtCaveEntrance, me) then
+                    SetFlag(fl_AtCaveEntrance, me)
+                end
+            end
+            Sleep(5.0)
+        end,
+        Valid = function()
+            return GetFlag(fl_GoToOwlbearCave)
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            SteerTo(ch_SickPriest)
+            LookAtEntity(ch_SickPriest, 3.0)
+            try
+                PlayLoopingAnimation(anim_KneelingBesideCorpse_Start, {anim_KneelingBesideCorpse_Loop_01, anim_KneelingBesideCorpse_Loop_02, anim_KneelingBesideCorpse_Loop_03}, anim_KneelingBesideCorpse_End)
+                --PlayAnimation(anim_Idle,false,true)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Animation Failed")
+            end
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Default = Action{
+        function()
+            Sleep(2.0)
+        end
+    }
+
+    events.Died = function(e)
+        if e.Target == ch_Owlbear then
+            pos_Owlbear = ch_Owlbear.Position
+        end
+    end
+
+    events.FlagSet = function(ev)
+        if(ev.Flag == fl_BehaviourMoveToOwlbear.Guid) then
+            pos_Owlbear = ch_Owlbear.Position
+        end
+    end
+end}

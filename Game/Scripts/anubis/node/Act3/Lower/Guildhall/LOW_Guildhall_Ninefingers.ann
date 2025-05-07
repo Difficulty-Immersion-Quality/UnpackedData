@@ -1,0 +1,39 @@
+game.states.LOW_Guildhall_Ninefingers = State{function ()
+    
+    modules = { "shared.dialog" }
+
+    params.DontWaitForBursar = {type = EParamType.Bool, help = "[[Ninefingers goes straight to writing]]", required = false, default = false }
+
+    local BursarSpokeWith9F = Flag("LOW_Guildhall_Event_BursarDoneSpeakingWith9F_a5f37c27-89df-45a7-a649-c5e951fcd393")
+    local standAtTrigger_STR = "S_LOW_Guildhall_Leader_29de84e5-b1c0-44a1-8531-f45f5461ca1b"
+    local chair = Entity("S_LOW_Guildhall_Chair_Leader_702c006e-7cbb-4415-a1f7-8e80ee75fbaf")
+    local sitAndWriteDialog = Dialog("BHVR_WRLD_SitAndWrite_HUM_F_9bb11294-0627-cf49-8099-d9f859034a46")
+    local sitAndWriteTrigger = Entity("S_LOW_Guildhall_TimelineScene_Ninefingers_Writing_e9fa22c4-0994-460e-92cc-5aefff9a66f1")
+
+    nodes.State_PostBursarMeeting = ImmediateSelector {
+        Valid = function(nodes)
+            return GetFlag(BursarSpokeWith9F) or params.DontWaitForBursar
+        end
+    }
+
+    nodes.State_PostBursarMeeting.Writing = Action {
+        function()
+            StartBehaviorDialog(sitAndWriteDialog, sitAndWriteTrigger.Trigger, true, me, chair)
+            Sleep(2.0)
+        end
+    }
+
+    nodes.State_PreBursarMeeting = 
+    ImmediateSelector {
+        Valid = function(nodes)
+            return not GetFlag(BursarSpokeWith9F) and not params.DontWaitForBursar
+        end
+    }
+
+    nodes.State_PreBursarMeeting.Action_StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = standAtTrigger_STR
+        }
+    }
+end}

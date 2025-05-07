@@ -1,0 +1,362 @@
+game.states.GOB_Volo = State {function ()
+    modules = { "shared.util" }
+
+    description = [[Behaviour of Volothamp Geddarm]]
+    local ScenePoint, CageWanderAnchor, PrepEscapePoint
+    local ToastGoblin
+    local HidePoint
+    local GobFlag = Flag("GLO_Volo_State_AtGoblinCamp_fc815506-028d-582d-a953-4182d682aa07")
+    local BeerPoisonedFlag = Flag("GLO_GoblinHuntPoison_Quest_BeerPoisoned_0c261a18-68f7-4a4b-9e91-b0b5ef50f474")
+    local OnStageFlag = Flag("GOB_VoloBallad_State_OnStage_0bc1d7d7-9129-4c6e-188d-054640cea3b9")
+    local CagedFlag = Flag("GOB_VoloBallad_State_InCage_a48a226c-9789-4d13-2771-0daa94f112b7")
+    local VoloPrepsEscapeFlag = Flag("GOB_VoloBallad_State_VoloPrepsEscape_fef2b414-aa62-1b1d-4279-ae2a8ea4a2de")
+    local SweptFlag = Flag("GOB_FestivitiesArea_State_Swept_01863b85-a514-473a-9fa9-2869612480a2")
+    local RealizedPoisonFlag = Flag("GOB_GoblinToast_State_RealizedPoison_0e867c08-b2b9-4f43-8260-168026663e2c")
+    local ToStationsFlag = Flag("GOB_GoblinToast_Event_ToStations_0b555ee8-2b8e-3881-b35e-9811f6baf77a")
+    local SongAD = Dialog("GOB_VoloBallad_AD_Song_623358f2-4477-b6b4-841f-df2c54a14820")
+    local anim_SingingStart = Animation("CUST_VoloOnStage_Start_01_b4d580b4-6df8-4e83-97fb-c7803af23b1d")
+    local anim_SingingLoop = Animation("CUST_VoloOnStage_01_Loop_adca4d76-eca7-422d-b419-da89fecfce45")
+    local anim_SingingStop = Animation("CUST_VoloOnStage_End_01_139047d0-8555-4d84-a1b5-e235a0b50009")
+    local evadeAnims = {
+        Animation("CUST_EvadePebbles_01_97abc6ca-b785-4dd2-bf59-adfb3f1f68ea"),
+        Animation("CUST_EvadePebbles_02_172279a5-4d83-4605-ba2c-073744f755b8"),
+        Animation("CUST_EvadePebbles_03_d221ff5e-7119-45a5-8485-f77a7ee7efac"),
+        Animation("CUST_EvadePebbles_04_2884a470-b056-4b13-abf6-9015f60ce2a2"),
+        Animation("CUST_EvadePebbles_05_fa1a4df9-e464-4576-b4ec-b98aa88dca97"),
+        Animation("CUST_EvadePebbles_06_4802d831-fc39-421b-8d27-9101609cb780"),
+    }
+    local singing = false
+    local doEvade = false
+    local anim_CagePeeping = Animation("CUST_PeepingOut_01_900ae3c5-4f37-43ff-9bce-6a1f0813b6a6")
+    local anim_CageProbing = Animation("CUST_ProbingCageWalls_01_130ae414-ba2f-405a-bfff-c55ce221a545")
+    local anim_OnAlert = Animation("CUST_OnAlert_01_55a6083b-1c24-4124-bdcc-78671c1d6417")
+    local escortFlag = Flag("GOB_Volo_State_BeingEscorted_d5a9c68f-bf66-4462-b2bd-066b4547cd19")
+    local temple = Entity("S_GOB_TempleBox_001_754d69fd-f1aa-486d-8f9f-ee8957215780")
+    local cage = Entity("S_GOB_VoloBallad_InCage_17b0e3c4-d1b1-4080-b64f-a0ca67f07b2c")
+    local cagePoint = Entity("S_GOB_Volo_CagePoint_696dcbd7-ef54-42ad-915d-665f44fb9fb3")
+    local entrance = Entity("S_GOB_ThroneRoom_EntranceSource_d2d1a0a0-7af7-4e72-802f-0a127eb02300")
+    local guard = Entity("S_GOB_VoloGuard_c25f0e79-b9f7-453c-8138-964bca267d93")
+    local switchAnim = false
+
+    self.OnInit = function()
+        ToastGoblin = FindEntity("S_GOB_Festivities_Goblin_004_e63401de-04ea-40b6-a988-b2f90a90f748")
+        ScenePoint = FindEntity("S_GOB_Volo_ScenePoint_bcb4ce23-d204-4d67-b96f-51ba34037cb0")
+        CageWanderAnchor = FindEntity("S_GOB_Volo_CagePoint_696dcbd7-ef54-42ad-915d-665f44fb9fb3")
+        PrepEscapePoint = FindEntity("S_GOB_Volo_PrepEscapePoint_d39f1f9a-d409-4fab-bfc0-e186816faf68")
+        HidePoint = FindEntity("S_GOB_Volo_HidePoint_beef9b96-e0fa-4ff7-9429-739bb3745adb")
+    end
+    self.Valid = function()
+        return CheckCurrentGameLevel("WLD_Main_A") and GetFlag(GobFlag,nil)
+    end
+
+    -- Commented out Volo evading stones as animation trnasitions don't look good
+    --[[events.EntityEvent = function(ev)
+        if ev.TargetEntity == me then
+            if ev.Event == "GOB_FestiveGoblin_ThrowsStone" then
+                doEvade = true
+                if singing then
+                    StopAnimation(me)
+                end
+            end
+        end
+    end]]
+
+    nodes.Studying = Proxy {
+        game.states.GOB_Volo_Studying,
+        Valid = function()
+            return not GetFlag(CagedFlag) and GetFlag(SweptFlag,nil)
+        end
+    }
+
+    nodes.BattleStationsTriggered = Action {
+        
+        function()
+            try
+                local altHidePoint = nil
+                if(GetDistance2DTo(me,HidePoint) > 1.0) then
+                    if not IsInDangerousSurfaceFor(HidePoint,me.Character,0.2) then
+                        MoveTo(HidePoint,MovementSpeed.Run,false,true,0.0,0.2)
+                    else
+                        altHidePoint = FindValidPosition(HidePoint,4.0,me)
+                        MoveTo(altHidePoint,MovementSpeed.Run,false,true,0.0,0.2)
+                    end
+                end
+                if(altHidePoint == nil) then
+                    LookFrom(HidePoint)
+                    Sleep(2.0)
+                else
+                    LookFrom(altHidePoint)
+                    Sleep(2.0)
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception")
+                Sleep(2.0)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(OnStageFlag,nil) and not GetFlag(SweptFlag,nil) and
+                   GetFlag(ToStationsFlag,nil) and GetFlag(RealizedPoisonFlag,nil)
+        end
+    }
+
+    nodes.OnStageNotSinging = Action {
+        function()
+            LookAtEntity(ToastGoblin, 3.0)
+            Sleep(1.0)
+        end,
+        CanEnter = function()
+            return GetFlag(BeerPoisonedFlag,nil)
+        end,
+        Valid = function()
+            return GetFlag(OnStageFlag,nil) and
+                   not GetFlag(SweptFlag,nil) and
+                   not GetFlag(escortFlag)
+        end,
+    }
+
+    nodes.Singing = Action {
+        function()
+            try
+                if(GetDistance2DTo(me,ScenePoint) > 0.2 and not IsInDangerousSurfaceFor(ScenePoint,me.Character,0.2)) then
+                    MoveTo(ScenePoint,MovementSpeed.Walk,true,false,0.0,0.2)
+                end
+                LookFrom(ScenePoint)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception")
+            end
+            if (not IsInDialog(me,false)) then
+                StartAutomatedDialogImmediate(SongAD, me)
+            end
+            try
+                if not doEvade then
+                    -- start singin animation if we're not supposed to evade pebbles
+                    singing = true
+                    PlayLoopingAnimation(anim_SingingStart,{anim_SingingLoop},anim_SingingStart)
+                    singing = false
+                end
+                -- DISABLED: Singing animation might be interrupted due to evasion, check and do evade animation
+                if doEvade then
+                    doEvade = false
+                    local _, evadeAnimChosen = mod.util.RandomFrom(evadeAnims)
+                    PlayAnimation(evadeAnimChosen)
+                end
+            catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimatioFailed")
+            end
+            --Sleep(math.random(1,4))
+        end,
+        CanEnter = function()
+            return not GetFlag(BeerPoisonedFlag,nil)
+        end,
+        Valid = function()
+            return GetFlag(OnStageFlag,nil) and
+                   not GetFlag(SweptFlag,nil) and
+                   not GetFlag(escortFlag)
+        end,
+        OnLeave = function()
+            singing = false
+            doEvade = false
+            DialogRequestStop(me,SongAD)
+            StopAnimation(me)
+        end
+    }
+
+    nodes.BeingEscorted_GuardFar = Action{
+        function()
+            Sleep(3.0)
+            SteerTo(guard, false)
+            Sleep(5.0)
+        end,
+        Valid = function()
+            return GetFlag(escortFlag) and
+                   GetDistanceTo(guard, me) > 5.0 or IsInDialog(guard, true)
+        end
+    }
+
+    nodes.BeingEscorted_GuardNear = Action{
+        function()
+            if IsInTrigger(me, temple.Trigger) then
+                if not IsInTrigger(me, cage.Trigger) then
+                    local MoveToResult = MoveTo(cagePoint, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                    if moveToResult ~= error.MovementError.None then
+                        Sleep(2.0)
+                    end
+                end
+            else
+                if GetDistanceTo(me, entrance) > 2.0 then
+                    local MoveToResult = MoveTo(entrance, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                    if moveToResult ~= error.MovementError.None then
+                        Sleep(2.0)
+                    end
+                else
+                    SetEntityEvent(me, "GOB_VoloBallad_VoloArrivedAtDoor")
+                    Sleep(1)
+                end
+            end
+        end,
+        Valid = function()
+            return GetFlag(escortFlag) and
+                   GetDistanceTo(guard, me) <= 8.0 and not IsInDialog(guard, true)
+        end
+    }
+
+    nodes.PrepEscape = Action {
+        function()
+            if(IsInTrigger(me, temple.Trigger)) then
+                try
+                    if(GetDistance2DTo(me,PrepEscapePoint) > 0.2 and not IsInDangerousSurfaceFor(PrepEscapePoint,me.Character,0.2)) then
+                        MoveTo(PrepEscapePoint,MovementSpeed.Walk,true,false,0.0,0.2)
+                    end
+                    LookFrom(PrepEscapePoint)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Move Exception")
+                end
+            end
+
+            DebugText(me,"Playing OnAlert animation")
+            try
+                PlayAnimation(anim_OnAlert)
+            catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                DebugText(me, "Failed PlayAnimation CUST_ProbingCageWalls_01_130ae414-ba2f-405a-bfff-c55ce221a545")
+            end
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(VoloPrepsEscapeFlag)
+        end,
+        OnLeave = function()
+            RemoveStatus(me,"SNEAKING")
+        end
+    }
+
+    nodes.Caged = Action {
+        function()
+            Sleep(5.0)
+            Wander(.5,3.0,MovementSpeed.Walk,CageWanderAnchor)
+            LookFrom(CageWanderAnchor)
+            if switchAnim == false then
+                try
+                    PlayAnimation(anim_CagePeeping)
+                catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                    DebugText(me, "Failed PlayAnimation CUST_PeepingOut_01_900ae3c5-4f37-43ff-9bce-6a1f0813b6a6")
+                end
+                switchAnim = true
+            else
+                try
+                    PlayAnimation(anim_CageProbing)
+                catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                    DebugText(me, "Failed PlayAnimation CUST_ProbingCageWalls_01_130ae414-ba2f-405a-bfff-c55ce221a545")
+                end
+                switchAnim = false
+            end
+        end,
+        Valid = function()
+            return GetFlag(CagedFlag)
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not GetFlag(escortFlag)
+        end
+    }
+end}
+
+game.states.GOB_Volo_Studying = State {function ()
+    description = [[Behaviour of Volothamp Geddarm studying goblins]]
+    local FestiveSub
+    local Goblins = {}
+    local CorpseMove = false
+    local FirstMove = true
+    local WriteAnim = Animation("CUST_Writing_01_98fe16cb-1bbe-4046-bede-5d2336962b63")-- or nil
+    local StudyAD = Dialog("GOB_VoloBallad_AD_StudyingGoblins_e1c5189f-8c6b-7704-cfac-22a37d2ce3fb")
+
+    self.OnInit = function()
+        FestiveSub = FindEntity("S_GOB_Festivities_SUB_f4a4031d-7e0c-45b8-970b-47c62d4908d8")
+
+        Goblins[1] = FindEntity("S_GOB_Festivities_Goblin_000_031e9fb7-136a-46c7-91d7-77ce3e20236a")
+        Goblins[2] = FindEntity("S_GOB_Festivities_Goblin_001_774c78ed-1227-48f9-812e-aac0021c71bf")
+        Goblins[3] = FindEntity("S_GOB_Festivities_Goblin_002_bb9c82a2-7ed9-45ed-99b6-58f84520fb8c")
+        Goblins[4] = FindEntity("S_GOB_Festivities_Goblin_003_0296a9f6-b2bc-46a0-8632-ba72679a36d3")
+        Goblins[5] = FindEntity("S_GOB_Festivities_Goblin_004_e63401de-04ea-40b6-a988-b2f90a90f748")
+        Goblins[6] = FindEntity("S_GOB_Festivities_Goblin_005_a955aea9-9040-4d4c-9264-e46e385dea94")
+        Goblins[7] = FindEntity("S_GOB_Festivities_Goblin_006_f3f416d1-b946-4019-95ba-7053f63dd776")
+        Goblins[8] = FindEntity("S_GOB_Festivities_Goblin_007_10a00987-1dbe-4540-aa34-e96976c7bac0")
+        Goblins[9] = FindEntity("S_GOB_PartyingGoblin_000_69ab2a7d-9035-4e4e-97e5-2d005c9662ee")
+        Goblins[10] = FindEntity("S_GOB_PartyingGoblin_001_4aa22ae0-1f97-42e3-8fd7-474f2f3b7269")
+        Goblins[11] = FindEntity("S_GOB_PartyingGoblin_002_bedb5fe5-2fa7-42f4-82c0-dda23883ff7c")
+        Goblins[12] = FindEntity("S_GOB_ChickenChase_Commentator_eb2c434d-1833-485e-bca2-f181eed6010b")
+    end
+
+    nodes.StudyGoblins = Selector {
+        function(nodes)
+            if FirstMove then
+                return nodes.MoveToCorpse
+            else
+                return CorpseMove and FindWeightedRandomSelectable(nodes,{[nodes.PlayAnimation] = 1, [nodes.PlayAD] = 1}) or
+                FindWeightedRandomSelectable(nodes,{[nodes.MoveToCorpse] = 2, [nodes.PlayAnimation] = 1, [nodes.PlayAD] = 1})
+            end
+        end
+    }
+    nodes.StudyGoblins.MoveToCorpse = Action {
+        function()
+            local Corpse = Goblins[math.random(1,#Goblins)]
+            try
+                if Corpse.Character.IsDead and IsInTrigger(Corpse,FestiveSub.Trigger) then
+                    MoveTo(Corpse)
+                    if FirstMove then FirstMove = false end
+                    CorpseMove = true
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception")
+                Sleep(2.0)
+            end
+        end,
+        OnLeave = function()
+            CorpseMove = false
+        end
+    }
+    nodes.StudyGoblins.PlayAnimation = Action {
+        function()
+            PlayAnimation(WriteAnim)
+            Sleep(math.random(2,8))
+        end
+    }
+    nodes.StudyGoblins.PlayAD = Action {
+        function()
+            if(not IsInDialog(me,false)) then
+                StartAutomatedDialog(StudyAD,true,me)
+            end
+            Sleep(math.random(2,8))
+        end
+    }
+end}
+
+game.states.GOB_Volo_Cower = State {function ()
+    description = [[Used to track whether Volo is cowering in GOB for Osiris]]
+
+    local voloIsCoweringFlag = Flag("GOB_VoloBallad_State_VoloIsCowering_f2fdd7e7-b5a5-4211-bbf6-89cee980c980")
+
+    self.OnEnter = function()
+        SetFlag(voloIsCoweringFlag,nil)
+    end
+
+    nodes.Cower = Proxy{
+        game.states.CombatCower
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    self.OnLeave = function()
+        ClearFlag(voloIsCoweringFlag,nil)
+    end
+
+end}

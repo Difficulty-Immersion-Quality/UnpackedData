@@ -1,0 +1,123 @@
+game.states.UND_SocietyOfBrilliance_Scholar = State { function ()
+    description = [[
+        Behaviour for the SoB member - scholar Blurg. He patrols between his tables and plays AD.
+    ]]
+
+    modules = { "shared.math", "shared.dialog", "shared.params" }
+
+    -----------------------------------------
+    -- params section
+
+    params.repeatingAD = { type = EParamType.String, required = false, help = [[
+        Idle looping AD to play
+    ]]}
+
+    params.otherMember = { type = EParamType.String, required = false, help = [[
+        Other SoB member to play AD with
+    ]]}
+
+    params.baseTrigger = { type = EParamType.String, required = false, help = [[
+        Base trigger where AD is played
+    ]]}
+
+    params.ponderTriggers_initial = {type = EParamType.String, arrayRange = "1..", required = true, help=[[
+        Triggers to walk between in an idle before Mind Flayer's connection performed.
+    ]]}
+
+    params.ponderTriggers_afterMF = {type = EParamType.String, arrayRange = "1..", required = true, help=[[
+        Triggers to walk between in an idle after Mind Flayer's connection performed.
+    ]]}
+
+    params.delayTimeAD = { type = EParamType.Number, required = false, default = 40.0, help = [[
+        Pause in seconds between ADs play
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local repeatingAD = nil
+    local otherMember = nil
+    local baseTrigger = nil
+    local curPonderTrigger = nil
+
+    local ponderTriggers_initial = {}
+    local ponderTriggers_afterMF = {}
+
+    local idleAnims = {
+        Animation("CUST_Pondering_01_c2a68c82-1b0b-4d0c-8f1a-c9f14984a5fb"),
+        Animation("CUST_Pondering_02_c6b5f1ab-aa50-4b19-8139-fa66ee0abafe"),
+        Animation("CUST_Pondering_03_7872d8f3-fda0-4d85-931e-ea73988fe743")
+    }
+    local mindMeldAnim = Animation("CINE_MindMeldLevel_01_6b107552-2db4-4b51-8505-06845d459b58")
+    local mindFlayerPresentFlag = Flag("UND_SocietyOfBrilliance_State_MindFlayerPresent_75f84546-ec41-4e44-b274-dbb1e14be7fb")
+
+    local curTriggerIndex = 1
+    local movedToBase = false
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        if params.repeatingAD ~= nil then
+            repeatingAD = Dialog(params.repeatingAD)
+        end
+        if params.otherMember ~= nil then
+            otherMember = FindEntity(params.otherMember)
+        end
+        baseTrigger = FindEntity(params.baseTrigger)
+
+        ponderTriggers_initial = mod.params.ParamArrayToEntityList(params.ponderTriggers_initial)
+        ponderTriggers_afterMF = mod.params.ParamArrayToEntityList(params.ponderTriggers_afterMF)
+    end
+
+    self.OnLeave = function()
+        movedToBase = false
+    end
+
+    -----------------------------------------
+    -- node section
+
+    nodes.IdleWithAD = Action {
+        function()
+            -- playing AD
+            if IsInTrigger(me, baseTrigger.Trigger) then
+                Sleep(mod.math.random(1,2))
+                local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    repeatingAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = params.delayTimeAD,
+                        checkSight = false,
+                        cullingDistance = 15.0,
+                        fallbackSoloDialog = repeatingAD
+                    },
+                    me,
+                    otherMember
+                )
+            end
+            if not IsInDialog(me, false) then
+                -- cycling
+                local curTable = GetFlag(mindFlayerPresentFlag) and ponderTriggers_afterMF or ponderTriggers_initial
+                if curTriggerIndex > #curTable then
+                    curTriggerIndex = 1
+                end
+                curPonderTrigger = curTable[curTriggerIndex]
+                -- moving to trigger
+                if GetDistance2DTo(me, curPonderTrigger) > 2 then
+                    try
+                        MoveTo(curPonderTrigger, MovementSpeed.Stroll, false, false, 1.0, 1.5)
+                    catch ex if ls.CheckType(ex, error.MovementFailed) then
+                        DebugText(me, "MovementFailed")
+                        Sleep(5)
+                    end
+                end
+                -- idle animation
+                LookFrom(curPonderTrigger)
+                Sleep(1)
+                PlayAnimation(idleAnims[math.random(#idleAnims)],true)
+                Sleep(mod.math.random(1,2))
+                curTriggerIndex = curTriggerIndex+1
+            else
+                Sleep(2)
+            end
+        end
+    }
+end}

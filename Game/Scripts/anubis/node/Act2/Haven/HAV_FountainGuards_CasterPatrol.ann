@@ -1,0 +1,49 @@
+game.states.HAV_FountainGuards_CasterPatrol = State{
+    function()
+        params.waitTime = {type = EParamType.Number, required = false, default = 6.0, help = [[Wait time.]]}
+        params.patrolSpline = {type = EParamType.String, required = true, help = [[Patrol spline.]]}
+        params.inspectAnim= {type = EParamType.String, required = false, help = [[Optional animation override]]}
+       
+
+        local bWait = false
+        local spPatrol = Spline(params.patrolSpline)
+        local inspectAnim = Animation(params.inspectAnim)
+        local queuedAnim = nil
+
+
+        self.OnInit = function()
+            SetWeaponUnsheathed(me,false)
+        end
+
+        self.Valid = function()
+            return bWait
+        end
+
+        self.OnLeave = function()
+            bWait = false
+        end
+
+        nodes.Action_Wait = Action{
+            function()
+                LookFrom(spPatrol)
+                if queuedAnim ~= nil then
+                    Sleep(0.5)
+                    PlayAnimation(queuedAnim)
+                end
+                    Sleep(params.waitTime)
+                    bWait = false
+            end
+        }
+
+        events.SplineControlPointReached = function(e)
+            if e.Event == "Inspect" then 
+                queuedAnim = inspectAnim
+                bWait = true
+            end
+            if e.Event == "Walk" then 
+                queuedAnim = nil
+                bWait = true
+            end
+        end
+    end
+}

@@ -1,0 +1,140 @@
+game.states.LOW_SteelWatchFoundry_BaneiteOfficer02 = State{function()
+    description = [[Baneite Officer 02's (Tamia Holzt) behaviours]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+
+    ------------------------------------------------ 
+    params.patrolActions = {type=EParamType.State, required = false, default=nil,
+    help = [[Optional slot for characters to do something while in patrol.
+        This state has higher priority than patrolling and is switched to as soon as its IsSelectable == true]]}
+    params.patrolSpline = {type=EParamType.String, required = false, default=nil,
+    help = [[Spline to be patrolled]]}
+    params.patrolSpeed = {type=EParamType.String, required = false, default = "Walk",
+    help = [[Speed at which to patrol: Stroll, Walk, Run, or Sprint]]}
+    params.patrolReverse = {type=EParamType.Bool, required = false, default = false,
+    help = [[Whether or not to patrol the spline in reverse]]}
+    params.startSplineIndex = {type=EParamType.Int, required = false, default = -1,
+    help = [[Start spline point index or -1 for nearest]]}
+    params.patrolActionsIsSmallInterrupt = {type=EParamType.Bool, required = false, default = true,
+    help = [[Whether the caret should continue spline movement in background if character deactivates during PatrolActions.
+             Almost always safe to leave it to default true value]]}
+    
+
+    params.anxiousPacing =  {type = EParamType.String, required = false, default = nil, help = [[Animation for when the Baneite knows the Foundry was destroyed.]]}
+    local anxiousPacing
+    local allowedInWorkroom = Flag("LOW_SteelWatchFoundry_State_AllowedInWorkroom_5f50c96b-735a-4f02-8d77-bccc5030ba64")
+    local argument = Dialog("LOW_SteelWatchFoundry_AD_BeforeWorkroomEncounter_82be1ba8-c32a-d750-81d0-1b0d8f666955")
+    local lowa = Entity("S_LOW_GondianWorker01_92010ea3-cd5e-4896-97fc-1f1e7942fcf5")
+    local ironThroneDestroyed = Flag("IRN_IronThrone_State_Destroyed_91795368-af06-4b56-9ac1-b78995aa9ea9")
+    local switchExploded = Flag("LOW_SteelWatchFoundry_State_KillSwitchDestroyedIRN_7d083a0a-4f0d-4ebb-aab5-fb45c90b5c95")
+    
+    params.shouldPatrol =  {type=EParamType.Bool, required = false, default = false,
+    help = [[Whether or not the character should patrol at all.]]}
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    self.OnInit = function()
+        anxiousPacing = Animation(params.anxiousPacing)
+    end
+
+    -- While Overseer is in a repeated AD with Lowa wait
+    nodes.Action_TalkingWithLowa = Action
+    {
+        function ()
+            Sleep(3.0)
+        end,
+
+        Valid = function()
+            return (not GetFlag(allowedInWorkroom))
+            and (not GetFlag(ironThroneDestroyed))
+        end
+    }
+
+    --After the player Visits the Iron throne wait at confrontation location
+    nodes.Action_WaitingForConfrontation = Action
+    {
+        function ()
+            LookAtEntity(lowa,2.0)
+            PlayAnimation(anxiousPacing,false, true)
+            Sleep(5.0)
+        end,
+
+        Valid = function()
+            return GetFlag(ironThroneDestroyed)
+            and (not GetFlag(switchExploded))
+            and anxiousPacing ~= nil
+            and anxiousPacing ~= ""
+        end
+    }
+    
+    --if the gondians get incinareted by collars, just wander around
+    nodes.Action_GondiansAreDead = Action
+    {
+        function ()
+            local wanderAnchor = me.Position
+            Wander(10.0, 3.0, MovementSpeed.Walk, wanderAnchor)
+        end,
+
+        Valid = function()
+            return GetFlag(switchExploded)
+        end
+    }
+
+    --After persuaded to let the palyer pass, patrol if there is a patrol spline defined
+    nodes.Action_Patrol = Proxy
+    {
+        game.states.TEST_Patrol,
+        params = {
+            patrolActions = params.patrolActions,
+            patrolSpline = params.patrolSpline,
+            patrolSpeed = params.patrolSpeed,
+            patrolReverse = params.patrolReverse,
+            startSplineIndex = params.startSplineIndex,
+            patrolActionsIsSmallInterrupt = params.patrolActionsIsSmallInterrupt
+        },
+        Valid = function()
+            return GetFlag(allowedInWorkroom)
+            and (not GetFlag(ironThroneDestroyed))
+        end,
+
+        CanEnter = function()
+            return params.shouldPatrol
+        end
+    }
+    --otherwise just stand around
+    nodes.Action_Idle = Action
+    {
+        function()
+            Sleep(2.0)
+        end,
+        Valid = function()
+            return GetFlag(allowedInWorkroom)
+            and (not GetFlag(ironThroneDestroyed))
+        end
+
+    }
+
+    -- Action - fallback
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+    }
+end}

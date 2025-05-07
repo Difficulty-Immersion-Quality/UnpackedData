@@ -1,0 +1,488 @@
+local __enum = require 'larian.anubis.enum'
+local __env = require 'larian.anubis.env'
+local __function = require 'larian.anubis.function'
+local __module = require 'larian.anubis.module'
+local __params = require 'larian.anubis.params'
+local __socket = require 'larian.anubis.socket'
+local __util = require 'larian.util'
+
+local __m = {}
+
+local function setupTreeCallbacks(builder, events)
+    for eventName, callbacks in pairs(events) do
+        if callbacks ~= nil then
+            local cOnEvent = function (event)
+                for _, callback in pairs(callbacks) do
+                    callback(event)
+                end
+            end
+
+            builder.AddOnEventCallback(eventName, cOnEvent)
+        end
+    end
+end
+
+local function setupForwardedEventCallbacks(builder, forwardedEvents)
+    for eventName, callbacks in pairs(forwardedEvents) do
+        if callbacks ~= nil then
+            local cOnForwardedEvent = function (event, source)
+                for _, callback in pairs(callbacks) do
+                    callback(event, source)
+                end
+            end
+
+            builder.AddOnForwardedEventCallback(eventName, cOnForwardedEvent)
+        end
+    end
+end
+
+local function makeCallback(prototype, data, env)
+    if prototype ~= nil then
+        return __function.MakeInstance(data, prototype, env.callback)
+    else
+        return nil;
+    end
+end
+
+local function setupAnubisNodeCallbacks(nodeId, builder, prototype, data, env)
+    local pcallbacks = prototype.callbacks
+
+    local cValid = makeCallback(pcallbacks.Valid, data, env)
+    local cCanEnter = makeCallback(pcallbacks.CanEnter, data, env)
+    local cOnEnter = makeCallback(pcallbacks.OnEnter, data, env)
+    local cOnLeave = makeCallback(pcallbacks.OnLeave, data, env)
+    local cOnInterrupt = makeCallback(pcallbacks.OnInterrupt, data, env)
+    local cOnFinished = makeCallback(pcallbacks.OnFinished, data, env)
+    local cOnPause = makeCallback(pcallbacks.OnPause, data, env)
+    local cOnResume = makeCallback(pcallbacks.OnResume, data, env)
+    local cOnException = makeCallback(pcallbacks.OnException, data, env)
+
+    builder.SetupNodeCallbacks(nodeId, cValid, cCanEnter, cOnEnter, cOnLeave, cOnInterrupt, cOnFinished, cOnPause, cOnResume, cOnException)
+end
+
+local function setupStateCallbacks(nodeId, builder, prototype, events, data, env)
+    local cOnInit = makeCallback(prototype.OnInit, data, env)
+    local cOnLoaded = makeCallback(prototype.OnLoaded, data, env)
+
+    builder.SetupStateCallbacks(nodeId, cOnInit, cOnLoaded)
+
+    for eventName, onEventPrototype in pairs(prototype.events) do
+        __util.AssertTypedTable(onEventPrototype, __enum.Prototype.Function)
+
+        if (events[eventName] == nil) then
+            events[eventName] = {};
+        end
+
+        local cOnEvent = __function.MakeInstance(data, onEventPrototype, env.event)
+        table.insert(events[eventName], cOnEvent)
+    end
+end
+
+local function setupConstellationCallbacks(nodeId, builder, prototype, forwardedEvents, data, env)
+    local socketEvents = __function.MakeInstances(data, prototype.socketEvents, env.event)
+
+    local cOnSocketEvent = function (name, event)
+        local handler = socketEvents[name]
+
+        if handler ~= nil then
+            handler(event)
+            return true
+        end
+        return false
+    end
+
+    local cOnEditorChanges = makeCallback(prototype.OnEditorChanges, data, env)
+    local cOnCreateEditorPreviewVisual = makeCallback(prototype.OnCreateEditorPreviewVisual, data, env)
+    local cOnDestroyEditorPreviewVisual = makeCallback(prototype.OnDestroyEditorPreviewVisual, data, env)
+
+    builder.SetupConstellationCallbacks(nodeId, cOnSocketEvent, cOnEditorChanges, cOnCreateEditorPreviewVisual, cOnDestroyEditorPreviewVisual)
+
+    for eventName, onForwardedEventPrototype in pairs(prototype.forwardedEvents) do
+        __util.AssertTypedTable(onForwardedEventPrototype, __enum.Prototype.Function)
+
+        if (forwardedEvents[eventName] == nil) then
+            forwardedEvents[eventName] = {};
+        end
+
+        local cOnForwardedEvent = __function.MakeInstance(data, onForwardedEventPrototype, env.event)
+        table.insert(forwardedEvents[eventName], cOnForwardedEvent)
+    end
+end
+
+local function makeState(data, api)
+    local state = ls.anubis.NodeState()
+
+    state.Api = api
+
+    state.GetValues = function ()
+        local values = data.accessor()
+        return values
+    end
+
+    state.SetValue = function (name, value)
+        local values = data.accessor()
+        values[name] = value
+        data.accessor(values)
+    end
+
+    return state
+end
+
+local function instantiateAction(builder, prototype, parentId, fqdn, data, env)
+    local executeCallback = __function.MakeInstance(data, prototype.execute, env.action)
+
+    local nodeId = builder.AddAction(fqdn, parentId, executeCallback)
+    setupAnubisNodeCallbacks(nodeId, builder, prototype, data, env)
+
+    return nodeId
+end
+
+local instantiateState, instantiateConstellationState, instantiateSubNodes = nil, nil, nil
+
+local function mergeProxyParams(subparams, prototypeParams, stateParams)
+    for k, v in pairs(prototypeParams) do
+        if type(v) == "table" then
+            if v.type == __enum.Ref.Param then
+                subparams[k] = stateParams.Resolve(v)
+            elseif v.type == nil then
+                local array = {}
+
+                for i, arrayItem in ipairs(v) do
+                    if type(arrayItem) == "table" and arrayItem.type == __enum.Ref.Param then
+                        array[i] = stateParams.Resolve(arrayItem)
+                    else
+                        array[i] = arrayItem
+                    end
+                end
+
+                subparams[k] = array
+            else
+                subparams[k] = v
+            end
+        else
+            subparams[k] = v
+        end
+    end
+end
+
+local function mergeProxySockets(subsockets, prototypeSockets, stateSockets)
+    for k, v in pairs(prototypeSockets) do
+        if type(v) == "table" and v.type == nil then
+            local array = {}
+
+            for i, arrayItem in ipairs(v) do
+                if type(arrayItem) == "table" and arrayItem.type == __enum.Ref.Socket then
+                    array[i] = stateSockets.Resolve(arrayItem)
+                end
+            end
+
+            subsockets[k] = array
+        end
+    end
+end
+
+local function instantiateProxy(builder, prototype, events, params, parentId, fqdn, data, env, globalConfigParams)
+    local substate = prototype.state
+    local subparams = {}
+
+    if substate == nil then
+        ls.anubis.game.DebugLogCritical("No prototype for " .. fqdn)
+        return -1
+    end
+
+    if substate.type == __enum.Ref.Param then
+        local param = params.Resolve(substate)
+
+        -- Could be optional - then silently ignore whole node
+        if param == nil then
+            return nil
+        end
+
+        __util.AssertTypedTable(param, __enum.Ref.State)
+
+        substate = param.prototype
+        subparams = __util.Copy(param.params)
+    end
+
+    if prototype.params then
+        mergeProxyParams(subparams, prototype.params, params)
+    end
+
+    __util.AssertTypedTable(substate, __enum.Prototype.State)
+
+    local nodeId = builder.BeginProxy(fqdn, parentId)
+    setupAnubisNodeCallbacks(nodeId, builder, prototype, data, env)
+
+    instantiateState(builder, substate, events, subparams, nodeId, fqdn .. "." .. substate.name, globalConfigParams)
+
+    builder.EndNode(nodeId)
+
+    return nodeId
+end
+
+local function instantiateConstellationProxy(builder, prototype, events, forwardedEvents, params, inputs, outputs, parentId, fqdn, stateConfigPath, globalConfigParams)
+    local substate = prototype.state
+    local subparams = {}
+    local subinputs = {}
+    local suboutputs = {}
+
+    if substate == nil then
+        ls.anubis.game.DebugLogCritical("No prototype for " .. fqdn)
+        return -1
+    end
+
+    if substate.type == __enum.Ref.Param then
+        local param = params.Resolve(substate)
+
+        -- Could be optional - then silently ignore whole node
+        if param == nil then
+            return nil
+        end
+
+        __util.AssertTypedTable(param, __enum.Ref.State)
+
+        substate = param.prototype
+        subparams = __util.Copy(param.params)
+    end
+
+    if prototype.params then
+        mergeProxyParams(subparams, prototype.params, params)
+    end
+
+    if prototype.inputs then
+        mergeProxySockets(subinputs, prototype.inputs, outputs)
+    end
+
+    if prototype.outputs then
+        mergeProxySockets(suboutputs, prototype.outputs, inputs)
+    end
+
+    __util.AssertTypedTable(substate, __enum.Prototype.State)
+
+    instantiateConstellationState(builder, substate, events, forwardedEvents, subparams, subinputs, suboutputs, parentId, fqdn .. "." .. substate.name, stateConfigPath .. "." .. prototype.state.name, globalConfigParams)
+
+    return nodeId
+end
+
+local function beginSelector(builder, prototype, params, parentId, fqdn, data, env)
+    local pcallbacks = prototype.callbacks
+
+    local validCallback = makeCallback(pcallbacks.Valid, data, env)
+    local canEnterCallback = makeCallback(pcallbacks.CanEnter, data, env)
+    local onEnterCallback = makeCallback(pcallbacks.OnEnter, data, env)
+    local onLeaveCallback = makeCallback(pcallbacks.OnLeave, data, env)
+    local onInterruptCallback = makeCallback(pcallbacks.OnInterrupt, data, env)
+    local onFinishedCallback = makeCallback(pcallbacks.OnFinished, data, env)
+    local onPauseCallback = makeCallback(pcallbacks.OnPause, data, env)
+    local onResumeCallback = makeCallback(pcallbacks.OnResume, data, env)
+    local onExceptionCallback = makeCallback(pcallbacks.OnException, data, env)
+
+    local selectCallback = __function.MakeInstance(data, prototype.select, env.selector)
+
+    if prototype.kind == __enum.Selector.Immediate then
+        local originalSelect = selectCallback
+        local originalValid = validCallback
+        local originalFinished = onFinishedCallback
+        local originalInterrupt = onInterruptCallback
+
+        local selected = nil
+
+        selectCallback = function(node)
+            selected = originalSelect(node)
+            return selected
+        end
+
+        validCallback = function(node)
+            if originalValid ~= nil and not originalValid(node) then
+                return false
+            end
+
+            local result = (selected == nil) or (originalSelect(node) == selected)
+            if not result then
+                selected = nil
+            end
+            return result
+        end
+
+        onFinishedCallback = function()
+            selected = nil
+            if (originalFinished) then
+                originalFinished()
+            end
+        end
+
+        onInterruptCallback = function()
+            selected = nil
+            if (originalInterrupt) then
+                originalInterrupt()
+            end
+        end
+    end
+
+    local nodeId = builder.BeginSelector(fqdn, parentId, selectCallback)
+    builder.SetupNodeCallbacks(nodeId, validCallback, canEnterCallback, onEnterCallback, onLeaveCallback, onInterruptCallback, onFinishedCallback, onPauseCallback, onResumeCallback, onExceptionCallback)
+
+    return nodeId
+end
+
+local function instantiateSelector(builder, prototype, events, params, parentId, fqdn, data, env, globalConfigParams)
+    local nodeId = beginSelector(builder, prototype, params, parentId, fqdn, data, env)
+
+    instantiateSubNodes(builder, prototype.nodes, events, params, nodeId, fqdn, data, env, globalConfigParams)
+
+    builder.EndNode(nodeId)
+
+    return nodeId
+end
+
+instantiateSubNodes = function(builder, nodes, events, params, parentId, fqdn, data, env, globalConfigParams)
+    for i = #nodes, 1, -1 do
+        local prototype = nodes[i]
+        local subfqdn = fqdn .. "." .. prototype.name
+
+        try
+            if prototype.type == __enum.Prototype.Action then
+                instantiateAction(builder, prototype, parentId, subfqdn, data, env)
+            elseif prototype.type == __enum.Prototype.Selector then
+                instantiateSelector(builder, prototype, events, params, parentId, subfqdn, data, env, globalConfigParams)
+            elseif prototype.type == __enum.Prototype.Proxy then
+                instantiateProxy(builder, prototype, events, params, parentId, subfqdn, data, env, globalConfigParams)
+            else
+                __util.Throw("Unexpected prototype %s in state nodes of %s", prototype.type, fqdn)
+            end
+        catch e then
+            __util.Rethrow(e, "While instantiating node %s", subfqdn)
+        end
+    end
+end
+
+local function instantiateConstellationSubNodes(builder, nodes, events, forwardedEvents, params, inputs, outputs, parentId, fqdn, stateConfigPath, globalConfigParams)
+    for i = #nodes, 1, -1 do
+        local prototype = nodes[i]
+        local subfqdn = fqdn .. "." .. prototype.name
+
+        try
+            if prototype.type == __enum.Prototype.Proxy then
+                instantiateConstellationProxy(builder, prototype, events, forwardedEvents, params, inputs, outputs, parentId, subfqdn, stateConfigPath, globalConfigParams)
+            else
+                __util.Throw("Unexpected prototype %s in constellation state nodes of %s", prototype.type, fqdn)
+            end
+        catch e then
+            __util.Rethrow(e, "While instantiating constellation node %s", subfqdn)
+        end
+    end
+end
+
+instantiateState = function(builder, prototype, events, paramValues, parentId, fqdn, globalConfigParams)
+    try
+        __util.AssertTypedTable(prototype, __enum.Prototype.State)
+
+        local api = {}
+        local params = __params.Instance()
+
+        local env = __env.MakeInstance(prototype.env, api, params)
+        local data = __function.MakeInstanceData(prototype.data)
+
+        params.Init(builder, data, prototype.params, paramValues, env, globalConfigParams)
+
+        __function.ResolveDataVariables(data, prototype.data, params)
+
+        for k, v in pairs(prototype.apis) do
+            api[k] = __function.MakeInstances(data, v, env.api)
+        end
+
+        local helpers = __module.MakeInstance(data, prototype.helpers, env)
+
+        for name, category in pairs(helpers) do
+            local categoryHelpers = env[name].helpers
+            __util.MergeTableInto(categoryHelpers, category)
+            __util.MergeTableInto(categoryHelpers, helpers.common)
+        end
+
+        local state = makeState(data, api)
+
+        local nodeId = builder.BeginState(fqdn, parentId, state)
+        setupAnubisNodeCallbacks(nodeId, builder, prototype, data, env)
+        setupStateCallbacks(nodeId, builder, prototype, events, data, env)
+
+        instantiateSelector(builder, prototype.selector, events, params, nodeId, fqdn .. ".nodes", data, env, globalConfigParams)
+
+        builder.EndNode(nodeId)
+
+        return nodeId
+    catch e then
+        __util.Rethrow(e, "While instantiating state %s", fqdn)
+    end
+end
+
+instantiateConstellationState = function(builder, prototype, events, forwardedEvents, paramValues, inputValues, outputValues, parentId, fqdn, stateConfigPath, globalConfigParams)
+    try
+        __util.AssertTypedTable(prototype, __enum.Prototype.State)
+
+        for inputSocketName, _ in pairs(prototype.inputs) do
+            __util.Assert(prototype.socketEvents[inputSocketName] ~= nil, "No corresponding socketEvent for inputs.%s (possibly name mismatch?)", inputSocketName)
+        end
+    
+        for socketEventName, _ in pairs(prototype.socketEvents) do
+            __util.Assert(prototype.inputs[socketEventName] ~= nil, "No corresponding input socket for socketEvents.%s (possibly name mismatch?)", socketEventName)
+        end
+
+        local params = __params.Instance()
+        local inputs = __socket.Instance()
+        local outputs = __socket.Instance()
+
+        local env = __env.MakeConstellationInstance(prototype.env, params, inputs, outputs)
+        local data = __function.MakeInstanceData(prototype.data)
+
+        params.Init(builder, data, prototype.params, paramValues, env, globalConfigParams)
+
+        __function.ResolveDataVariables(data, prototype.data, params)
+
+        local helpers = __module.MakeInstance(data, prototype.helpers, env)
+
+        for name, category in pairs(helpers) do
+            local categoryHelpers = env[name].helpers
+            __util.MergeTableInto(categoryHelpers, category)
+            __util.MergeTableInto(categoryHelpers, helpers.common)
+        end
+
+        local nodeId = builder.BeginConstellationState(fqdn, parentId)
+        setupStateCallbacks(nodeId, builder, prototype, events, data, env)
+        setupConstellationCallbacks(nodeId, builder, prototype, forwardedEvents, data, env)
+
+        inputs.InitInputs(builder, prototype.inputs, inputValues, nodeId, stateConfigPath)
+        outputs.InitOutputs(builder, prototype.outputs, outputValues, stateConfigPath)
+
+        instantiateConstellationSubNodes(builder, prototype.selector.nodes, events, forwardedEvents, params, inputs, outputs, nodeId, fqdn .. ".nodes", stateConfigPath, globalConfigParams)
+
+        builder.EndNode(nodeId)
+
+        return nodeId
+    catch e then
+        __util.Rethrow(e, "While instantiating constellation state %s", fqdn)
+    end
+end
+
+__m.Instantiate = function(builder, ref, globalConfigParams)
+    __util.AssertTypedTable(ref, __enum.Ref.State)
+
+    local events = {}
+
+    instantiateState(builder, ref.prototype, events, ref.params, -1, ref.prototype.name, globalConfigParams)
+
+    setupTreeCallbacks(builder, events)
+end
+
+__m.InstantiateConstellation = function(builder, ref, globalConfigParams)
+    __util.AssertTypedTable(ref, __enum.Ref.State)
+
+    local events = {}
+    local forwardedEvents = {}
+
+    instantiateConstellationState(builder, ref.prototype, events, forwardedEvents, ref.params, {}, {}, -1, ref.prototype.name, "root", globalConfigParams)
+
+    setupTreeCallbacks(builder, events)
+    setupForwardedEventCallbacks(builder, forwardedEvents)
+end
+
+return __m

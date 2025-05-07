@@ -1,0 +1,98 @@
+game.states.DEN_Wyll = State {function()
+
+    modules = {"shared.moveto", "shared.math"}
+
+    description = [[Behaviour of Wyll at the DEN]]
+
+    local raidOverFlag = Flag("DEN_RaidingParty_Quest_GoblinRaidOver_98712d90-c46b-20c4-c4df-02c0117e85a5")
+    local gateOpenedFlag = Flag("DEN_RaidingParty_Event_GateIsOpened_735e0e81-bd67-eb67-87ac-40da4c3e6c49")
+    local AoDStartedFlag = Flag("DEN_AttackOnDen_Event_Start_c641da6a-b3f5-4873-bd34-c53768d30d6f")
+    local denVictoryFlag = Flag("DEN_AttackOnDen_State_DenVictory_71c7f23e-3ff1-c9b8-3ef5-d75fa1b42c8d")
+    local trainerFlag = Flag("DEN_Trainer_State_IsTrainer_bf719cf2-08db-40ef-8e92-f0b112f5c883")
+    local recruitPoint = Entity("S_DEN_WyllRecruitPoint_3a3551e1-f5eb-49d7-b46c-c29b60ee470d")
+    local watchPoint = Entity("S_DEN_TrainerPoint_8b56581e-8e85-41ac-a32e-dcecffaa7fa5")
+    local watchingLoopAnim = Animation([[CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71]])
+    local limberUpAnim = Animation([[CUST_LimberUp_01_bd13cb25-1dfb-4ea5-8218-9e96d11e3117]])
+    local animIsLooping = false
+    local stoppedTraining = false
+
+    nodes.Trainer = Proxy {
+        --Valid checks are done in the state.
+        --It becomes valid when Osiris gets DEN_Wyll_Event_ArrivedAtCave
+        game.states.DEN_Trainer
+    }
+
+    nodes.ToGate = Proxy {
+        --Start approaching the gate after the fight, before it is opened and "gen_anubismoveto" takes over the real move.
+        CanEnter = function()
+            return GetFlag(raidOverFlag) and not GetFlag(gateOpenedFlag)
+        end,
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_DEN_WyllGatePoint_afd9e1e5-e7da-41f1-a5aa-1aff383b82be"
+        }
+    }
+
+    nodes.WatchTraining = Action {
+        CanEnter = function()
+            return stoppedTraining
+        end,
+        function()
+            if (GetDistance2DTo(me, watchPoint) > 1.5) and not IsInDangerousSurfaceFor(watchPoint, me.Character) then
+                try
+                    MoveTo(watchPoint)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    SteerTo(watchPoint)
+                    Sleep(2.0)
+                end
+            end
+            Sleep(1)
+            LookFrom(watchPoint)
+            Sleep(3)
+            if mod.math.CoinToss(0.5) then
+                if mod.math.CoinToss(0.5) then
+                    animIsLooping = true
+                    PlayAnimation(watchingLoopAnim, false, true)
+                else
+                    animIsLooping = false
+                    PlayAnimation(limberUpAnim, false, false)
+                end
+                Sleep(math.random(6, 12))
+                if animIsLooping then
+                    StopAnimation(me)
+                    animIsLooping = false
+                end
+            end
+            Sleep(2)
+        end,
+        OnLeave = function()
+            if animIsLooping then
+                StopAnimation(me)
+                animIsLooping = false
+            end
+        end
+    }
+
+    nodes.Sleep = Action {
+        function()
+            Sleep(1)
+        end,
+    }
+
+    events.FlagSet = function(e)
+        if not me.Character.IsPlayer
+            and e.Flag == gateOpenedFlag.Guid
+            and not GetFlag(AoDStartedFlag) 
+            and not GetFlag(denVictoryFlag) then
+                mod.moveto.MoveTo(recruitPoint, true, 1.5, "Walk", "DEN_Wyll_Event_ArrivedAtCave")
+        end
+    end
+
+    --Wyll starts watching trainees if he is cleared from the trainer role
+    events.FlagCleared = function(e)
+        if (e.Flag == trainerFlag.Guid and e.Entity == me) then
+            stoppedTraining = true
+        end
+    end
+
+end}

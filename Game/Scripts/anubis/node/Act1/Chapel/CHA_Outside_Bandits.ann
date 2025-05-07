@@ -1,0 +1,315 @@
+game.states.CHA_Outside_Bandits = State{ function()
+    modules = {"shared.util", "shared.dialog"}
+
+    -- Params
+    params.patrol01 = {type = EParamType.String, required = false, default = nil, help=[[
+        The first point in the patrol.
+    ]]}
+
+    params.patrol02 = {type = EParamType.String, required = false, default = nil, help=[[
+        The optional second point in the patrol.
+    ]]}
+
+    params.patrol03 = {type = EParamType.String, required = false, default = nil, help=[[
+        The optional third point in the patrol.
+    ]]}
+
+    params.patrol04 = {type = EParamType.String, required = false, default = nil, help=[[
+        The optional fourth point in the patrol.
+    ]]}
+
+    params.restPosition = {type = EParamType.String, required = false, default = nil, help=[[
+        Optional resting position.
+    ]]}
+
+    params.holePosition = {type = EParamType.String, required = false, default = "S_CHA_OUTSIDE_Fissure_FloorDoor_d7d19d9b-85d2-4739-856f-0079e5433188", help=[[
+        The position where to move when the pillar has fell.
+    ]]}
+
+    params.crushedReaction = {type = EParamType.String, required = true, help=[[
+        The AD played when looking at a crushed camarade.
+    ]]}
+
+    params.defaultAD = {type = EParamType.String, required = false, default = "", help=[[
+        Default repeated AD.
+    ]]}
+
+    params.defaultADSpeakers = {type = EParamType.String, arrayRange = "..", required = false, help=[[
+        Other default repeated AD spekaers.
+    ]]}
+
+
+    -- Local params
+    local idleFlag = Flag("CHA_Outside_State_BanditIdleScene_4242a524-7cd9-4e62-9ddc-14324923e3a7")
+    local patrol = {}
+    local restPosition = nil
+    local step
+    local failing_step
+    local CHA_Outside_State_Debris_PillarFell = Flag("CHA_Outside_State_Debris_PillarFell_43c4727c-62fe-6361-9cd2-c9cdd677aca4")
+    local CHA_Outside_State_BanditGotCrushed = Flag("CHA_Outside_State_BanditGotCrushed_fa9d040b-5eeb-4968-a6b3-2f47b644ddd4")
+    local holePosition
+    local hasReactedToBoulder = false
+    local crushedReaction
+
+    local dDefaultAD = Dialog(params.defaultAD)
+    local chDefaultADSpeakers = {}
+
+    -- Hole behaviour
+    local runToHole = true
+    local inspectHole = false
+    local inspectAnimation = Animation("CUST_BanditLookingAtHole_01_5aa2427f-b8ab-4213-ae48-57c10a619239")
+
+    -- Dead bandits
+    local bandits = {}
+    local deadBandits = {}
+
+    -- Loot corpse behaviour
+    local lootTrigger
+    local lootAnimation = Animation("CUST_BanditLootingCorpse_01_f0e9d967-3618-43b8-adbb-e26b9f0686ca")
+
+    helpers.action.PlayDefaultRepeatedAD = function()
+        if dDefaultAD ~= nil then
+            local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(dDefaultAD,
+                { maxDistance = 10.0,
+                checkSight = true,
+                ignoreCower = false,
+                waitForCompletion = false,
+                fallbackSoloDialog = nil,
+                minDelay = math.random(6.0, 12.0),
+                cullingDistance = 20.0 },
+            me, table.unpack(chDefaultADSpeakers))
+            if result == error.AutomatedDialogRateLimitedStartFailed then
+                DebugText(me, "Error: StartCheckedAutomatedDialogRateLimited failed")
+            end
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == CHA_Outside_State_Debris_PillarFell.Guid then
+            inspectHole = true
+            Interrupt()
+        end
+    end
+
+    self.OnInit = function()
+
+        if params.patrol01 ~= nil then
+            patrol[1] = FindEntity(params.patrol01)
+        end
+        if params.patrol02 ~= nil then
+            patrol[2] = FindEntity(params.patrol02)
+        end
+        if params.patrol03 ~= nil then
+            patrol[3] = FindEntity(params.patrol03)
+        end
+        if params.patrol04 ~= nil then
+            patrol[4] = FindEntity(params.patrol04)
+        end
+        if params.restPosition ~= nil then
+            restPosition = FindEntity(params.restPosition)
+        end
+
+        if params.holePosition ~= nil then
+            holePosition = FindEntity(params.holePosition)
+        end
+
+        if params.crushedReaction ~= nil then
+            crushedReaction = Dialog(params.crushedReaction)
+        end
+
+        -- Add other bandits to the table
+        bandits[FindEntity("S_CHA_Exterior_Bandit_Caster_01_0f4300f6-0e1e-4d6c-a582-5da588d64ea7").UUID.String] = true
+        bandits[FindEntity("S_CHA_Exterior_Bandit_Melee_01_538e38b9-e3a4-452a-8369-60eb1fe8c40d").UUID.String] = true
+        bandits[FindEntity("S_CHA_Exterior_Bandit_Melee_02_b5c913f9-f081-45bd-8e95-e34d0735b645").UUID.String] = true
+        bandits[FindEntity("S_CHA_Exterior_Bandit_Ranger_01_fa1a1fbd-2152-40e4-b53d-29e95d54279e").UUID.String] = true
+
+        -- If any bandit is outside of this trigger, he won't be looted
+        -- For example, if his corpse falls into the hole and gets teleported inside the chapel
+        lootTrigger = FindEntity("S_CHA_OUTSIDE_BanditLootTrigger_46af9de9-e850-4f0e-bdf6-499e5cb555c2")
+
+        step = 1
+        failing_step = 0
+
+        if params.defaultADSpeakers ~= nil and #params.defaultADSpeakers > 0 then
+            for _, speaker in pairs(params.defaultADSpeakers) do
+                table.insert(chDefaultADSpeakers, Entity(speaker))
+            end
+        end
+    end
+
+    -- Behaviour nodes
+    nodes = Selector{
+        function(nodes)
+            -- Force bandit to go inspect the hole
+            if not GetFlag(idleFlag, me) and inspectHole then
+                return nodes.Action_InspectHole
+            else
+                return GetWeightedCanEnter(nodes, {
+                            [nodes.Action_Patrol] = 6,
+                            [nodes.Action_Rest] = 6,
+                            [nodes.Action_LootBandit] = 3,
+                            [nodes.Action_InspectHole] = 1,
+                            [nodes.Action_SceneIdle] = 1
+                        })
+            end
+        end
+    }
+
+    -- When another bandit dies, the character will get close and start looting
+    -- It's only visual, no loot is removed from the dead bandit
+    nodes.Action_LootBandit = Action{
+        function()
+            local key, bandit = mod.util.RandomFrom(deadBandits)
+
+            -- For any reason the bandit is outside of the trigger (for example he fell into the hole)
+            if not IsInTrigger(bandit, lootTrigger.Trigger) then
+                --Remove it from the bandits table
+                table.remove(deadBandits, key)
+                bandit = nil
+            end
+            if bandit ~= nil and not IsInDangerousSurfaceFor(bandit, me.Character) then
+                try
+                    MoveTo(bandit)
+                    LookAtEntity(bandit, 3.0)
+                    DebugText(me, "Loot animation")
+                    PlayAnimation(lootAnimation, true)
+                    -- Finished looting bandit: remove it from table
+                    table.remove(deadBandits, key)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Error: movement failed")
+                end
+            end
+        end,
+        CanEnter = function()
+            return not GetFlag(idleFlag, me) and #deadBandits > 0
+        end
+    }
+
+    -- First time approaching the hole: character will react with its AD
+    -- After that, it will only inspect the hole
+    nodes.Action_InspectHole = Action{
+        function()
+            if IsInDangerousSurfaceFor(holePosition, me.Character) then
+                LookAtEntity(holePosition, 3.0)
+                Sleep(1.0)
+            else
+                try
+                    -- Only run the first time
+                    if runToHole then
+                        MoveTo(holePosition, MovementSpeed.Run, false, false, 2.0, 3.0)
+                        runToHole = false
+                    else
+                        MoveTo(holePosition, MovementSpeed.Walk, false, false, 2.0, 3.0)
+                    end
+
+                    LookFrom(holePosition)
+                    Sleep(1.0)
+
+                    -- React to it playing the AD
+                    if  not hasReactedToBoulder                         and
+                        GetFlag(CHA_Outside_State_BanditGotCrushed,nil) and
+                        crushedReaction ~= nil                          then
+
+                            StartAutomatedDialog(crushedReaction, true, me)
+                            hasReactedToBoulder = true
+                    -- Just play the animation
+                    else
+                        DebugText(me, "Inspect hole animation")
+                        PlayAnimation(inspectAnimation, true)
+                    end
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Can't move to hole")
+                    Sleep(1.0)
+                end
+            end
+        end,
+        OnEnter = function()
+            inspectHole = false
+        end,
+        Valid = function()
+            return not GetFlag(idleFlag, me) and GetFlag(CHA_Outside_State_Debris_PillarFell, nil)
+        end
+    }
+
+    -- Rest behaviour (only enter where the character has one)
+    nodes.Action_Rest = Action{
+        function()
+            if not IsInDangerousSurfaceFor(restPosition, me.Character) then
+                try
+                    MoveTo(restPosition)
+                    LookFrom(restPosition)
+                    helpers.PlayDefaultRepeatedAD()
+                    Sleep(3.0)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Error: moving to rest position failed")
+                end
+            else
+                DebugText(me, "Resting pos over dangerous surface, try to find a close position")
+                try
+                    MoveInRange(restPosition, 1.5, 3.0, MovementSpeed.Walk)
+                    LookAtEntity(restPosition, 3.0)
+                    Sleep(10.0)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Error: moving to position failed")
+                end
+            end
+        end,
+        Valid = function()
+            return not GetFlag(idleFlag, me) and restPosition ~= nil
+        end
+    }
+
+    -- Patrol behaviour
+    nodes.Action_Patrol = Action{
+        function()
+            if patrol[step] ~= nil then
+                if not IsInDangerousSurfaceFor(patrol[step],me.Character) then
+                    try
+                        MoveTo(patrol[step], MovementSpeed.Walk)
+                        LookFrom(patrol[step])
+                        step = step + 1
+                        failing_step = 0
+                        Sleep(4.5)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        failing_step = failing_step + 1
+                    end
+                else
+                    failing_step = failing_step + 1
+                end
+                --if the character fail to move to the next patrol point for 10 sec, it is probably not reachable, and it skip it.
+                if(failing_step > 9) then
+                    step = step + 1
+                    failing_step = 0
+                end
+                Sleep(1.0)
+            else
+                if step == 1 then
+                    Sleep(1.0)
+                else
+                    step = 1
+                end
+            end
+        end,
+        Valid = function()
+            return not GetFlag(idleFlag, me)
+        end
+    }
+
+    nodes.Action_SceneIdle = Action{
+        function()
+            helpers.PlayDefaultRepeatedAD()
+            mod.util.SleepRandom(6.0, 12.0)
+        end,
+        Valid = function()
+            return GetFlag(idleFlag, me)
+        end
+    }
+
+    -- Events
+    events.Dying = function(e)
+        if bandits[e.Target.UUID.String] then
+            table.insert(deadBandits, e.Target)
+        end
+    end
+end
+}

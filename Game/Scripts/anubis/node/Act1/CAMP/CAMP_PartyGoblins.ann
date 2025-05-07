@@ -1,0 +1,559 @@
+game.states.CAMP_PartyBeachPatrolling = State {function ()
+    description = [[Patrolling the beach area during the goblin party.]]
+
+    modules = {"shared.dialog"}
+
+    local betrayal = false
+
+    -- Chase Dog
+    local CAMP_GLO_State_InCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+    local courierDog = Entity("S_FOR_Courier_Dog_3059f69c-068d-4e28-8491-55953c027901")
+
+    --Patrol
+    local patrolSpline = Spline("S_CAMP_BeachSpline_ab3528b0-dddf-4734-98cb-aa4bcd4d5079")
+    local canWalkOnSpline = true
+    local splineEvent = ""
+    local drowCommander = Entity("S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b")
+    local AD = Dialog("CAMP_GoblinHuntCelebration_AD_ReportingToDrow_7213670a-9394-8ec7-72e9-9587c5c9abbb")
+    local soloAD = Dialog("CAMP_GoblinHuntCelebration_AD_GoblinGuardComplaint_c9099b96-81c8-2f47-174e-cee2695de222")
+
+    nodes.Betrayal = Action{
+        function()
+            SetWeaponUnsheathed(me, true, true)
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return betrayal
+        end
+    }
+
+    nodes.ChaseDog = Action{
+        function()
+            local moveResult = MoveTo(courierDog, MovementSpeed.Run, true, false, 1, 3, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(courierDog)
+                Sleep(2.0)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(CAMP_GLO_State_InCamp, courierDog)
+        end
+    }
+
+    nodes.AtLocation = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(20)
+
+            if splineEvent == "CAMP_GoblinHuntCelebration_WithDrow" then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 40.0,
+                    },
+                    me,
+                    drowCommander
+                )
+            else
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    soloAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 40.0,
+                    },
+                    me
+                )
+            end
+
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnInterrupt = function()
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.Patrolling = Action {
+        OnEnter = function()
+            splineEvent = ""
+        end,
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.Automated then
+            canWalkOnSpline = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "CAMP_GoblinHuntCelebration_Betrayal" then
+            betrayal = true
+            Interrupt()
+        end
+    end
+end}
+
+game.states.CAMP_PartyGuardPatrolling = State {function ()
+    description = [[Patrolling the camp area during the camp party.]]
+
+    modules = {"shared.dialog"}
+
+    local betrayal = false
+
+    --Patrol
+    local patrolSpline = Spline("S_CAMP_PartyGuardSpline_d52ccb29-074a-42bd-abf2-023abed1c6fe")
+    local canWalkOnSpline = true
+    local splineEvent = ""
+    local AD = Dialog("CAMP_GoblinHuntCelebration_AD_GuardAndGoblin001_4a453d4b-aaef-d3a4-ec47-1741fdca403e")
+    local ADPartner = Entity("S_CAMP_PartyGoblin_001_2476e584-4b62-4a9f-b1f5-f3cca562b180")
+
+    nodes.Betrayal = Action{
+        function()
+            SetWeaponUnsheathed(me, true, true)
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return betrayal
+        end
+    }
+
+    nodes.AtLocation = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(18)
+
+            if splineEvent == "CAMP_GoblinHuntCelebration_WithGoblin" then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 40.0,
+                    },
+                    me,
+                    ADPartner
+                )
+            end
+
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnInterrupt = function()
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.Patrolling = Action {
+        OnEnter = function()
+            splineEvent = ""
+        end,
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.Automated then
+            canWalkOnSpline = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "CAMP_GoblinHuntCelebration_Betrayal" then
+            betrayal = true
+            Interrupt()
+        end
+    end
+end}
+
+game.states.CAMP_MainPartyPraying = State {function ()
+    description = [[Praying to the absolute altar]]
+
+    modules = {"shared.dialog", "shared.util"}
+
+    local chantAnimation = Animation("CUST_Chanting_01_2b033b5d-6402-4ffe-af56-124a5dd7ba0e")
+    local altar = Entity("S_CAMP_BloodAltar_ae7c1c27-3a7f-4d39-8b06-fe56879a7c37")
+    local chantAD = Dialog("CAMP_GoblinHuntCelebration_AD_GoblinWorship_019a030b-d092-11d8-d5b6-b04d97d327f5")
+    local interruptAD = Dialog("CAMP_GoblinHuntCelebration_AD_WorshipInterruption_68a294bf-6512-45b5-6237-49d09988bb48")
+    local interruptTimerDone = true
+    local interruptPraying = false
+    local betrayal = false
+    local ADPartner = Entity("S_CAMP_PartyGoblin_002_c7eabe93-d7dd-4345-b363-f156281d3fdb")
+
+    nodes.Betrayal = Action{
+        function()
+            SetWeaponUnsheathed(me, true, true)
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return betrayal
+        end
+    }
+
+    nodes.InterruptAD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                interruptAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 1.0,
+                },
+                me,
+                ADPartner
+            )
+        end,
+        OnEnter = function()
+            interruptTimerDone = false
+            StartTimer(me, "CAMP_GoblinHuntCelebration_PrayingInterruptionTimer", 80, 0)
+        end,
+        Valid = function()
+            return interruptPraying
+        end
+    }
+
+    nodes.Praying = Action {
+        function()
+            LookAtEntity(altar, 3.0)
+            mod.util.SleepRandom(1.0,3.0)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                chantAD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 20.0,
+                },
+                me
+            )
+            PlayAnimation(chantAnimation)
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "CAMP_GoblinHuntCelebration_PrayingInterruptionTimer") then
+            interruptTimerDone = true
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == chantAD.Guid then
+            if interruptTimerDone then
+                interruptPraying = true
+            end
+        elseif e.Instance.DialogUUID == interruptAD.Guid then
+            interruptPraying = false
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "CAMP_GoblinHuntCelebration_Betrayal" then
+            betrayal = true
+            Interrupt()
+        end
+    end
+end}
+
+game.states.CAMP_SubPartyPraying = State {function ()
+    description = [[Praying to the absolute altar as a helper.]]
+
+    modules = {"shared.dialog", "shared.util"}
+
+    local chantAnimation = Animation("CUST_Chanting_01_2b033b5d-6402-4ffe-af56-124a5dd7ba0e")
+    local altar = Entity("S_CAMP_BloodAltar_ae7c1c27-3a7f-4d39-8b06-fe56879a7c37")
+    local betrayal = false
+
+
+    nodes.Betrayal = Action{
+        function()
+            SetWeaponUnsheathed(me, true, true)
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return betrayal
+        end
+    }
+
+    nodes.Praying = Action {
+        function()
+            LookAtEntity(altar, 3.0)
+            mod.util.SleepRandom(1.0,3.0)
+            PlayAnimation(chantAnimation)
+        end
+    }
+end}
+
+game.states.CAMP_MainPartyLooting = State {function ()
+    description = [[Looting corpses around the camp party.]]
+
+    modules = {"shared.dialog", "shared.util"}
+
+    params.LootSpline = {type=EParamType.String, required=false, default=nil, help=[[Spline this character uses to go around corpses and loot them.]]}
+    params.InitialDelay = {type=EParamType.Int, required=false, default=0, help=[[Initial AD delay.]]}
+
+    local initialDelayDone = false
+    local lootCorpseAnim = Animation("CUST_LootingCorpse_01_c7d9d546-a74a-4471-9ab1-4175c389a872")
+    local betrayal = false
+
+    --Patrol
+    local patrolSpline = Spline(params.LootSpline)
+    local canWalkOnSpline = true
+    local splineEvent = ""
+    local AD = Dialog("CAMP_GoblinHuntCelebration_AD_CorpseLooters_e697a93a-a478-15d8-cdee-e3907a975f0e")
+    local soloAD = Dialog("CAMP_GoblinHuntCelebration_AD_CorpseLooter003Solo_ff2b30af-4486-12ce-225b-2b1e1de462ec")
+    local ADPartners = { Entity("S_CAMP_PartyGoblin_006_effef76f-4a36-45be-89bf-3824787b0d30"),
+        Entity("S_CAMP_PartyGoblin_007_0b4bd4f2-4190-46fc-b9b9-826df468ee85") }
+    local trioOrSolo = 0
+
+
+    self.OnInit = function()
+        StartTimer(me, "CAMP_GoblinHuntCelebration_InitialADDelay", params.InitialDelay, 0)
+    end
+
+    nodes.Betrayal = Action{
+        function()
+            SetWeaponUnsheathed(me, true, true)
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return betrayal
+        end
+    }
+
+    nodes.AtLocation = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(2)
+            PlayAnimation(lootCorpseAnim, true, false)
+            mod.util.SleepRandom(6.0,12.0)
+
+            if initialDelayDone then
+                if trioOrSolo < 2 then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        AD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 30.0,
+                        },
+                        me,
+                        ADPartners
+                    )
+                    trioOrSolo = trioOrSolo + 1
+                elseif trioOrSolo == 2 then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        soloAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 30.0,
+                        },
+                        me
+                    )
+                    trioOrSolo = 0
+                end
+            end
+
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnInterrupt = function()
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.Patrolling = Action {
+        OnEnter = function()
+            splineEvent = ""
+        end,
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.Automated then
+            canWalkOnSpline = true
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "CAMP_GoblinHuntCelebration_InitialADDelay") then
+            initialDelayDone = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "CAMP_GoblinHuntCelebration_Betrayal" then
+            betrayal = true
+            Interrupt()
+        end
+    end
+end}
+
+game.states.CAMP_SubPartyLooting = State {function ()
+    description = [[Looting corpses around the camp party.]]
+
+    modules = {"shared.dialog", "shared.util"}
+
+    params.SoloAD = {type=EParamType.String, required=false, default=nil, help=[[AD this character says when looting a corpse.]]}
+    params.LootSpline = {type=EParamType.String, required=false, default=nil, help=[[Spline this character uses to go around corpses and loot them.]]}
+    params.InitialDelay = {type=EParamType.Int, required=false, default=0, help=[[Initial AD delay.]]}
+
+    local initialDelayDone = false
+    local lootCorpseAnim = Animation("CUST_LootingCorpse_01_c7d9d546-a74a-4471-9ab1-4175c389a872")
+    local betrayal = false
+
+    --Patrol
+    local patrolSpline = Spline(params.LootSpline)
+    local canWalkOnSpline = true
+    local splineEvent = ""
+    local soloAD = Dialog(params.SoloAD)
+
+    self.OnInit = function()
+        StartTimer(me, "CAMP_GoblinHuntCelebration_InitialADDelay", params.InitialDelay, 0)
+    end
+
+    nodes.Betrayal = Action{
+        function()
+            SetWeaponUnsheathed(me, true, true)
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return betrayal
+        end
+    }
+
+    nodes.AtLocation = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(2)
+            PlayAnimation(lootCorpseAnim, true, false)
+            mod.util.SleepRandom(6.0,12.0)
+
+            if initialDelayDone then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    soloAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 80.0,
+                    },
+                    me
+                )
+            end
+
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnInterrupt = function()
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.Patrolling = Action {
+        OnEnter = function()
+            splineEvent = ""
+        end,
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == Guid(params.SoloAD) then
+            canWalkOnSpline = true
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "CAMP_GoblinHuntCelebration_InitialADDelay") then
+            initialDelayDone = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "CAMP_GoblinHuntCelebration_Betrayal" then
+            betrayal = true
+            Interrupt()
+        end
+    end
+end}

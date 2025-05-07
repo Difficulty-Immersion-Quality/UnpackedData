@@ -1,0 +1,66 @@
+game.states.GOB_Festivities_OwlbearDiscussion = State{function()
+    description = [[State used by 3 goblins who discuss the Owlbear before Chicken Chase game]]
+
+    modules = { "shared.dialog", "shared.math" }
+
+    params.NonOwlbearState = { type = EParamType.State, required = true,
+        help = [[State used when not in Owlbear Discussion]]}
+
+    params.OwlbearDiscussPos = { type = EParamType.String, required = true,
+        help = [[Trigger position for the discussion]]}
+
+    params.IsInitiator ={ type = EParamType.Bool, required = false, default = false,
+        help = [[Is this goblin initiating the discussion?]] }
+
+    local fl_OwlbearDiscussion = Flag("GOB_ChickenChase_Event_OwlbearDiscussion_b0364ea7-a813-4d71-aebb-13bea72c812a")
+    local dlg_OwlBearDiscussAD = Dialog("GOB_ChickenChase_AD_OwlbearDiscussion_57216fb7-3763-b04d-c8c6-e0d3392a0b76")
+    local ch_OwlBearDiscussPartners = {}
+    local ch_Owlbear = nil
+    local tr_OwlbearDiscussPos = nil
+
+    local b_CanDoAD = true
+    local s_CanDoADTimer = "GOB_Festivities_OwlbearDiscussion.AD.CanDoAD"
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(15.0, 30.0), 0)
+    end
+
+
+    self.OnInit = function()
+        ch_Owlbear = FindEntity("S_FOR_OwlBear_Cub_001_c66b2865-6613-4372-b97a-e330c1d75d09")
+        tr_OwlbearDiscussPos = FindEntity(params.OwlbearDiscussPos)
+        ch_OwlBearDiscussPartners = { FindEntity("S_GOB_Festivities_Goblin_001_774c78ed-1227-48f9-812e-aac0021c71bf"),
+                                      FindEntity("S_GOB_ChickenChase_Commentator_eb2c434d-1833-485e-bca2-f181eed6010b") }
+        helpers.CanDoADReset()
+    end
+
+    nodes.NotOwlbearDiscuss = Proxy{
+        params.NonOwlbearState,
+
+        Valid = function()
+            return not GetFlag(fl_OwlbearDiscussion)
+        end
+    }
+
+    nodes.OwlbearDiscuss = Action{
+        function()
+            try
+                MoveTo(tr_OwlbearDiscussPos)
+                SteerTo(ch_Owlbear)
+                if params.IsInitiator and b_CanDoAD and mod.dialog.AreSpeakersAvailableAndNear(me, 5.0, false, false, false, ch_OwlBearDiscussPartners) then
+                    mod.dialog.StartAutomatedDialogWithWait(dlg_OwlBearDiscussAD, me, ch_OwlBearDiscussPartners)
+                    helpers.CanDoADReset()
+                end
+                Sleep(1.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_OwlbearDiscussPos)")
+                Sleep(0.5)
+            end
+        end
+    }
+end}

@@ -1,0 +1,64 @@
+game.states.HAV_ShadowRift = State{function ()
+    description = [[A Shadow Rift for Haven Siege situation combat. Appears in combat and then explodes dealing AoE damage]]
+
+    --modules = { "shared.math", "shared.params", "shared.util" }
+
+    params.TurnOfExplosion = { type = EParamType.Int, default = 1,
+        help = "Combat turn of explosion (counts every active turn of this rift in combat starting at 1)"}
+
+    params.ExplosionSpell = { type = EParamType.String, default = "Fireball_FromItem",
+            help = "Spell used for AoE damage"}
+
+    local i_TurnCount = 0
+
+    self.OnInit = function()
+        i_TurnCount = 0
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me then
+            Interrupt()
+        end
+    end
+
+    events.TurnStarted = function(ev)
+        i_TurnCount = i_TurnCount + 1
+        DebugText(me, "Turn. TurnCount = " .. tostring(i_TurnCount))
+        helpers.CheckExplode()
+    end
+
+    helpers.CheckExplode = function()
+        if i_TurnCount == params.TurnOfExplosion then
+            helpers.Explode()
+        else
+            DebugText(me, "Explode in " .. tostring(params.TurnOfExplosion - i_TurnCount))
+        end
+    end
+
+    helpers.Explode = function()
+        DebugText(me, "Explosion")
+        ExplodeProjectileAt(params.ExplosionSpell, me)
+        SetOnStage(me, false)
+    end
+
+    nodes.Default = Action{
+        function()
+            Sleep(1.0)
+        end,
+
+        CanEnter = function()
+            return not me.IsInCombat or not me.CanActInCombatTeamTurn
+        end
+    }
+
+    nodes.Default_Turn = Action{
+        function()
+            Sleep(1.0)
+            EndTurn(me)
+        end,
+
+        CanEnter = function()
+            return me.IsInCombat and me.CanActInCombatTeamTurn
+        end
+    }
+end}

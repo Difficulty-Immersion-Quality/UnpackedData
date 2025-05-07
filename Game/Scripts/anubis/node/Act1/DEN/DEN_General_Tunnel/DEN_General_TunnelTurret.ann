@@ -1,0 +1,268 @@
+game.states.DEN_General_TunnelTurret = State{function()
+    description = [[State for arcane turrets in the secret tunnel]]
+
+--------------------------------PARAMS--------------------------------
+    params.DistanceSeeking = {type = EParamType.Number, default = 30.0, help = [[Distance of activation for the turret]]}
+    params.Origin = {type = EParamType.String, required = false, default = nil, help = [[origin point of projectile]]}
+    params.Off = {type = EParamType.String, required = false, default = "VFX_Script_DruidSubs_TunnelTurret_Idle_Dummy_01_dacb87be-0340-7d68-f4c0-857b2784483d", help = [[Effect on activation]]}
+    params.On = {type = EParamType.String, required = false, default = "VFX_Script_DruidSubs_TunnelTurret_Attacking_Dummy_01_d181e8cd-4c4d-a872-82e3-d302ac00e8b1", help = [[Effect on idle]]}
+    params.AttackArea = {type = EParamType.String, required = true, help = [[The trigger used for the attack area]]}
+    --All use fire currently, but we could change them to using a different element for each animal type
+    --Example: Fire for bear, ice for wolf, lightning for eagle
+    params.Projectile = {type = EParamType.String, required = false, default = "Projectile_DEN_TunnelTurret_Trap", help = [[The spell the totem casts]]}
+    params.WarmupVFX = {type = EParamType.String, required = false, default = "VFX_Projectiles_DruidSubs_TunnelTurret_Attacking_Projectile_Fire_WarmUp_01_c2ec99e6-d234-691a-b612-d5c5caf8889b", help = [[The VFX before the spell is cast]]}
+    params.CastVFX = {type = EParamType.String, required = false, default = "VFX_Projectiles_DruidSubs_TunnelTurret_Attacking_Projectile_FIre_CastImpact_01_653e4c1f-51ac-4a98-808f-2a6d40257029", help = [[The VFX when the spell is cast]]}
+    params.ActiveFlag = {type = EParamType.String, required = true, help = [[Flag to turn on and off turrets]]}
+--------------------------------LOCAL--------------------------------
+    local target, lastPosTarget, origin
+    local isActive --true, false, or nil (nil = Inactive)
+    local isFiring = false
+    local isTrackingTimerActive = false
+    local isTracking = false
+    --VFX--
+    local glowFX, offFX, onFX, fireCastFX, fireWarmupFX, spotLightFX, targetBeamFX
+    --In use VFX--
+    local activeSpotLightFX, activeWarmupFX, activeBeamFX
+    local attackArea = Entity(params.AttackArea)
+    local hidingFlag = Flag("GLO_State_Hiding_ad57af70-2300-4c49-b713-ba0bd8e77ea3")
+    local activeFlag = Flag(params.ActiveFlag)
+--------------------------------HELPERS--------------------------------
+    helpers.GlowSet = function(new)
+        if glowFX then 
+            glowFX = StopEffect(glowFX) 
+        end
+    
+        if new ~= nil and not glowFX then 
+            glowFX = PlayEffectAt(new and onFX or offFX,me,"Dummy_FX_01") 
+        end
+        isActive = new
+    end
+    
+    --This can probably be replaced by a custom spell (future changes will allow items to cast spells)
+    helpers.WarmUpEffects = function(active, lastPos)
+        if active then
+            if activeWarmupFX ~= nil then 
+                StopEffect(activeWarmupFX)
+                activeWarmupFX = nil
+            end
+            activeWarmupFX = PlayEffectAt(fireWarmupFX, origin.Position)
+        else
+            if activeWarmupFX ~= nil then 
+                StopEffect(activeWarmupFX)
+                activeWarmupFX = nil
+            end
+        end
+    end
+
+    --Any character that can be seen and is not beast or wildshaped
+    helpers.action.GetNearestActiveCharacter = function(anchor, distance)
+        local characters = GetActiveCharacters(anchor, distance)
+        local target = nil
+        
+        if #characters > 0 then
+            local tempTarget = nil
+            local minDist = 2 * distance
+    
+            for i, character in ipairs(characters) do
+                local distToChar
+                if character.OnStage
+				and not character.Character.IsDead
+				and not (HasActiveStatus(character, "DOWNED") or GetFlag(hidingFlag, character))
+				and not (IsTagged(character, Tag("WILDSHAPE_04ae77c4-f708-4ffa-8b8c-763b062a2e6e") or IsTagged(character, Tag("BEAST_890b5a2a-e773-48df-b191-c887d87bec16")))) 
+                and HasLineOfSight(anchor, character) then
+                    distToChar = GetDistanceTo(anchor, character)
+				    if (distToChar < minDist) then
+                        minDist = distToChar
+                        tempTarget = character
+                    end
+                end
+            end
+    
+            if tempTarget ~= nil then
+                if ls.CheckType(anchor, ls.anubis.game.Entity) then
+                    DebugText(anchor, "Found Target [1]", tempTarget.Name)
+                end
+                target = tempTarget
+            end
+        end
+        return target
+    end
+
+    helpers.action.TrackingLight = function(targetPos)
+        if activeBeamFX ~= nil then 
+            StopEffect(activeBeamFX) 
+        end
+        if activeSpotLightFX ~= nil then 
+            StopEffect(activeSpotLightFX) 
+        end
+        if targetPos == nil then
+            isTracking = false
+        else 
+            --activeSpotLightFX = PlayEffectAt(spotLightFX, targetPos)
+            activeBeamFX = PlayBeamEffectAt(targetBeamFX, origin.Position, targetPos)
+        end
+    end
+
+    self.OnInit = function()
+        offFX = PrepareEffect(params.Off)
+        onFX = PrepareEffect(params.On)
+        origin = Entity(params.Origin) or me
+        fireCastFX = PrepareEffect(params.CastVFX) 
+        fireWarmupFX = PrepareEffect(params.WarmupVFX)
+        spotLightFX = PrepareEffect("VFX_Script_DruidSubs_TunnelTurret_Attacking_WarmUp_Decal_01_c19eaf8c-a9d7-6c3d-6339-29b541b0b29c") --Placeholder: Appears on ground on last player location before firing
+        targetBeamFX = PrepareEffect("VFX_Script_DruidSubs_TunnelTurret_Attacking_WarmUp_01_966f682e-38aa-f454-040a-2dde209ca0e9") --Placeholder: Points at player to emphasize warning. Can come from eyes like a spotlight?
+    end
+
+--------------------------------NODES--------------------------------
+    --nodes = ImmediateSelector{}
+
+    nodes.Firing = Action{
+        OnEnter = function()
+            StopTimer(me, "DEN_TunnelTurret_TrackingEnd")
+            isTrackingTimerActive = false
+        end,
+
+        function()
+            if target then
+                lastPosTarget = target.Position
+                helpers.TrackingLight(nil) 
+                SetEntityEvent(me,"DEN_TunnelTurret_ReadyCast")
+                helpers.WarmUpEffects(true, lastPosTarget)
+                Sleep(0.22)
+                PlayEffectAt(fireCastFX, origin.Position)
+                ShootProjectileAt(params.Projectile, me, origin.Position - me.Position, lastPosTarget)
+                helpers.WarmUpEffects(false)
+                --helpers.TrackingLight(nil) 
+                Sleep(1.5)
+                if me.IsInCombat then
+                    SetTurnActionsCompleted(me, true)
+                elseif target.IsInCombat then 
+                    SetEntityEvent(me,"DEN_TunnelTurret_JoinCombat",target) 
+                end
+                isFiring = false
+            else
+                if me.IsInCombat then
+                    SetTurnActionsCompleted(me, true)
+                end
+                isFiring = false
+            end
+        end,
+
+        OnLeave = function()
+            helpers.WarmUpEffects(false)
+            --helpers.TrackingLight(nil)
+        end,
+
+        Valid = function()
+            return GetFlag(activeFlag) and isFiring 
+        end
+    }
+
+    nodes.Tracking  = Action {
+        function()
+            if me.IsInCombat and not me.CanActInCombatTeamTurn then 
+                WaitForInterrupt()
+            end
+
+            target = helpers.GetNearestActiveCharacter(origin.Position + me.ForwardDirection, params.DistanceSeeking)
+            
+            if target then
+                if not isActive then 
+                    helpers.GlowSet(true)
+                end
+                
+                if IsInTrigger(target, attackArea.Trigger) and HasLineOfSight(origin.Position + me.ForwardDirection, target) then
+                    if not isTracking then
+                        isTracking = true
+                        helpers.TrackingLight(target)
+                    end
+                    if not isTrackingTimerActive then
+                        if not me.IsInCombat then
+                            StartTimer(me, "DEN_TunnelTurret_TrackingEnd", 1.5, 0) --So it can still update if the player enters cover while waiting to fire, rather than using Sleep()
+                            isTrackingTimerActive = true
+                        else
+                            Sleep(1.5)
+                            isFiring = true
+                        end
+                    end
+                else
+                    helpers.TrackingLight(nil)
+                    StopTimer(me, "DEN_TunnelTurret_TrackingEnd")
+                    isTrackingTimerActive = false
+
+                    if(me.IsInCombat) then 
+                        Sleep(0.5)
+                        SetTurnActionsCompleted(me, true) 
+                    end
+                    
+                end
+            else
+                if(isActive ~= false) then 
+                    helpers.GlowSet(false)
+                    helpers.TrackingLight(nil)
+                end
+
+                if(me.IsInCombat) then 
+                    Sleep(0.5)
+                    SetTurnActionsCompleted(me, true) 
+                end
+            end
+            Sleep(0.5)
+        end,
+
+        OnLeave = function()
+            helpers.WarmUpEffects(false)
+            helpers.TrackingLight(nil)
+        end,
+
+        Valid = function()
+            return GetFlag(activeFlag) --Set/Cleared by switches
+        end
+    }
+
+    nodes.Inactive = Action{
+        function()
+            if(isActive ~= nil) then 
+                helpers.GlowSet(nil)
+                --helpers.TrackingLight(nil) 
+            end
+
+            if not me.IsInCombat then 
+                WaitForInterrupt() 
+                Sleep(0.5)
+            else
+                Sleep(2.5)
+                SetTurnActionsCompleted(me, true)
+            end
+        end
+    }
+
+--------------------------------EVENTS--------------------------------
+    events.TurnStarted = function()
+        Interrupt()
+    end
+
+    events.LeftCombat = function()
+        Interrupt()
+    end
+
+    events.EntityEvent = function(e)
+        if e.Event == "DEN_TunnelTurret_ClearGlow" and glowFX then 
+            glowFX = StopEffect(glowFX) 
+        end
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "DEN_TunnelTurret_TrackingEnd" then 
+            isFiring = true
+            isTrackingTimerActive = false
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == activeFlag.Guid then
+            Interrupt()
+        end
+    end
+
+end}

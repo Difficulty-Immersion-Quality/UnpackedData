@@ -1,0 +1,61 @@
+game.states.CAMP_Volo = State {function()
+    description = [[Behaviour of Volothamp Geddarm at the campsite]]
+
+    modules = {"shared.util"}
+
+    local WriteAnim = Animation("CUST_Writing_01_98fe16cb-1bbe-4046-bede-5d2336962b63")
+    local peepingAnim = Animation("CUST_PeepingOut_01_900ae3c5-4f37-43ff-9bce-6a1f0813b6a6")
+
+    local voloAtCampFlag = Flag("GLO_Volo_State_AtCamp_de1cadca-2eca-4cee-a3dc-e262bbb92277")
+
+    local cagePoint = Entity("S_CAMP_PartyVoloPoint_0f929989-b0ef-43d9-ae73-66756bdeaebb")
+
+    local inParty = false
+
+    self.Valid = function()
+        return GetFlag(voloAtCampFlag)
+    end
+
+    nodes.CAMP_PartyVolo = Action {
+        function()
+            mod.util.SleepRandom(2.5, 5.0)
+            Wander(.5,3.0,MovementSpeed.Stroll,cagePoint)
+            LookFrom(cagePoint)
+            try
+                PlayAnimation(peepingAnim)
+            catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                DebugText(me, "Failed PlayAnimation CUST_PeepingOut_01_900ae3c5-4f37-43ff-9bce-6a1f0813b6a6")
+            end
+            Sleep(1.5)
+            PlayAnimation(WriteAnim)
+        end,
+        Valid = function()
+            return inParty
+        end
+    }
+
+    nodes.CAMP_Volo = Selector {
+        function(nodes)
+            return GetWeightedCanEnter(nodes, {
+                [nodes.TakeNotes] = 1
+            })
+        end
+    }
+
+    nodes.CAMP_Volo.TakeNotes = Action {
+        function()
+            PlayAnimation(WriteAnim)
+            Sleep(math.random(2,8))
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me and e.Event == "CAMP_GoblinHuntCelebration_SetupVolo") then
+            inParty = true
+            Interrupt()
+        elseif(e.TargetEntity == me and e.Event == "CAMP_GoblinHuntCelebration_ClearVolo") then
+            inParty = false
+            Interrupt()
+        end
+    end
+end}

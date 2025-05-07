@@ -1,0 +1,103 @@
+game.states.LOW_Elfsong_Revoor = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+
+    modules = {"shared.dialog", "shared.moveto", "shared.math"}
+
+    --------------------------------Flags and variables--------------------------------
+    --AD
+    local localAD = Dialog("LOW_Elfsong_AD_Revoor_3fdc5d49-4c1d-53bb-27a2-40ad3e8ae936")
+
+    --Positions and chair
+    local kitchenPositions = {
+        Entity("S_LOW_Elfsong_Kitchen_RevoorP_001_02f20f53-3d1b-4c4d-a934-d5bb7e51bc54"),
+        Entity("S_LOW_Elfsong_Kitchen_RevoorP_002_68707427-681c-40dc-9484-454bad2e0a1c")
+    }
+    local restingChair = Entity("S_LOW_Elfsong_Kitchen_RestingChair_32a2b342-4666-48a5-bd70-39fc59e8972e")
+    --local playingCatPosition = Entity("LOW_Elfsong_Kitchen_CatPoint_d58ccef6-8ab1-4330-ad1a-7884d0ea0c2e")
+    --Flags
+    --local catFlag = Flag("LOW_Elfsong_Event_PlayingWithCats_6ef8cff0-dd14-bd1c-ea91-c1f190def307")
+    local restingFlag = Flag("LOW_Elfsong_Event_KitchenResting_2ba0b1c3-8c3f-4010-8fee-7e9be81a50c8")
+
+    --------------------------------Nodes--------------------------------
+
+    nodes = Selector{
+        function(nodes)
+            return GetWeightedCanEnter(nodes, {
+                                                [nodes.CookingWithAD] = 3,
+                                                --[nodes.PlayingWithCat] = 2,
+                                                [nodes.Resting] = 1})
+        end
+    }
+
+    nodes.CookingWithAD = Action {
+        function()
+            if mod.moveto.MoveToPoint(kitchenPositions[1], MovementSpeed.Walk, me) then
+                helpers.StartTheAD()
+                Sleep(math.random(15,20))
+            else
+                Sleep(10.0)
+            end
+
+        end
+    }
+
+    --TODO: hope I can implement this in a proper way after release or in polishing.
+    --[[nodes.PlayingWithCat = Action {
+        function()
+
+            if mod.moveto.MoveToPoint(playingCatPosition, MovementSpeed.Walk, me) then
+                SetFlag(catFlag, me)
+                helpers.StartTheAD()
+                --Here future throw ball to the cats
+                ClearFlag(catFlag, me)
+                Sleep(math.random(12,15))
+            else
+                Sleep(15 + 20 * math.random())
+            end
+        end
+    }]]--
+
+    nodes.Resting = Action {
+        function()
+            local failedtoSeat = false
+            try
+                UseItem(restingChair.Item)
+            catch e if ls.CheckType(e, error.UseItemFailed) then
+                failedtoSeat = true
+            end
+
+            if (mod.math.CoinToss()) then
+                setFlag(restingFlag, me)
+                helpers.StartTheAD()
+                ClearFlag(restingFlag, me)
+            end
+
+            if failedtoSeat then
+                Sleep(15)
+            else
+                Sleep(10)
+            end
+
+        end,
+        CanEnter = function()
+            return restingChair ~= nil
+        end,
+    }
+
+    --------------------------------Helpers--------------------------------
+
+    helpers.action.StartTheAD = function()
+        mod.dialog.StartCheckedAutomatedDialog(
+            localAD,
+            {
+                waitForCompletion = true
+            },
+            me
+        )
+    end
+
+
+
+end
+}

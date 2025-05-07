@@ -1,0 +1,128 @@
+game.states.WYR_Posthouse_Groom = State { function ()
+    description = [[ Groom does work unless spoken to by Equerry. ]]
+
+    local GroomEquerryAD = Dialog("WYR_Posthouse_EquerryGroomArguing_AD_cd9bfde3-34ab-f32b-7c6d-1e8054a7fbdc")
+    local Equerry = Entity("S_WYR_Posthouse_Equerry_800e7e52-64f1-4a52-a2a2-5a409e8aab53")
+    local WanderTrigger = "S_WYR_Posthouse_Poly_GroomWander_7fad2c89-a7fd-4635-b73a-8db8f47b38a2"
+    local StandTrigger = "S_WYR_Posthouse_Point_KennelStand_f6cb903d-7e09-4b6a-98ff-862b279e8989"
+    local inDialog = false
+
+    local GroomCleansDialog = Dialog("BHVR_WRLD_WYR_Posthouse_DringoCleansCages_1a13896a-0112-0779-a342-5084b8e047fd")
+    local GroomCleansTriggers = { 
+        Entity("WYR_Posthouse_DringoCleansCage1A_SceneTrigger_f12e9579-ff5d-4fed-a52b-04a6fbbe26b5"),
+        Entity("WYR_Posthouse_DringoCleansCage2A_SceneTrigger_989125ab-3444-45a8-a7f5-490359b82798"),
+        Entity("WYR_Posthouse_DringoCleansCage3A_SceneTrigger_e271d30b-cdaf-4dec-8c48-388b8e3191ae") }
+    local GroomCleansTag = Tag("ACT3_WYR_POSTHOUSE_CLEANINGCAGES_3f1841b9-a03a-4127-819b-ec652de79102")
+    local EquerryLeavesFlag = Flag("WYR_Posthouse_State_EquerryLeaves_ed582a57-4fba-3fa0-22b0-6c3cdee35bb6")
+    local EquerryLeftFlag = Flag("WYR_Posthouse_State_EquerryLeft_e1fa25df-1f63-4912-8bf5-a421970f77a5")
+    local EquerryPermaDefeatedFlag = Flag("WYR_Posthouse_State_EquerryPermaDefeated_d4f0d459-8a81-4acc-829f-3c98e7ac273e")
+    local KennelDoors = {
+        Entity("S_WYR_PostHouse_KennelDoor_001_91d7c4ce-a17f-4af7-9abd-abc598c32610"),
+        Entity("S_WYR_PostHouse_KennelDoor_002_c18ee776-8eea-4bb3-bf2d-68e5db0c3cfc"),
+        Entity("S_WYR_PostHouse_KennelDoor_003_78da2dad-58de-41cc-96c8-c2c1c74e8a91")
+    }
+    modules = { "shared.dialog","shared.util" }
+
+    helpers.GetNextLockedKennelDoor = function()
+        for i = 1, #KennelDoors do
+            if(not KennelDoors[i].Item.IsDestroyed and
+                KennelDoors[i].Item.IsLocked and
+                KennelDoors[i].Item.IsClosed) then
+                return KennelDoors[i]
+            end
+        end
+        return nil
+    end
+
+    events.DialogStarted = function(e)
+        if e.Instance.DialogUUID == GroomEquerryAD.Guid then
+            StopAnimation(me)
+            inDialog = true
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == GroomEquerryAD.Guid then
+            inDialog = false
+        end
+    end
+
+    nodes.WithEquerry = Selector {
+        Valid = function()
+            return not GetFlag(EquerryLeftFlag) and not GetFlag(EquerryPermaDefeatedFlag)
+        end
+    }
+
+    nodes.WithEquerry.Act = Selector {
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        Valid = function ()
+            return not inDialog
+        end
+    }
+
+    nodes.WithEquerry.Talk = Selector {
+        Valid = function ()
+            return inDialog
+        end
+    }
+
+    nodes.WithEquerry.Act.Wandering = Proxy {
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 5,
+            sleepMin = 1,
+            trigger = WanderTrigger,
+            wanderMax = 10,
+            wanderMin = 2
+        }
+    }
+
+    nodes.WithEquerry.Act.CleaningCages = Action {
+        OnEnter = function()
+            AddTag(me, GroomCleansTag)
+        end,
+        OnLeave = function()
+            RemoveTag(me, GroomCleansTag)
+        end,
+        function()
+            StartBehaviorDialog(GroomCleansDialog, GroomCleansTriggers[math.random(#GroomCleansTriggers)].Trigger, true, me)
+            Sleep(1.0)
+        end,
+        CanEnter = function()
+            return not GetFlag(EquerryLeavesFlag)
+        end
+    }
+
+    nodes.WithEquerry.Talk.Talking = Action {
+        function()
+            SteerTo(Equerry, true)
+            Sleep(1.0)
+        end
+    }
+
+    nodes.WithoutEquerry = Selector {
+        Valid = function()
+            return GetFlag(EquerryLeftFlag) or GetFlag(EquerryPermaDefeatedFlag)
+        end
+    }
+
+    nodes.WithoutEquerry.OpenCages = Action {
+        function()
+            local nextDoor = helpers.GetNextLockedKennelDoor()
+            UseItem(nextDoor.Item)
+            Sleep(3.0)
+        end,
+        CanEnter = function()
+            return helpers.GetNextLockedKennelDoor() ~= nil
+        end
+    }
+
+    nodes.WithoutEquerry.Idle = Proxy {
+        game.states.GLO_StateInTrigger,
+        params  = {
+            Trigger = StandTrigger
+        },
+    }
+end}

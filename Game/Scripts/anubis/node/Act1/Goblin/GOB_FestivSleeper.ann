@@ -1,0 +1,120 @@
+game.states.GOB_FestivSleeper = State{function()
+    description = [[Behaviour for sleeping goblins/bugbears at the upper balcony at Festivities area]]
+
+    local f_LookAtX = nil
+    local f_LookAtY = nil
+    local f_LookAtZ = nil
+
+    self.OnInit = function()
+        f_LookAtX = nil
+        f_LookAtY = nil
+        f_LookAtZ = nil
+    end
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me then
+            if ev.Event == "GOB_FestivSleeper_LookAt_X" then
+                f_LookAtX = ev.Params[1]
+            elseif ev.Event == "GOB_FestivSleeper_LookAt_Y" then
+                f_LookAtY = ev.Params[1]
+            elseif ev.Event == "GOB_FestivSleeper_LookAt_Z" then
+                f_LookAtZ = ev.Params[1]
+            end
+        end
+    end
+
+    nodes.LookAtNoise = Action{
+        function()
+            SteerTo(ls.math.Vector3(f_LookAtX, f_LookAtY, f_LookAtZ))
+            f_LookAtX = nil
+            f_LookAtY = nil
+            f_LookAtZ = nil
+        end,
+
+        Valid = function()
+            return f_LookAtX ~= nil and f_LookAtY ~= nil and f_LookAtZ ~= nil
+        end
+    }
+
+    nodes.Default = Action{
+        function()
+            Sleep(1.0)
+        end
+    }
+
+end}
+
+
+game.states.GOB_FestivSleeper_Combat = State{function()
+    description = [[Combat behaviour for sleeping goblins/bugbears at the upper balcony at Festivities area. First one that was waoken in case of combat calls for others]]
+
+    modules = { "shared.params" }
+
+    params.FriendsToWake = { type = EParamType.String, required = true, arrayRange="1..",
+        help = [[Sleeping friends that this npc tries to wake in first combat round]]}
+
+    params.WakeAD = { type = EParamType.String, required = true,
+        help = [[AD dialog to shout for waking up friends]] }
+
+    local ch_FriendsToWake = nil
+    local dlg_WakeAD = Dialog(params.WakeAD)
+    local fl_FirstWoken = Flag("GOB_Festivities_Sleeper_WokenByNoise_97d3e68c-1d98-446a-bc08-1e84c53b63c7")
+    local fl_TriedWakeFriends = Flag("GOB_Festivities_Sleeper_TriedWakeFriends_8f668cae-04e8-4179-87bf-651659dec2fe")
+
+    local i_NumWakeAttempts = 0
+
+    helpers.IsFriendSleeping = function()
+        ch_FriendsToWake = ch_FriendsToWake or mod.params.ParamArrayToEntityList(params.FriendsToWake)
+
+        for _, ch_Friend in ipairs(ch_FriendsToWake) do
+            if HasActiveStatus(ch_Friend, "SLEEP") then
+                return true
+            end
+        end
+        return false
+    end
+
+    self.CanEnter = function()
+        return me.IsInCombat and me.CanActInCombatTeamTurn
+          and GetFlag(fl_FirstWoken, me) and not GetFlag(fl_TriedWakeFriends, me)
+          and helpers.IsFriendSleeping()
+    end
+
+    self.OnInit = function()
+        ch_FriendsToWake = mod.params.ParamArrayToEntityList(params.FriendsToWake)
+    end
+
+    nodes.Default = Action{
+        function()
+            local ch_FriendToWake = nil
+            local f_MinDist = 100000.0
+
+            for _, ch_Friend in ipairs(ch_FriendsToWake) do
+                local f_Dist = GetDistanceTo(me, ch_Friend)
+                if f_Dist < f_MinDist then
+                    ch_FriendToWake = ch_Friend
+                    f_MinDist = f_Dist
+                end
+            end
+
+            if ch_FriendToWake ~= nil then
+                try
+                    MoveInRange(ch_FriendToWake, 0.5, 5.0, MovementSpeed.Run)
+                    SteerTo(ch_FriendToWake)
+                    StartAutomatedDialog(dlg_WakeAD, true, me)
+                    SetFlag(fl_TriedWakeFriends, me)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "Failed MoveInRange(ch_FriendToWake)")
+                    i_NumWakeAttempts = i_NumWakeAttempts + 1
+                    if i_NumWakeAttempts > 2 then
+                        SteerTo(ch_FriendToWake)
+                        StartAutomatedDialog(dlg_WakeAD, true, me)
+                        SetFlag(fl_TriedWakeFriends, me)
+                    end
+                end
+                Sleep(1.0)
+            end
+        end
+    }
+
+end}

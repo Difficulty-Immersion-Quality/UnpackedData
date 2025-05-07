@@ -1,0 +1,210 @@
+game.states.UND_MushroomHunter = State
+{
+    function ()
+
+        modules = { "gustav.Act1.Underdark", "shared.dialog" }
+
+        local anim_Confused = Animation("CUST_Confused_01_b00ad31e-a4a8-4a66-a1c4-e0a8f9a43990")
+        local anim_Crying = Animation("CUST_Crying_01_Loop_2e105276-ff57-4fcb-bb9d-21344f7c4608")
+
+        local dlg_InFieldAD = Dialog("UND_MushroomHunter_AD_2ee13fa2-9f69-a9ae-c2ac-787527a19880")
+        local dlg_InFieldDistantAD = Dialog("UND_MushroomHunter_AD_Distant_7b518ac0-b570-7646-ddb8-080378f15608")
+        local dlg_ThankingPlayerAD = Dialog("UND_MushroomHunter_AD_HunterThanksPlayer_42d32b1a-3da2-ed0b-9c65-3f6c3b3aa1af")
+        local dlg_MyconidVillageAD = Dialog("UND_MushroomHunter_AD_Alone_ac819d53-89ed-ce88-a8de-95894ccb0307")
+
+        local b_canAD = true
+
+        local fl_Saved = Flag("UND_MushroomHunter_State_Saved_cd1f8012-322b-4135-bb40-54580bf5cea1")
+        local fl_InVillage = Flag("UND_MushroomHunter_State_InVillage_b9b27a52-e27b-481f-b483-8fcb95ff2f65")
+        local fl_WifeIsDead = Flag("UND_MushroomHunter_State_DerrythDead_27b68f02-b401-4228-b10b-d28df94601ce")
+        local fl_ReportingToWife = Flag("UND_MushroomHunter_State_ReportingToWife_3160b3f2-409f-4a79-a3ae-0cc698e91ef6")
+        local fl_WifeIsFuming = Flag("UND_DwarvenAlchemist_State_Fuming_2689c0e0-4335-4578-9ff0-3080f913dc12")
+        local fl_PlayerInSituationAreaFlag = Flag("UND_MushroomHunter_State_PlayerInSituationArea_4aea2b66-12e7-4440-8317-74b07a923bd3")
+
+        local fl_MushroomEaten = Flag("UND_MushroomHunter_Event_EatingMushroomDialogEnded_0bcc675e-bf2d-deef-37f0-45375980bf4e")
+        local fl_ReactedOnMushroomBeingEaten = Flag("UND_DwarvenAlchemist_State_ReactedOnMushroomBeingEaten_5f3d9ca8-b7bb-e0d3-f3a8-c6cab3f775ac")
+
+        local ch_alchemist = Entity("S_GLO_Derryth_2b537d2a-14c8-43b3-ab71-d537c925a2a7")
+        local tr_WanderArea = Entity("S_UND_MushroomHunter_HunterWanderArea_fbbeb4ff-982d-4df7-b320-9128c00910ca")
+        local tr_InspectingCratePosition = Entity("S_UND_MushroomHunter_InspectingCratePosition_d4fccad3-18ba-4dfb-8e05-2f4b75560676")
+
+        local b_thanked = false
+
+        local anim_Drink = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+        local anim_Eat = Animation("UTIL_Eat_01_88e837ec-7a04-44d2-b1ce-35d083c5390a")
+
+        nodes.InField_Talking = Action {
+            function()
+                if not IsInDialog(me, false) then
+                    if GetFlag(fl_PlayerInSituationAreaFlag) then
+                        StartAutomatedDialog(dlg_InFieldAD, true, me)
+                    else
+                        StartAutomatedDialog(dlg_InFieldDistantAD, true, me)
+                    end
+                end
+            end,
+            CanEnter = function()
+                return b_canAD and not GetFlag(fl_Saved) and not IsInDialog(me, false)
+            end
+        }
+
+        nodes.InField_Confused = Action {
+            function()
+                PlayAnimation(anim_Confused, true, false)
+            end,
+            Valid = function()
+                return not GetFlag(fl_Saved)
+            end
+        }
+
+        nodes.State_NearField = Action {
+            function()
+                DebugText(me, "I'm NEAR the field of dangerous mushrooms!")
+                Sleep(1.0)
+                if not IsInDialog(me, false) then
+                    StartAutomatedDialog(dlg_ThankingPlayerAD, true, me)
+                end
+                b_thanked = true
+            end,
+            Valid = function()
+                return GetFlag(fl_Saved) and not GetFlag(fl_InVillage) and not b_thanked
+            end
+        }
+
+        nodes.State_NearField_Silent = Action {
+            function()
+                PlayAnimation(anim_Confused, true, false)
+                Sleep(6.0)
+            end,
+            Valid = function()
+                return GetFlag(fl_Saved) and not GetFlag(fl_InVillage) and b_thanked
+            end
+        }
+
+        nodes.State_InVillage = Selector {
+            Valid = function()
+                return GetFlag(fl_InVillage)
+            end
+        }
+
+        nodes.State_InVillage.WifeIsDead = Selector {
+            function(nodes)
+                return FindFirstSelectable(nodes)
+            end,
+            Valid = function()
+                return GetFlag(fl_WifeIsDead)
+            end
+        }
+
+        nodes.State_InVillage.WifeIsDead.Talk = Action {
+            function()
+                DebugText(me, "Talking")
+                StartAutomatedDialog(dlg_MyconidVillageAD, true, me)
+                Sleep(4.0)
+            end,
+            CanEnter = function()
+                return b_canAD and not IsInDialog(me, false)
+            end
+        }
+
+        nodes.State_InVillage.WifeIsDead.MoveToWife = Action {
+            function()
+                MoveInRange(ch_alchemist, 0.0, 1.5)
+                SteerTo(ch_alchemist)
+            end,
+            Valid = function()
+                return CanSee(me, ch_alchemist) and GetDistance2DTo(me, ch_alchemist) > 2.0
+            end
+        }
+
+        nodes.State_InVillage.WifeIsDead.Cry = Action {
+            function()
+                PlayAnimation(anim_Crying, true)
+            end,
+            Valid = function()
+                return CanSee(me, ch_alchemist) and not b_canAD
+            end
+        }
+
+        nodes.State_InVillage.ReportingToWife = Action {
+            function()
+                --DebugText(me, "I'm reporting to my wife!")
+                SteerTo(ch_alchemist)
+                Sleep(4.0)
+            end,
+            Valid = function()
+                return GetFlag(fl_ReportingToWife)
+            end
+        }
+
+        nodes.State_InVillage.WifeIsFuming = Action {
+            function()
+                --DebugText(me, "My wife is FUMING")
+                SteerTo(ch_alchemist)
+                Sleep(4.0)
+            end,
+            Valid = function()
+                return GetFlag(fl_WifeIsFuming)
+            end
+        }
+
+        nodes.State_InVillage.HangingAround = Selector {
+            function(nodes)
+                return FindDifferentRandomSelectable(nodes)
+            end
+        }
+
+        nodes.State_InVillage.HangingAround.Wander = Action {
+            function()
+                DebugText(me, "Wandering")
+                MoveTo(tr_WanderArea)
+                Wander(tr_WanderArea, 4.0)
+                Sleep(4.0)
+            end
+        }
+
+        nodes.State_InVillage.HangingAround.Talk = Action {
+            function()
+                DebugText(me, "Talking")
+                StartAutomatedDialog(dlg_MyconidVillageAD, true, me)
+                Sleep(4.0)
+            end,
+            CanEnter = function()
+                return b_canAD and not IsInDialog(me, false)
+            end
+        }
+
+        nodes.State_InVillage.HangingAround.EatAndDrink = Action {
+            function()
+                PlayAnimation(anim_Drink, true)
+                Sleep(4.0)
+            end
+        }
+
+        events.TimerFinished = function(e)
+            if(e.TimerName == "GLO_MushroomHunter_CanAD") then
+                b_canAD = true
+            end
+        end
+
+        events.DialogStarted = function(e)
+            if e.Instance.DialogUUID == dlg_InFieldAD.Guid
+                or e.Instance.DialogUUID == dlg_InFieldDistantAD.Guid
+                or e.Instance.DialogUUID == dlg_MyconidVillageAD.Guid then
+                    b_canAD = false
+                    if GetFlag(fl_Saved) then
+                        StartTimer(me, "GLO_MushroomHunter_CanAD", 16.0, 0)
+                    else
+                        StartTimer(me, "GLO_MushroomHunter_CanAD", 10.0, 0)
+                    end
+            end
+
+        end
+
+        events.SavegameLoaded = function(ev)
+            if anim_Drink == Animation("UTIL_Drink_01_895ce382-397d-4b9a-9e8f-6ee3b1ff3a13") then
+                anim_Drink = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+            end
+        end
+    end
+}

@@ -1,0 +1,209 @@
+game.states.MOO_KitchenFight_Gnoll = State {function ()
+    --------------------------------MODULE--------------------------------
+    modules = {"shared.dialog", "shared.util"}
+    --------------------------------PARAMS--------------------------------
+    params.idlePosition = {type = EParamType.String, required = true, help = [[Position where the gnoll stands when idle]]}
+    params.chorePositions = {type = EParamType.String, arrayRange = "..", required = false, help = [[Position where the gnoll should perform a chore]]}
+    params.choreAnimation = {type = EParamType.String, required = false, help = [[Chore the gnoll will be performing]]}
+    params.choreAnimation_WorldBehaviour = {type = EParamType.String, required = false, help = [[Chore the gnoll will be performing (world behaviour)]]}
+    params.choreAnimation_SceneTrigger = {type = EParamType.String, required = false, help = [[Scene trigger for the chore the gnoll will be performing (world behaviour)]]}
+    params.lookAtTarget = {type = EParamType.String, required = false, help = [[Target the gnoll will look at while working]]}
+    params.choreRequiresFire = {type = EParamType.Bool, required = false, default = false, help = [[This chore animation requires the fire in the fireplace to be on.]]}
+    params.choreRequiresMeat = {type = EParamType.Bool, required = false, default = false, help = [[This chore animation requires the meat to be in position.]]}
+
+    --------------------------------LOCAL---------------------------------
+    local chorePoints = {}
+    local choreAnim = nil
+    local choreAnim_WB = nil
+    local choreAnim_SceneTrigger = nil
+    local attackFlag = Flag("MOO_Kitchen_State_AttackedTrueSoul_63f37c80-5bf0-47eb-901b-180f4274f105")
+    local freedFlag = Flag("MOO_KitchenFight_Event_PlayerFreedGnoll_bc87cc92-9231-7412-92e2-3cb10b9da954")
+    local entertainmentFlag = Flag("MOO_Kitchen_State_GnollIsEntertaining_035465cc-1a31-4d8c-b8f2-167ce80b0a59")
+    local qtrMaster = Entity("S_MOO_Kitchen_GnollMaster_627dfc1c-56e1-4e56-9920-56e381e72c53")
+    local runawayPoint = Entity("S_MOO_Kitchen_RunawayPoint_c2cdcc6e-f961-40a3-a5b6-e5d79923cf75")
+    local lookAtTarget = Entity(params.lookAtTarget)
+    local fireplace = Entity("DEC_GEN_Wood_Stacked_A_Burning_002_aa74bc38-2260-4ec9-87e2-727d7cfe6bb4")
+    local meat = Entity("S_MOO_Kitchen_CookingTarget_1ba9f25a-63a5-400b-a500-2837a5dd6146")
+    local meatTrigger = Entity("S_MOO_Kitchen_GnollChoreMeat_Trigger_6630ffb4-f853-486d-b622-d1e031cae9c1")
+    local currChorePoint = nil
+    local isFree = false
+    local isTired = false
+    local isHelping = false
+    local isStandbye = false
+    local isEntertaining = false
+    local hasSeveralSpots = false
+    local choreCounter = 1
+    local maxChoreCount = 1
+    --------------------------------NODES---------------------------------
+    self.OnInit = function()
+        if #params.chorePositions > 0 then
+            for i = 1, #params.chorePositions do
+                local trigger = Entity(params.chorePositions[i])
+                table.insert(chorePoints, trigger)
+            end
+        end
+
+        if #chorePoints == 0 then
+            local trigger = Entity(params.idlePosition)
+            table.insert(chorePoints, trigger)
+        end
+
+        if #chorePoints > 1 then
+            hasSeveralSpots = true
+        end
+
+        if params.choreAnimation ~= nil and params.choreAnimation ~= "" then
+            choreAnim = Animation(params.choreAnimation)
+        end
+
+        if params.choreAnimation_WorldBehaviour ~= nil and params.choreAnimation_WorldBehaviour ~= "" then
+            choreAnim_WB = Dialog(params.choreAnimation_WorldBehaviour)
+        end
+
+        if params.choreAnimation_SceneTrigger ~= nil and params.choreAnimation_SceneTrigger ~= "" then
+            choreAnim_SceneTrigger = Entity(params.choreAnimation_SceneTrigger)
+        end
+    end
+
+    nodes.RunAway = Action {function()
+        MoveTo(runawayPoint, MovementSpeed.Run)
+        SetOnStage(me, false)
+    end,
+    CanEnter = function()
+        return isFree and not isHelping
+    end
+    }
+
+    nodes.Entertain = Action{function()
+        Sleep(5.0)
+    end, 
+    Valid = function()
+        return isEntertaining
+    end}
+
+    nodes.Chore = Action {function()
+        local doChore = true
+
+        if params.choreRequiresFire and fireplace ~= nil and not HasActiveStatus(fireplace,"BURNING") then 
+            ApplyStatus(fireplace,"BURNING",false,-1.0,me)
+        end
+
+        if params.choreRequiresMeat and meat ~= nil and meatTrigger ~= nil and not IsInTrigger(meat,meatTrigger.Trigger) then 
+            doChore = false
+            DebugText(me, "Meat not in position")
+        end
+
+        if doChore and choreAnim_WB ~= nil and choreAnim_SceneTrigger ~= nil then
+            try
+                StartBehaviorDialog(choreAnim_WB,choreAnim_SceneTrigger.Trigger,true,me)
+            catch e then
+                DebugText(me, "Behaviour dialog failed: [1]",e)
+            end
+        elseif doChore and choreAnim ~= nil then
+            try
+                MoveTo(currChorePoint, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(2.0)
+                return
+            end
+
+            if lookAtTarget ~= nil then
+                SteerTo(lookAtTarget)
+            end
+
+            try
+                PlayAnimation(choreAnim, true, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, tostring(params.choreAnimation))
+                Sleep(5.0)
+            end
+        else
+            Sleep(5.0)
+        end
+ 
+        choreCounter = choreCounter + 1
+        if choreCounter > maxChoreCount then
+            isTired = true
+            SetEntityEvent(qtrMaster, "MOO_KitchenFight_GnollOnBreak", me)
+            return
+        end
+
+        if hasSeveralSpots then
+            currChorePoint = chorePoints[math.random(1, #chorePoints)]
+        end
+    end,
+    OnEnter = function()
+        currChorePoint = chorePoints[math.random(1, #chorePoints)]
+        maxChoreCount = math.random(5,10)
+        choreCounter = 1
+    end,
+    Valid = function()
+        return not isTired and not isFree and not isStandbye
+    end}
+
+    nodes.OnBreak = Action{ function()
+        Sleep(5)
+    end,
+    Valid = function()
+        return isTired and not isFree and not isStandbye
+    end
+    }
+
+    nodes.Idle = Action{function()
+        Sleep(2)
+    end,
+    CanEnter = function()
+        return isStandbye and not isFree
+    end,
+    Valid = function()
+        return not isFree
+    end
+    }
+
+    nodes.Fallback = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.idlePosition
+        }
+    }
+--------------------------------EVENTS--------------------------------
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "MOO_KitchenFight_GetBackToWork" then
+                isTired = false
+            elseif e.Event == "MOO_GnollsSetFree" then
+                if isHelping then
+                    isFree = true
+                else
+                    StartTimer(me, "MOO_Kitchen_FreedomTimer", 15.0, 0)
+                end 
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "MOO_Kitchen_FreedomTimer" then
+            isFree = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == attackFlag.Guid then
+            isStandbye = true
+        elseif e.Flag == freedFlag.Guid then 
+            isHelping = true
+        elseif e.Flag == entertainmentFlag.Guid then
+            if e.Entity == me then
+                isEntertaining = true
+            end
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == entertainmentFlag.Guid then
+            if e.Entity == me then
+                isEntertaining = false
+            end
+        end
+    end
+end}

@@ -1,0 +1,243 @@
+game.states.SHA_OrthonCompanion = State{
+function()
+    ---------------------------------------------
+    -- Local params
+    params.LairPos = {type = EParamType.String, required = true, help = [[Trigger where character will stand while at the lair.]]}
+    params.doJump = {type = EParamType.Bool, required = false, default = false, help = [[Character has to jump the gap.]]}
+    params.customBehaviour = {type = EParamType.State, required = false, default = nil, help = [[Is patrolling instead of standing.]]}
+    params.customAmbushBehaviour = {type = EParamType.State, required = false, default = nil, help = [[Custom ambush behaviour.]]}
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- Local values
+    local trLairPos = Entity(params.LairPos)
+
+    local flAmbushing = Flag("SHA_OrthonLair_State_AmbushInProgress_3fb4d528-b422-43e4-816b-54261450b401")
+
+    local trSecondJumpStart = nil
+    local trSecondJumpEnd = nil
+    local trSecondJumpArea = nil
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        if params.doJump then
+            trSecondJumpStart = Entity("S_SHA_OrthonLair_SecondJump_Start_9611aa21-05b8-4d32-8e7d-7fc78a42e9b5")
+            trSecondJumpEnd = Entity("S_SHA_OrthonLair_SecondJump_End_50339d43-bb76-4969-bd2f-edf9c8fce9ff")
+            trSecondJumpArea = Entity("S_SHA_OrthonLair_SecondJump_0e3341b2-5d32-4006-8a2f-9a493c759e86")
+        end
+    end
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- Nodes
+    nodes.Action_CustomAmbushing = Proxy{
+        params.customAmbushBehaviour,
+        Valid = function()
+            return params.customAmbushBehaviour ~= nil and GetFlag(flAmbushing)
+        end
+    }
+
+    nodes.Action_Ambushing = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return params.customAmbushBehaviour == nil and GetFlag(flAmbushing)
+        end
+    }
+
+    -- Jump done to reach one of the platfoms where one of the merregons patrols
+    nodes.Action_SecondJump = Action{
+        function()
+            local jumpFrom = FindValidPosition(trSecondJumpStart, 1.0, me)
+        if jumpFrom then
+            -- Approach the gap
+            local moveToResult = MoveTo(jumpFrom, MovementSpeed.Walk, false, false, 0.5, 1.0, false)
+
+            if moveToResult == error.MovementError.None then
+                local jumpTo = FindValidPosition(trSecondJumpEnd, 1.0, me)
+                if jumpTo then
+                    -- Jump the gap
+                    try
+                        UseSpell("Projectile_Jump", jumpTo,  nil, nil, nil, true, true, true)
+                        Sleep(4.0) -- Wait before resuming movement
+                    catch e if ls.CheckType(e, error.UseSpellFailed) then
+                        DebugText(me, "Error: Jump spell failed")
+                        Sleep(3.0)
+                    end
+                else
+                    DebugText(me, "Error: no valid position for jump to")
+                    Sleep(3.0)
+                end
+            else
+                DebugText(me, "Error: MovementFailed towards jump from")
+                Sleep(3.0)
+            end
+        else
+            DebugText(me, "Error: no valid position for jump from")
+            Sleep(3.0)
+        end
+        end,
+        Valid = function()
+            return params.doJump and not IsInTrigger(me, trSecondJumpArea.Trigger)
+        end
+    }
+
+    nodes.Proxy_CustomBehaviour = Proxy{
+        params.customBehaviour,
+        Valid = function()
+            return params.customBehaviour ~= nil
+        end
+    }
+
+    nodes.Action_AtLair = Action{
+        function()
+            if not IsInDangerousSurfaceFor(trLairPos, me.Character) then
+                local moveToResult = MoveTo(trLairPos, MovementSpeed.Walk, true, false, 0.5, 1.0, false)
+
+                if moveToResult == error.MovementError.None then
+                    LookFrom(trLairPos)
+                    WaitForInterrupt()
+                else
+                    DebugText(me, "Error: MovementFailed towards the lair")
+                    Sleep(3.0)
+                end
+            else
+                DebugText(me, "Error: MoveTo in dangerous surface")
+                Sleep(3.0)
+            end
+        end,
+    }
+    ---------------------------------------------
+end
+}
+
+game.states.SHA_Merregon_001 = State{
+function()
+    description = [[Small behaviour of merregon that interacts with the Orthon while patrolling]]
+
+    modules = {"shared.dialog"}
+
+    ---------------------------------------------
+    -- Local values
+    local orthon = Entity("S_SHA_Orthon_1dc8091d-2af6-4d33-9268-998ef266d19c")
+
+    local wait = false
+    local patrolSpline = Spline("S_SHA_MerregonPatrol_000_bfbd9b4b-b109-42f6-903f-06f25f1037c1")
+
+    local doAD = false
+    local AD = Dialog("SHA_OrthonLair_AD_MerregonAndOrthon_f64bdc1b-1b5e-f06a-e355-e4ac73bfb172")
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- State nodes
+    nodes = ImmediateSelector{}
+
+    self.Valid = function()
+        return wait or doAD
+    end
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- Nodes
+    -- Wait at patrolling node
+    nodes.Action_Wait = Action{
+        function()
+            LookFrom(patrolSpline)
+            Sleep(5.0)
+            wait = false
+        end,
+        Valid = function()
+            return wait
+        end
+    }
+
+    -- Small "chat" with Orthon if he is available
+    nodes.Action_OrthonAD = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(AD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 60.0,
+                    }, me, orthon)
+            doAD = false
+        end,
+        Valid = function()
+            return doAD
+        end
+    }
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "SHA_MerregonWait" then
+            wait = true
+        elseif e.Event == "SHA_OrthonAD" and mod.dialog.IsSpeakerAvailableAndNear(orthon, me, 10.0, true, false) then
+            doAD = true
+        end
+    end
+    ---------------------------------------------
+end
+}
+
+game.states.SHA_Merregon_SittingAtCampfire = State{
+function()
+    ---------------------------------------------
+    -- Local params
+    params.sitPos  = {type = EParamType.String, required = true, help = [[Trigger where character will sit while at the lair.]]}
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- Local values
+    local sitPos = Entity(params.sitPos)
+    local campfire = Entity("S_SHA_OrthonLair_Campfire_f1b07f19-aa90-467f-b298-15af4e52586e")
+
+    local currentState = ""
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- Nodes
+    nodes.Action_SittingNextToCampfire = Action{
+        function()
+            if not IsInDangerousSurfaceFor(sitPos, me.Character) then
+                local moveToResult = MoveTo(sitPos, MovementSpeed.Walk, true, false, 0.5, 1.0, false)
+
+                if moveToResult == error.MovementError.None then
+                    LookFrom(sitPos)
+
+                    -- Lit campfire if it's not.
+                    if not HasActiveStatus(campfire, "BURNING") then
+                        ApplyStatus(campfire, "BURNING", true, -1)
+                    end
+
+                    currentState = "SittingNextToCampfire"
+                    SitOnGround(me)
+
+                    WaitForInterrupt()
+                else
+                    DebugText(me, "Error: MovementFailed towards the lair")
+                    Sleep(3.0)
+                end
+            end
+        end,
+        OnLeave = function()
+            EndRepose(me)
+            currentState = ""
+        end
+    }
+    ---------------------------------------------
+
+    ---------------------------------------------
+    -- Events
+    events.EntityEvent = function(e)
+        if  e.TargetEntity == me and  e.Event == "SHA_MerregonLitCampfire" and
+            currentState == "SittingNextToCampfire" then
+                ApplyStatus(campfire, "BURNING", true, -1)
+        end
+    end
+    ---------------------------------------------
+end
+}

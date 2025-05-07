@@ -1,0 +1,50 @@
+game.states.LOW_PhilgravesMansion_EatingGhoul = State{
+
+    
+    function()
+
+        modules = {"shared.moveto","shared.util"}
+
+        params.WanderTrigger = {type=EParamType.String, required = false, help = [[meeting spline GUID]]}
+        params.CanEat = {type=EParamType.Bool, required = false, default = false, help = [[whether ghoul will stop to eat]]}
+
+        local WanderTrigger = Entity(params.WanderTrigger)
+        local eatingAnimation = Animation("CUST_EatingCorpse_01_ea42da9e-15b5-4404-8fe2-9c0080b019c9")
+        local eating = false
+        local currentGut =  Entity("S_LOW_PhilgravesMansion_ExplodedCorpse_003_08954d6b-7d8e-453e-ada3-2934a7ea6488")
+        local guts = {
+            Entity("S_LOW_PhilgravesMansion_ExplodedCorpse_003_08954d6b-7d8e-453e-ada3-2934a7ea6488"),
+            Entity("S_LOW_PhilgravesMansion_ExplodedCorpse_001_0595d810-6dbf-4e02-8e3d-4c7414a6d627"),
+            Entity("S_LOW_PhilgravesMansion_ExplodedCorpse_002_9e34fa2d-1664-48eb-8af8-9d83534cf39e")
+        }
+
+        nodes.Eat = Action{
+            function()
+                currentGut = guts[math.random(#guts)]
+                if mod.moveto.MoveToPoint(currentGut,MovementSpeed.Walk, me) then
+                    SteerTo(currentGut)
+                    PlayAnimation(eatingAnimation,true,false)
+                end
+                eating = false
+            end,
+            Valid = function()
+                return eating and params.CanEat
+            end
+        }
+
+        nodes.PatrolSleep = Action{
+            function()
+                Wander(10.0,5.0,MovementSpeed.Walk,WanderTrigger)
+                Sleep(math.random(5.0, 10.0))
+                if params.CanEat then
+                    eating = true
+                end
+            end,
+            CanEnter = function()
+                return not eating 
+
+            end
+        }
+
+end
+    }

@@ -1,0 +1,154 @@
+game.states.LOW_Minsc = State {
+    function()
+        description = [[Minsc's state in LOW: Counting house -> Abandoned Cistern]]
+
+        modules = {"shared.items", "shared.dialog"}
+
+        --------------- PARAMS ---------------
+
+        local hasEscapedCountingHouse = Flag("LOW_CountingHouse_State_RobbersEscaped_16197488-9cc2-48e2-94ae-36225025d4d8")
+
+        local isSavingBoo = Flag("ORI_Minsc_State_SavingBoo_c0bb9916-a2e0-416a-9117-1724bc5854c4")
+        local isBooSaved = Flag("ORI_Minsc_State_BooSaved_86765e52-75f0-4b7a-a346-c55265ec4af9")
+        local isReunitedWithBoo = Flag("ORI_Minsc_State_ReunitedWithBoo_491635de-7395-5fe4-f8ce-be3288707a80")
+
+        local searchForBooAD = Dialog("LOW_MinscHideout_AD_SavingBoo_f4040bea-3729-e048-df43-f0985f5b8a81")
+        local foundBooAD = Dialog("LOW_MinscHideout_AD_FoundBoo_986d9f46-4e8a-545f-d286-aff7c033f3c5")
+
+        local minscZhentMeetingPoint = Entity("S_LOW_MinscHideout_MinscMeetingPoint_df3a2aa8-e232-4100-9d53-578941868569")
+        local hamsterCaveTrigger = Entity("S_LOW_MinscHideout_HamsterCave_984e5991-8912-4580-8381-a22ab3da823a")
+        local booMinscMeetingPoint =
+            Entity("S_LOW_MinscHideout_MinscBooMeetingPoint_a33fa993-2fa2-4eb1-93c7-70b10ff398dc")
+        local boo = Entity("S_GLO_Boo_Summon_d49e3b49-a089-4465-b453-28dc79e82bb3")
+        local booPrisonWall = Entity("S_LOW_MinscHideout_BooPrisonWall_1e32480a-9446-46d7-9018-76002fce1d7e")
+        local booPrisonCell = Entity("S_LOW_MinscHideout_CorrectBooPrisonCell_b4674779-e4ee-4378-94c1-4013dc4e546b")
+        local booPrisonEmptyCells = {
+            Entity("S_LOW_MinscHideout_BooPrisonCell_000_80773f37-6ab0-4283-9a8a-ef4e280c0c82"),
+            Entity("S_LOW_MinscHideout_BooPrisonCell_001_d2c95d68-c333-4334-abe0-061cecd3d05a")
+        }
+
+        local currentCellTarget = nil
+    
+        --------------- NODES ---------------
+
+        nodes = ImmediateSelector {}
+
+        nodes.DuringCountingHouse = ImmediateSelector {
+            Valid = function(nodes)
+                return not GetFlag(hasEscapedCountingHouse)
+            end
+        }
+
+        nodes.DuringCountingHouse.Action_WaitForMeeting = Action {
+            function()
+                sleep(1.0)
+            end
+        }
+
+        nodes.PostCountingHouse = ImmediateSelector {
+            Valid = function(nodes)
+                return GetFlag(hasEscapedCountingHouse)
+            end
+        }
+
+        nodes.PostCountingHouse.Action_WaitForMeeting = Action {
+            function()
+                Wander(4.5, 3.0, MovementSpeed.Walk, minscZhentMeetingPoint)
+            end,
+            Valid = function()
+                return not GetFlag(isSavingBoo)
+            end
+        }
+
+        nodes.PostCountingHouse.Action_WaitForRecruitment = Action {
+            function()
+                Wander(4.5, 3.0, MovementSpeed.Walk, hamsterCaveTrigger)
+            end,
+            Valid = function()
+                return GetFlag(isReunitedWithBoo)
+            end
+        }
+
+        nodes.PostCountingHouse.Action_OpenBooPrison = Action {
+            function()
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    searchForBooAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 15.0
+                    },
+                    me
+                )
+                Sleep(1.0)
+                MoveTo(booPrisonWall, MovementSpeed.Run, true, false, 0.5, 0.5)
+                UseSpell("Target_LOW_MinscHideout_MinscAttacksWall", booPrisonWall, nil, nil, nil, false, true, false)
+            end,
+            Valid = function()
+                -- Isn't it too expensive to check in Valid?
+                return not mod.items.SafeIsDestroyed(booPrisonWall)
+            end
+        }
+
+        nodes.PostCountingHouse.Action_SearchForBoo = Action {
+            function()
+                local moveResult = MoveTo(booMinscMeetingPoint, MovementSpeed.Run, false, false, 0.5, 2.0, false)
+                Sleep(1)
+
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Can't get there!")
+                    Sleep(2.0)
+                    return false
+                end
+
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    searchForBooAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 15.0
+                    },
+                    me
+                )
+
+                if currentCellTarget ~= nil and mod.items.SafeIsDestroyed(currentCellTarget) then
+                    currentCellTarget = nil
+                    table.remove(booPrisonEmptyCells, currentCellTarget)
+                end
+
+                if currentCellTarget == nil and #booPrisonEmptyCells > 0 then
+                    local currentTargetIndex = math.random(1, #booPrisonEmptyCells)
+                    currentCellTarget = booPrisonEmptyCells[currentTargetIndex]
+                elseif currentCellTarget == nil and #booPrisonEmptyCells <= 0 and not mod.items.SafeIsDestroyed(booPrisonCell) then
+                    currentCellTarget = booPrisonCell
+                elseif currentCellTarget == nil then
+                    SetFlag(isBooSaved) -- all walls are destroyed
+                end
+
+                if currentCellTarget ~= nil then
+                    SteerTo(currentCellTarget)
+                    MoveTo(currentCellTarget, MovementSpeed.Run, true, false, 0.5, 0.5)
+                    UseSpell("Target_LOW_MinscHideout_MinscAttacksWall", currentCellTarget, nil, nil, nil, false, true, false)
+                end
+            end,
+            Valid = function()
+                return not GetFlag(isBooSaved)
+            end
+        }
+
+        nodes.PostCountingHouse.Action_ReuniteWithBoo = Action {
+            function()
+                local moveResult = MoveTo(boo, MovementSpeed.Run, false, false, 2.0, 3.0, true)
+
+                if moveResult == error.MovementError.None then
+                    SetOnStage(boo, false)
+                    SetFlag(isReunitedWithBoo)
+                else
+                    Sleep(1.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(isBooSaved)
+            end
+        }
+
+    end
+}

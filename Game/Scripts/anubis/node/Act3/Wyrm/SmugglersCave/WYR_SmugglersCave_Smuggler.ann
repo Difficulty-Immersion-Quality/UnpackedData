@@ -1,0 +1,143 @@
+game.states.WYR_SmugglersCave_Smuggler = State{function()
+    description = [[Behavior of smugglers in Smuggler's Cave:
+        - after combat they run around as if unloading the ship
+    ]]
+
+    modules = { "shared.moveto", "shared.params", "shared.util" }
+
+    params.LoadPos = { type = EParamType.String, required = true, arrayRange = "1.." }
+    params.UnloadPos = { type = EParamType.String, required = true, arrayRange = "1.." }
+
+    local pickup = Animation("CUST_Barricade_PickupMaterial_01_2f0b5393-9999-42d5-8b7a-3b9433a53cd3")-- CUST_PickUp_01_73059636-3720-4bf9-9709-772bbf9ff685")
+    local drop = Animation("CUST_DropItem_01_a61ba17e-affb-47af-a915-90e1f3f07439")
+    local postCombat = Flag("WYR_SmugglersCave_Event_PostCombat_67b3c231-5dc4-4bb8-9fee-02d7d1074da3")
+
+    local moveDist = 1.0
+    local maxMoveRetries = 3
+
+    local loadPos = {}
+    local unloadPos = {}
+
+    local hasCargo = false
+    local selectedLoad = 0
+    local selectedUnload = 0
+
+    local failedMoves = 0
+
+    self.OnInit = function()
+        loadPos = mod.params.ParamArrayToEntityList(params.LoadPos)
+        unloadPos = mod.params.ParamArrayToEntityList(params.UnloadPos)
+    end
+
+    --[[ LOADING ]]
+
+    nodes.Load = Selector{
+        CanEnter = function(node)
+            return not hasCargo and GetFlag(postCombat) and CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Load.SelectPos = Action{
+        CanEnter = function()
+            return selectedLoad == 0 or failedMoves == maxMoveRetries
+        end,
+
+        function()
+            selectedLoad = selectedLoad + 1
+            -- if we iterated to end of table, start over again
+            if selectedLoad == #loadPos + 1 then
+                selectedLoad = 0
+            end
+            --DebugText(me, "Selected load: " .. tostring(selectedLoad))
+            failedMoves = 0
+        end
+    }
+
+    nodes.Load.MoveTo = Action{
+        CanEnter = function()
+            return GetDistanceTo(me, loadPos[selectedLoad]) > moveDist
+        end,
+
+        function()
+            local moved = mod.moveto.MoveToPoint(loadPos[selectedLoad], MovementSpeed.Run, me, moveDist)
+            if not moved then
+                failedMoves = failedMoves + 1
+                --DebugText(me, "Failed moves: " .. tostring(failedMoves))
+            else
+                LookFrom(loadPos[selectedLoad])
+            end
+        end
+    }
+
+    nodes.Load.Animate = Action{
+        function()
+            try
+                PlayAnimation(pickup, true, false)
+            catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                --DebugText(me, "Failed PlayAnimation(pickup)")
+                Sleep(2.0)
+            end
+            hasCargo = true
+        end
+    }
+
+    --[[ UNLOADING ]]
+
+    nodes.Unload = Selector{
+        CanEnter = function(node)
+            return hasCargo and GetFlag(postCombat) and CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Unload.SelectPos = Action{
+        CanEnter = function()
+            return selectedUnload == 0 or failedMoves == maxMoveRetries
+        end,
+
+        function()
+            selectedUnload = selectedUnload + 1
+            -- if we iterated to end of table, start over again
+            if selectedUnload == #unloadPos + 1 then
+                selectedUnload = 0
+            end
+            --DebugText(me, "Selected unload: " .. tostring(selectedUnload))
+            failedMoves = 0
+        end
+    }
+
+    nodes.Unload.MoveTo = Action{
+        CanEnter = function()
+            return GetDistanceTo(me, unloadPos[selectedUnload]) > moveDist
+        end,
+
+        function()
+            local moved = mod.moveto.MoveToPoint(unloadPos[selectedUnload], MovementSpeed.Run, me, moveDist)
+            if not moved then
+                failedMoves = failedMoves + 1
+                --DebugText(me, "Failed moves: " .. tostring(failedMoves))
+            else
+                LookFrom(unloadPos[selectedUnload])
+            end
+        end
+    }
+
+    nodes.Unload.Animate = Action{
+        function()
+            try
+                PlayAnimation(drop, true, false)
+            catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                --DebugText(me, "Failed PlayAnimation(drop)")
+                Sleep(2.0)
+            end
+            hasCargo = false
+        end
+    }
+
+    --[[ FALLBACK ]]
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(1.0)
+        end
+    }
+end}

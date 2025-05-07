@@ -1,0 +1,91 @@
+game.states.MOO_KethericHound = State{function ()
+
+    modules = { "shared.dialog", "shared.character"}
+
+    description = [[Ketheric Hound Behaviour within Moonrise]]
+
+    local patrolAD = Dialog("MOO_KethericHound_AD_Patrol_ec1c0d50-6791-12bd-82fa-4b39a73e38ac")
+    local houndInBedroomFlag = Flag("MOO_Execution_Event_KethericLeave_b8718f8f-6313-dc0e-e20d-7435db4b74c4")
+
+    nodes.Wander = Proxy {
+        game.states.GEN_Wander,
+        params = {
+            trigger = [[S_MOO_KethericHound_Wander_Box_37664bfd-7bfa-4db1-b410-0e05dcb37c44]],
+            wanderMin = 2,
+            wanderMax = 6,
+            sleepMin = 1,
+            sleepMax = 3},
+        CanEnter = function()
+            return GetFlag(houndInBedroomFlag)
+        end,
+        OnEnter = function()
+            StartTimer(me,"MOO_KethericHound_AD",10.0,0)
+        end,
+        OnLeave = function()
+            StopTimer(me,"MOO_KethericHound_AD")
+        end
+    }
+
+    nodes.Execution = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_MOO_KethericHound_Execution_Point_e0001ea2-9a6d-4ab4-bf18-70fa0dd0fa0a]]
+        }
+    }
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "MOO_KethericHound_AD" then
+            StartTimer(me,"MOO_KethericHound_AD",30.0,0)
+            DebugText(me,"Restarted dialog timer")
+            StartAutomatedDialogRateLimitedImmediate(patrolAD,1.0,12.0,me)
+        end
+    end
+
+end
+}
+
+game.states.MOO_KethericHound_Assault = State{function ()
+    description = [[Ketheric Hound Behaviour during the assault. If hostile, will be on the roof, otherwise, in Isobels room]]
+
+    modules = { "shared.moveto" }
+
+    local smelledBlessingFlag = Flag("MOO_KethericHound_State_SmelledBlessing_8b18d9a1-fbad-5106-c428-38caae51c18c")
+    local isobelRoomIdlePoint = Entity("S_MOO_AssaultIsobelRoomPoint_001_71f34f15-c2d6-47e5-b664-febc2851826f")
+    --local sniffingAnim = Animation("CUST_Sniffing_Air_01_92e7ac17-b123-4a26-8e4f-2f8df2502fc2") TODO: Need anim request for hound
+    local mimicItem = Entity("S_MOO_MimicChest_75c62599-7d9e-4dbf-a95a-198bfa3901dc")
+    local mimic = Entity("S_MOO_Mimic_8571d22f-7e86-4f29-8a41-220c2ef3473f")
+    local barkAD = Dialog("MOO_KethericHound_AD_Bark_63ab4118-3458-1efe-ade0-9504f9db643b")
+
+    nodes.InIsobelRoom = Action {
+        CanEnter = function()
+            return GetFlag(smelledBlessingFlag)
+        end,
+
+        function()
+            Wander(8.0, 6.0, MovementSpeed.Walk, isobelRoomIdlePoint)
+            Sleep(22 + 10 * math.random())
+            --PlayAnimation(sniffingAnim, false, true)
+            if not mimic.Character.IsDead then
+                if mod.moveto.MoveToPoint(mimicItem,  MovementSpeed.Walk, me) then
+                    SteerTo(mimicItem)
+                    StartAutomatedDialog(barkAD, true, me)
+                else
+                    SteerTo(mimicItem)
+                    StartAutomatedDialog(barkAD, true, me)
+                end
+            end
+            Sleep(2)
+        end
+    }
+
+
+    nodes.OnRoof = Proxy {
+        game.states.MOO_Assault_CombatReadyIdle,
+        params = {
+            IsCombatIdleAnim = false,
+            IsWeaponUnsheathed = false,
+        }
+    }
+
+end
+}

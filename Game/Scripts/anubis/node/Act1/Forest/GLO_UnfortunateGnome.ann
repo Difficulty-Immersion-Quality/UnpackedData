@@ -1,0 +1,204 @@
+game.states.GLO_UnfortunateGnome = State{function ()
+
+    modules = {"shared.dialog","shared.params", "shared.util"}
+
+    params.homeTrigger = {type=EParamType.String, required = false, default=nil, help=[[
+        home trigger
+        ]]}
+
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is about to be destroyed or has been already.
+    ]]}
+    params.CaveInEvacuationBox = {type = EParamType.String, help=[[
+        The trigger to which the characters will run if the Rothe is going to crash the cave in or explosives are set.
+    ]]}
+
+    local FOR_UnfortunateGnome_AD_WaitingForRelease = Dialog("FOR_UnfortunateGnome_AD_WaitingForRelease_b5847f5a-28c3-2393-a7e6-cdb4391e4352")
+    local FOR_GnomeGoblinsDead = Flag("FOR_GnomeGoblinsDead_8910f084-c9ad-2336-c6a7-098d71914529")
+    local FOR_GnomeGoblinsPacified = Flag("FOR_GnomeGoblinsPacified_385336a9-30d7-f4f8-fa62-32dff47ff714")
+    local GLO_UnfortunateGnome_State_Still = Flag("GLO_UnfortunateGnome_State_Still_d58850bc-2eac-8105-99b1-fec5d247b746")
+    local currentState = "State_Windmill"
+    local Goblin1 = Entity("S_FOR_GnomeGoblin1_b2c582af-bc69-48b3-a004-648562dab404")
+    local bucket = Entity("S_CAMP_AlchemyBucket_deafbe9b-93c2-4243-98a1-0e3e493e09eb")
+    local TiedUpAD  = Dialog("FOR_UnfortunateGnome_AD_Plead_2d81796b-043f-50af-4c56-a3fec92b3e74")
+
+    -- Anims
+    local ThinkingAnimStart = Animation("CUST_Thinking_01_Start_74abd35c-c980-4d55-b696-9afec086edf1")
+    local ThinkingAnimLoop = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+    local ThinkingAnimEnd = Animation("CUST_Thinking_01_End_bfbcf996-bc08-4a42-8b50-8a7b41b2d613")
+    local InspectPotionAnim = Animation("CUST_InspectingPotion_01_b5842c3c-b6f8-4e71-8e38-7cb6a495e5c2")
+
+    local OrganiseAnim = Dialog("BHVR_WRLD_GLO_Organizing_01_3c0f2704-a516-929d-e728-427559819f1b")
+
+    -- Camp
+    local CAMP_AlchemyStationPos
+    local organizingSceneTrigger
+    local CAMP_WLDMAIN_State_InRegion = Flag("CAMP_WLDMAIN_State_InRegion_3eb9118b-b60d-4fac-bb27-bfe63b852ff5")
+
+    self.OnInit = function()
+        -- Camp Entities
+        CAMP_AlchemyStationPos = FindEntity("BHVR_WRLD_CAMP_InspectingPotion_GNO_M_SceneTrigger_460414f1-99d5-481c-bbf3-b602cb7f7f7e")
+        organizingSceneTrigger = FindEntity("BHVR_WRLD_GLO_Organizing_01_SceneTrigger_ae05b5ff-c9a9-4c8b-8765-163953a97ff8")
+    end
+
+    nodes.Selector_Global = Selector
+    {
+
+            function(nodes)
+                return nodes[currentState]
+            end
+    }
+
+    nodes.Selector_Global.State_Windmill = Action
+    {
+        function()
+            Sleep(1.0) --Character is Disabled while in this state.
+        end
+        ,
+        Valid = function()
+            return currentState == "State_Windmill"
+        end
+    }
+
+    nodes.Selector_Global.State_Underdark = Proxy{
+        game.states.UND_DebrisCleaners,
+        params={
+            homeTrigger = params.homeTrigger,
+            CaveInPosition = params.CaveInPosition,
+            CaveInEvacuationBox = params.CaveInEvacuationBox},
+        Valid = function()
+            return currentState == "State_Underdark"
+        end
+    }
+
+    nodes.Selector_Global.State_Camp = Selector
+    {
+        function(nodes)
+            return GetWeightedCanEnter(nodes,
+            {
+                [nodes.Alchemy] = 1, -- Only available in main camp
+                [nodes.Organising] = 1, -- Only available in main camp
+                [nodes.Thinking] = 2
+            })
+        end
+        ,
+        Valid = function()
+            return currentState == "State_Camp"
+        end
+
+    }
+
+    nodes.Selector_Global.State_Camp.Alchemy = Action
+    {
+        function()
+            local moveResult = MoveTo(CAMP_AlchemyStationPos, MovementSpeed.Walk, true, false, 0.5, 0.6 ,false)
+            
+            if moveResult ~= error.MovementError.None or InspectPotionAnim == nil then
+                DebugText(me, "Fallback anim")
+                if (ThinkingAnimStart ~= nil and ThinkingAnimLoop ~= nil and ThinkingAnimEnd ~= nil) then
+                    PlayLoopingAnimation(ThinkingAnimStart,{ThinkingAnimLoop},ThinkingAnimEnd)
+                    Sleep(18.0)
+                    StopAnimation(me)
+                    Sleep(9.0) --TODO: hard-coded animation sleep fix
+                end
+                return
+            else
+                DebugText(me, "Inspecting potion")
+                PlayAnimation(InspectPotionAnim)
+                mod.util.SleepRandom(2,8)
+            end
+        end,
+
+        CanEnter = function()
+            return GetFlag(CAMP_WLDMAIN_State_InRegion, me)
+        end
+    }
+
+    nodes.Selector_Global.State_Camp.Organising = Action
+    {
+        function()
+            local moveResult = MoveTo(organizingSceneTrigger, MovementSpeed.Walk, true, false, 0.5, 0.6 ,false)
+            
+            if moveResult ~= error.MovementError.None or OrganiseAnim == nil or organizingSceneTrigger == nil then
+                DebugText(me, "Fallback anim")
+                if (ThinkingAnimStart ~= nil and ThinkingAnimLoop ~= nil and ThinkingAnimEnd ~= nil) then
+                    PlayLoopingAnimation(ThinkingAnimStart,{ThinkingAnimLoop},ThinkingAnimEnd)
+                    Sleep(18.0)
+                    StopAnimation(me)
+                    Sleep(9.0) --TODO: hard-coded animation sleep fix
+                end
+                return
+            elseif bucket ~= nil then
+                DebugText(me, "Organising")
+                StartBehaviorDialog(OrganiseAnim,organizingSceneTrigger.Trigger,true,me,bucket)
+                mod.util.SleepRandom(2,8)
+            end
+        end,
+
+        CanEnter = function()
+            return GetFlag(CAMP_WLDMAIN_State_InRegion, me)
+        end
+    }
+
+    nodes.Selector_Global.State_Camp.Thinking = Action
+    {
+        function()
+            DebugText(me, "Thinking")
+            if (ThinkingAnimStart ~= nil and ThinkingAnimLoop ~= nil and ThinkingAnimEnd ~= nil) then
+                PlayLoopingAnimation(ThinkingAnimStart,{ThinkingAnimLoop},ThinkingAnimEnd)
+                Sleep(18.0)
+                StopAnimation(me)
+                Sleep(9.0) --TODO: hard-coded animation sleep fix
+            end
+            mod.util.SleepRandom(2,8)
+        end
+    }
+
+    events.EntityEvent = function(ev)
+        if (ev.TargetEntity == me) then
+            if (ev.Event == "FOR_UnfortunateGnome_RanAway") then
+                currentState = "State_Underdark"
+            elseif (ev.Event == "UND_UnfortunateGnome_RanAwayToCamp") then
+                currentState = "State_Camp"
+            end
+        end
+    end
+
+    helpers.RestartTimer = function()
+        local duration = math.random()*4.0+7.0
+        StartTimer(me, "FOR_StartNewDialogue", duration, 0)
+    end
+
+    events.Activated = function()
+        if currentState == "State_Windmill" then
+            helpers.RestartTimer()
+        end
+    end
+
+    events.Deactivated = function()
+        StopTimer(me, "FOR_StartNewDialogue")
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "FOR_StartNewDialogue" then
+            local FOR_GnomeGoblin1_State_Incapacitated = Flag("FOR_GnomeGoblin1_State_Incapacitated_6effeebc-285b-4846-9098-488f6f192139")
+            if mod.dialog.IsSpeakerAvailable(me) and
+               me.IsReposed then
+                if GetFlag(FOR_GnomeGoblinsDead) or
+                   GetFlag(FOR_GnomeGoblinsPacified) or
+                   GetFlag(FOR_GnomeGoblin1_State_Incapacitated) then
+                    StartAutomatedDialogRateLimitedImmediate(FOR_UnfortunateGnome_AD_WaitingForRelease, 4.0, 5.0, me)
+                elseif mod.dialog.IsSpeakerAvailable(Goblin1) and
+                       not me.IsInCombat and
+                       not Goblin1.IsInCombat and not
+                       GetFlag(GLO_UnfortunateGnome_State_Still) then
+                    StartAutomatedDialogRateLimitedImmediate(TiedUpAD, 4.0, 5.0, me, Goblin1)
+                end
+            end
+            if currentState == "State_Windmill" then
+                helpers.RestartTimer()
+            end
+        end
+    end
+end
+}

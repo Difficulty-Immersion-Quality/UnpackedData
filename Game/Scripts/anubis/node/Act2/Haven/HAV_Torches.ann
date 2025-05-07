@@ -1,0 +1,267 @@
+game.states.HAV_Torches = State{function()
+
+    description = [[A helper object that controls npc behaviors in Act2 Haven.
+        As darkness poses a threat to life, npcs care about doused torches and try their best to ignite them.]]
+
+    local dbg_FX = nil
+    local dbg_FXs = {}
+
+
+    -- npcs care for torches in this radius
+    local distAwareness = 12
+    -- when npc is assigned to ignite a torch, this helper waits for this period before looking for someone else
+    local caretakeTimer = 3.0
+
+    -- list of torches registered from Osiris
+    local torches = {}
+    -- list of npcs, registered in this script
+    local npcs = {}
+    -- a square grid with overlaps, used to improve npc search performance
+    -- this weas benchmarked in a test level: grid saves performance by a degree
+    local npcsGrid = {}
+
+    local moodSiege = Flag("HAV_Mood_State_Siege_b509af8b-a331-47ac-8230-3b8c5ef9956b")
+    local moodUnprotected = Flag("HAV_Mood_State_Unprotected_7ac5d939-2c81-4871-81a5-fd5c6a0adba1")
+    local liftedCurse = Flag("GLO_LiftingTheCurse_State_BreathHasBeenRestored_2113b54e-a140-4aa0-97ac-219fa7b7d038")
+    local humanoid = Tag("HUMANOID_7fbed0d4-cabc-4a9d-804e-12ca6088a0a8")
+    local killedNightsong = Flag("SHA_NightsongPrison_State_ShadowheartKilledNightsong_3cac3cd6-4c16-44a6-8246-a91922821169")
+
+    -- debug vfx beam between torch and npc which is going to ignite it
+    helpers.UpdateFX = function(torch, npc)
+        --[[
+        if torch == nil then return end
+        if dbg_FXs[torch.guid] ~= nil then
+            StopEffect(dbg_FXs[torch.guid].effect)
+            dbg_FXs[torch.guid] = nil
+        end
+        if npc ~= nil then
+            local effect = PlayBeamEffectAt(dbg_FX, torch.entity, npc, "", "")
+            dbg_FXs[torch.guid] = { npc = npc, effect = effect }
+        end
+        --]]
+    end
+
+    self.OnInit = function()
+        --dbg_FX = PrepareEffect("VFX_Beams_Underdark_Arcane_Turret_Beam_01_3af9c664-d864-cbcd-e6b1-11ea99e307df")
+    end
+
+    self.Valid = function()    
+        return not GetFlag(killedNightsong)
+    end
+
+    -- return grid cell where the target entity/position is
+    -- returns string to be used as key in a table
+    helpers.GetGridCell = function(entityOrX, y, dx, dy)
+        if y == nil then
+            local gridX = math.floor(entityOrX.Position.X / distAwareness)
+            local gridY = math.floor(entityOrX.Position.Z / distAwareness)
+            return tostring(gridX) .. ':' .. tostring(gridY)
+        end
+        local gridX = math.floor(entityOrX / distAwareness) + dx
+        local gridY = math.floor(y / distAwareness) + dy
+        return tostring(gridX) .. ':' .. tostring(gridY)
+    end
+
+    -- doused torches are added to tracked list
+    helpers.AddTorch = function(entity)
+        local gridCell = helpers.GetGridCell(entity)
+        local entityGUID = tostring(entity.UUID)
+        torches[entityGUID] = {
+            cell = gridCell,
+            entity = entity,
+            guid = entityGUID,
+            pos = entity.Position,
+        }
+    end
+
+    -- ignited torches are removed from tracked list
+    helpers.RemoveTorch = function(entity)
+        local entityGUID = tostring(entity.UUID)
+        local torch = torches[entityGUID]
+        if torch ~= nil and torch.caretaker ~= nil then
+            helpers.UpdateFX(torch)
+            torch.caretaker.Blackboard.ClearFact("HAV_Torches_TakeCareOf")
+            torch.caretaker.Blackboard.ClearFact("HAV_Torches_CareInProgress")
+        end
+        torches[entityGUID] = nil
+    end
+
+    -- add npc to list and onto the grid
+    helpers.AddNPC = function(entity)
+        local gridCell = helpers.GetGridCell(entity)
+        local entityGUID = tostring(entity.UUID)
+        npcsGrid[gridCell] = npcsGrid[gridCell] or {}
+        npcsGrid[gridCell][entityGUID] = npcsGrid[gridCell][entityGUID] or {}
+
+        npcsGrid[gridCell][entityGUID] = true
+        npcs[entityGUID] = {
+            cell = gridCell,
+            entity = entity,
+            guid = entityGUID
+        }
+    end
+
+    -- remove npc from the list and from the grid
+    helpers.RemoveNPC = function(entity)
+        local entityGUID = tostring(entity.UUID)
+        if npcs[entityGUID] == nil then
+            return
+        end
+        local gridCell = npcs[entityGUID].cell
+        npcsGrid[gridCell][entityGUID] = nil
+        npcs[entityGUID] = nil
+
+        local torchEntity = entity.Blackboard.GetFact("HAV_Torches_TakeCareOf")
+        if torchEntity ~= nil then
+            entity.Blackboard.ClearFact("HAV_Torches_TakeCareOf")
+            entity.Blackboard.ClearFact("HAV_Torches_CareInProgress")
+            local torch = torches[tostring(torchEntity.UUID)]
+            if torch ~= nil then
+                helpers.UpdateFX(torch)
+                torch.caretaker = nil
+            end
+        end
+    end
+
+    -- updates grid positions of npcs, runs on every cycle of main action
+    helpers.UpdateNPCsGrid = function()
+        for _, npc in pairs(npcs) do
+            local gridCell = helpers.GetGridCell(npc.entity)
+            if gridCell ~= npc.cell then
+                npcsGrid[npc.cell][npc.guid] = nil
+
+                npcsGrid[gridCell] = npcsGrid[gridCell] or {}
+                npcsGrid[gridCell][npc.guid] = npcsGrid[gridCell][npc.guid] or {}
+
+                npcsGrid[gridCell][npc.guid] = true
+                npcs[npc.guid].cell = gridCell
+            end
+        end
+        --helpers.DumpGrid()
+    end
+
+    --[[helpers.DumpGrid = function()
+        local str = ""
+        for c, n in pairs(npcsGrid) do
+            for g, _ in pairs(n) do
+                local xy = tostring(npcs[g].entity.Position.X) .. ", " .. tostring(npcs[g].entity.Position.Z)
+                str = str .. xy .. " : " .. c .. " : " .. g .. "\n"
+            end
+        end
+        DebugLog(str)
+    end]]
+
+    -- main action cycle:
+    --   update npc grid
+    --   for all tracked torches - find npcs nearby, try to send them for ignition
+    --   give each npc some time to switch into torch igniting behavior
+    nodes.Default = Action {
+        function()
+            helpers.UpdateNPCsGrid()
+            --
+            for _, torch in pairs(torches) do
+                --DebugText(torch.entity, "{(-)_(-)}")
+                if torch.caretaker == nil then
+                    --DebugText(torch.entity, "  ...  ")
+                    local npcsNear = {}
+                    --
+                    for dx = -1, 1, 1 do
+                        for dy = -1, 1, 1 do
+                            local gridCell = helpers.GetGridCell(torch.pos.X, torch.pos.Z, dx, dy)
+                            --DebugText(torch.entity, gridCell)
+                            if npcsGrid[gridCell] ~= nil then
+                                for guid, _ in pairs(npcsGrid[gridCell]) do
+                                    local npc = npcs[guid].entity
+                                    if not npc.IsDead
+                                        and npc.Blackboard.GetFact("HAV_Torches_TakeCareOf") == nil
+                                        and GetDistanceTo(npc, torch.entity) <= distAwareness
+                                        and IsTagged(npc, humanoid)
+                                        and HasLineOfSight(npc, torch.entity)
+                                      then--and CanSee(npc, torch.entity) then
+                                        table.insert(npcsNear, npc)
+                                      --  DebugText(npc, "Caretaker " .. torch.guid .. " CanSee = " .. tostring(CanSee(npc, torch.entity)))
+                                      --elseif npc.Blackboard.GetFact("HAV_Torches_TakeCareOf") ~= nil then
+                                      --  DebugText(npc, "Busy with " .. tostring(npc.Blackboard.GetFact("HAV_Torches_TakeCareOf")) .. " CanSee = " .. tostring(CanSee(npc, torch.entity)))
+                                      end
+                                end
+                            end
+                        end
+                    end
+
+                    if #npcsNear > 0 then
+                        local caretaker = npcsNear[math.random(#npcsNear)]
+                        caretaker.Blackboard.SetFact("HAV_Torches_TakeCareOf", torch.entity)
+                        torch.caretaker = caretaker
+
+                        local timerName = "Timer_HAV_Torches_CheckCare:" .. torch.guid
+                        StopTimer(me, timerName)
+                        StartRealtimeTimer(me, timerName, caretakeTimer, 0)
+
+                        helpers.UpdateFX(torch, caretaker)
+                    else
+                        helpers.UpdateFX(torch, nil)
+                    end
+                end
+            end
+            --]]
+            Sleep(1.0)
+        end,
+
+        CanEnter = function()
+            return not GetFlag(liftedCurse) or not GetFlag(killedNightsong)--GetFlag(moodSiege) or GetFlag(moodUnprotected)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(3.14159)
+        end
+    }
+
+
+    events.Died = function(ev)
+        if EntityExists(ev.Target) and ev.Target.IsCharacter and not ev.Target.Character.IsPartyMember then
+            helpers.RemoveNPC(ev.Target)
+        end
+    end
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity ~= me then
+            return
+        end
+        local entity = ev.Params[1]
+
+        if ev.Event == "HAV_Torches_AddTorch" then
+            helpers.AddTorch(entity)
+        elseif ev.Event == "HAV_Torches_RemoveTorch" then
+            helpers.RemoveTorch(entity)
+        elseif ev.Event == "HAV_Torches_AddNPC" then
+            helpers.AddNPC(entity)
+        elseif ev.Event == "HAV_Torches_RemoveNPC" then
+            helpers.RemoveNPC(entity)
+        end
+    end
+
+    -- this npc hasn't switched to torch igniting action (has more important things to do)
+    -- try a different one
+    events.TimerFinished = function(ev)
+        local i = string.find(ev.TimerName, ":", 1, true)
+        if i == nil then
+            return
+        end
+
+        local torchGUID = string.sub(ev.TimerName, i + 1)
+        local torch = torches[torchGUID]
+        if torch ~= nil and torch.caretaker ~= nil then
+            --
+            if torch.caretaker.Blackboard.GetFact("HAV_Torches_CareInProgress") == 1 then
+                -- restart check timer
+                StartRealtimeTimer(me, ev.TimerName, caretakeTimer, 0)
+            else
+                torch.caretaker.Blackboard.ClearFact("HAV_Torches_TakeCareOf")
+                torch.caretaker = nil
+            end
+        end
+    end
+
+end}

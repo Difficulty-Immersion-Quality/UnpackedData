@@ -1,0 +1,51 @@
+game.states.GOB_WolfPens_AdultCombat = State{ function()
+
+    modules = { "shared.items" }
+
+    local it_CageDoor = Entity("S_GOB_WolfPens_CageDoor_001_d29ec2f5-46c0-41cc-8fee-a259338f33ad")
+    local it_Lever = Entity("S_GOB_WolfPens_LeverForCage001_611d4226-459f-46a9-be08-697553271bd4")
+    local i_TurnsPassed = 0
+    local i_TurnToOpenCageDoor = 2
+    local b_NeedToOpenCage = false
+
+    self.Valid = function()
+        return me.CanActInCombatTeamTurn
+            and b_NeedToOpenCage
+            and not mod.items.SafeIsDestroyed(it_CageDoor)
+            and not it_CageDoor.Item.IsOpened
+            and not it_CageDoor.Item.IsOpening
+    end
+
+    nodes.Action_OpenWorgsCage = Action{
+        function()
+            if me.Character.CanMove then
+                if not HasActiveStatus(me, "DASH") then
+                    UseSpell("Shout_GOB_WolfPens_Dash_GoblinAdult", me, nil, nil, nil, true, true, true)
+                end
+                local moveResult = MoveTo(it_Lever, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+                if moveResult == error.MovementError.None then
+                    DebugText(me, "MOVEMENT FINISHED")
+                    UseItem(it_Lever.Item)
+                    Sleep(2.0)  -- delay is necessary for the door to open
+                    EndTurn(me)
+                else
+                    DebugText(me, "Movement to the cage with worgs failed!")
+                    Sleep(1.0)
+                    EndTurn(me)
+                end
+            else
+                EndTurn(me)
+            end
+        end
+    }
+
+    events.TurnStarted = function()
+        if i_TurnsPassed < i_TurnToOpenCageDoor then
+            i_TurnsPassed = i_TurnsPassed + 1
+            if i_TurnsPassed == i_TurnToOpenCageDoor then
+                b_NeedToOpenCage = true
+            end
+        end
+    end
+end
+}

@@ -1,0 +1,45 @@
+game.states.WYR_Smugglers_Trap_Shooting = State{function()
+
+    modules = { "shared.math" }
+
+    params.spell = { type=EParamType.String, required = true }
+
+    params.chainStart = { type=EParamType.Bool, required = false, default = false }
+
+    params.chainNext = { type=EParamType.String, required = false, default = "" }
+
+    params.delay = { type=EParamType.Number, required = false, default = 5.0 }
+
+
+    local next = Entity(params.chainNext)
+
+    helpers.Shoot = function(spell)
+        ShootProjectile(params.spell, me, ls.math.Vector3(0, 0, 0), me.UpDirection)
+    end
+
+    self.OnInit = function()
+        if params.chainStart == true then
+            SetUnicastEntityEvent(me, "Trap_ChainReaction")
+        end
+    end
+
+    nodes.Default = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Trap_ChainReaction" then
+            helpers.Shoot(params.spell)
+            SetUnicastEntityEvent(next, "Trap_ChainReaction")
+        end
+    end
+
+    events.EntityEvent = function(ev)
+        if ev.Event == "Trap_ChainReaction" and ev.TargetEntity == me then
+            StartTimer(me, "Trap_ChainReaction", params.delay, 0, true)
+        end
+    end
+end}

@@ -1,0 +1,135 @@
+game.states.PLA_GithCaptain = State { function ()
+    description = [[Captain Sarth Baretha, a githyanki in the Gith Chokepoint]]
+    modules = { "shared.dialog" }
+
+    -----------------------------------------
+    -- Local variables
+
+    --Stand off (before player activates the dragon scene)
+    local fodder = Entity("S_PLA_GithFodder_001_ab8515a1-cd07-41ae-a5b4-cb50ffb9da4b")
+    local fodderAD = Dialog("PLA_GithChokepoint_AD_StandOff_c2ad8bad-d5fd-aa07-6af0-915b3dbe9526")
+    local standOffAnim = Animation([[CUST_ProvokingIntimidate_01_Loop_3d987fd4-6ba0-426b-87d1-0fdd2e14aec8]])
+    local startAnimation = true
+    local dragonEventFlag = Flag("GLO_GithChokepoint_DragonEventEnd_ded1de27-9668-418f-93f6-4b5a789b5640")
+
+    --Default until player activates confrontation
+    local knight = Entity("S_GLO_GithKnight_2adce2df-0799-49dc-b867-ba7ca21e9aea")
+    local knightWithLZFlag = Flag("PLA_GithChokepoint_State_TalkingToLaezel_12b26742-cb8e-48cb-8249-75c62902c75f")
+    local searchCorpsesAD = Dialog("PLA_GithChokepoint_AD_SearchingCorpses_9e686b7b-0af9-bda1-06d1-90251411ec04")
+    local lookAtPoint = Entity("S_PLA_GithWanderAnchor_4b1b348c-5c53-4ba3-ba1e-a632f6e6c92f")
+    local standingPoint = Entity([[S_PLA_GithCaptainPoint_79162a85-1e74-4420-9e12-fb22ff4de6cc]])
+    local supervisingAnim = Animation([[CUST_Angry_02_Loop__ecfb527c-591d-4501-9d81-0ef25a59ae10]])
+    local canAD = true
+
+    local spline = Spline("S_PLA_GithCaptainSpline_0c4946df-28c5-42ea-bafd-829635e0f1f7")
+    local canWalkOnSpline = true
+    local targetSplineIndex = -1
+    local isReversed = false
+
+    -----------------------------------------
+    -- Nodes
+    nodes.StandOff = Action {
+        CanEnter = function()
+            return not GetFlag(dragonEventFlag)
+        end,
+        OnEnter = function()
+            SetDoNotFace(me, true)
+        end,
+        function()
+            if startAnimation then
+                SteerTo(fodder)
+                Sleep(1)
+                PlayAnimation(standOffAnim, false, true)
+                startAnimation = false
+            end
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                fodderAD, 
+                {minDelay = math.random(20, 30)}, 
+                me, fodder
+            )
+            Sleep(4)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+            startAnimation = true
+            SetDoNotFace(me, false)
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+            startAnimation = true
+            SetDoNotFace(me, false)
+        end
+    }
+
+    nodes.CorpseSearching = Action {
+        CanEnter = function()
+            return canWalkOnSpline == false
+        end,        
+        OnEnter = function()
+            canWalkOnSpline = true
+        end,
+        function()
+            local didAD = nil
+            Sleep(0.5)
+            SteerTo(lookAtPoint,false,5)
+            if not GetFlag(knightWithLZFlag, knight) then
+                Sleep(0.5)
+                SetDoNotFace(me, true)
+                SetDoNotFace(knight, true)
+                -- talk to Kith'ak Voss only if Lae'zel is not with him
+                didAD = mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    searchCorpsesAD, 
+                    {   waitForCompletion = false,
+                        minDelay = math.random(20, 40)}, 
+                    me, knight
+                )
+            end
+            if didAD ~= error.RateLimitedAutomatedDialogError.None then
+                Sleep(0.5)
+                PlayAnimation(supervisingAnim, false, true)
+                Sleep(math.random (10, 15))
+                StopAnimation(me)
+            else
+                Sleep(8)
+            end
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+            SetDoNotFace(me, false)
+            SetDoNotFace(knight, false)
+        end
+    }
+
+    nodes.Patrol = Action {
+        CanEnter = function()
+            return canWalkOnSpline and not IsInDialog(me, false)
+        end,
+        function()
+            DoPatrol(spline, isReversed, MovementSpeed.Stroll, targetSplineIndex)
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        if e.EndReached then
+            if isReversed then
+                isReversed = false
+            else
+                isReversed = true
+            end
+        end
+        if me.Active then
+            canWalkOnSpline = false
+            ShortPatrolInterrupt()
+        end
+    end
+
+end}

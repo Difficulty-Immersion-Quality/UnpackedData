@@ -1,0 +1,61 @@
+game.states.WYR_Circus_Thug_01 = State { function ()
+    description = [[ Thug who guards the circus beasts cages. ]]
+
+    modules = { "shared.util", "shared.moveto" }
+
+    local beastRunAway = false
+    local homePosTrigger = Entity("S_WYR_Circus_Thug_01_Pos_208f4768-3343-42c8-a53c-3b5e1e160cf0")
+    local releasedTrigger = Entity("S_WYR_Circus_Thug_01_BeastReleasedPos_7b3a5d0e-bf39-408a-ab91-ed94dbb1ae65")
+    local releasedFlag = Flag("WYR_Circus_State_BeastReleased_5f59da8f-1d66-4f08-b07e-912dae9e2ebf")
+    local disappearedTrigger = Entity("S_WYR_Circus_Thug_01_BeastDisappearPos_399bf486-e409-40f8-83f0-1e151a8067f9")
+    local disappearedAnim = Animation("CUST_Angry_01_5295fe1e-abec-4873-a09a-23ae6e895a63")
+    local boredAnims = {
+        Animation("CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef"),
+        Animation("CUST_Bored_02_7892cb3b-2935-4aa3-b65c-64d9664cbe75")
+    }
+
+    nodes.BeastRunAway = Action {
+        function()
+            if mod.moveto.MoveToPoint(disappearedTrigger, MovementSpeed.Run, me) then
+                LookFrom(disappearedTrigger)
+                PlayAnimation(disappearedAnim, true, false)
+            end            
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return beastRunAway
+        end
+    }
+
+    nodes.BeastReleased = Action {
+        function()
+            if mod.moveto.MoveToPoint(releasedTrigger, MovementSpeed.Run, me) then
+                LookFrom(releasedTrigger)
+            end
+        end,
+        Valid = function()
+            return not beastRunAway and GetFlag(releasedFlag)
+        end
+    }
+
+    nodes.NearCages = Action {
+        function()
+            if mod.moveto.MoveToPoint(homePosTrigger, MovementSpeed.Walk, me) then
+                LookFrom(homePosTrigger)
+                PlayAnimation(boredAnims[math.random(#boredAnims)],true)
+            end
+        end,
+        Valid = function()
+            return not beastRunAway and not GetFlag(releasedFlag)
+        end
+    }
+
+    -- Events
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me and e.Event == "WYR_Circus_Thug_01_Event_BeastRunAwayReaction") then
+            beastRunAway = true            
+        end
+    end
+end}

@@ -1,0 +1,176 @@
+game.states.LOW_GriefGuard_001_Patrol = State{
+    function()
+        description = [[]]
+
+        modules = {"shared.character", "shared.dialog"}
+
+        local b_Stop = false
+        local i_patrol
+        local guardsGossiped = Flag("LOW_HouseOfGrief_State_GuardsGossiped_0f37bde1-0f00-4eaa-baaa-3dce8ae0dbd3")
+
+        local gossipReady = Flag("LOW_HouseOfGrief_State_GossipReady_1fc1b11e-e622-4e6c-8ec3-4808c46c7aa3")
+        local FetchDocument = Flag("LOW_HouseOfGrief_State_FetchDocument_77eb7534-385e-4369-a0c3-1456c3171018")
+        local ReadyToFetch = Flag ("LOW_HouseOfGrief_State_ReadyToFetch_a06f6027-f469-4c7f-a0fb-40869db06f72")
+
+        local otherGuard = Entity("S_LOW_GriefGuard_000_e2a86aa9-3d65-4517-a946-f1ad851b6ef1")
+
+        local fetchAnim = Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+        local fetchedAnim = Animation("CUST_Organizing_01_0e82e372-b47d-4d62-933b-068725cdfd06")
+
+        local shelfPos = Entity("S_LOW_BookCasePoint_c08e908f-2cda-4b16-a569-69d1ca8dae69")
+        local deskPos = Entity("S_LOW_GuardDeskPoint_ebead400-c246-4e72-bec8-910675247c1c")
+        local lookAt = Entity("S_LOW_GriefGuard_001_LookAt_ac556170-3c8b-4bb0-9eef-b709a1d64ea0")
+
+        local fetchedDocumentAD = Dialog("LOW_HouseOfGrief_AD_DocumentFetched_0eae0030-e4f0-977f-346e-236ebde7e6f6")
+
+
+        events.SplineControlPointReached = function(e)
+            i_patrol = e.Index
+            b_Stop = (e.Index == 2 or e.Index == 7 or e.Index == 10)
+        end
+
+        events.FlagSet = function(e)
+            if not GetFlag(guardsGossiped) then
+                if e.Flag == gossipReady.Guid then
+                    if e.Entity == me then
+                        if GetFlag(gossipReady, otherGuard) then
+                            SetFlag(guardsGossiped)
+                        end
+                    end
+                end
+            end
+        end
+
+        nodes = ImmediateSelector{
+            Valid = function(node)
+                return CheckAnySelectable(node)
+            end
+        }
+
+        nodes.FetchWait= Action {
+            function()
+                SetFlag(ReadyToFetch)
+                Sleep(30.0)
+            end,
+            CanEnter = function()
+                return b_Stop
+            end,
+            Valid = function()
+                return (i_patrol == 2) and not GetFlag(FetchDocument)
+            end,
+            OnLeave = function()
+                ClearFlag(ReadyToFetch)
+            end
+        }
+
+        nodes.FetchDocument = Action {
+            function()
+                Sleep(4.0)
+                if not IsInDangerousSurfaceFor(shelfPos, me.Character) and GetDistanceTo(me, shelfPos) > 2 then
+                    local moveResult = MoveTo(shelfPos, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        Sleep(3.0)
+                    else
+                        PlayAnimation(fetchAnim,true, false)
+                        if not IsInDangerousSurfaceFor(deskPos, me.Character) and GetDistanceTo(me, deskPos) > 0.5 then
+                            moveResult = MoveTo(deskPos, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                            if moveResult ~= error.MovementError.None then
+                                DebugText(me, "Error: MoveTo failed")
+                                Sleep(3.0)
+                            else
+                                PlayAnimation(fetchedAnim,true, false)
+                                if mod.dialog.IsSpeakerAvailable(me) then
+                                    StartAutomatedDialog(fetchedDocumentAD , true, me)
+                                    ClearFlag(FetchDocument, me)
+                                    b_Stop = false
+                                end
+                            end
+                        end
+                    end
+                end
+            end,
+            CanEnter = function()
+                return b_Stop
+            end,
+            Valid = function()
+                return i_patrol == 2 and GetFlag(FetchDocument)
+            end,
+            OnLeave = function()
+                b_Stop = false
+            end
+        }
+
+        nodes.GossipWait= Action {
+            function()
+                SetFlag(gossipReady, me)
+                WaitForInterrupt()
+            end,
+            CanEnter = function()
+                return b_Stop
+            end,
+            Valid = function()
+                return (i_patrol == 10) and not (mod.character.IsDefeated(otherGuard)) and not GetFlag(guardsGossiped)
+            end
+        }
+
+        nodes.Gossip= Action {
+            function()
+                WaitForInterrupt()
+            end,
+            CanEnter = function()
+                return b_Stop
+            end,
+            Valid = function()
+                return i_patrol == 10 and GetFlag(gossipReady, me) and GetFlag(gossipReady, otherGuard) and not (mod.character.IsDefeated(otherGuard))
+            end,
+            OnLeave = function()
+                ClearFlag(gossipReady, me)
+            end
+        }
+
+        nodes.PatrolStop = Action {
+            function()
+                if lookAt ~= nil then
+                    SteerTo(lookAt)
+                end
+                Sleep(12.0)
+                b_Stop = false
+            end,
+            CanEnter = function()
+                return b_Stop
+            end
+        }
+
+        nodes.Fallback = Action {
+            function()
+                b_Stop = false
+            end,
+            CanEnter = function()
+                return b_Stop
+            end
+        }
+
+    end
+}
+
+game.states.LOW_HouseOfGriefGuard_001 = State {function ()
+
+    nodes.Patrol = Proxy{
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = "S_LOW_GriefGuard_001_Patrol_79b6dd72-d358-4e4a-a56d-1ab914a19cc3",
+            patrolSpeed = "Walk",
+            patrolReverse = true,
+            patrolActions = StateRef{game.states.LOW_GriefGuard_001_Patrol}
+        }
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+
+end
+}

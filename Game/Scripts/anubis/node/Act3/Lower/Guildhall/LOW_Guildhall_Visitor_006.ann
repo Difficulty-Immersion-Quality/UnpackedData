@@ -1,0 +1,76 @@
+game.states.LOW_Guildhall_Visitor_006 = State {
+    function()
+        modules = { "shared.dialog" }
+            
+        local secondLocation = Entity([[S_LOW_Guildhall_Visitor_006_SecondPos_9e8f1ee1-581e-4175-a0cd-f7db193d3088]])
+        local drinkingTrigger = Entity([[S_LOW_Guildhall_TimelineScene_Visitor_006_8614fff9-567d-4a86-b66a-345104b870aa]])
+        local sitAndDrinkDialog_Patched = Dialog([[BHVR_WRLD_GLO_MagicPocketsSitAndDrink_c2e8c0bf-d1d0-af01-72c3-e7c244444e2c]])
+        local standAndDrinkDialog_Patched = Dialog([[BHVR_WRLD_GLO_StandAndDrink_a4065598-1ea2-8866-d23f-f765b5008273]])
+        local drinkAnimation = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+        
+        local canDrink = true
+        local canChangeLocation = true
+        local IsDrinking = true
+        local DrinkingCooldown = 20
+
+        
+        events.TimerFinished = function(e)
+            if e.TimerName == "DrinkingCooldown" then
+                canDrink = true
+            elseif e.TimerName == "ChangeLocationCooldown" then
+                canChangeLocation = true
+            end
+        end
+
+        nodes.Idling = Selector {
+            function(nodes)
+                local node = FindDifferentRandomSelectable(nodes)
+                if node ~= nil then
+                    return node
+                else
+                    return nodes.DoNothing
+                end
+            end
+        }
+
+        nodes.Idling.ChangeLocation = Action {
+            function()
+                MoveTo(secondLocation, MovementSpeed.Stroll, true, false)
+                Sleep(3.0 + 3.0 * math.random())
+                MoveTo(drinkingTrigger, MovementSpeed.Stroll, true, false)
+                LookFrom(drinkingTrigger)
+            end,
+            CanEnter = function()
+                return secondLocation ~= nil and secondLocation ~= "" and canChangeLocation == true
+            end,
+            OnLeave = function()
+                canChangeLocation = false
+                StartTimer(me, "ChangeLocationCooldown", 45.0, 0)
+            end
+        }
+        
+        nodes.Idling.Drink = Action {
+            function()
+                try
+                    StartBehaviorDialog(standAndDrinkDialog_Patched, drinkingTrigger.Trigger, true, me)
+                    Sleep(DrinkingCooldown + math.random(0,6))
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    DebugText(me, "Failed to play".. tostring(sitAndDrinkDialog_Patched) .. "sit drink animation. Final animation TBD")
+                end
+            end,
+            CanEnter = function()
+                return canDrink and IsDrinking
+            end,
+            OnLeave = function()
+                canDrink = false
+                StartTimer(me, "DrinkingCooldown", DrinkingCooldown, 0)
+            end
+        }
+        
+        nodes.Idling.DoNothing = Action {
+            function()
+                Sleep(math.random(3,8))
+            end
+        }
+    end
+}

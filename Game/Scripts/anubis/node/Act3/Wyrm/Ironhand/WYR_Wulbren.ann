@@ -1,0 +1,164 @@
+game.states.WYR_Wulbren = State{function()
+    description = [[]]
+
+    modules = { "shared.math" }
+
+    local atTable = "S_WYR_Ironhand_InitPos_Wulbren_871e4d40-bf0b-4222-b1df-223172782023"
+    local atTablePos = Entity("S_WYR_Ironhand_InitPos_Wulbren_871e4d40-bf0b-4222-b1df-223172782023")
+    local atWriting = "S_WYR_Ironhand_Wulbren_AtTable_fd005c51-baf0-4c15-b624-50e524dde33a"
+    local atWritingPos = Entity("S_WYR_Ironhand_Wulbren_AtTable_fd005c51-baf0-4c15-b624-50e524dde33a")
+    local atFireplace = "S_WYR_Ironhand_Wulbren_AtFireplace_1002b70d-4321-4003-922e-50a65cc1a719"
+    local atFireplacePos = Entity("S_WYR_Ironhand_Wulbren_AtFireplace_1002b70d-4321-4003-922e-50a65cc1a719")
+    local atDrink = "S_WYR_Ironhand_Wulbren_AtDrink_63dc79a3-10bc-4467-95a7-9da3c917ce8d"
+    local atDrinkPos = Entity("S_WYR_Ironhand_Wulbren_AtDrink_63dc79a3-10bc-4467-95a7-9da3c917ce8d")
+
+    local thinkStart = Animation("CUST_Thinking_01_Start_74abd35c-c980-4d55-b696-9afec086edf1")
+    local thinkLoop = Animation("CUST_Thinking_01_Loop_8698c87d-1f73-419a-be2a-d051951bea86")
+    local thinkEnd = Animation("CUST_Thinking_01_End_bfbcf996-bc08-4a42-8b50-8a7b41b2d613")
+
+    local writeDialog = Dialog("WYR_Ironhand_WB_Write_01_31f439d3-14e4-c6e5-ff46-1301671c1b3d")
+    local writeSceneTrigger = Entity("WYR_Ironhand_WB_WriteAtTable_SceneTrigger_2397fcd5-a594-4949-b674-3c44bece4d00")
+    local standAndDrink = Dialog("BHVR_WRLD_GLO_StandAndDrink_a4065598-1ea2-8866-d23f-f765b5008273")
+    local drinkTrigger = Entity("BHVR_WRLD_WYR_WulbrenDrinking_SceneTrigger_689be530-5e55-4732-9284-452192a9dc9c")
+
+    local lookDialog = Dialog("WYR_Ironhand_WB_LookDocuments_b258c65f-8a5d-29ab-570d-d61b84a38d0f")
+    local lookSceneTrigger = Entity("WYR_Ironhand_WB_LookDocuments_SceneTrigger_1a7502fa-7f14-4701-a983-3758f6bb0146")
+
+    local lookStart = Animation("CUST_LookDocument_01_Start_c17095b3-9f0a-49a7-a1ca-a6f1e726501e")
+    local lookLoop = Animation("CUST_LookDocument_01_Loop_2ec5f309-3299-4bc4-8ce2-cb8a6cb13c17")
+    local lookEnd = Animation("CUST_LookDocument_01_End_c1a78f30-3834-4d29-93ba-960c0b5a9f25")
+
+    local choice = {
+        think = 1,
+        write = 2,
+        look = 3,
+        --drink = 4,
+    }
+    local currentChoice = 1
+
+
+    nodes = Selector{
+        function(node)
+            if currentChoice == choice.think then
+                return node.Thinking
+            elseif currentChoice == choice.write then
+                return node.Writing
+            elseif currentChoice == choice.look then
+                return node.Looking
+--[[             elseif currentChoice == choice.drink then
+                return node.Drinking ]]
+            end
+            return GetRandomCanEnterNoRepeat(node)
+        end
+    }
+
+    nodes.Thinking = Action{
+        OnEnter = function()
+            currentChoice = choice.think
+        end,
+
+        function()
+            DebugText(me,"thinking")
+            SetWeaponUnsheathed(me, false, true)
+            local moveResult = MoveTo(atFireplacePos, MovementSpeed.Walk, false, false, 0.1, 0.5, false)
+            if moveResult == error.MovementError.None then
+                LookFrom(atFireplacePos)
+                StartTimer(me, "Timer_WYR_Ironhand_StopAnimation", mod.math.random(15.0,25.0), 1)
+                PlayLoopingAnimation(thinkStart, {thinkLoop}, thinkEnd)
+                StopTimer(me, "Timer_WYR_Ironhand_StopAnimation")
+            end
+            Sleep(8.0)
+            currentChoice = nil
+        end,
+
+        OnLeave = function()
+            StopAnimation(me,false)
+        end
+    }
+--[[ 
+    nodes.Drinking = Action{
+        OnEnter = function()
+            currentChoice = choice.drink
+        end,
+
+        function()
+            local moveResult = MoveTo(atDrinkPos, MovementSpeed.Walk, false, false, 0.1, 0.5, false)
+            if moveResult == error.MovementError.None then
+                --LookFrom(atDrinkPos)
+                StartTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog", mod.math.random(5.0,10.0), 1)
+                StartBehaviorDialog(standAndDrink, drinkTrigger.Trigger, true, me)
+                StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+            end
+            Sleep(0.5)
+            currentChoice = nil
+        end,
+        OnLeave = function()
+            StopAnimation(me,false)
+        end
+    }
+ ]]
+
+    nodes.Writing = Selector {
+        OnEnter = function()
+            currentChoice = choice.write
+        end
+    }
+
+    nodes.Writing.Write = Action {
+        function()
+            SetWeaponUnsheathed(me, false, true)
+            StartTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog", mod.math.random(15.0,25.0), 1)
+            StartBehaviorDialog(writeDialog, writeSceneTrigger.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+            Sleep(0.5)
+            currentChoice = nil
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+        end
+    }
+
+
+    nodes.Looking = Selector {
+        OnEnter = function()
+            currentChoice = choice.look
+        end
+    }
+
+    nodes.Looking.Look = Action {
+        function()
+            SetWeaponUnsheathed(me, false, true)
+            local moveResult = MoveTo(atTablePos, MovementSpeed.Walk, false, false, 0.1, 0.5, false)
+            if moveResult == error.MovementError.None then
+                LookFrom(atTablePos)
+                --PlayAnimation(think, true)
+                StartTimer(me, "Timer_WYR_Ironhand_StopAnimation", mod.math.random(15.0,25.0), 1)
+                PlayLoopingAnimation(lookStart, {lookLoop}, lookEnd)
+                StopTimer(me, "Timer_WYR_Ironhand_StopAnimation")
+            end
+            Sleep(8.0)
+            currentChoice = nil
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_StopAnimation")
+        end,
+        OnLeave = function()
+            StopAnimation(me,false)
+        end
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_Ironhand_StopBehaviorDialog" then
+            DebugText(me, "Graceful Stop")
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+        if ev.TimerName == "Timer_WYR_Ironhand_StopAnimation" then
+            DebugText(me, "StopAnim")
+            StopAnimation(me,false)
+        end
+        Sleep(3.0)
+    end
+end}

@@ -1,0 +1,188 @@
+game.states.MOO_DockGuard_Observe = State{function ()
+    description = [[Behaviour of the guard at the Moonrise Tower docks observing the Tadpole Shipment]]
+
+    modules = { "shared.moveto", "shared.dialog" }
+
+--------------------------------DIALOG--------------------------------
+    local witnessJumpAD = Dialog("MOO_Docks_AD_ObserverWitness_637462a1-ce3e-47df-2012-7079411cb3fd")
+    local fishingAD = Dialog("MOO_Docks_AD_ObserverFishing_a9a56d70-7864-b3db-d223-5f9fb56e243f")
+    local inspectDamageAD = Dialog("MOO_Docks_AD_ObserverInspect_56511247-126c-483c-7fd2-c5aa18035ae9")
+--------------------------------ENTITY--------------------------------
+    local standingPoint = Entity("S_MOO_GuardObservePoint_5828d598-4a6b-4a55-82fd-3632e62d017c")
+    local wanderPoints = {
+        Entity("S_MOO_DockObservWanderPoint_001_c8a1d2c9-5e3d-4b22-895e-1f94a6be161b"),
+        Entity("S_MOO_DockObservWanderPoint_002_91874b68-8b46-46cb-987d-8375c21c4a51")
+    }
+    local jumpReportPoint = Entity("S_MOO_JumpReportPoint_cd5c1750-40c9-4993-8d60-d8fb68dc5263")
+    local dockReturnPoint = Entity("S_MOO_DockReturnPoint_2f4d40ef-c693-4e1d-a09b-deb7873e11c0")
+    local jumpFromPoint = Entity("S_MOO_DockJumpFromPoint_931effba-5e7b-4196-b5b7-e29eb33e7e18")
+    local jumpToPoint = Entity("S_MOO_DockJumpToPoint_a96839e0-4769-48f5-8533-96038d99a72c")
+    local inspectVatPoint = Entity("S_MOO_InspectVatPoint_c95d0f15-be7e-4b7a-ae04-68365f52b540")
+    local oldJumperIdlePoint = Entity("S_MOO_DockPos_000_5319051c-c269-4b3f-b8ea-4efb21776a52")
+
+    local vatHelper = Entity("S_MOO_VatHelper_ab6f3cf1-ad53-4f2b-b957-f61cd7f48a12")
+    --Helper allows the observer to "see" the Vat item even though it's destroyed
+--------------------------------FLAG--------------------------------
+    local witnessJumpFlag = Flag("MOO_Docks_Event_WitnessJump_88cbe282-918b-4fc0-a15a-9a1e24ee05ff")
+    local reportJumpFlag = Flag("MOO_Docks_State_ReportJump_bb1038ca-1eba-4f1b-8803-4d47ced56d2a")
+    local vatDestroyedFlag = Flag("MOO_Docks_Event_VatDestroyed_d7926e38-0014-4dbb-b466-208fcb488a70")
+    local witnessedDamageFlag = Flag("MOO_Docks_State_ObserverWitnessDamage_12942a73-888a-40ba-9eaa-1910740c000a")
+
+--------------------------------BOOL--------------------------------
+    local isWitness = true
+    local hasReported = false
+    local hasReturnedToDock = false
+    local hasInspectedDamage = false
+
+--------------------------------INT--------------------------------
+    local inspectAttemptCount = 0
+
+--------------------------------Animation--------------------------------
+    local lookingDownAnim = Animation("CUST_BanditLookingAtHole_01_5aa2427f-b8ab-4213-ae48-57c10a619239")
+    local lookAtCargoAnim = Animation("CUST_Looking_Around_Cargo_01_b78b8e8d-6849-4cf2-bf0e-55384af851cb")
+
+--------------------------------NODES--------------------------------
+    nodes = ImmediateSelector {}
+
+    nodes.InspectDamage = Action {
+        function()
+            try
+                MoveInRange(vatHelper, 3, 6, MovementSpeed.Run)
+                SteerTo(vatHelper)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    inspectDamageAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                Sleep(10)
+                hasInspectedDamage = true
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveInRange(vatHelper)")
+                inspectAttemptCount = inspectAttemptCount + 1
+                if inspectAttemptCount > 2 then
+                    SteerTo(vatHelper)
+                    mod.dialog.StartCheckedAutomatedDialog(
+                        inspectDamageAD,
+                        {
+                            waitForCompletion = true
+                        },
+                        me
+                    )
+                    Sleep(10)
+                    hasInspectedDamage = true
+                end
+            end
+        end,
+
+        Valid = function()
+            return CanSee(me, vatHelper) and GetFlag(vatDestroyedFlag) and not hasInspectedDamage
+        end,
+
+        OnLeave = function()
+            hasInspectedDamage = true
+        end
+    }
+
+    nodes.ReturnFromReport = Action {
+        function()
+            if mod.moveto.MoveToPoint(jumpFromPoint,  MovementSpeed.Run, me) then
+                LookFrom(jumpFromPoint)
+                PlayAnimation(lookingDownAnim)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    fishingAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 20
+
+                    },
+                    me
+                )
+                Sleep(6 + 6 * math.random())
+            else
+                LookAtEntity(jumpFromPoint)
+                Sleep(2)
+            end
+            StopAnimation(me)
+            if mod.moveto.MoveToPoint(oldJumperIdlePoint,  MovementSpeed.Walk, me) then
+                LookFrom(oldJumperIdlePoint)
+            else
+                LookAtEntity(oldJumperIdlePoint)
+            end
+            Sleep(20 + 10 * math.random())
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return hasReported and not hasInspectedDamage
+        end
+    }
+
+    nodes.ReportJump = Action {
+        function()
+            if mod.moveto.MoveToPoint(jumpReportPoint,  MovementSpeed.Run, me) then
+                PlayAnimation(lookAtCargoAnim)
+                Sleep(10)
+                hasReported = true
+            else
+                hasReported = true
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(reportJumpFlag) and not hasReported
+        end
+    }
+    nodes.Witness = Action {
+        function()
+            if GetDistance2DTo(me, jumpFromPoint) <= 40 or CanSee(me, jumpFromPoint) then
+                SteerTo(jumpToPoint)
+                Sleep(1 + 3 * math.random())
+                mod.dialog.StartCheckedAutomatedDialog(
+                    witnessJumpAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                Sleep(8 + 8 * math.random())
+                isWitness = false
+            else
+                isWitness = false
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(witnessJumpFlag) and isWitness
+        end,
+
+        OnLeave = function()
+            isWitness = false
+        end
+    }
+
+    nodes.IdleGuard = Action {
+        function()
+            if mod.moveto.MoveToPoint(standingPoint,  MovementSpeed.Walk, me) then
+                LookFrom(standingPoint)
+            else
+                SteerTo(standingPoint, 3.0)
+            end
+            Sleep(10 + 4 * math.random())
+
+            local randomPoint = wanderPoints[math.random(1, #wanderPoints)]
+            if mod.moveto.MoveToPoint(randomPoint,  MovementSpeed.Walk, me) then
+                LookFrom(randomPoint)
+            else
+                SteerTo(randomPoint, 3.0)
+            end
+            Sleep(6 + 4 * math.random())
+        end
+    }
+
+end
+}

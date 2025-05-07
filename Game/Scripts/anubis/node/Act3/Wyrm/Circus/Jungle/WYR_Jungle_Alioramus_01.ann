@@ -1,0 +1,64 @@
+game.states.WYR_Jungle_Alioramus_01 = State { function ()
+
+    description = [[ 
+        Patroling jungle dino behaviour. 
+    ]]
+
+    modules = { "shared.util" }
+
+    local readyForRoutine = false
+    local playedIntro = false
+    local playerAtStartArea = true
+
+    nodes.Intro = Proxy {
+        game.states.WYR_Jungle_AlioramusIntro,
+        params = {
+            introSpline = "S_WYR_Jungle_Alioramus_01_PatrolSpline_IntroA 9f523439-d94a-42bc-b237-6fdab67b3a49",
+            movementSpeed = "Stroll"
+        }
+    }
+
+    nodes.WaitingBeforeRoutine = Action {
+        function()
+            Sleep(3)
+            playedIntro = true
+        end,
+        Valid = function()
+            return not readyForRoutine or not playedIntro
+        end
+    }
+
+    nodes.RoutineA = Proxy {
+        game.states.WYR_Jungle_AlioramusRoutinePatrol,
+        params = {
+            patrolSpline = "S_WYR_Jungle_Alioramus_01_PatrolSpline_RoutineA 05726dc4-4b50-46c5-b3cf-d420b8e8d379",
+            movementSpeed = "Stroll",
+            patrolReverse = true
+        },
+        Valid = function()
+            return readyForRoutine and playedIntro and playerAtStartArea
+        end
+    }
+
+    nodes.RoutineB = Proxy {
+        game.states.WYR_Jungle_AlioramusRoutinePatrol,
+        params = {
+            patrolSpline = "S_WYR_Jungle_Alioramus_01_PatrolSpline_RoutineB_4b22e546-151d-402b-8d49-5856606acd9f",
+            movementSpeed = "Walk"
+        },
+        Valid = function()
+            return readyForRoutine and playedIntro and not playerAtStartArea
+        end
+    }
+
+    -- Events
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "WYR_Jungle_Alioramus_01_Event_FinishIntro" then
+                readyForRoutine = true
+            elseif e.Event == "WYR_Jungle_Alioramus_01_Event_LeftRoutineAArea" then
+                playerAtStartArea = false
+            end
+        end
+    end
+end}

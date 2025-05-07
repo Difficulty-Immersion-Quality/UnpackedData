@@ -1,0 +1,238 @@
+game.states.LOW_KurwinCoffin_Priestess_Patrolling = State{
+    function()
+        modules = {"shared.util", "shared.dialog", "shared.math"}
+
+        params.waitTime = {type = EParamType.Number, required = false, default = 6.0, help = [[Wait time.]]}
+        params.patrolSpline = {type = EParamType.String, required = true, help = [[Patrol spline.]]}
+        params.patrolSpline2 = {type = EParamType.String, required = true, help = [[Patrol spline after Nina.]]}
+
+        local canWalkOnSpline = true
+        local patrolSpline = Spline(params.patrolSpline)
+        local patrolSpline2 = Spline(params.patrolSpline2)
+        local targetSplineIndex = -1
+        local splineEvent = ""
+
+        local convoPartnerFather = Entity("S_LOW_BereavedFather_42023010-c670-4885-addf-23e9bb31af32")
+        local convoPartnerMother = Entity("S_LOW_BereavedMother_f83df228-b03f-465d-aae5-c40007249f19")
+
+        local idleAnim = Animation("CUST_Pondering_01_c2a68c82-1b0b-4d0c-8f1a-c9f14984a5fb")
+        local BuriedManAD = Dialog("LOW_KurwinCoffin_AD_PriestessBellReaction_f10f5cef-7205-b847-b602-44f181aeaad3")
+        local CoupleUnsolvedAD = Dialog("LOW_KurwinCoffin_AD_PriestessCoupleReaction_e0898468-ddcb-920d-ef46-b47be70b58ba")
+        local CoupleSolvedAD = Dialog("LOW_KurwinCoffin_AD_PriestessCoupleSolved_2a0bfe7c-2890-a678-0a4a-1d459121374b")
+
+        local ReactingNina = Entity("S_LOW_KurwinCoffin_PriestessWanderTrigger_b28bddec-c70d-4ea0-87cc-5a407db7db6e")
+        local ReactingMorbol = Entity("S_LOW_MorbusAndGirlTrigger_d896a41f-394f-479e-9e12-db24959d86e8")
+
+        local ToldOfMorbol = Flag("LOW_KurwinCoffin_State_PriestessAttackingZombie_7fc99ea0-7884-4df0-a419-2c1bcbdc1c6e")
+        local ToldOfNina = Flag("LOW_KurwinCoffin_State_PriestessSavingNina_17dd161f-0656-39b4-b5f0-c945fe5bc679")
+        local SolvedBuriedMan = Flag("LOW_KurwinCoffin_State_BuriedMan_Saved_a4eba5cc-906c-97dd-2aa5-4674cc3435f9")
+        local SolvedBereavedCouple = Flag("LOW_KurwinCoffin_State_HelpedBereavedCouple_4d3baf56-a815-457b-8465-62e03a70fe9c")
+        local SolvedNina = Flag("LOW_KurwinCoffin_State_ResolvingNecromancy_05b76371-6c86-4a77-845b-6653e4065f01")
+
+
+
+
+nodes.ReactingToMorbol = Action {
+
+    CanEnter = function()
+        return GetFlag(ToldOfMorbol, me) == true
+    end,
+    function()
+        if(not IsInDangerousSurfaceFor(point,entity.Character,3.0)) then
+            MoveTo(ReactingMorbol, MovementSpeed.Run)
+            LookAtEntity(point, 3.0)
+        else
+            Sleep(math.random(1, 4))
+        end
+    end,
+    OnInterrupt = function()
+        SetFlag(ToldOfMorbol,me)
+    end,
+    OnLeave = function()
+        SetFlag(ToldOfMorbol,me)
+    end
+}
+
+nodes.ReactingToNina = Action {
+
+    CanEnter = function()
+        return GetFlag(ToldOfNina, me) == true
+    end,
+    function()
+        if(not IsInDangerousSurfaceFor(point,entity.Character,3.0)) then
+            MoveTo(ReactingNina, MovementSpeed.Run)
+            LookAtEntity(point, 3.0)
+        else
+            Sleep(math.random(1, 4))
+        end
+    end,
+    Valid = function()
+        return GetFlag(SolvedNina) == false
+end
+}
+
+nodes.PatrolingAfterNina = Action {
+    CanEnter = function()
+        return GetFlag(SolvedNina) == true
+    end,
+    function()
+        DoPatrol(patrolSpline2, false, MovementSpeed.Stroll, targetSplineIndex, false)
+    end,
+    OnLeave = function()
+        if canWalkOnSpline then
+            ShortPatrolInterrupt()
+        end
+    end,
+    Valid = function()
+        return canWalkOnSpline
+    end
+}
+
+nodes.Patroling = Action {
+    CanEnter = function()
+        return GetFlag(SolvedNina) == false
+    end,
+    function()
+        DoPatrol(patrolSpline, false, MovementSpeed.Stroll, targetSplineIndex, false)
+    end,
+    OnLeave = function()
+        if canWalkOnSpline then
+            ShortPatrolInterrupt()
+        end
+    end,
+    Valid = function()
+        return canWalkOnSpline
+    end
+}
+
+nodes.PatrolPointIdle = Selector{
+    function(nodes)
+        if splineEvent == "Couple" then
+            return nodes.Couple
+        elseif splineEvent == "BuriedMan" then
+            return nodes.BuriedMan
+        elseif splineEvent == "Pray" then
+            return nodes.Pray
+        elseif splineEvent == "Wait" then
+            return nodes.Waiting -- todo
+        else
+            return nodes.Waiting
+        end
+    end,
+    Valid = function()
+        return not canWalkOnSpline and splineEvent ~= ""
+    end,
+    OnLeave = function()
+        splineEvent = ""
+        canWalkOnSpline = true
+    end,
+    OnInterrupt = function()
+        splineEvent = ""
+        canWalkOnSpline = true
+    end
+}
+
+nodes.PatrolPointIdle.Couple = Action {
+    function()
+        if GetFlag(SolvedBereavedCouple) == true then
+        LookFrom(patrolSpline)
+            if(convoPartnerFather ~= nil and mod.dialog.IsSpeakerAvailable(convoPartnerFather) and convoPartnerMother ~= nil and mod.dialog.IsSpeakerAvailable(convoPartnerMother)) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                CoupleSolvedAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 10
+                },
+                convoPartnerFather,
+                convoPartnerMother,
+                me
+            )
+            Sleep(mod.math.random(0.5, 1.2))
+            canWalkOnSpline = true
+            else
+                Sleep(mod.math.random(2.1, 4.4))
+                canWalkOnSpline = true
+            end
+        elseif GetFlag(SolvedBereavedCouple) == false then
+        LookFrom(patrolSpline)
+            if(convoPartnerFather ~= nil and mod.dialog.IsSpeakerAvailable(convoPartnerFather) and convoPartnerMother ~= nil and mod.dialog.IsSpeakerAvailable(convoPartnerMother)) then
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                CoupleUnsolvedAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 10
+
+                },
+                me,
+                convoPartnerFather,
+                convoPartnerMother
+            )
+            Sleep(mod.math.random(0.5, 1.2))
+            canWalkOnSpline = true
+            else
+                Sleep(mod.math.random(2.1, 4.4))
+                canWalkOnSpline = true
+            end
+    end
+end
+}
+
+nodes.PatrolPointIdle.BuriedMan = Action {
+    function()
+        if GetFlag(SolvedBuriedMan) == false then
+        LookFrom(patrolSpline)
+        mod.dialog.StartCheckedAutomatedDialogRateLimited(
+            BuriedManAD,
+            {
+                waitForCompletion = true,
+                minDelay = 10
+
+            },
+            me
+        )
+        Sleep(mod.math.random(0.5, 1.2))
+        canWalkOnSpline = true
+    else
+        LookFrom(patrolSpline)
+        Sleep(mod.math.random(3.1, 5.9))
+        canWalkOnSpline = true
+    end
+end
+}
+
+nodes.PatrolPointIdle.Pray = Action {
+    function()
+        LookFrom(patrolSpline)
+        Sleep(mod.math.random(12.1, 15.4))
+        StopAnimation(me)
+        Sleep(3.0)
+        canWalkOnSpline = true
+    end,
+}
+
+nodes.PatrolPointIdle.Waiting = Action {
+    function()
+        LookFrom(patrolSpline)
+        Sleep(mod.math.random(3.1, 5.9))
+        canWalkOnSpline = true
+    end,
+}
+
+
+
+
+
+
+----------------------EVENT--------------------
+events.SplineControlPointReached = function(e)
+    targetSplineIndex = e.NewIndex
+        if e.Event ~= nil and e.Event ~= "" then
+            canWalkOnSpline = false
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+
+        end
+    end
+end
+}

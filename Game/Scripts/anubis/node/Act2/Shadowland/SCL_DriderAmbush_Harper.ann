@@ -1,0 +1,448 @@
+game.states.SCL_DriderAmbush_Harper = State{
+function()
+    description = [[Default harper ambush behaviour. Handles haven state and ambush behaviour (moving to ambush point, waiting before and after ambush).]]
+    modules = {"shared.moveto", "shared.items"}
+
+    ------------------------------------------------
+    -- Params
+    params.rendezvousPoint = {type = EParamType.String, required = true, help = [[Rendezvous point after ambush.]]}
+    params.ambushSpline = {type = EParamType.String, required = true, help = [[Path harper follows towards the ambush]]}
+    params.rightBeforeAmbushPos = {type = EParamType.String, required = true, help = [[Trigger where character will stand while waiting for Drider before their combat positions]]}
+    params.ambushPos = {type = EParamType.String, required = true, help = [[Trigger where character will stand while waiting for Drider at their combat positions]]}
+
+    -- Inn behaviours
+    params.havenState = { type = EParamType.State, required = false, default = nil, help = [[Behaviour while in Haven]]}
+
+    -- We need multiple jump triggers or there won't be enough room for everyone to jump down and characters will end up stuck
+    params.jumpFrom = {type = EParamType.String, required = true, help = [[Jump from rooftop trigger.]]}
+    params.jumpTo = {type = EParamType.String, required = true, help = [[Jump to rooftop trigger.]]}
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local variables
+    local spPathToAmbush = Spline(params.ambushSpline)
+    local rightBeforeAmbushPos = Entity(params.rightBeforeAmbushPos)
+    local trAmbushPos = Entity(params.ambushPos)
+
+    local flMoveToAmbush = Flag("SCL_Drider_State_HarpersMovingToAmbush_5bde3cff-5e95-4c86-b368-75c744e02411")
+    local arrivedToAmbush = Flag("SCL_Drider_State_HarperArrivedToAmbush_207e84a6-6e3d-4351-9a92-83b6a707049c")
+    local flWaitingAtAmbush = Flag("SCL_Drider_State_HarperWaitingAtAmbush_9b072ae9-ea08-4f66-aa97-e9592a23150c")
+    local beforeAmbushPosition = Flag("SCL_Drider_State_HarpersRightBeforeAmbush_168a8200-8ba4-4104-acae-a3b5ba49ba0e")
+    local flBackAtInn = Flag("SCL_Drider_State_HarpersBackAtInn_9e0b8ee1-ccf7-4645-92da-4ec8be45508e")
+
+    local flRendezvousAtPoint = Flag("SCL_Drider_State_RendezvousAfterAmbush_8df6c358-021e-495a-8fff-d9becf02cb47")
+
+    local bReachedAmbushArea = false
+
+    local animSneak = Animation("STAT_Sneak_Combat_01_Loop_8a2d2e0e-bd6b-4ac7-afa0-86b87f6cd997")
+
+
+    -- House rooftop
+    local houseLadder0 = Entity("S_SCL_Drider_HouseLadder_000_3decfd6b-15b0-4202-abf2-b7736b11f652")
+    local houseLadder1 = Entity("S_SCL_Drider_HouseLadder_001_5e70ccd8-bdca-4690-b8cd-a2280502d7c6")
+    local rooftop = Entity("S_SCL_Drider_HouseRooftop_147b6fdd-1387-4291-9268-b959ff4ed855")
+    local jumpFrom = Entity(params.jumpFrom)
+    local jumpTo = Entity(params.jumpTo)
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Helpers
+    helpers.action.WaitAtAmbushTrigger = function(pos)
+        try
+            if not IsInDangerousSurfaceFor(pos, me.Character) then
+                local moveToResult = MoveTo(pos, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+                if moveToResult == error.MovementError.None then
+                    LookFrom(pos)
+                    PlayAnimation(animSneak, false, true)
+                    DebugText(me, "Duck animation")
+                    SetFlag(flWaitingAtAmbush, me)
+                    WaitForInterrupt()
+                else
+                    DebugText(me, "Error: MoveTo error")
+                    SteerTo(pos)
+                    Sleep(3.0)
+                end
+            else
+                DebugText(me, "Ambush pos in dangerous position.")
+                SteerTo(pos)
+                Sleep(3.0)
+            end
+        catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+            DebugText(me, "Error: Animation Failed")
+            Sleep(3.0)
+        end
+    end
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Nodes
+    nodes.havenState = Proxy{
+        params.havenState,
+        Valid = function()
+            return not GetFlag(flMoveToAmbush)
+        end
+    }
+
+    nodes.Selector_Ambush = ImmediateSelector{
+        function(nodes)
+            return GetFirstCanEnter(nodes)
+        end,
+        Valid = function()
+            return GetFlag(flMoveToAmbush)
+        end
+    }
+
+    -- Edge case if harper ends combat encounter at the roof of the ambush and ladder was destroyed.
+    nodes.Action_JumpFromRooftop = Action {
+        function()
+            if mod.moveto.MoveToPoint(jumpFrom, MovementSpeed.Walk, me, 1.0) then
+                local validPosition = FindValidPosition(jumpTo, 4.0, me, true)
+                if validPosition ~= nil then
+                    UseSpell("Projectile_Jump", validPosition, nil, nil, nil, true, true)
+                else
+                    DebugText(me, "Error: failed to find a valid position")
+                    Sleep(3.0)
+                end
+            else
+                SteerTo(jumpFrom)
+                Sleep(3.0)
+            end
+        end,
+        Valid = function()
+            return  GetFlag(flRendezvousAtPoint) and
+                    mod.items.SafeIsDestroyed(houseLadder0) and
+                    mod.items.SafeIsDestroyed(houseLadder1) and
+                    IsInTrigger(me, rooftop.Trigger)
+        end
+    }
+
+    nodes.Selector_Ambush.Proxy_RendezvousAfterAmbush = Proxy{
+        game.states.SCL_DriderAmbush_AfterAmbush,
+        params = {
+            rendezvousPoint = params.rendezvousPoint
+        },
+        Valid = function()
+            return GetFlag(flRendezvousAtPoint)
+        end
+    }
+
+    nodes.Selector_Ambush.Action_WaitRightBeforeAmbush = Action{
+        function()
+            helpers.WaitAtAmbushTrigger(rightBeforeAmbushPos)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        CanEnter = function()
+            return GetFlag(beforeAmbushPosition)
+        end
+    }
+
+    nodes.Selector_Ambush.Action_WaitAtAmbush = Action{
+        function()
+            helpers.WaitAtAmbushTrigger(trAmbushPos)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        CanEnter = function()
+            return GetFlag(arrivedToAmbush, me)
+        end
+
+    }
+
+    nodes.Selector_Ambush.Action_Fallback = Action{
+        function()
+            Sleep(0.5)
+        end,
+        CanEnter = function()
+            return  not GetFlag(arrivedToAmbush, me) and
+                    not GetFlag(flRendezvousAtPoint) and
+                    not GetFlag(beforeAmbushPosition)
+        end
+
+    }
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.EndReached then
+            bReachedAmbushArea = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "SCL_Drider_HarperLeavesToAmbush" then
+            bReachedAmbushArea = true
+        elseif e.Event == "HAV_Torches_Reequip" then
+            local torch = e.Params[1]
+            Unequip(me.Character, torch.Item)
+            Equip(me.Character, torch.Item, true)
+        end
+    end
+    ------------------------------------------------
+end
+}
+
+game.states.SCL_DriderAmbush_AfterAmbush = State{
+function()
+    description = [[Behaviour used for characters who wait after the ambush to the caravan. Shared between the harpers and the prisoners if they survive to this point.]]
+
+    ------------------------------------------------
+    -- Modules
+    modules = {"shared.util", "shared.dialog"}
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Params
+    params.rendezvousPoint = {type = EParamType.String, required = true, help = [[Rendezvous point.]]}
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local variables
+    local trRendezvousPoint = Entity(params.rendezvousPoint)
+
+    local harperLeader = Entity("S_SCL_Drider_Harper_Melee_000_b9f6bb1e-f4cd-4bb3-a7f0-80aad9bae8c8")
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Nodes
+    nodes.Action_MoveToRendezvous = Action{
+        function()
+            try
+                MoveTo(trRendezvousPoint, MovementSpeed.Run)
+                LookFrom(trRendezvousPoint)
+                if me ~= harperLeader then
+                    WaitForInterrupt()
+                else
+                    SetEntityEvent(me, "SCL_Harpers_StartAfterAmbushAD") -- Start in Osiris for optional harpers speakers
+                    mod.util.SleepRandom(25.0, 30.0)
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Error: MovementFailed")
+                Sleep(3.0)
+            end
+        end
+    }
+    ------------------------------------------------
+end
+}
+
+game.states.SCL_DriderAmbush_Harper_AtHaven = State{
+function()
+    description = [[Harper's behaviours before leaving to the ambush and after coming back from it. Handles group ADs between the harpers.]]
+
+    ------------------------------------------------
+    -- Modules
+    modules = {"shared.util", "shared.dialog"}
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Params
+    params.beforeAmbushPoint = {type = EParamType.String, required = true, help = [[Where the harper is before the ambush]]}
+    params.afterAmbushPoint = {type = EParamType.String, required = true, help = [[Where the harper is after the ambush]]}
+    params.bridgePos = {type = EParamType.String, required = true, help = [[Trigger where character will stand at the bridge before the ambush]]}
+
+    params.afterAmbushAD = {type = EParamType.String, required = false, help = [[Optional AD harper will start after the ambush back at the inn]]}
+    params.afterAmbushSpeakers = {type = EParamType.String, arrayRange = "..", required = false, default = {}, help = [[AD speakers.]]}
+    params.animAfterAmbush = {type = EParamType.String, required = false, help = [[Optional Animation harper will do after the ambush back at the inn]]}
+
+    params.patrolSpline = {type = EParamType.String, required = false, help = [[Patrol spline for the before ambush at Inn state]]}
+        ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local variables
+    local afterAmbushPoint = Entity(params.afterAmbushPoint)
+    local flAfterAmbush = Flag("SCL_Drider_State_HarpersBackAtInn_9e0b8ee1-ccf7-4645-92da-4ec8be45508e")
+    local animAfterAmbush = Animation(params.animAfterAmbush)
+    local afterAmbushAD = Dialog(params.afterAmbushAD)
+    local afterAmbushSpeakers = {}
+    local isWandering = false
+
+    local bridgePos = Entity(params.bridgePos)
+    local waitingAtBridge = Flag("SCL_Drider_State_HarpersWaitingAtBridge_94c5a554-2eee-470c-ab0a-c69264a25eb0")
+
+    local trBeforeAmbushPoint = Entity(params.beforeAmbushPoint)
+    local dPreparingBeforeAmbushAD = Dialog("SCL_Drider_AD_HarpersPreparingBeforeAmbush_9a26e0df-249d-c9ec-01ce-b63d04e74676")
+
+    local chHarperMelee = Entity("S_SCL_Drider_Harper_Melee_000_b9f6bb1e-f4cd-4bb3-a7f0-80aad9bae8c8")
+    local chHarperRanger000, chHarperRanger001, chHarperCaster = nil
+    local animPreparingAmbush = Animation("CUST_DebugAsset_CustomAnim_01_95ff9541-9c09-4356-8f50-da327d7a64bc")
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Helpers
+    helpers.action.MoveToAndTalkIfNeeded = function(moveToPos)
+        if not IsInDangerousSurfaceFor(moveToPos, me.Character) then
+            local moveToResult = MoveTo(moveToPos, MovementSpeed.Walk, true, false, 0.5, 1.0, false)
+
+            if moveToResult ~= error.MovementError.None then
+                DebugText(me, "Error: MoveTo failed")
+                Sleep(3.0)
+                return
+            end
+
+            LookFrom(moveToPos)
+
+            if me == chHarperMelee then -- Only the melee harper will start the AD. Use the new StartCheckedAutomatedDialogRateLimited to avoid too much repetition.
+                local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(dPreparingBeforeAmbushAD,
+                        { maxDistance = 10.0,
+                        checkSight = true,
+                        ignoreCower = false,
+                        waitForCompletion = false,
+                        fallbackSoloDialog = nil,
+                        minDelay = 20.0,
+                        cullingDistance = 20.0 },
+                    me, chHarperCaster, chHarperRanger000, chHarperRanger001)
+                if result == error.AutomatedDialogRateLimitedStartFailed then
+                    DebugText(me, "Error: StartCheckedAutomatedDialogRateLimited failed")
+                end
+            end
+            return true
+        else
+            SteerTo(moveToPos)
+            return false
+        end
+    end
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Nodes
+    self.OnInit = function()
+        if me == chHarperMelee and chHarperRanger000 == nil then
+            chHarperRanger000 = Entity("S_SCL_Drider_Harper_Ranger_000_ce089a64-1a91-4ab0-ac71-a2712680780d")
+            chHarperRanger001 = Entity("S_SCL_Drider_Harper_Ranger_001_71c140fa-0ebd-4f36-8728-6e28a445a6ff")
+            chHarperCaster = Entity("S_SCL_Drider_Harper_Caster_000_ef609a8e-08bf-4648-bbb4-380a7f4bc887")
+        end
+
+        if #params.afterAmbushSpeakers > 0 then
+            for _, speaker in pairs(params.afterAmbushSpeakers) do
+                table.insert(afterAmbushSpeakers, Entity(speaker))
+            end
+        end
+    end
+
+    nodes.Selector_AfterAmbush = Selector{
+        function(nodes)
+            return GetFirstCanEnter(nodes)
+        end,
+        CanEnter = function()
+            return GetFlag(flAfterAmbush)
+        end
+    }
+
+    nodes.Selector_AfterAmbush.Action_Wander = Action{
+        function()
+            local wanderDist = math.random(5.0, 7.0)
+            local wanderTime = math.random(5.0, 10.0)
+            Wander(wanderDist, wanderTime, MovementSpeed.Stroll, afterAmbushPoint)
+            Sleep(math.random(1.0, 3.0))
+        end,
+        CanEnter = function()
+            return isWandering
+        end
+    }
+
+    nodes.Selector_AfterAmbush.Action_WaitingAtInn = Action{
+        function()
+            if not IsInDangerousSurfaceFor(afterAmbushPoint, me.Character) then
+                local moveToResult = MoveTo(afterAmbushPoint, MovementSpeed.Walk, false, true, 0.5, 1.0, false)
+
+                if moveToResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                    Sleep(3.0)
+                    return
+                end
+
+                LookFrom(afterAmbushPoint)
+                SetWeaponUnsheathed(me, false, false)
+
+                if afterAmbushAD ~= nil then
+                    local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    afterAmbushAD,
+                    { maxDistance = 10.0,
+                    waitForCompletion = false,
+                    fallbackSoloDialog = nil,
+                    minDelay = math.random(15.0, 20.0),
+                    cullingDistance = 10.0 },
+                    me, table.unpack(afterAmbushSpeakers))
+
+                    mod.util.SleepRandom(1.0, 5.0)
+                end
+
+                if animAfterAmbush ~= nil then
+                    try
+                        PlayAnimation(animAfterAmbush, true, false)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "Error: PlayAnimation failed")
+                        Sleep(3.0)
+                    end
+                end
+
+                if afterAmbushAD == nil and animAfterAmbush == nil then
+                    isWandering = true
+                end
+            else
+                SteerTo(afterAmbushPoint)
+                Sleep(3.0)
+            end
+        end,
+    }
+
+    nodes.Action_BeforeAmbush_WaitingAtBridge = Action{
+        function()
+            if helpers.MoveToAndTalkIfNeeded(bridgePos) then
+                mod.util.SleepRandom(3.0, 9.0)
+            else
+                Sleep(3.0)
+            end
+        end,
+        CanEnter = function()
+            return not GetFlag(flAfterAmbush) and GetFlag(waitingAtBridge)
+        end
+    }
+
+    nodes.Action_BeforeAmbush_WaitingAtInn = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = params.patrolSpline
+        },
+        CanEnter = function()
+            return not GetFlag(flAfterAmbush) and not GetFlag(waitingAtBridge) and params.patrolSpline ~= ""
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+    ------------------------------------------------
+end
+}
+
+game.states.SCL_DriderAmbush_Harper_AtHavenHelper = State{
+function()
+    description = [[State helper to manage the harper's behaviour before and after the ambush while at Haven with the different states.]]
+
+    params.beforeAmbushState = { type = EParamType.State, required = true, help = [[State before the ambush.]]}
+    params.afterAmbushState = { type = EParamType.State, required = true, help = [[State after the ambush.]]}
+
+    local backAtInn = Flag("SCL_Drider_State_HarpersBackAtInn_9e0b8ee1-ccf7-4645-92da-4ec8be45508e")
+
+    nodes.Proxy_BeforeAmbushState = Proxy{
+        params.beforeAmbushState,
+        CanEnter = function()
+            return not GetFlag(backAtInn)
+        end
+    }
+
+    nodes.Proxy_AfterAmbushState = Proxy{
+        params.afterAmbushState,
+        CanEnter = function()
+            return GetFlag(backAtInn)
+        end
+    }
+end
+}

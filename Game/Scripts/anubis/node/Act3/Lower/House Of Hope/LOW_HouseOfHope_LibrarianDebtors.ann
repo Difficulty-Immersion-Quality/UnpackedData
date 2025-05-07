@@ -1,0 +1,88 @@
+game.states.LOW_HouseOfHope_LibrarianDebtors = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Flags and variables--------------------------------
+
+    params.Sweep01 = {
+        type = EParamType.String,
+        required = false,
+        help=[[]]
+    }
+
+    params.Sweep02 = {
+        type = EParamType.String,
+        required = false,
+        help=[[]]
+    }
+
+    params.Sweep03 = {
+        type = EParamType.String,
+        required = false,
+        help=[[]]
+    }
+
+    params.Dust01 = {
+        type = EParamType.String,
+        required = false,
+        help=[[]]
+    }
+
+    params.Dust02 = {
+        type = EParamType.String,
+        required = false,
+        help=[[]]
+    }
+
+    local actions = {}
+
+    local sweepAnim = Animation("CUST_SweepBroom_01_74d09877-6b18-451a-8128-377a293b8bd0")
+    local dustAnim = Animation("CUST_DustBookcase_01_bb619b50-5ee5-4e66-a922-798f9fa5db04")
+
+    local currentIndex = 0
+    --------------------------------Nodes--------------------------------
+    
+    self.OnInit = function()
+        if params.Sweep01 ~= nil and params.Sweep01 ~= "" then table.insert(actions, {point = Entity(params.Sweep01), anim = sweepAnim, lookFrom = false}) end
+        if params.Sweep02 ~= nil and params.Sweep02 ~= "" then table.insert(actions, {point = Entity(params.Sweep02), anim = sweepAnim, lookFrom = false}) end
+        if params.Sweep03 ~= nil and params.Sweep03 ~= "" then table.insert(actions, {point = Entity(params.Sweep03), anim = sweepAnim, lookFrom = false}) end
+        if params.Dust01 ~= nil and params.Dust01 ~= "" then table.insert(actions, {point = Entity(params.Dust01), anim = dustAnim, lookFrom = true}) end
+        if params.Dust02 ~= nil and params.Dust02 ~= "" then table.insert(actions, {point = Entity(params.Dust02), anim = dustAnim, lookFrom = true}) end
+    end
+
+
+    nodes.Act = Action {
+        function()
+            local index = currentIndex
+            while currentIndex == index do
+                index = math.random(1,#actions)
+            end
+            currentIndex = index
+            if IsInDangerousSurfaceFor(actions[index].point, me.Character) then
+                SteerTo(actions[index].point)
+                Sleep(math.random(10,15))
+                return
+            end
+            local moveResult = MoveTo(actions[index].point, MovementSpeed.Walk)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(actions[index].point)
+                Sleep(math.random(10,15))
+                return
+            end
+            if (actions[index].lookFrom) then LookFrom(actions[index].point) end
+            PlayAnimation(actions[index].anim, true, false)
+            Sleep(math.random(3,8))
+        end
+    }
+
+    nodes.IdleFallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+        --------------------------------Events--------------------------------
+   
+end}

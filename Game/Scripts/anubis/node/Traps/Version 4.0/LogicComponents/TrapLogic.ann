@@ -1,0 +1,61 @@
+ -- luacheck: globals socket Input EType Output
+    
+    
+game.states.TrapLogic = State{function()
+
+    params.activationComponent = {type = EParamType.Bool, required=false, default=false, help=[[
+        Triggers that toggle the trap on or off.
+    ]],OnChange=function(old, new)
+    end}
+
+    params.activeBehaviour = {type = EParamType.State, required=false, default=nil, help=[[
+        What the trap does when activated
+    ]]}
+
+    params.inactiveBehaviour = {type = EParamType.State, required=false, default=nil, help=[[
+        What the trap does when deactivated
+    ]]}
+
+    local activeCompleted = false
+    local inactiveCompleted = false
+
+    nodes = ImmediateSelector{
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.ActiveBehaviour = Proxy{
+        params.activeBehaviour,
+        Valid = function()
+            return params.activationComponent and
+                   not activeCompleted
+        end,
+        OnLeave = function()
+        if params.activationComponent then
+                activeCompleted = true
+            end
+        end,
+        OnEnter = function()
+            inactiveCompleted = false
+        end
+    }
+
+    nodes.InactiveBehaviour = Proxy{
+        params.inactiveBehaviour,
+        Valid = function()
+            return not params.activationComponent and
+                   not inactiveCompleted
+        end,
+        OnLeave = function()
+        if not params.activationComponent then
+                inactiveCompleted = true
+            end
+        end,
+        OnEnter = function()
+            activeCompleted = false
+        end
+    }
+
+end
+}

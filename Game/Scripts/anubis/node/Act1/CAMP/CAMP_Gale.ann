@@ -1,0 +1,365 @@
+game.states.CAMP_Gale = State {function()
+    description = [[Behaviour of Gale at Camp]]
+
+    -- Flags
+    local campNight = Flag("GLO_CAMP_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+
+    -- State logic
+    local selectedBehaviour = nil
+    local ignoreReselectionUponInterrupt = false
+
+    self.OnEnter = function()
+        selectedBehaviour = nil
+        ignoreReselectionUponInterrupt = false
+    end
+
+
+    -- Daisy dream 1: Gale is feeling sick
+    nodes.CAMP_DaisyDream1 = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS"},
+
+        Valid = function()
+            return HasActiveStatus(me, "CAMP_DAISY_SICK")
+        end
+    }
+
+    nodes.CAMP_Gale = Selector {
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end,
+
+        function(nodes)
+            -- Check if the behaviour was interrupted and enter it again if still valid
+            if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                ignoreReselectionUponInterrupt = false
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+
+            -- Always clear this, in case it was interrupted but was not able to select a node
+            ignoreReselectionUponInterrupt = false
+
+            -- Select new behaviour
+            local selectedNode = FindDifferentRandomSelectable(nodes)
+            selectedBehaviour = selectedNode.Name
+            return nodes.TryGetChild(selectedBehaviour)
+        end
+    }
+
+    -- Full Camp Behaviours
+    nodes.CAMP_Gale.StudySpellbook = Proxy {
+        game.states.CAMP_Idle, 
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_Reading_Book_01_Start_16107c0f-dbf6-47c4-9596-4c8cca8a683d",
+                    idleAnim = "CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716",
+                    idleAnimEnd = "CUST_Reading_Book_01_End_6fda7690-15e7-4668-acc0-1025692de049",
+                    loopIdleAnim = false,
+                    idleAnimLength = 40.0,
+                    idleAnimEndLength = 3.0,
+                    sleepDurationMin = 10.0,
+                    sleepDurationMax = 18.0}
+    }
+
+    nodes.CAMP_Gale.Thoughtful = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba",
+                    loopIdleAnim = false,
+                    idleAnimLength = 12.666667,
+                    sleepDurationMin = 10.0,
+                    sleepDurationMax = 18.0}
+    }
+
+
+    nodes.CAMP_Gale.Blank = Proxy { --Allows his usual idle to take over.
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    sleepDurationMin = 50.0,
+                    sleepDurationMax = 80.0}
+    }
+
+    -- Clear current behaviour on day<->night transition
+    events.FlagSet = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if e.Event == "InterruptCampBehaviour" then
+                selectedBehaviour = nil
+                Interrupt()
+            elseif e.Event == "InterruptCampBehaviour_WithoutReselection" then
+                Interrupt()
+            end
+        end
+    end
+end}
+
+game.states.CAMP_GaleNightBehaviours = State {function()
+    modules = { "shared.util" }
+
+    -- Dialogs
+    local nightCRDs = {}
+
+    -- Flags
+    local CAMP_GLO_State_InCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+    local ORI_Gale_State_CAMP_Night2_CRDOver = Flag("ORI_Gale_State_CAMP_Night2_CRDOver_2154190b-e9ed-464e-a361-f1e597d2b3c9")
+    local ORI_Gale_State_CAMP_Gale_CRD_SpellTeachingStarted = Flag("ORI_Gale_State_CAMP_Gale_CRD_SpellTeachingStarted_8c0a51e6-480e-4425-b17c-eb105ce51554")
+    local ORI_Gale_State_CAMP_Gale_CRD_LossStarted = Flag("ORI_Gale_State_CAMP_Gale_CRD_LossStarted_e0453839-4efd-4940-bd76-7aa188dc7894")
+    local ORI_Gale_State_ShowGaleDouble = Flag("ORI_Gale_State_ShowGaleDouble_ad1aabf8-690d-4f54-a674-717b515dc08d")
+
+    -- Behaviour Vars
+    local inProgressCrd = nil
+
+    local campPos = nil
+    local actionActive = false
+
+
+    -- Behaviour Entities
+    local fireStarePos = Entity("S_CAMP_Gale_FireStare_21bbbb49-6204-48f0-bbfe-312819d96fcb")
+    local campfire
+    local campfires = {}
+    local double = Entity("S_ORI_GaleDouble_ddf3dd37-fa65-4351-9f55-e50b1211fcfe")
+
+    -- Anims
+    local CUST_FailingToCastSpell_01_Loop = Animation("CUST_FailingToCastSpell_01_Loop_38b44570-95f9-4c7a-b800-6bc6e9248234")
+    local CUST_ArmsCrossed_01 = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+    local CUST_Illusionary_Mystra_01_Start = Animation("CUST_Illusionary_Mystra_01_Start_56eb77cb-a711-4f81-bb98-8666830417ef")
+    local CUST_Illusionary_Mystra_01_Loop = Animation("CUST_Illusionary_Mystra_01_Loop_8ba618f4-f831-418b-aa97-8fe8435ce216")
+    local CUST_Illusionary_Mystra_01_End = Animation("CUST_Illusionary_Mystra_01_End_888e1110-5559-451c-b6aa-580fc4fd53b4")
+    local doubleBHVR = Dialog("BHVR_WRLD_ORI_Gale_Double_9e64a676-0d3b-c2a5-a4da-0270bf124f08")
+
+    helpers.SetupNights = function(e)
+        nightCRDs["Ceremorphosis_NightOne"] = Guid("CAMP_Night1_CRD_Gale_7b7bcf3d-98bd-56bb-d4f0-6cf8461e40d7")
+        nightCRDs["CAMP_Night2_CRD_Gale"] = Guid("CAMP_Night2_CRD_Gale_adae2da4-11a7-2966-db5a-8342d8e64e15")
+        nightCRDs["CAMP_Gale_CRD_SpellTeaching"] = Guid("CAMP_Gale_CRD_SpellTeaching_4d0a0d4e-0812-98c1-f2a6-94013578ce97")
+        nightCRDs["CAMP_Gale_CRD_Loss"] = Guid("CAMP_Gale_CRD_Loss_292fe889-760d-00c4-c873-e68a30fcd1ab")
+        nightCRDs["CAMP_Night3_CRD_Gale"] = Guid("CAMP_Night3_CRD_Gale_d806ce65-aa95-b98c-3c09-3a9bd008e177")
+
+        campfires["6f8660f9-6635-4cf7-8b9c-ee61fb54f8cf"]= "S_CAMP_Fire_6edeea44-9b83-46b6-ba38-49fcd531ff2e"
+        campfires["c2f168f5-5baf-44f5-b77b-8f1926bc0006"]= "S_CAMP_WLDCAVGRN_Fire_aebf4f1d-73ec-4ded-88c9-863b9b9bb7d6"
+        campfires["b13f55a8-088c-46bc-8de7-a4b08cba5729"]= "S_CAMP_Fire_ca30c4a7-d2e8-43d9-ba49-4aaa5670271d"
+        campfires["c7c187b8-74c7-46ea-9d89-938f1ab6e85f"]= "S_CAMP_WLDDUNABB_Fire_a68bdabf-23f4-4117-845d-f4ab78611d43"
+        campfires["e323ca7a-45c8-49db-9ad7-793a919e960f"]= "S_CAMP_WLDDUNSHA_Fire_720ce936-86e0-4c62-96b4-057831b36072"
+        campfires["7538bd21-7580-445a-b637-0757def2a4ac"]= "S_CAMP_WLDUND_Campfire_5beb1451-03de-408d-8868-9098642edbf5"
+
+    end
+
+    self.OnInit = function()
+        helpers.SetupNights()
+    end
+
+    -- Behaviours tied to specific camp nights
+    nodes.ceremorphosis_NightOne = Action {
+        function()
+            if IsInDangerousSurfaceFor(campPos, me.Character) then
+                SteerTo(campPos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(campPos, MovementSpeed.Walk, true, false, 1.5, 2.5, false)
+
+            if moveResult ~= error.MovementError.None then
+                SteerTo(campPos)
+                Sleep(2.0)
+                return
+            end
+
+            SteerTo(campfire)
+            LookAtEntity(campfire, 3.0)
+            try
+                PlayAnimation(CUST_ArmsCrossed_01, false, true)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Failed to play CUST_ArmsCrossed_01")
+            end
+            WaitForInterrupt()
+        end,
+
+        OnEnter = function()
+            actionActive = true
+        end,
+
+        OnLeave = function()
+            actionActive = false
+        end,
+
+        Valid = function()
+            return inProgressCrd == nightCRDs["Ceremorphosis_NightOne"]
+        end
+    }
+
+
+    nodes.CAMP_Night2_CRD_Gale = Action {
+        function()
+            if GetDistanceTo(me, campPos) > 2.0 then
+                ClearFlag(ORI_Gale_State_ShowGaleDouble)
+                if IsInDangerousSurfaceFor(campPos, me.Character) then
+                    SteerTo(campPos)
+                    Sleep(2.0)
+                else
+                    local moveResult = MoveTo(campPos, MovementSpeed.Stroll, true, false, 1.5, 2.5, false)
+                    if moveResult ~= error.MovementError.None then
+                        SteerTo(campPos)
+                        Sleep(2.0)
+                    end
+                end
+            else
+                Sleep(1.0)
+                SteerTo(double)
+                if not GetFlag(ORI_Gale_State_CAMP_Night2_CRDOver) then
+                    SetFlag(ORI_Gale_State_ShowGaleDouble)
+                    while me.Blackboard.GetFact("ORI_GaleDoubleBehaviourTrigger") == nil do
+                        Sleep(0.1)
+                    end
+                    StartBehaviorDialog(doubleBHVR, me.Blackboard.GetFact("ORI_GaleDoubleBehaviourTrigger").Trigger, true, me, double)
+                end
+                Sleep(2.0)
+            end
+        end,
+        OnEnter = function()
+            actionActive = true
+        end,
+
+        OnLeave = function()
+            actionActive = false
+            ClearFlag(ORI_Gale_State_ShowGaleDouble)
+        end,
+        Valid = function()
+            return inProgressCrd == nightCRDs["CAMP_Night2_CRD_Gale"]
+        end
+    }
+
+    nodes.CAMP_Gale_CRD_SpellTeaching = Action {
+        function()
+            DebugText(me, campPos.UUID.String)
+            if GetDistanceTo(me, campPos) > 2.0 then
+                if IsInDangerousSurfaceFor(campPos, me.Character) then
+                    SteerTo(campPos)
+                    Sleep(2.0)
+                else
+                    local moveResult = MoveTo(campPos, MovementSpeed.Stroll, true, false, 1.5, 2.5, false)
+                    if moveResult ~= error.MovementError.None then
+                        SteerTo(campPos)
+                        Sleep(2.0)
+                    end
+                end
+            else
+                LookFrom(campPos)
+                PlayLoopingAnimation(CUST_Illusionary_Mystra_01_Start, {CUST_Illusionary_Mystra_01_Loop}, CUST_Illusionary_Mystra_01_End)
+                WaitForInterrupt()
+            end
+        end,
+
+        OnEnter = function()
+            actionActive = true
+        end,
+    
+        OnLeave = function()
+            actionActive = false
+        end,
+    
+        Valid = function()
+            return inProgressCrd == nightCRDs["CAMP_Gale_CRD_SpellTeaching"] and
+                   not GetFlag(ORI_Gale_State_CAMP_Gale_CRD_SpellTeachingStarted)
+        end
+    }
+
+
+    nodes.CAMP_Gale_CRDs_FixedLocation = Proxy{ --These needs to be location-bound for cinematics.
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716"},
+        Valid = function()
+            return (inProgressCrd ==  nightCRDs["CAMP_Gale_CRD_SpellTeaching"] and
+                    GetFlag(ORI_Gale_State_CAMP_Gale_CRD_SpellTeachingStarted)) or
+                   inProgressCrd == nightCRDs["CAMP_Night3_CRD_Gale"]
+        end
+    }
+
+    nodes.CAMP_Gale_CRD_Loss = Action {
+        function()
+            if GetDistanceTo(me, campPos) > 2.0 then
+                if IsInDangerousSurfaceFor(campPos, me.Character) then
+                    SteerTo(campPos)
+                    Sleep(2.0)
+                else
+                    local moveResult = MoveTo(campPos, MovementSpeed.Stroll, true, false, 1.5, 2.5, false)
+                    if moveResult ~= error.MovementError.None then
+                        SteerTo(campPos)
+                        Sleep(2.0)
+                    end
+                end
+            else
+                SteerTo(campfire)
+                LookAtEntity(campfire, 3.0)
+                PlayAnimation(CUST_FailingToCastSpell_01_Loop, false, true)
+                Sleep(2.0)
+            end
+        end,
+        OnEnter = function()
+            actionActive = true
+        end,
+
+        OnLeave = function()
+            actionActive = false
+        end,
+
+        Valid = function()
+            return inProgressCrd == nightCRDs["CAMP_Gale_CRD_Loss"] and
+                   not GetFlag(ORI_Gale_State_CAMP_Gale_CRD_LossStarted)
+        end
+    }
+
+    -- Default night behaviours
+    nodes.DefaultBehaviour = Proxy {
+        game.states.CAMP_Gale,
+
+        Valid = function()
+            return inProgressCrd == nil or
+                   (inProgressCrd == nightCRDs["CAMP_Gale_CRD_Loss"] and
+                    GetFlag(ORI_Gale_State_CAMP_Gale_CRD_LossStarted))
+        end
+    }
+
+    -- Update inProgressCrd
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if #nightCRDs == 0 then
+                helpers.SetupNights()
+            end
+           if e.Event == "NightInProgress" then
+            if mod.util.ContainsValue(nightCRDs, e.Params[1]) then
+                inProgressCrd = e.Params[1]
+            end
+            elseif e.Event == "CampPositionChange" then
+                campPos = e.Params[1]
+                --SetEntityEvent(me, campPos.UUID.String)
+                assert(campPos.UUID.String)
+                if campfires[campPos.UUID.String] ~= nil then
+                    campfire = Entity(campfires[campPos.UUID.String])
+                end --Gale only stares into the fire for the nights during which he is teleported near the fire.
+                if actionActive then 
+                    Interrupt()
+                end
+            end
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == CAMP_GLO_State_InCamp.Guid and e.Entity == me then
+            inProgressCrd = nil
+            Interrupt()
+        end
+    end
+end}

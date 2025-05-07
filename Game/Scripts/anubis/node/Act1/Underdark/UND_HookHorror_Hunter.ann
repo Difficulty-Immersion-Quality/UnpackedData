@@ -1,0 +1,83 @@
+
+game.states.UND_HookHorror_Hunter = State{function ()
+
+    modules = { "shared.math", "shared.params", "shared.util" }
+
+    params.LurkAreas = { type = EParamType.String, arrayRange = "1..", required = true,
+        help = [[Area triggers that Hook Horror Hunter is traversing through]]}
+
+    local tr_LurkAreas = nil
+    local i_AreaIndex = 1
+
+    local s_TalkTimer = "UND_HookHorror_Hunter.Talk"
+    local b_Talk = false
+
+    helpers.RestartTalkTimer = function()
+        local randomTime = mod.math.random(25.0, 37.0)
+        StartTimer(me, s_TalkTimer, randomTime, 0)
+    end
+
+    self.OnInit = function()
+        tr_LurkAreas = mod.params.ParamArrayToEntityList(params.LurkAreas)
+        --helpers.RestartTalkTimer()
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_TalkTimer then
+            b_Talk = true
+            helpers.RestartTalkTimer()
+        end
+    end
+
+    nodes.Lurk = Action{
+        function()
+            if i_AreaIndex > #tr_LurkAreas then
+                i_AreaIndex = 1
+            elseif i_AreaIndex < 1 then
+                i_AreaIndex = #tr_LurkAreas
+            end
+
+            local i_NumLurks = math.random(2, 3)
+            DebugText(me, "[1] lurks in [2]", i_NumLurks, tr_LurkAreas[i_AreaIndex].Name)
+            for i = 1, i_NumLurks do
+                local randPos = TriggerGetRandomPosition(tr_LurkAreas[i_AreaIndex].Trigger)
+                local movementSpeed = MovementSpeed.Walk
+                if (math.random() > 0.7) then
+                    movementSpeed = MovementSpeed.Run
+                end
+                try
+                    MoveTo(randPos, movementSpeed)
+                    DebugText(me, "Animation: Look around")
+                    mod.util.SleepRandom(2.0, 3.0)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "Movement failed to randPos")
+                    Sleep(1.0)
+                end
+            end
+
+            i_AreaIndex = i_AreaIndex + 1
+        end,
+
+        CanEnter = function()
+            return not b_Talk
+        end,
+
+        OnInterrupt = function()
+            i_AreaIndex = i_AreaIndex + 1
+        end
+    }
+
+    nodes.Talk = Action{
+        function()
+            try
+                Wander(2.5, 1.0, MovementSpeed.Walk, me)
+                DebugText(me, "Animation: Click Clack")
+                Sleep(3.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Wander failed")
+                Sleep(1.0)
+            end
+            b_Talk = false
+        end
+    }
+end}

@@ -1,0 +1,64 @@
+game.states.UND_GnomeSilly = State{function ()
+    description = [[Behaviour for the Gnome Silly]]
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    params.grymforgeState = {type = EParamType.State, required = true, help = [[
+        State for the gnome before being rescued.
+    ]]}
+
+    params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled.
+    ]]}
+
+    local d_AtMyconidsAD = Dialog("UND_MyconidCircle_AD_GnomesSaved_89469351-7742-14d9-c4de-b8d7b7e24c5c")
+    local char_GnomeDaffy = Entity("S_GLO_GnomeWorkerDaffy_fdaeccaa-d903-4568-ac36-a0a0ec24977d")
+    local tr_AtMyconidsPosition = Entity("S_UND_GnomeWorkerSilly_SavedTrigger_aed85589-355a-4c25-bdb7-f6c4c3120a86")
+
+    local flag_AtMyconids = Flag("UND_DuergarCamp_State_GnomeAtMyconids_f48d9c4e-e6eb-46dc-93a7-89326d11829b")
+    local flag_ForemanDead = Flag("UND_GnomeForeman_State_Dead_32e110c6-7830-4ebe-be12-de932bd16e3f")
+	local flag_PostMutiny = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+
+    nodes.State_AtMyconids = Action {
+		function()
+			if mod.moveto.MoveToPoint(tr_AtMyconidsPosition, MovementSpeed.Walk, me) then
+                LookFrom(tr_AtMyconidsPosition)
+			end
+            if GetFlag(flag_ForemanDead) then
+                local gnomeDaffy = mod.dialog.IsSpeakerAvailableAndNear(char_GnomeDaffy, me, 10, false) and char_GnomeDaffy or nil
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    d_AtMyconidsAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 25,
+                            checkSight = false,
+                            fallbackSoloDialog = d_AtMyconidsAD
+                        },
+                        nil,
+                        gnomeDaffy,
+                        me,
+                        nil
+                    )
+            end
+            Sleep(5)
+		end,
+		CanEnter = function()
+			return GetFlag(flag_AtMyconids)
+		end
+	}
+
+    nodes.State_PostMutiny = Proxy {
+        game.states.UND_DuergarCamp_PostMutiny,
+        params = {PostMutinyPosition = params.PostMutinyPosition},
+        Valid = function()
+            return GetFlag(flag_PostMutiny)
+        end
+    }
+
+    nodes.State_Grymforge = Proxy {
+        params.grymforgeState,
+        Valid = function()
+            return not GetFlag(flag_AtMyconids)
+        end
+    }
+end}

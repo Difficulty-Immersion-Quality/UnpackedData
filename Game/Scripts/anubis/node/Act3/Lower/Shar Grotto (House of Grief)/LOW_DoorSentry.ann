@@ -1,0 +1,103 @@
+game.states.LOW_HouseOfGrief_DoorSentry = State {function ()
+ 
+    modules = { "shared.dialog", "shared.items" }
+
+    local bool_MovedToDestination = false
+    
+    local HeartDoorPoint = Entity("S_LOW_HeartDoor f0d84268-360a-467d-8b13-d55e808fe6a3")
+    local SideStepPoint = Entity("S_LOW_DoorSideStepPoint 8d528f0a-34f8-4aad-b95b-8bbc1b08e681")
+    local SentryDeskpoint = Entity("S_LOW_SentryDeskPoint 03c99716-053e-4074-8dd8-6d07058c5adf")
+
+    local HeartDoorLookAt = Entity("S_LOW_HeartDoorLookAt_1e97f2a9-c22e-488e-a4d2-88319b6102da")
+    local SideStepLookAt = Entity("S_LOW_SideStepLookAt_eeeefb2a-84da-4a98-9242-41d5636f146c")
+    local SlackChair = Entity("S_LOW_SentryChair_92537798-2539-4460-8c43-7892befadc7a")
+
+    local Partner = Entity("S_LOW_GriefAttendant_2d74b412-6ed8-438a-b229-6cee7a48acca")
+
+    local MoveToDoor = Flag("LOW_HouseOfGrief_State_SentryMoveToDoor_730f7ab6-3589-4b3f-a504-5fe67ca9b8c8")
+    local MoveToDesk = Flag("LOW_HouseOfGrief_State_SentryMoveToDesk_5b5c91de-7305-4122-a2a8-6d0796db409d")
+    local MoveToSide = Flag("LOW_HouseOfGrief_State_SentryMoveToSide_ba7582af-58af-4105-9de5-367c5e09fb7f")
+    local MoveToChamber = Flag("LOW_HouseOfGrief_Event_AttendantShowToRoom_bcadad71-c096-4e8d-8d96-0c80139bd4fc")
+    local SlackingOff = Flag("LOW_HouseOfGrief_State_SlackingOff_6f92282c-1622-4e9f-85a2-4855411f421d")
+    local StopSlacking = Flag("LOW_HouseOfGrief_State_ToldToStopSlacking_5eef599d-2b3d-49b6-bfb1-29dfa89a1c93")
+
+    local SentryDeskAD = Dialog("LOW_HouseOfGrief_AD_SentryAttendantTalk_ff916c91-ffd3-e698-b99a-24f2e3156834")
+    local SideStepAD = Dialog("LOW_HouseOfGrief_AD_SentrySideStep_989fe330-676c-7b73-7483-ca4f73d566c1")
+
+    helpers.action.SentryMoveTo = function(pos, lookat)
+        if not IsInDangerousSurfaceFor(pos, me.Character) and GetDistanceTo(me, pos) > 2 then
+            local moveResult = MoveTo(pos, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+            if moveResult ~= error.MovementError.None then
+                DebugText(me, "Error: MoveTo failed")
+                Sleep(3.0)
+            else
+                LookFrom(lookat)
+                bool_MovedToDestination = true
+            end
+        end
+    end
+
+    
+    nodes.MoveBacktoDoor = Action {
+        function()
+            ClearFlag(SlackingOff)
+            helpers.SentryMoveTo(SideStepPoint, SideStepLookAt)
+        end,
+        Valid = function()
+            return GetFlag(StopSlacking)
+        end
+    }
+    
+    nodes.MoveToSide = Action {
+        function()
+            helpers.SentryMoveTo(SlackChair, SlackChair)
+            if bool_MovedToDestination then
+                bool_MovedToDestination = false
+                if mod.dialog.IsSpeakerAvailable(me) and not GetFlag(MoveToChamber) then
+                    StartAutomatedDialog(SideStepAD, true, me)
+                end
+                if SlackChair ~= nil and not mod.items.SafeIsDestroyed(SlackChair) and GetDistance2DTo(me, SlackChair) < 5.0 and CanReposeOn(me, SlackChair) then
+                    UseItem(SlackChair.Item)
+                    SetFlag(SlackingOff)
+                end
+            end
+        end,
+        Valid = function()
+            return GetFlag(MoveToSide) or GetFlag(MoveToChamber) and not GetFlag(StopSlacking)
+        end
+    }
+
+    nodes.MoveToDesk = Action {
+        function()
+            helpers.SentryMoveTo(SentryDeskpoint, Partner)
+            if bool_MovedToDestination then
+                bool_MovedToDestination = false
+                if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailable(Partner) then
+                    StartAutomatedDialog(SentryDeskAD, true, me, Partner)
+                end
+                    SetFlag(MoveToDoor)
+                    ClearFlag(MoveToDesk)
+            end
+        end,
+        Valid = function()
+            return GetFlag(MoveToDesk)
+        end
+    }
+
+    nodes.MoveToDoor = Action {
+        function()
+            helpers.SentryMoveTo(HeartDoorPoint, HeartDoorLookAt)
+        end,
+        Valid = function()
+            return GetFlag(MoveToDoor)
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+    
+end
+}

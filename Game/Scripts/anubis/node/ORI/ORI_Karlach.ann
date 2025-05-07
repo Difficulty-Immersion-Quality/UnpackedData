@@ -1,0 +1,91 @@
+game.states.PLA_Karlach = State {function ()
+
+    local WoundedFlag = Flag("PLA_KarlachRecruitment_State_KarlachWounded_4cd908ef-0bc9-41fa-84f1-18bc7c64ed2d")
+    local LeavingFlag = Flag("PLA_KarlachRecruitment_Quest_ToldKarlach_0f7ebbd3-2774-4b63-a292-c93212c32d1c")
+
+    local Pos_Karlach = Entity("S_PLA_KarlachPos_6cd446e9-be56-42c3-99d1-0ec78df1f152")
+    local Pos_Backpack = Entity("S_PLA_KarlachBackpack_e6b331da-d5e2-481f-8db6-8c36ddb9562d")
+
+    local Trig_Backpack = Entity("S_PLA_KarlachBagBounds_d34ae8de-76c4-4708-aefb-b193d1be2ce3")
+    local Trig_JumpStart = Entity("S_PLA_KarlachJumpStart_e7ba4029-51f0-4e30-bd91-a28735e08aea")
+    local Trig_JumpEnd = Entity("S_PLA_KarlachJumpEnd_e5d0f3bd-06b4-43a5-9d56-372f85de7760")
+
+    local Anim_Wounded = Animation("CUST_DEN_TieflingGuard5_Sit_Idle_76ff641c-d22e-44bf-926e-7b77880f2fda")
+    local Anim_Packing = Animation("CUST_Packing_01_2f29380f-3a19-4f8f-ab25-7b755027b323")
+
+    nodes = ImmediateSelector {}
+
+    helpers.action.IdleAction = function(pos, animation)
+        try
+            if(not IsInDangerousSurfaceFor(pos,me.Character,3.0)) then
+                MoveTo(pos.Position, MovementSpeed.Walk)
+                LookFrom(pos)
+                PlayAnimation(animation, false, true)
+                DebugText(me, "Try Animation")
+                WaitForInterrupt()
+            else
+                Sleep(4.0)
+            end
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            DebugText(me,"Move Exception")
+            Sleep(4.0)
+        catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+            DebugText(me, "PlayAnimationFailed")
+            Sleep(4.0)
+        end
+    end
+
+    nodes.KarlachInjured = Action{
+        function()
+            helpers.IdleAction(Pos_Karlach, Anim_Wounded)
+        end,        
+        Valid = function()
+            return GetFlag(WoundedFlag) and not GetFlag(LeavingFlag)
+        end
+    }
+
+    nodes.KarlachHealed = Action{
+        function()
+            helpers.IdleAction(Pos_Backpack, Anim_Packing)
+        end,        
+        Valid = function()
+            return IsInTrigger(Pos_Backpack, Trig_Backpack.Trigger) and not GetFlag(WoundedFlag) and not GetFlag(LeavingFlag)
+        end
+    }
+
+    nodes.KarlachLeaving = Action{
+        function()
+            if not IsInDangerousSurfaceFor(Pos_Backpack, me.Character, 1.0) and IsInTrigger(Pos_Backpack, Trig_Backpack.Trigger) then
+                local moveResult = MoveTo(Pos_Backpack, MovementSpeed.Walk, true, false, 0.5, 4.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                    else
+                        if IsInTrigger(Pos_Backpack, Trig_Backpack.Trigger) then
+                            LookAtEntity(Pos_Backpack, 3.0)
+                            SetOnStage(Pos_Backpack, false)
+                        end
+                    end
+            end
+
+            if not IsInDangerousSurfaceFor(Trig_JumpStart, me.Character, 1.0) then
+                local moveResult = MoveTo(Trig_JumpStart, MovementSpeed.Walk, true, false, 0.5, 4.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                    else
+                        UseSpell("Projectile_Jump", Trig_JumpEnd,  nil, nil, nil, true, true, true)
+                    end
+            end
+                SetFlag(Flag("GEN_DisappearOutOfSight_5dc33889-cbfb-c3d2-9e4e-8d826bf8566f"), me)
+        end,        
+        Valid = function()
+            return GetFlag(LeavingFlag)
+        end
+    }
+
+    nodes.KarlachFallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end
+}

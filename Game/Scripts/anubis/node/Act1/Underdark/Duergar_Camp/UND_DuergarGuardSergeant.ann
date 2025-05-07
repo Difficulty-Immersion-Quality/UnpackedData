@@ -1,0 +1,235 @@
+game.states.UND_DuergarGuardSergeant = State{function ()
+	description = [[Behavior for Duergar Sergeant, the second-in-command in the Duergar Camp]]
+	
+	modules = {"shared.dialog", "shared.moveto"}
+
+	params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled.
+    ]]}
+	params.CaveInPosition = {type = EParamType.String, help=[[
+		The trigger to which the character will move if Cave In is about to be destroyed or has been already.
+	]]}
+	params.DebriefPosition = {type = EParamType.String, help=[[
+		The trigger to which the character will temporary move to debrief the arrived Raft Captain.
+	]]}
+	params.ShoutPositionBox = {type = EParamType.String, help=[[
+		The trigger to which the character will sometimes move to shout at the workers.
+	]]}
+	params.WanderPositionBox = {type = EParamType.String, help=[[
+		The trigger in which the character will wander.
+	]]}
+	params.CaveInEvacuationBox = {type = EParamType.String, help=[[
+        The trigger to which the characters will run if the explosives are set.
+    ]]}
+
+
+	local char_raftCaptain = Entity("S_UND_DuergarRaftCaptain_473ae3b0-d8e9-428d-9129-bbffe449b8ec")
+	local char_theDrow = Entity("S_UND_TheDrowNere_06bf05c5-216b-4eaf-91f5-8f1dd3d57f30")
+
+	local tr_debriefPosition = Entity(params.DebriefPosition)
+	local tr_caveInPosition = Entity(params.CaveInPosition)
+	local tr_shoutPositionBox = Entity(params.ShoutPositionBox)
+	local tr_wanderPositionBox = Entity(params.WanderPositionBox)
+	local tr_lineUpPosition = Entity("S_UND_DuergarCamp_PostCavein_Sergeant_LinePoint_20c8fb57-e214-4ab7-8781-73d4d76f1af0")
+	local tr_postMutinyPosition = Entity(params.PostMutinyPosition)
+
+	local d_DebriefAD = Dialog("UND_DuergarRaftCaptainAndDuergarSergeant_AD_8a73d039-15fb-13b4-5f84-fb0a3ac24ade")
+	local d_DrowAD = Dialog("UND_DuergarGuardSergeantAndTheDrow_AD_e5f8bdea-f70d-c118-e9f2-94eb8a25dbb0")
+	local d_DigAD = Dialog("UND_DuergarGuardSergeant_AD_64bbc8c0-4538-f5cd-7b08-de309161bb97")
+	local d_LineUpAD = Dialog("UND_DuergarLoyalSergeant_AD_PostMutiny_LineUp_18fb20aa-e7d5-45de-e13b-aea28dd480f2")
+
+	local flag_Debrief = Flag("UND_DuergarRaftCaptain_Debrief_df399331-418a-4990-9759-076b46f2de56")
+	local flag_ExplosivesSet = Flag("UND_DuergarCamp_State_ExplosivesAtCaveIn_41633d28-12de-4fad-989f-863f411132c4")
+	local flag_CaveInCleared = Flag("UND_DuergarCamp_State_CaveInCleared_e0d8a48b-e0cf-4cc8-96bc-b637b79ce9bd")
+	local flag_PostMutiny = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+
+	local b_liningUp = false
+
+    
+	nodes.State_PostMutiny = Selector {
+        function(nodes)
+			return FindFirstSelectable(nodes)
+		end,
+        Valid = function()
+            return GetFlag(flag_PostMutiny)
+        end
+    }
+
+	nodes.State_PostMutiny.LineUp_MoveTo = Action {
+        function()
+			DebugText(me,"Lining up")
+			SetEntityEvent(me,"UND_DuergarCamp_PostMutiny_LineUp")
+			mod.moveto.MoveTo(tr_lineUpPosition,true,0,"Run")
+		end,
+        CanEnter = function()
+            return b_liningUp==true and GetDistanceTo(me, tr_lineUpPosition) > 0.3
+        end
+    }
+
+	nodes.State_PostMutiny.LineUp_AD = Action {
+        function()
+			LookFrom(tr_lineUpPosition)
+			DebugText(me,"Looking and speaking")
+			mod.dialog.StartCheckedAutomatedDialogRateLimited(
+				d_LineUpAD,
+				{
+					waitForCompletion = true,
+					minDelay = 15.0,
+				},
+				me)
+			b_liningUp = false
+			SetEntityEvent(me,"UND_DuergarCamp_PostMutiny_Dismiss")
+		end,
+        CanEnter = function()
+            return b_liningUp==true and GetDistanceTo(me, tr_lineUpPosition) < 0.3
+        end
+    }
+
+	nodes.State_PostMutiny.Idle = Action{
+		function()
+			Wander(5,24,MovementSpeed.Walk,tr_postMutinyPosition)
+			b_liningUp = true
+		end,
+	}
+
+	nodes.State_CaveInCleared_ToDrow = Action {
+		function()
+			if not IsInDangerousSurfaceFor(tr_caveInPosition, me.Character) then
+				if GetDistanceTo(me, tr_caveInPosition) > 3.0 then
+					try
+						MoveTo(tr_caveInPosition,MovementSpeed.Run)
+					catch e if ls.CheckType(e, error.MovementFailed) then
+						LookFrom(tr_caveInPosition)
+						Sleep(2.0)
+					end
+				else
+					LookFrom(tr_caveInPosition)
+					if mod.dialog.IsSpeakerAvailable(me) then
+						if mod.dialog.IsSpeakerAvailableAndNear(char_theDrow, me, 20.0, false) and math.random() < 0.6 then
+							StartAutomatedDialog(d_DrowAD,true,me,char_theDrow)
+						end
+					end
+				end
+			else
+				LookFrom(tr_caveInPosition)
+			end
+			Sleep(10.0)
+		end,
+		Valid = function()
+			return GetFlag(flag_CaveInCleared)
+		end,
+		OnLeave = function()
+			DialogRequestStop(me,d_DrowAD)
+		end
+	}
+
+	nodes.State_CaveInEvacuation = Proxy {
+		game.states.UND_DuergarCamp_CaveInEvacuation,
+		params = {CaveInEvacuationBox = params.CaveInEvacuationBox},
+		Valid = function()
+			return not GetFlag(flag_CaveInCleared) and
+			       (GetFlag(flag_ExplosivesSet) or
+				    IsInSurface(tr_caveInPosition,SurfaceType.BLACKPOWDER,5.0) or
+				    IsInDangerousSurfaceFor(tr_caveInPosition,me.Character,0.5,true))
+		end
+	}
+
+	nodes.State_DebriefCaptain = Action {
+		function()
+			if not IsInDangerousSurfaceFor(tr_debriefPosition, me.Character) then
+				if GetDistanceTo(me, tr_debriefPosition) > 3.0 then
+					try
+						MoveTo(tr_debriefPosition)
+					catch e if ls.CheckType(e, error.MovementFailed) then
+						LookAtEntity(tr_debriefPosition, 3.0)
+						Sleep(2.0)
+					end
+				else
+					LookFrom(tr_debriefPosition)
+				end
+			else
+				LookAtEntity(tr_debriefPosition, 3.0)
+			end
+			if GetDistanceTo(me,char_raftCaptain) < 6.0 then
+				LookAtEntity(char_raftCaptain, 3.0)
+				if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailableAndNear(char_raftCaptain, me, 10.0, false) then
+					try
+						StartAutomatedDialog(d_DebriefAD,true,char_raftCaptain,me)
+					catch e if ls.CheckType(e,error.AutomatedDialogStartFailed) then
+						ClearFlag(flag_Debrief)
+					end
+					ClearFlag(flag_Debrief)
+				else
+					ClearFlag(flag_Debrief)
+				end
+			end
+			Sleep(2.0)
+		end,
+		Valid = function()
+			return GetFlag(flag_Debrief) and not GetFlag(flag_CaveInCleared)
+		end,
+		OnLeave = function()
+			DialogRequestStop(me,d_DebriefAD)
+		end
+	}
+
+	nodes.State_DigInProgress = Selector {
+		function(nodes)
+			return GetWeightedCanEnter(nodes,{[nodes.Action_SayAD] = 10,
+												[nodes.Action_Wander] = 8,
+												[nodes.Action_IdleAnim] = 6})
+		end,
+		Valid = function()
+			return not GetFlag(flag_CaveInCleared) and not GetFlag(flag_ExplosivesSet)
+		end
+	}
+
+	nodes.State_DigInProgress.Action_SayAD = Action {
+		function()
+			if GetDistanceTo(me, tr_shoutPositionBox) > 3.0 then
+				local shoutPosition = TriggerGetRandomPosition(tr_shoutPositionBox.Trigger)
+				try
+					MoveTo(shoutPosition)
+				catch e if ls.CheckType(e, error.MovementFailed) then
+					LookFrom(shoutPosition)
+					Sleep(2.0)
+				end
+			end
+			LookFrom(tr_caveInPosition)
+			StartAutomatedDialog(d_DigAD,true,me)
+			Sleep(5.0)
+		end,
+		Valid = function()
+			return not GetFlag(flag_ExplosivesSet)
+		end,
+		OnLeave = function()
+			DialogRequestStop(me,d_DigAD)
+		end
+	}
+
+	nodes.State_DigInProgress.Action_Wander = Action {
+		function()
+			try
+				Wander(tr_wanderPositionBox,4.0)
+			catch e if ls.CheckType(e, error.MovementFailed) then
+				LookFrom(tr_caveInPosition)
+				Sleep(2.0)
+			end
+			LookFrom(tr_caveInPosition)
+			Sleep(5.0)
+		end,
+		Valid = function()
+			return not GetFlag(flag_ExplosivesSet)
+		end
+	}
+
+	nodes.State_DigInProgress.Action_IdleAnim = Action {
+		function()
+			Sleep(5.0)
+		end,
+		Valid = function()
+			return not GetFlag(flag_ExplosivesSet)
+		end
+	}
+
+end}

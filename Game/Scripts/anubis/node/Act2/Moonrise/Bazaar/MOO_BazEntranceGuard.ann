@@ -1,0 +1,134 @@
+game.states.MOO_BazEntranceGuard_001 = State{function ()
+    description = [[Idle behaviour till he informs the Pilgrims of their new role]]
+
+    modules = {"shared.moveto", "shared.dialog", "gustav.Act1.Underdark"}
+
+--------------------------------LOCAL--------------------------------
+    local standPoint = Entity("S_MOO_BazEntranceGuardPoint_001_79c884ca-9db9-4a5a-b158-258a6686cff8")
+    local informAD = Dialog("MOO_Bazaar_AD_GuardRejectPilgrims_71257ec2-66a0-9896-9cda-eacbec35f2c8")
+    local pilgrimsLeavingFlag = Flag("MOO_Bazaar_Event_PilgrimsLeaveToTown_6d5f99a3-d858-4bf2-a76c-7a7d5b9560e1")
+    local pilgrimPresentFlag = Flag("MOO_Bazaar_State_PilgrimsInBazaar_cde71533-78da-4df4-bec9-332fd5225dbd")
+    local pilgrimsToTownFlag = Flag("MOO_Bazaar_State_PilgrimsToTown_dc97fc60-e749-4723-9264-c856f6f90f2c")
+    local pilgrimsDeadFlag = Flag("MOO_Bazaar_State_PilgrimsDead_068ae499-6007-4575-a498-c22b85109ccf")
+
+    local nearestPilgrim
+    local bazaarStander4 = Entity("S_MOO_BazaarStander_004_a6211285-d412-42c5-8c1c-ffe7feca2e09")
+    local bazaarStander5 = Entity("S_MOO_BazaarStander_005_c31c6739-c991-490e-9857-2a3367042727")
+    local bazaarStander6 = Entity("S_MOO_BazaarStander_006_5e4c22f4-1122-4822-bc16-ba49d3cb701e")
+    local bazaarStander7 = Entity("S_MOO_BazaarStander_007_f152d3c1-fe32-403f-9d7f-2f1049912e0f")
+
+--------------------------------HELPERS--------------------------------
+
+    helpers.action.GetNearestActivePilgrim = function()
+        local pilgrims  = {}
+        table.insert(pilgrims, bazaarStander4)
+        table.insert(pilgrims, bazaarStander5)
+        table.insert(pilgrims, bazaarStander6)
+        table.insert(pilgrims, bazaarStander7)
+
+        local target = nil
+
+        if #pilgrims > 0 then
+            local tempTarget = nil
+
+            for i, pilgrim in ipairs(pilgrims) do
+                local distToChar
+                if pilgrim.OnStage
+                and not pilgrim.Character.IsDead
+                and not (HasActiveStatus(pilgrim, "DOWNED")) then
+                    tempTarget = pilgrim
+                end
+            end
+
+            if tempTarget ~= nil then
+                if ls.CheckType(me, ls.anubis.game.Entity) then
+                    DebugText(me, "Found Target [1]", tempTarget.Name)
+                end
+                target = tempTarget
+            end
+        end
+        return target
+    end
+
+--------------------------------NODES--------------------------------
+
+    nodes.InformPilgrims = Action{
+        CanEnter = function()
+            return GetFlag(pilgrimPresentFlag) and GetFlag(pilgrimsToTownFlag) and not GetFlag(pilgrimsDeadFlag) and not GetFlag(pilgrimsLeavingFlag)
+        end,
+
+        function()
+            nearestPilgrim = helpers.GetNearestActivePilgrim()
+            try
+                MoveInRange(nearestPilgrim, 1, 3, MovementSpeed.Walk)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Debug : MoveTo failed")
+            end
+            Sleep(2.5)
+            SteerTo(nearestPilgrim)
+            mod.dialog.StartCheckedAutomatedDialog(
+                informAD,
+                {
+                    waitForCompletion = true
+                },
+                me,
+                bazaarStander4
+            )
+            Sleep(6)
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            if mod.moveto.MoveToPoint(standPoint,  MovementSpeed.Walk, me) then
+                LookFrom(standPoint)
+                Sleep(4)
+            else
+                SteerTo(standPoint)
+            end
+            Sleep(2)
+        end
+    }
+
+end
+}
+
+game.states.MOO_BazEntranceGuard_Greet = State{function ()
+    description = [[Behaviour for the guard at the very entrance of the Bazaar, who greets players upon entry]]
+
+--------------------------------LOCAL--------------------------------
+    local AD = Dialog("MOO_Bazaar_AD_BazEntranceGuard_002_15e1428a-49c5-b705-5b44-a5d99636be2c")
+    local executionOverFlag = Flag("MOO_GroundFloor_State_ExecutionOver_1560c0ae-5fec-4e7c-a6e7-35e9c33bbbeb")
+    local greetingDone = false
+--------------------------------NODES--------------------------------
+
+
+    nodes.WaitingForPlayer = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_MOO_BazEntranceGuardPoint_003_143bbfe1-7974-40a5-9dc4-29888eb36c9b]]
+        },
+        Valid = function()
+            return not greetingDone
+        end
+    }
+    nodes.Guarding = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_MOO_BazEntranceGuardPoint_004_8b3410f7-8a0e-4422-b5d1-db0029a52aeb]]
+        },
+    }
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == AD.Guid then
+            greetingDone = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == executionOverFlag.Guid then
+            greetingDone = true
+        end
+    end
+end
+}

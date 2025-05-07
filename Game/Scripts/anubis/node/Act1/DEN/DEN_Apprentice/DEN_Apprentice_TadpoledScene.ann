@@ -1,0 +1,96 @@
+game.states.DEN_Apprentice_TadpoledScene = State { function ()
+
+    description = [[Handles Nettie's tadpole scene (leading the player to the secret library).]]
+
+    -----------------------------------------
+    -- local state section
+    local tadpoled = nil
+    local canAD = true
+    local waitingforCyanide = false
+    local enterChamberAD = Dialog("DEN_Apprentice_AD_ToStorage_99f848da-f626-5bd9-73e6-758d01daf650")
+    local labWaitPoint = Entity("S_DEN_AppTadWaitPoint_7260318d-46ef-42d7-bc39-41581f1daa24")
+    local labProxBox = Entity("S_DEN_AppTadProxBox_6afdf30e-f1dc-4a4c-a29c-e73f8ddc5105")
+    local labDoor = Entity("S_DEN_LibraryEntryDoor_df1f2445-3737-4410-8f8c-b7af5967dea6")
+    local inLabBox = Entity("S_DEN_AppTadInBox_2411c846-27d1-446d-9faa-20a5dc12dea9")
+
+    -----------------------------------------
+    -- helper functions
+
+    -----------------------------------------
+    -- node section
+    nodes = ImmediateSelector {}
+
+    nodes.WaitingForCyanide = Action {
+        CanEnter = function()
+            return waitingforCyanide
+        end,
+        function()
+            WaitForInterrupt()
+            --osiris makes her move in the room & start a dialog immediately (as soon as she spots the player)
+            --she's just waiting for the tadpoled variable to be cleared so she can go back to doing her default studying behaviour
+        end,
+    }
+
+    nodes.LockingUp = Action {
+        CanEnter = function()
+            return IsInTrigger(tadpoled, inLabBox.Trigger)
+                and labDoor.Item.IsOpened
+        end,
+        function()
+            SetEntityEvent(me, "DEN_Apprentice_Event_LockStorage")
+            if canAD and not IsInDialog(me) then
+                canAD = false
+                StartAutomatedDialog(enterChamberAD, false, me)
+            end
+            waitingforCyanide = true
+            Sleep(10)
+        end,
+    }
+
+    nodes.LeadToChamber = Action {
+        function()
+            if GetDistance2DTo(me, labWaitPoint) > 1.5 then
+                try
+                    MoveTo(labWaitPoint, MovementSpeed.Walk, true)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(1)
+                end
+            end
+            LookFrom(labWaitPoint)
+            SetEntityEvent(me, "DEN_Apprentice_Event_OpenDoor")
+            Sleep(1)
+            if canAD
+                and not IsInDialog(me, true)
+                and IsInTrigger(me, labProxBox.Trigger)
+                and not IsInTrigger(tadpoled, inLabBox.Trigger)
+                and (GetDistance2DTo(me, tadpoled) < 12.0) then
+                        canAD = false
+                        StartAutomatedDialog(enterChamberAD, false, me)
+            end
+            Sleep(1)
+        end,
+    }
+
+
+    -----------------------------------------
+    -- event section
+    events.DialogEnded = function(e)
+        local uuid = e.Instance.DialogUUID
+        if (uuid == enterChamberAD.Guid) then
+            StopTimer(me, "DEN_TadpoledScene_ADTimer")
+            StartTimer(me, "DEN_TadpoledScene_ADTimer", 30, 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_TadpoledScene_ADTimer" then
+            canAD = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.Event == "DEN_Apprentice_Event_RevealedTadpole" then
+            tadpoled = e.TargetEntity
+        end
+    end
+end}

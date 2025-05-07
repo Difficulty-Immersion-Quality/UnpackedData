@@ -1,0 +1,48 @@
+game.states.GLO_WorldBehaviourAtTrigger = State{function()
+    description=[[Genering behaviour to play a World behaviour at a scene trigger]]
+    
+    ------------------------------------------------
+    -- Local State variables
+    ------------------------------------------------
+    params.Behaviour = {type=EParamType.String, required = false, default=nil,
+    help = [[World behaviour to play]]}
+    params.SceneTrigger = {type=EParamType.String, required = false, default=nil,
+    help = [[Scenetrigger to play the behaviour at]]}
+
+    local WorldBehav = Dialog(params.Behaviour)
+    local SceneTrigger = Entity(params.SceneTrigger)
+
+    ------------------------------------------------ 
+    -- Actions
+    ------------------------------------------------
+
+    nodes.PlayBehaviour = Action
+    {
+        function()
+            try
+                StartBehaviorDialog(WorldBehav, SceneTrigger.Trigger, true, me)
+                Sleep(0.5)
+            catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                Sleep(1.0)
+            end
+        end,
+
+        OnInterrupt = function()
+            BehaviorDialogRequestGracefulStop(me, true, WorldBehav)
+        end,
+
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true, WorldBehav)
+        end,
+
+        Valid = function()
+            return WorldBehav ~= nil and WorldBehav ~= "" and SceneTrigger ~= nil and SceneTrigger ~= ""
+        end
+    }
+    -- Action - fallback
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+    }
+end}

@@ -1,0 +1,122 @@
+game.states.LOW_SteelWatchFoundry_GondianWorking = State{function()
+    description = [[Gondian working behaviours]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    params.workPositions = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[Positions to work at.]]}
+    params.workTargets = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[Things to look at while working (match the index of positions)]]}
+    params.workAD = {type = EParamType.String, required = false, default = nil, help = [[ADs to play while working]]}
+    params.workAnimations = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[Work animations to play (match the index of positions).]]}
+    params.workBhvrs = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[Work world behaviours to play (match the index of positions).]]}
+    params.isWrldBhvr = {type = EParamType.Bool, arrayRange = "1..", required = false, default = nil, help=[[Set to true if the animation is a World Behaviour.]]}
+
+    local workPositions = {}
+    local workAnimations = {}
+    local workBhvrs = {}
+    local workTargets = {}
+    local isWrldBhvr = {}
+    local workAD = nil
+    --worklocation/animation indexes
+    local selectedIndex = 1
+    local newIndex = 1
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    self.OnInit = function()
+        for i, position in ipairs(params.workPositions) do
+            workPositions[i] = FindEntity(position)
+        end
+        for i, animation in ipairs(params.workAnimations) do
+            workAnimations[i] = Animation(animation)
+        end
+        for i, dialog in ipairs(params.workBhvrs) do
+            workBhvrs[i] = Dialog(dialog)
+        end
+        for i, target in ipairs(params.workTargets) do
+            workTargets[i] = FindEntity(target)
+        end
+        for i, b in ipairs(params.isWrldBhvr) do
+            isWrldBhvr[i] = Bool(b)
+        end
+        if params.workAD ~= nil then
+            workAD = Dialog(params.workAD)
+        end
+    end
+
+    --Walks between points of interest and plays animations facing them. if they have an AD, they will play it during work.
+    nodes.Action_Working = Action
+    {
+        function ()
+            --keep randomising a new index until you get one that is not the same as last time
+            if #workPositions > 1 then
+                while selectedIndex == newIndex do
+                    newIndex = math.random(#workPositions)
+                end
+                selectedIndex = newIndex
+            end
+            local target = workPositions[selectedIndex]
+            if workAD ~= nil then  
+                StartAutomatedDialog(workAD,false,me)
+            end
+            
+            if params.isWrldBhvr[selectedIndex] then
+                StartBehaviorDialog(workBhvrs[selectedIndex], workPositions[selectedIndex].Trigger, true, me)
+                Sleep(0.5)
+            else
+                --move to new work location
+                if GetDistanceTo(me, target)>0.5 then
+
+                    local moveResult = MoveTo(target,MovementSpeed.Stroll, true, false, 0.1, 0.5, false)
+                    if moveResult ~= error.MovementError.None then
+                       DebugText(me, "Movement to destination failed")
+                       Sleep(3.0)
+                       return
+                    end
+                end
+                SteerTo(workTargets[selectedIndex])
+                --start playing working animation
+                if workAnimations[selectedIndex] ~= nil then
+                    PlayAnimation(workAnimations[selectedIndex],false, true)
+                    mod.util.SleepRandom(3.0,9.0)
+                end
+            end
+
+            --end working animation
+            if #workPositions > 1 then
+                if params.isWrldBhvr[selectedIndex] then
+                    BehaviorDialogRequestGracefulStop(me, true, workBhvrs[selectedIndex])
+                else
+                    StopAnimation(me)
+                end
+            end
+        end,
+
+        Valid = function()
+            return #workPositions > 0
+        end
+    }
+    
+    -- Action - fallback
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+    }
+end}

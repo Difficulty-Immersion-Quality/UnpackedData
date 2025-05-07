@@ -1,0 +1,77 @@
+game.states.LOW_HouseOfHope_ImpDebtor03 = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Flags and variables--------------------------------
+
+    local points = {
+        -- key = value
+        Entity("S_LOW_HouseOfHope_ImpDebtor03_Point1_ef09e022-339c-45c6-9f20-8ab605dfa85a"),
+        Entity("S_LOW_HouseOfHope_ImpDebtor03_Point2_0357e93e-720b-4a85-9c63-2582b3994a2a"),
+        Entity("S_LOW_HouseOfHope_ImpDebtor03_Point3_e6309be8-2f7e-4d36-aceb-2083d66c1d52"),
+        Entity("S_LOW_HouseOfHope_ImpDebtor03_Point4_492f85d5-6724-43e7-b901-62887948a8fb")
+    }
+
+    local alarmFlag = Flag("LOW_HouseOfHope_State_RaphaelAlerted_f83c3d6b-d6cf-41a1-a03d-c31df5ea44fe")
+
+    local touchPortal = Animation("CUST_PeepDebtor_TouchPortal_01_8aaaac0c-b944-46d6-b41d-68068807277b")
+
+    local door = Entity("S_LOW_HouseOfHope_BoudoirMagicField_938fd73b-e975-4907-8cd8-3755daa5dddc")
+
+    local currentIndex = 0
+
+    -------------------------------Helpers-------------------------------
+
+    --------------------------------Nodes--------------------------------
+    
+    nodes.Act = Action {
+        function()
+            local index = currentIndex
+            while currentIndex == index do
+                index = math.random(1,#points)
+                if (index == 2 and not door.OnStage) then index = currentIndex end
+            end
+            currentIndex = index
+            if IsInDangerousSurfaceFor(points[index], me.Character) then
+                SteerTo(points[index])
+                Sleep(math.random(10,15))
+                return
+            end
+            local moveResult = MoveTo(points[index], MovementSpeed.Walk)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(points[index])
+            end
+            LookFrom(points[index])
+            if (index == 2) then 
+                PlayAnimation(touchPortal, true, false)
+            else
+                Sleep(math.random(5,10))
+            end
+        end,
+        CanEnter = function()
+            return not GetFlag(alarmFlag) 
+        end
+    }
+
+
+    nodes.StayingInAmbush = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return not GetFlag(alarmFlag) 
+        end
+    }   
+
+
+    nodes.IdleFallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+        --------------------------------Events--------------------------------
+   
+end}

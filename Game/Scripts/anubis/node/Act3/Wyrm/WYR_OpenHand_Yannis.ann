@@ -1,0 +1,87 @@
+game.states.WYR_OpenHand_Yannis = State {
+
+    function()
+
+        modules = { "shared.dialog", "shared.math" }
+
+        local repeatedAD = Dialog("WYR_OpenHand_AD_YannisAndHollyphantDetective_562d5d1f-70d0-14a4-2222-5c4b88d19780")
+        local partner = Entity("S_GLO_HollyphantDetective_acf70307-3bb9-4b91-b894-fa2120916f58")
+
+        local valeriaLeft = Flag("WYR_OpenHand_Event_SendHollyphantToTavern_34a5879a-debf-41a7-a6cb-8e74b0b9e8ff")
+        local valeriaDead = Flag("LOW_SerialKiller_State_ValeriaIsDead_35e90fa8-bff8-4fae-87ac-f0f6f23b6a28")
+
+        local thinkingPos = Entity("S_WYR_OpenHand_YannisThinkingPos_8fa46634-1141-4f43-bd2e-a0256f4a8537")
+        local thinkingAnim = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+
+        local wanderArea = Entity("S_WYR_OpenHand_YannisWanderArea_ffc4c4ab-3214-4d96-9f80-debd7fce128e")
+        local lookAtPos = Entity("S_WYR_OpenHand_YannisLookAt_faef4529-3275-42d7-a8f0-d13fa41cc44b")
+
+        local poolPos = Entity("WYR_OpenHand_YannisPoolPos_cefb12a9-13a9-4505-970c-6313e9d17dc6")
+
+        nodes.ValeriaPresent = Action{
+            function()
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    repeatedAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 12.0,
+                    },
+                    me,
+                    partner
+                )
+				Sleep(6.0)
+            end,
+            Valid = function()
+                return not GetFlag(valeriaLeft) and not GetFlag(valeriaDead)
+            end
+        }
+
+        nodes.NoValeria = Selector {
+            function(nodes)
+                return FindDifferentRandomSelectable(nodes)
+            end
+        }
+
+        nodes.NoValeria.AtPool = Action{
+            function()
+                if GetDistance2DTo(me, poolPos) > 0.5 then
+                    local moveResult = MoveTo(poolPos, MovementSpeed.Stroll, false, false, 0.1, 0.5, false)
+                    if moveResult == error.MovementError.None then
+                        LookFrom(poolPos)
+                        Sleep(math.random(6.0, 12.0))
+                    end
+                else
+                    Sleep(math.random(6.0, 12.0))
+                end
+            end
+        }
+
+        nodes.NoValeria.Thinking = Action{
+            function()
+                if GetDistance2DTo(me, thinkingPos) > 0.5 then
+                    local moveResult = MoveTo(thinkingPos, MovementSpeed.Stroll, false, false, 0.1, 0.5, false)
+                    if moveResult == error.MovementError.None then
+                        LookFrom(thinkingPos)
+                        Sleep(math.random(6.0, 12.0))
+                    end
+                else
+                    Sleep(math.random(6.0, 12.0))
+                end
+            end
+        }
+
+        nodes.NoValeria.Wander = Action{
+            function()
+                Wander(wanderArea, 6.0)
+                SteerTo(lookAtPos)
+            end
+        }
+
+        nodes.Fallback = Action{
+            function()
+                Sleep(6.0)
+            end
+        }
+
+    end
+}

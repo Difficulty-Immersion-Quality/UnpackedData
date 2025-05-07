@@ -1,0 +1,283 @@
+game.states.UND_ArcaneTurret_Char = State{function()
+    description = [[State for an Arcane Turrets at the Cleric Tower in the Underdark]]
+
+    params.DistanceSeeking = { type = EParamType.Number, default = 20.0,
+        help = [[Distance of activation for the turret]]}
+
+    params.DistanceShooting = { type = EParamType.Number, default = 10.0,
+        help = [[Distance of shooting for the turret]]}
+
+    params.BurstCount = { type = EParamType.Number, default = 2,
+        help = [[Number of projectiles shot before reload]]}
+
+    params.ReloadTime = { type = EParamType.Number, default = 2.0,
+        help = [[Reload time controlling rate of fire]]}
+
+    params.ShootSpell = { type = EParamType.String, default = "Projectile_Turret_Arcane",
+        help = [[Spell that the turret will use to attack players. By default, Projectile_Turret_Arcane]]}
+
+    local f_ReloadTime = 0.5
+    local f_BurstTime = 0.25
+    local f_MaxHeightDiff = 8.0
+    local ch_Target = nil
+    local dist_Target = 1000.0
+    local fx_Warning = nil
+    local pfx_Warning = nil
+    local i_ShotCount = 0
+    local fl_DebugDisable = Flag("Debug_UND_ArcaneTurretsOff_bc42370d-d121-4603-9e5c-c085cf2e8c13")
+    local tg_Construct = Tag("CONSTRUCT_22e5209c-eaeb-40dc-b6ef-a371794110c2")
+    local s_ReloadTimer = "Timer_UND_ArcaneTurret_Char_Reload"
+    local set_FTB_Flag = Flag("UND_ArcaneTower_Event_TurretsDiscoveredFTB_772ff79d-bdc0-4aef-867d-931dffc69a86")
+
+    self.OnInit = function()
+        dist_Target = 2 * params.DistanceSeeking
+        fx_Warning = PrepareEffect("VFX_Beams_Underdark_Arcane_Turret_Beam_01_3af9c664-d864-cbcd-e6b1-11ea99e307df")
+        if params.ReloadTime > 0.5 then
+            f_ReloadTime = params.ReloadTime
+        end
+    end
+
+    self.OnLeave = function()
+        helpers.UpdateWarningFX(nil)
+        ch_Target, dist_Target = nil, 2 * params.DistanceSeeking
+    end
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me then
+            -- this is a debug event
+            if ev.Event == "ReloadTime" then
+                f_ReloadTime = f_ReloadTime + 0.5
+                if f_ReloadTime > 3.0 then
+                    f_ReloadTime = 0.5
+                end
+            end
+
+            if ev.Event == "GLO_Combat_TurretVFX_Deactivate" then
+                helpers.UpdateWarningFX(nil)
+                ch_Target, dist_Target = nil, 2 * params.DistanceSeeking
+            end
+        end
+    end
+
+    events.TurnStarted = function(ev)
+        i_ShotCount = 0
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_ReloadTimer then
+            i_ShotCount = 0
+        end
+    end
+
+
+    nodes.NotInTurn = Action{
+    function()
+        Sleep(1.0)
+    end,
+    Valid = function()
+        return me.IsInCombat and
+               not me.CanActInCombatTeamTurn
+    end
+    }
+
+
+    nodes.DebugDisabled = Action{
+        function()
+            Sleep(1.0)
+            helpers.UpdateWarningFX(nil)
+            ch_Target, dist_Target = nil, 2 * params.DistanceSeeking
+        end,
+        Valid = function()
+            return GetFlag(fl_DebugDisable) and
+                   (not me.IsInCombat or
+                    me.CanActInCombatTeamTurn)
+        end
+    }
+
+    helpers.UpdateWarningFX = function(ch_NewTarget)
+        if ch_NewTarget ~= ch_Target or pfx_Warning == nil then
+            if pfx_Warning ~= nil then
+                StopEffect(pfx_Warning)
+                pfx_Warning = nil
+            end
+            if ch_NewTarget ~= nil then
+                pfx_Warning = PlayBeamEffectAt(fx_Warning, me, ch_NewTarget, "", "")
+            end
+        end
+    end
+
+    helpers.CalculateTarget = function()
+        local ch_NewTarget = nil
+        local dist_NewTarget = 2 * params.DistanceSeeking
+
+        local characters = GetActiveCharacters(me, params.DistanceSeeking)
+        if #characters > 0 then
+            for i, character in ipairs(characters) do
+                if character.OnStage and character.Character.IsPartyMember and not character.Character.IsDead
+                  and not IsTagged(character, tg_Construct) then
+
+                    local f_HeightDiff = math.abs(character.Position.Y - me.Position.Y)
+                    --DebugText(me, "HeightDiff = " .. tostring(f_HeightDiff))
+
+                    if f_HeightDiff < f_MaxHeightDiff then
+                        local dist_ToChar = GetDistanceTo(me, character)
+
+                        if dist_ToChar < dist_NewTarget then
+                            local canSee = CanSee(me, character)
+                            if canSee then
+                                ch_NewTarget = character
+                                dist_NewTarget = dist_ToChar
+                                if not GetFlag(set_FTB_Flag) then
+                                    SetUnicastEntityEvent(ch_NewTarget, "UND_ArcaneTower_FirstLock")
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        helpers.UpdateWarningFX(ch_NewTarget)
+
+        ch_Target, dist_Target = ch_NewTarget, dist_NewTarget
+    end
+
+    helpers.Shoot = function(target)
+        ShootProjectileAt(params.ShootSpell, me, ls.math.Vector3(0, 4, 0), target)
+    end
+
+    nodes.Activated = Selector{
+        OnEnter = function()
+            --SetEntityEvent(me, "UND_ArcaneTurret_Char_Activate")
+        end,
+        Valid = function()
+            return (not me.IsInCombat or
+                    me.CanActInCombatTeamTurn)
+        end
+    }
+
+    nodes.Activated.Seeking = Action{
+        function()
+            Sleep(1.0)
+            helpers.CalculateTarget()
+            Sleep(0.5)
+            if (ch_Target == nil or
+                dist_Target > params.DistanceSeeking) and
+                me.IsInCombat and
+                me.CanActInCombatTeamTurn then
+                    EndTurn(me)
+            end
+        end,
+
+        Valid = function()
+            return ch_Target == nil or dist_Target > params.DistanceSeeking
+        end
+    }
+
+    nodes.Activated.TargetLocked = Selector{
+        Valid = function()
+            return ch_Target ~= nil and dist_Target <= params.DistanceSeeking
+        end
+    }
+
+    nodes.Activated.TargetLocked.Warning = Action{
+        function()
+            helpers.CalculateTarget()
+            if ch_Target ~= nil then
+                SteerTo(ch_Target)
+            end
+            if (me.IsInCombat and
+                me.CanActInCombatTeamTurn) then
+                Sleep(2.0)
+                EndTurn(me)
+            end
+        end,
+
+        Valid = function()
+            return dist_Target <= params.DistanceSeeking and dist_Target > params.DistanceShooting
+        end
+    }
+
+    nodes.Activated.TargetLocked.Shooting = Action{
+        function()
+            local i_ShotsMade = i_ShotCount
+            -- Verify we have a valid target before shooted
+            helpers.CalculateTarget()
+
+            if ch_Target then
+                local v_TargetPos = ch_Target.Position
+                SteerTo(ch_Target, true)
+
+                if i_ShotCount < params.BurstCount then
+                    helpers.Shoot(ch_Target)
+                    i_ShotCount = i_ShotCount + 1
+                end
+
+                if not me.IsInCombat and not me.IsInTurnBasedMode then
+                    Sleep(f_BurstTime)
+
+                    if i_ShotCount >= params.BurstCount and i_ShotsMade ~= i_ShotCount then
+                        StartTimer(me, s_ReloadTimer, f_ReloadTime, 0)
+                    end
+                elseif me.IsInTurnBasedMode or me.IsInCombat then
+                    Sleep(3.0)
+                    if i_ShotCount >= params.BurstCount then
+                        EndTurn(me)
+                    end
+                end
+            end
+        end,
+
+        Valid = function()
+            return dist_Target <= params.DistanceShooting
+        end
+    }
+end}
+
+
+game.states.UND_ArcaneTurret_Char_StatusOverrides = State{function()
+
+    local s_Drain = "UND_SUSSURTREEANTIMAGIC"
+    local fl_MainPowerOn = Flag("UND_ArcaneTower_MainPowerOn_9423ae80-9b08-4fda-95c6-1832f753ca2b")
+
+    self.Valid = function()
+        return HasActiveStatus(me, s_Drain) or GetFlag(fl_MainPowerOn)
+    end
+
+    events.StatusApplied = function(ev)
+        if ev.Status.StatusID == s_Drain then
+            SetEntityEvent(me, "UND_ArcaneTurret_Char_Deactivate")
+        end
+    end
+
+    events.StatusRemoved = function(ev)
+        if ev.Status.StatusID == s_Drain then
+            SetEntityEvent(me, "UND_ArcaneTurret_Char_Activate")
+        end
+    end
+
+    events.FlagSet = function(ev)
+        if ev.Flag == fl_MainPowerOn.Guid then
+            SetEntityEvent(me, "UND_ArcaneTurret_Char_Deactivate")
+        end
+    end
+
+    events.FlagCleared = function(ev)
+        if ev.Flag == fl_MainPowerOn.Guid then
+            SetEntityEvent(me, "UND_ArcaneTurret_Char_Activate")
+        end
+    end
+
+    nodes.Deactivated = Action{
+        function()
+            Sleep(1.0)
+        end
+    }
+end}
+
+game.states.UND_ArcaneTurret_Char_CrimesBehaviour = State{function()
+
+    self.Valid = function()
+        return false
+    end
+end}

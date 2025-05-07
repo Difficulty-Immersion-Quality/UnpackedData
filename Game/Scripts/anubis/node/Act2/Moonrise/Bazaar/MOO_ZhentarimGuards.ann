@@ -1,0 +1,191 @@
+game.states.MOO_ZhentarimGuard_01_Peace = State { function ()
+
+    modules = {"shared.moveto", "shared.util"}
+
+    --------------------------------ENTITY--------------------------------
+    local standingPoint = Entity("S_GOB_ZhentarimGuard_Ranger_01_4b9818fa-cca6-4bad-b382-4c01334ef22a")
+    local guardBox = Entity("S_MOO_ZhentarimGuardBox_42ff65ba-e249-46ff-988b-db155f313236")
+    local player = nil
+    --------------------------------ANIMATION--------------------------------
+    local armsCrossedAnim = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+    local crossArmsAnimStart = Animation("CUST_ArmsCrossed_01_Start_dafd0bbc-012a-403c-aabe-4963aca9cf25")
+    local crossArmsAnimLoop = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+    local crossArmsAnimEnd = Animation("CUST_ArmsCrossed_01_End_ae43ea68-fc1b-456a-88ce-0e1d504e1d40")
+    --------------------------------BOOL--------------------------------
+    local isLooking = false
+
+--------------------------------HELPERS--------------------------------
+    helpers.FindCharacter = function()
+        local characters = GetActiveCharacters(me, 8.0)
+        player = nil
+
+        for _,char in pairs(characters) do
+            if char.Character.IsPlayer and player == nil and CanSee(me, char) and GetDistance2DTo(me, char) <= 8  then
+                player = char
+                isLooking = true
+                break
+            end
+        end
+
+        if player == nil then
+            isLooking = false
+        end
+    end
+
+    --------------------------------NODES--------------------------------
+    nodes.StandingLookAtPlayer = Action {
+        function()
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Walk, me) then
+
+                PlayLoopingAnimation(crossArmsAnimStart, {crossArmsAnimLoop}, crossArmsAnimEnd, false)
+
+                if isLooking then
+                    if GetDistance2DTo(me, player) <= 8 and CanSee(me, player) then
+                        SteerTo(player)
+                    else
+                        helpers.FindCharacter()
+                    end
+                else
+                    LookFrom(standingPoint)
+                end
+            else
+                LookAtEntity(standingPoint, 3.0)
+            end
+            Sleep(1)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    --------------------------------EVENTS--------------------------------
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "MOO_ZhentarimGuard_FindLookTarget" then
+                helpers.FindCharacter()
+            end
+        end
+    end
+end
+}
+
+game.states.MOO_ZhentarimGuard_02_Peace = State { function ()
+
+    modules = { "shared.math", "shared.util", "shared.moveto" }
+
+    --------------------------------ENTITY--------------------------------
+    local standingPoint = Entity("S_MOO_BazaarZhentPos_002_a66a7462-5838-445b-97ed-2f686a43fd96")
+   --------------------------------ANIMATION--------------------------------
+    local trainingAnims = {
+        Animation("CUST_Training_Random_01_ea2bc722-efe4-4ba8-9cc9-31ae6f139a80"),
+        Animation("CUST_Training_Random_02_eb82471d-6adf-422b-a5f4-fce6d7885fcc")
+    }
+    
+    --------------------------------NODES--------------------------------
+    nodes.Idle = Action {
+        function()
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Walk, me) then
+                SetWeaponUnsheathed(me, true)
+                LookFrom(standingPoint)
+                local anim = trainingAnims[math.random(1, #trainingAnims)]
+                if mod.math.CoinToss(0.45) then
+                    PlayAnimation(anim)
+                end
+                mod.util.SleepRandom(10, 20)
+            else
+                LookAtEntity(standingPoint, 3.0)
+                mod.util.SleepRandom(6, 12)
+            end
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+end
+}
+
+game.states.MOO_ZhentarimMerchant_Peace = State { function()
+
+    modules = { "shared.moveto", "shared.items", "shared.math",  "shared.dialog", "shared.util"}
+
+
+
+    --------------------------------ENTITY--------------------------------
+    local standingPoint = Entity("S_MOO_BazaarZhentPos_000_2ffbe979-0c12-4564-940b-17e7f1b3fd0e")
+    local travelChest2 = Entity("S_MOO_ZhentTravelChest_002_c348fb67-38af-447d-9fff-b4ef34b7b9d9")
+    local zhentRanger1 = Entity("S_GOB_ZhentarimGuard_Ranger_01_4b9818fa-cca6-4bad-b382-4c01334ef22a")
+    local zhentRanger2 = Entity("S_GOB_ZhentarimGuard_Ranger_02_afc5350d-dc9f-4808-b6ce-d7b1bb7c8229")
+    local zhentGuardBox = Entity("S_MOO_ZhentarimGuardBox_42ff65ba-e249-46ff-988b-db155f313236")
+    --------------------------------DIALOG--------------------------------
+    local AD = Dialog("MOO_Bazaar_AD_ZhentarimCrew_5d71878d-c9c6-6557-dbc0-e83ebf9b06eb")
+    --------------------------------ANIMATION--------------------------------
+    local behaviorTrigger = Entity("BHVR_WRLD_MOO_ZhentQuartermaster_DistractedPacking_SceneTrigger_d066c040-b30b-4f72-948d-7de7a8a35c14")
+    local behaviorDialog = Dialog("BHVR_WRLD_GLO_DistractedPacking_c83569fd-3be7-4ffb-8a77-b2a31682b8c3")
+    --------------------------------BOOL--------------------------------
+    local canAD = false
+    local isTimerFinished = true
+
+    --------------------------------NODES--------------------------------
+    nodes.AD = Action{
+        CanEnter = function()
+            return canAD
+        end,
+
+        OnEnter = function()
+            StartTimer(me, "MOO_Bazaar_ZhentAD", 60, 0)
+            SetDoNotFace(me, true)
+            canAD = false
+        end,
+
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                    AD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me,
+                    zhentRanger1,
+                    zhentRanger2
+                )
+        end,
+
+        OnLeave = function()
+            SetDoNotFace(me, false)
+        end
+    }
+
+    nodes.KeepingBusy = Action {
+        function()
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Walk, me) then
+                try
+                    StartBehaviorDialog(behaviorDialog, behaviorTrigger.Trigger, true, me, travelChest2)
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    DebugText(me, "Error: AutomatedDialogStartFailed")
+                    LookFrom(standingPoint)
+                end
+            else
+                LookAtEntity(standingPoint, 3.0)
+                mod.util.SleepRandom(6, 12)
+            end
+        end
+    }
+
+    --------------------------------EVENTS--------------------------------
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "MOO_Bazaar_ZhentAD" then
+            isTimerFinished = true
+        end
+    end
+
+    events.EnteredTrigger = function(e) --AD talks at player, so looking for player presence
+        if (e.Trigger == zhentGuardBox) and isTimerFinished and CanSee(me, e.Target) then
+            canAD = true
+            isTimerFinished = false
+        end
+    end
+
+end
+}

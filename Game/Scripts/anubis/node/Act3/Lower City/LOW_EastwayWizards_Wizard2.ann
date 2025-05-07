@@ -1,0 +1,158 @@
+game.states.LOW_EastwayWizards_Wizard2 = State{function()
+    modules = {"shared.dialog","shared.util"}
+
+    description = [[For performance reasons we might disable Anubis completely on vignette characters.
+        This Anubis script must not keep any important state that can't be reinitialized once Anubis is reenabled]]
+
+    params.regionBlockFlag = {type = EParamType.String,  required=false, default="", help=[[
+        Blocks the ADs for the entire group of characters (prevents overlap)
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String,  required=false, default="", help=[[
+        Blocks this specific AD from happening (prevents repetition)
+    ]]}
+
+    params.partners = {type = EParamType.String, arrayRange = "..4", required = false, default = {}, help = [[
+        Dialog Partner list
+    ]]}
+
+    params.castingPartners = {type = EParamType.String, arrayRange = "..2", required = false, default = {}, help = [[
+        Casting Partner list
+    ]]}
+
+    params.AD = {type = EParamType.String, required=true, help=[[
+        The AD to play.
+    ]]}
+
+    params.setDelay = {type = EParamType.Number,  required=false, default=15.0, help=[[
+        Delay between the end of one loop of the AD and the start of the next loop.
+    ]]}
+
+    local AD = Dialog(params.AD)
+    local regionBlockFlag = Flag(params.regionBlockFlag)
+    local dialogBlockFlag = Flag(params.dialogBlockFlag)
+    local dialogFollowup = Flag("LOW_EastwayWizards_ChildrensSpeech_Followup_c23df796-4466-825b-78d1-7fc5a0c5002a")
+    local illusionHelper = Entity("S_LOW_EastwayWizards_Helper_Illusion_e8aee70f-2886-4681-8cc1-b10fbe6e8db8")
+    local illusionPoint = Entity("S_LOW_EastwayWizards_Point_Illusion_9333796b-a315-43ce-a9ef-1a851df06d45")
+    local partners, castingPartners
+    local stage = 0
+    local targetTriggers = {
+        Entity("S_LOW_EastwayWizards_Point_Illusion_000_7035cffe-fe32-4729-b4ba-8c06875128db"),
+        Entity("S_LOW_EastwayWizards_Point_Illusion_001_5953acc3-0555-4ec0-8285-2eb273ad3a38"),
+        Entity("S_LOW_EastwayWizards_Point_Illusion_002_5d1e6e49-574e-4ef0-8658-8c0bd07ba777"),
+        Entity("S_LOW_EastwayWizards_Point_Illusion_003_9333796b-a315-43ce-a9ef-1a851df06d45"),
+    }
+  
+    helpers.Init = function()
+        if AD == nil then
+            DebugLog("Failed to find the automated dialog"..params.AD)
+        end
+
+        partners = {}
+        castingPartners = {}
+
+        if params.partners then
+            for _, partner in ipairs(params.partners) do
+                table.insert(partners, Entity(partner)) --don't use Findentity, the entity will be resolved later
+            end
+        end
+        if params.castingPartners then
+            for _, partner in ipairs(params.castingPartners) do
+                table.insert(castingPartners, Entity(partner)) --don't use Findentity, the entity will be resolved later
+            end
+        end
+    end
+
+    self.OnLoaded = function()
+        helpers.Init()
+    end
+
+    self.CanEnter = function()
+        if AD ~= nil then
+            return (not regionBlockFlag or
+                    not GetFlag(regionBlockFlag, nil)) and
+                    (not dialogBlockFlag or
+                    not GetFlag(dialogBlockFlag, nil)) and
+                    mod.dialog.AreSpeakersAvailableAndNear(me,12.0,false,false,false,partners) and
+                    mod.dialog.AreSpeakersAvailableAndNear(me,12.0,false,false,false,castingPartners) 
+
+        else
+            return false
+        end
+    end
+
+    helpers.action.WizardsCastSpell = function(spell)
+        try
+            UseSpell(spell, me, me, nil, nil, true, true, true)
+        catch e if ls.CheckType(e, error.UseSpellFailed) then
+            DebugText(me, "Failed to cast " .. spell)
+        end
+        for _, character in ipairs(castingPartners) do
+            SetUnicastEntityEvent(character, "LOW_EastwayWizards_WizardSide_CastSpell", spell)
+        end
+    end
+
+    helpers.action.WizardsTargetPractice = function()
+        for _, nextTarget in ipairs(targetTriggers) do
+            try
+                UseSpell("Target_LOW_EastwayWizards_MinorIllusion", nextTarget, nil, nil, nil, false, true, true)
+            catch e if ls.CheckType(e, error.UseSpellFailed) then
+                DebugText(me, "Failed to cast MinorIllusion")
+            end
+        end
+    end
+
+    nodes.DoIntroAD = Action {
+        function()
+            -- put a little random sleep in there, so that we don't all start talking at the 
+            -- same time when walking into a place
+            ClearFlag(dialogFollowup)
+            mod.util.SleepRandom(0.5, 2.5)
+            try
+                UseSpell("Shout_LOW_EastwayWizards_Thaumaturgy", me, me, nil, nil, false, true, true)
+            catch e if ls.CheckType(e, error.UseSpellFailed) then
+                DebugText(me, "Failed to cast Shout_Thaumaturgy")
+            end
+            local result = StartAutomatedDialog(AD, true, me, table.unpack(partners))
+
+            if result == error.StartAutomatedDialogStartFailed then                         
+                DebugLog("AD Failed to start" ..params.AD)
+                Sleep(3.0)
+            else
+                SetFlag(dialogFollowup)
+                stage = 1
+            end
+        end,
+        CanEnter = function()
+            return stage == 0
+        end
+    }
+
+    nodes.CastSpells = Action {
+        function()
+            Sleep(1.0)
+            helpers.WizardsCastSpell("Target_LOW_EastwayWizards_DancingLights")
+            Sleep(3.0)
+            StartAutomatedDialog(AD, false, me, table.unpack(partners))
+            Sleep(5.0)
+            helpers.WizardsCastSpell("Shout_LOW_EastwayWizards_BladeWard")
+            Sleep(5.0)
+            helpers.WizardsTargetPractice()
+            Sleep(3.0)
+            stage = 2
+        end,
+        CanEnter = function()
+            return stage == 1
+        end
+    }
+
+    nodes.Wait = Action {
+        function()
+            mod.util.SleepRandom(params.setDelay, params.setDelay + 10)
+            stage = 0
+        end,
+        CanEnter = function()
+            return stage == 2
+        end
+    }
+end}

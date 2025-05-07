@@ -1,0 +1,124 @@
+game.states.LOW_UmberleeFollower01 = State{function()
+    description = [[UmberleeFollower01 behavior, also chatting with UmberleeFollower04]]
+    modules = {"shared.dialog","shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local chatAD = Dialog("LOW_WaterQueensHouse_AD_UmberleeFollowersChat_5d74eca8-66e5-29d3-0592-7524c20d3920")
+
+    local animStart = Animation("CUST_Pondering_01_Start_2d14e6a9-d3a3-4f98-9031-22831546c392")
+    local animLoop = Animation("CUST_Pondering_01_Loop_a47454a1-05a2-4153-bdfe-7a0500fa62d0")
+    local animEnd = Animation("CUST_Pondering_01_End_e15cc480-7f1a-4ed4-8a3c-36355a37c644")
+
+    local secondNPC = Entity("S_LOW_UmberleeFollower04_ba52a7af-885a-4298-9fe1-32bc8c67cc8a")
+
+    local startRoutine = Flag("LOW_WaterQueensHouse_Event_TalkedToUmberleeFollower01_d141b75a-5c59-4597-aa5b-8c6d94b48409")
+    local offeringsChest = Entity("S_LOW_WaterQueensHouse_OfferingsChest_9f1a218c-c8ba-42da-8370-51e723052dbc")
+    local finishOfferings = false
+
+    local spotTrigger = Entity("S_LOW_UmberleeFollower01_Spot_9c65f410-3115-4801-a709-062766271af5")
+
+    local waitForOfferings = Flag("LOW_VaultWaveservant_State_WaitingForOfferings_2ab70a62-99ae-4f13-8c88-b582d9d0f214")
+    
+    local friendWentToOffer = Flag("LOW_WaterQueensHouse_Event_TalkedToUmberleeFollower04_58c5d102-37e5-49dc-ad36-88ae359d5947")
+
+    local offeringsGone = Flag("LOW_WaterQueensHouse_State_OfferingsAreGone_7b4a853d-fff5-4faa-82b6-2e3829eb2851")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Unless killed, the kitchen waveservants keep talking with a rate limited AD
+    nodes.Action_ADLoop = Action{
+        function()
+            if mod.moveto.MoveToPoint(spotTrigger, MovementSpeed.Walk, me) then
+                LookFrom(spotTrigger)
+                PlayLoopingAnimation(animStart, {animLoop}, animEnd)
+                if (not GetFlag(friendWentToOffer)) then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                            chatAD,
+                            {
+                                waitForCompletion = true,
+                                minDelay = 20.0,
+                            },
+                            me,
+                            secondNPC
+                        )
+                end
+            else
+                Sleep(5)
+            end
+        end,        
+        OnEnter = function()
+            SetDoNotFace(me, true)
+            SetDoNotFace(secondNPC, true)
+        end,
+
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+        OnLeave = function()
+            StopAnimation(me, false)
+        end,
+
+        Valid = function()
+            return not GetFlag(startRoutine) or finishOfferings
+        end
+    }
+
+    nodes.OfferingsRoutine = Action{
+        function()         
+            if not offeringsChest.Item.IsOpened and not offeringsChest.Item.IsLocked then          
+                UseItem(offeringsChest.Item)                
+                MoveAllItemsTo(me, offeringsChest, 0, 0, true)  
+                Sleep(1)            
+                if offeringsChest.Item.IsOpened then        
+                    UseItem(offeringsChest.Item)
+                end
+                finishOfferings = true
+                ApplyStatus(me, "BLESS", true, -1, offeringsChest)            
+            else
+                Sleep(5)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(startRoutine) and not finishOfferings and not IsInDialog(me, true) and not offeringsChest.Item.IsDestroyed and not offeringsChest.Item.IsLocked and not GetFlag(offeringsGone)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            finishOfferings = true
+        end,
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+
+    events.FlagSet = function(e)
+        if e.Flag == waitForOfferings.Guid then
+            SetFlag(startRoutine)
+        end
+    end
+
+
+    ------------------------------------------------
+
+end
+}

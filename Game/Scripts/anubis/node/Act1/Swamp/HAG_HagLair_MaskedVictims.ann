@@ -1,0 +1,102 @@
+game.states.HAG_MaskedVictims = State{
+    function ()
+
+        modules = {"shared.items"}
+
+        params.spline = {type=EParamType.String, required = false, default=nil, help=[[Patrol spline]]}
+        params.patrolActions = {type=EParamType.State, required = false, default=nil, help=[[Optional slot for characters who need to do something while in the patrol state]]}
+        params.atHagPoint = {type=EParamType.String, required = true, help=[[Point at the hag lair]]}
+
+        local atHagPoint = Entity(params.atHagPoint)
+        local HAG_MaskedVictimBox = Entity("S_HAG_MaskedVictimBox_f0bece7b-6f6d-4a6c-b545-b9002136df20")
+        local HAG_MaskedVictims_JumpToPoint = Entity("S_HAG_MaskedVictims_JumpToPoint_6bc303c7-2fe8-42e9-8d70-934bd827b8e2")
+        local HAG_Hag_SummonedVictims = Flag("HAG_Hag_SummonedVictims_755d8269-7864-b72c-f355-b00aa02cd17e")
+
+        nodes.HagFight_GoToEthel_NotTeleported = Action{
+            function()
+                Sleep(1.0)
+                try
+                    UseSpell("Projectile_Jump", HAG_MaskedVictims_JumpToPoint,  nil, nil, nil, true, true)
+                catch e if ls.CheckType(e, error.MovementFailed) or
+                            ls.CheckType(e, error.UseSpellFailed) then
+                    DebugText(me, "Jumping failed")
+                    SteerTo(atHagPoint)
+                    Sleep(4.0)
+                end                    
+            end,
+            Valid = function()
+                return GetFlag(HAG_Hag_SummonedVictims, nil) and
+                       IsInTrigger(me, HAG_MaskedVictimBox.Trigger)
+            end
+        }
+
+
+        nodes.HagFight_GoToEthel_Teleported = Action{
+            function()
+                if GetDistanceTo(me, atHagPoint) > 2.0 then
+                    try
+                        MoveTo(atHagPoint, MovementSpeed.Run, true, true, 0.0, 8.0, true, PathClimbingMode.Enabled, PathDroppingMode.Enabled)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        SteerTo(atHagPoint)
+                        Sleep(4.0)
+                    end
+                else
+                    LookFrom(atHagPoint)
+                    Sleep(10.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(HAG_Hag_SummonedVictims, nil) and
+                       not IsInTrigger(me, HAG_MaskedVictimBox.Trigger)
+            end        
+        }
+
+        nodes.Idle = Proxy{
+            game.states.GEN_Patrol,
+            params = {patrolSpline = params.spline,
+                      patrolActions = params.patrolActions},
+            Valid = function()
+                return not GetFlag(HAG_Hag_SummonedVictims, nil)
+            end
+        }
+
+    end
+}
+
+game.states.HAG_MaskedVictims_Patrol = State{
+    function()
+
+        params.patrolSpline = {type=EParamType.String, required = true, help = [[Spline to be patrolled]]}
+        params.pauseTime = {type=EParamType.Number, required = true, help = [[Time between movements]]}
+
+        local patrolSpline = Spline(params.patrolSpline)
+        local pauseTime = params.pauseTime
+
+        local lookFromSpline = false
+
+        events.SplineControlPointReached = function(e)
+            if math.random() < 0.8 then
+                lookFromSpline = true
+            end
+        end
+
+        nodes = ImmediateSelector{
+            Valid = function(node)
+                return CheckAnySelectable(node)
+            end
+        }
+
+        nodes.LookFromSpline = Action{
+            function()
+                LookFrom(patrolSpline)
+                Sleep(math.random()+pauseTime)
+                lookFromSpline = false
+            end,
+            CanEnter = function()
+                return lookFromSpline
+            end
+
+        }
+
+    end
+}

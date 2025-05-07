@@ -1,0 +1,332 @@
+game.states.DEN_DruidOpposed = State { function ()
+
+    description = [[Rath's script]]
+
+    local wolfAD = Dialog("DEN_ShadowDruid_AD_CallWolf_4945e5be-a4d3-b32e-476e-8a82e4ee686c")
+    local wolf = Entity("S_DEN_PetWolf_63471e30-7413-4496-97de-0bdf67c2f753")
+    local wolfArea = Entity("S_DEN_WolfProxArea_b908abf7-b210-4e49-954a-f9b9b86617d2")
+    local canCallWolf = true
+
+    local doChildDiedReaction = false
+    local kneelAnim = Animation("CUST_KneelHideFear_01_Loop_812c6801-f523-4207-870c-5a7b9e9bbde0") --replace
+    local child = Entity("S_DEN_SnakeKid_02257c1c-bbec-4ae3-9bcb-31c75a0a982f")
+
+    -----------------------------------------
+    -- Helper functions
+    helpers.BlockCallWolf = function()
+        StopTimer(me, "DEN_DruidOpposed_CallWolfTimer")
+        StartTimer(me, "DEN_DruidOpposed_CallWolfTimer", 60.0, 0)
+        canCallWolf = false
+    end
+
+    nodes.DeadChildReaction = Action {
+        CanEnter = function()
+            return doChildDiedReaction == true
+        end,
+        function()
+            Sleep(8)
+            try
+                MoveTo(child, MovementSpeed.Stroll, false, false, 1.0, 1.5, true, PathClimbingMode.Disabled)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(1)
+            end
+            SetDoNotFace(me, true)
+            SteerTo(child)
+            PlayAnimation(kneelAnim, false, true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            SetDoNotFace(me, false)
+            StopAnimation(me)
+        end
+    }
+
+    nodes.CallWolf = Action {
+        CanEnter = function()
+            return
+                canCallWolf and
+                not IsInTrigger(wolf, wolfArea.Trigger)
+        end,
+        function()
+            helpers.BlockCallWolf()
+            Sleep(1)
+            StartAutomatedDialog(wolfAD, true, me)
+            SetEntityEvent(wolf, "DEN_PetWolf_CalledByMaster")
+            Sleep(3)
+        end,
+    }
+
+    nodes.DoNothing = Proxy {
+        game.states.Sit,
+        params = {
+            seat = [[S_DEN_OpposedStool_79a26b16-64ed-4c86-866e-cf0d76691431]],
+            sitIdle = StateRef{game.states.Dummy},
+        },
+    }
+
+    -----------------------------------------
+    -- event section
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_DruidOpposed_CallWolfTimer" then
+            canCallWolf = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == Guid("DEN_ShadowDruid_State_KidDied_5b5de896-e733-47ae-81df-85a4b25ebfd1") then
+            --set during the Snake Court while Rath is still in the DEN_SnakesCourt script
+            doChildDiedReaction = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DEN_ShadowDruid_StopMourningKid" then
+                --set when the players leave the subregion and on other edge-case conditions (see osiris)
+                doChildDiedReaction = false
+            end
+        end
+    end
+
+end}
+
+
+game.states.DEN_DruidOpposed_SnakesCourt = State { function ()
+
+    description = [[Rath's behaviour during the snakes court]]
+
+    local child = Entity("S_DEN_SnakeKid_02257c1c-bbec-4ae3-9bcb-31c75a0a982f")
+    local point = Entity([[S_DEN_OpposedPoint_845d3860-5756-44b0-b6f3-1f2ebe31a7a5]])
+    local anim = Animation([[CUST_DefendingInCourt_01_Loop_1b30c455-1acf-42c1-b398-380f11a04cc9]])
+    local ready = false
+
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes.DoSnakesCourt = Action {
+        CanEnter = function()
+            return ready
+        end,
+        function()
+            Sleep(1)
+        end,
+        OnLeave = function()
+            ready = false
+        end
+    }
+
+    nodes.Animate = Action{
+        function()
+            if not IsInDangerousSurfaceFor(point, me.Character)then
+                if GetDistanceTo(me, point) > 2.0 then
+                    try
+                        MoveTo(point, MovementSpeed.Walk, false, false, 1.0, 1.5, true, PathClimbingMode.Disabled)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(2.0)
+                    end
+                end
+            end
+            SteerTo(child)
+            PlayAnimation(anim, false, true)
+            ready = true
+            Sleep(1)
+        end,
+    }
+end}
+
+
+game.states.DEN_DruidOpposed_Pacified = State { function ()
+
+    description = [[Rath's behaviour after stopping the ritual]]
+
+    modules = { "shared.dialog" }
+
+    local denouncingOngoingFlag = Flag([[DEN_ShadowDruid_State_DenouncingSceneInProgress_a9e1b188-80a7-4432-86b2-129c7623cb16]])
+    local waitABitAfterCombat = true
+    local kagha = Entity([[S_DEN_DruidLeader_95eb2b0b-a522-4ea5-8167-c5f4d1418156]])
+    local talkingToKagha = false
+    local druidLairSub = Entity([[S_DEN_DruidLair_SUB_a9794f19-187a-4d79-b739-443548411d29]])
+    local pacifiedAD = Dialog([[DEN_ShadowDruid_AD_OpposedPacified_249d27c7-6ac3-2a50-8b79-951ef7465427]])
+    local accusingAD = Dialog([[DEN_ShadowDruid_AD_OpposedDenounce_2a7e276c-9bf0-5672-ae8b-a7031ffa7cf1]])
+    local spline = Spline([[S_DEN_PacifiedOpposedSpline_3dd12976-13cc-43f5-8ef0-74853cc488df]])
+    local canWalkOnSpline = true
+    local targetSplineIndex = 0
+    local isReversed = false
+    local plaques = {
+        Entity([[S_DEN_PlaqueFounding_72675309-4fc4-49ec-b049-d676bf0ac336]]), --spline index 0
+        Entity([[S_DEN_PlaqueWorking_ff44c6ca-7a0c-47f2-8f60-e5861431cb70]]), -- index 1
+        Entity([[S_DEN_PlaqueAlliance_5620d87b-f41f-45ec-847a-6c382950070d]]), -- index 2
+        Entity([[S_DEN_PlaqueVictory_42342b3c-e8ab-41d7-ac96-dacaff8fd6c1]]), -- index 3
+    }
+    local tieflingsGoneFlag = Flag("DEN_TieflingRefugees_State_LeftDen_003b304b-f058-4f8a-b9fa-a097e1b6b395")
+    local ritualStoppedFlag = Flag("DEN_GroveConflict_State_DruidsPacified_0f747b55-d68d-436f-ac33-9fecaf30387d")
+    local currentPlaque = nil
+    local canAD = true
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Denouncing = Action {
+        CanEnter = function()
+            return GetFlag(denouncingOngoingFlag)
+        end,
+        function()
+            Sleep(2)
+        end
+    }
+
+    nodes.BreatherAfterCombat = Action {
+        CanEnter = function()
+            return waitABitAfterCombat
+        end,
+        function()
+            Sleep(5)
+            waitABitAfterCombat = false
+            if not kagha.Character.IsDead then
+                canWalkOnSpline = false
+            end
+        end
+    }
+
+    nodes.Patrol = Action {
+        Valid = function()
+            return canWalkOnSpline
+        end,
+        OnEnter = function()
+            currentPlaque = nil
+        end,
+        function()
+            while IsInDialog(me, false) do
+                Sleep(1)
+            end
+            try
+                DoPatrol(spline, isReversed, MovementSpeed.Stroll, targetSplineIndex, false)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                Sleep(5)
+            end
+        end,
+    }
+
+    nodes.MoveToKagha = Proxy {
+        CanEnter = function()
+            return
+                not GetFlag(tieflingsGoneFlag)
+                and canAD
+                and (GetDistance2DTo(me, kagha) > 4.0)
+                and not kagha.Character.IsDead
+                and IsInTrigger(kagha, druidLairSub.Trigger)
+                and not IsInDialog(kagha, true)
+        end,
+        OnEnter = function()
+            talkingToKagha = true
+        end,
+        game.states.DEN_GeneralGroveStates_MoveToAndTalk,
+        params = {
+            moveTarget = "S_DEN_DruidLeader_95eb2b0b-a522-4ea5-8167-c5f4d1418156",
+            lookTarget = "S_DEN_DruidLeader_95eb2b0b-a522-4ea5-8167-c5f4d1418156"
+        }
+    }
+
+    nodes.TalkToKagha = Action {
+        CanEnter = function()
+            return talkingToKagha
+        end,
+        OnEnter = function()
+            talkingToKagha = false
+        end,
+        function()
+            if mod.dialog.IsSpeakerAvailableAndNear(kagha, me, 6.0, true) then
+                Sleep(1)
+                StartAutomatedDialog(accusingAD, true, kagha, me)
+                Sleep(1)
+                while IsInDialog(me, false) do
+                    Sleep(1)
+                end
+                Sleep(2)
+                if currentPlaque ~= nil then
+                    try
+                        MoveTo(currentPlaque, MovementSpeed.Stroll)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        canWalkOnSpline = true
+                        Sleep(2.0)
+                    end
+                else
+                    canWalkOnSpline = true
+                    Sleep(2)
+                end
+            end
+            Sleep(2)
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+    }
+
+    nodes.ReadPlaque = Action {
+        OnEnter = function()
+            canWalkOnSpline = true
+        end,
+        function()
+            if not (currentPlaque == nil) then
+                SteerTo(currentPlaque)
+            end
+            Sleep(1)
+            if kagha.Character.IsDead and canAD then
+                StartAutomatedDialog(pacifiedAD, true, me)
+            end
+            Sleep(5)
+        end,
+    }
+
+    -----------------------------------------
+    -- Events
+    events.EnteredCombat = function(e)
+        if (e.Entity == me) and GetFlag(denouncingOngoingFlag) then
+            SetUnicastEntityEvent(me,"ClearPeaceReturn")
+        end
+    end
+
+    events.DialogStarted = function(e)
+        if (e.Instance.DialogUUID == pacifiedAD.Guid) or (e.Instance.DialogUUID == accusingAD.Guid) then
+            canAD = false
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == pacifiedAD.Guid) or (e.Instance.DialogUUID == accusingAD.Guid)  then
+            StopTimer(me, "DEN_DruidOpposed_PacifiedADTimer")
+            StartTimer(me, "DEN_DruidOpposed_PacifiedADTimer", math.random(40,70), 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_DruidOpposed_PacifiedADTimer" then
+            canAD = true
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        if GetFlag(ritualStoppedFlag) then
+            currentPlaque = plaques[e.Index + 1]
+            targetSplineIndex = e.NewIndex
+            if e.EndReached then
+                if isReversed then
+                    isReversed = false
+                else
+                    isReversed = true
+                end
+            end
+            if me.Active then
+                canWalkOnSpline = false
+                ShortPatrolInterrupt()
+            end
+        end
+    end
+
+end}

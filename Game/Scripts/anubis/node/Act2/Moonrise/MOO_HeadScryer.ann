@@ -1,0 +1,191 @@
+game.states.MOO_HeadScryer = State{function ()
+
+        local doAD = false
+        local MOO_HeadScryer_WatchHome
+
+        self.OnInit = function()
+
+            MOO_HeadScryer_WatchHome=FindEntity("S_MOO_HeadScryer_WatchHome_7683cd32-44e9-4dbe-97b5-dcb33f070f9d")
+
+        end
+
+        nodes.WatchWork = Action{function()
+            try
+                MoveTo(MOO_HeadScryer_WatchHome)
+                LookFrom(MOO_HeadScryer_WatchHome)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(MOO_HeadScryer_WatchHome, 3.0)
+                Sleep(2.0)
+            end
+            Sleep(6.0)
+            if math.random() < 0.4 then
+                doAD = true
+            end
+        end,
+        CanEnter = function()
+            return not doAD and not IsInDangerousSurfaceFor(MOO_HeadScryer_WatchHome, me.Character)
+        end,
+        Valid = function()
+            return not IsInDangerousSurfaceFor(MOO_HeadScryer_WatchHome, me.Character)
+        end
+        }
+
+        nodes.DoAD = Selector{function(nodes)
+                doAD = false
+                return GetRandomCanEnter(nodes)
+            end
+            }
+
+        nodes.DoAD.Scryer01 = Proxy{
+            game.states.MOO_HeadScryer_DoAD,
+            params = {home = "S_MOO_HeadScryer_WatchScryer_01_04_0bbbc677-bc08-4df6-88eb-a0e60f20c688",
+                AD = "MOO_HeadScryer_AD_Scryer01_36d93335-be06-917d-cf06-8f609b648d24",
+                dialogBlockFlag = "MOO_Scryers_State_BlockAD_Scryer01_c8d19e89-cba6-41a0-9452-e15f7e359427",
+                partner = "S_MOO_Scryer_01_a5788d93-942c-4be0-94a6-c269ceff698d"},
+
+        }
+
+        nodes.DoAD.Scryer02 = Proxy{
+            game.states.MOO_HeadScryer_DoAD,
+            params = {home = "S_MOO_HeadScryer_WatchScryer_02_0381c60e-4f50-4570-b011-9219be707bc9",
+                AD = "MOO_HeadScryer_AD_Scryer02_31ae008f-9972-3101-c26f-888860c25555",
+                dialogBlockFlag = "MOO_Scryers_State_BlockAD_Scryer02_c16a007c-798e-4bb0-8834-2cabf22a2886",
+                partner = "S_MOO_Scryer_02_cbc6bf2e-443e-4fbd-bdac-77ee17bfeb23"},
+        }
+
+        nodes.DoAD.Scryer03 = Proxy{
+            game.states.MOO_HeadScryer_DoAD,
+            params = {home = "S_MOO_HeadScryer_WatchScryer_03_638dbec9-e9e6-4ac0-adae-546d3b0b43a3",
+                AD = "MOO_HeadScryer_AD_Scryer03_07a49c9c-dc8f-e66f-14a0-5e4fcbbc9e27",
+                dialogBlockFlag = "MOO_Scryers_State_BlockAD_Scryer03_aae95482-544a-4148-9a06-aa92ecc69bc6",
+                partner = "S_MOO_Scryer_03_4b1ee7c2-5028-4ff9-8b32-904a5bd7837d"},
+        }
+
+        nodes.DoAD.Scryer04 = Proxy{
+            game.states.MOO_HeadScryer_DoAD,
+            params = {home = "S_MOO_HeadScryer_WatchScryer_01_04_0bbbc677-bc08-4df6-88eb-a0e60f20c688",
+                AD = "MOO_HeadScryer_AD_Scryer04_8f9ebc57-fe7f-8eb5-2d26-bf5847bd7da8",
+                dialogBlockFlag = "MOO_Scryers_State_BlockAD_Scryer04_8893a4e8-59df-4b99-bf85-f3a57aeb3bd4",
+                partner = "S_MOO_Scryer_04_da47e7f7-752d-4341-8c41-e1df94cb4023"},
+
+        }
+
+        nodes.FallBack = Action{function()
+            Sleep(4.0)
+            doAD = false
+        end
+        }
+
+    end
+    }
+
+    game.states.MOO_HeadScryer_DoAD = State{function()
+
+        params.home = {type = EParamType.String, required=false, default=nil, help=[[
+            home trigger.
+        ]]}
+
+        params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+            The AD to play.
+        ]]}
+
+        params.dialogBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+            Blocks this specific AD from happening (prevents repetition)
+        ]]}
+
+        params.partner = {type = EParamType.String,  required=false, default=nil, help=[[
+            AD partner (the scryer)
+        ]]}
+
+        params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+            The AD to play.
+        ]]}
+
+        params.regionBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+            Blocks the ADs for the entire group of characters (prevents overlap)
+        ]]}
+
+        params.dialogBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+            Blocks this specific AD from happening (prevents repetition)
+        ]]}
+
+        params.partner1 = {type = EParamType.String,  required=false, default=nil, help=[[
+            First Dialog Partner, if any
+        ]]}
+
+        params.partner2 = {type = EParamType.String,  required=false, default=nil, help=[[
+            Second Dialog Partner, if any
+        ]]}
+
+        params.blocking = {type = EParamType.Bool,  required=false, default=true, help=[[
+            Whether the AD is blocking.
+        ]]}
+
+        local AD
+        local dialogBlockFlag
+        local didInit = false
+        local home
+        local partner
+        local MOO_Scryers_State_Scrying
+        local regionBlockFlag
+
+        helpers.Init = function()
+            AD = Dialog(params.AD)
+            regionBlockFlag = Flag("MOO_Scryers_State_BlockADs_d76fbf19-8aec-44f0-9a53-56bedfdaa862")
+            dialogBlockFlag = Flag(params.dialogBlockFlag)
+            partner = FindEntity(params.partner)
+            home = FindEntity(params.home)
+            MOO_Scryers_State_Scrying = Flag("MOO_Scryers_State_Scrying_10f6c9bb-e840-44c7-93a1-5d4c1d206d2a")
+            didInit = true
+        end
+
+        self.CanEnter = function()
+            if not didInit then
+                helpers.Init()
+            end
+            return not GetFlag(regionBlockFlag, nil) and
+                   not GetFlag(dialogBlockFlag, nil) and
+                   (not partner.Character.IsDead and
+                    not partner.IsInCombat and
+                    not IsInDialog(partner, false) and
+                    not partner.Character.IsInteractionDisabled and
+                    CanSee(me, partner)) and
+                   (not me.Character.IsDead and
+                    not IsInDialog(me, false) and
+                    not me.Character.IsInteractionDisabled) and
+                   (GetFlag(MOO_Scryers_State_Scrying, partner) and
+                    not IsInDangerousSurfaceFor(home, me.Character))
+        end
+
+
+        self.Valid = function()
+            return GetFlag(MOO_Scryers_State_Scrying, partner) and
+                not IsInDangerousSurfaceFor(home, me.Character)
+        end
+
+        nodes.TalkToScryer = Action{function()
+            local distance
+            distance = GetDistance2DTo(me, home)
+            if distance > 2.0 then
+                try
+                    MoveTo(home)
+                    LookFrom(home)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Interrupt()
+                end
+            end
+            if (not partner.Character.IsDead and
+                not partner.IsInCombat and
+                not IsInDialog(partner, false) and
+                not partner.Character.IsInteractionDisabled and
+                CanSee(me, partner)) and
+               (not me.Character.IsDead and
+                not IsInDialog(me, false) and
+                not me.Character.IsInteractionDisabled) then
+                    StartAutomatedDialog(AD, true, me, partner)
+                end
+        end,
+        }
+
+    end
+    }

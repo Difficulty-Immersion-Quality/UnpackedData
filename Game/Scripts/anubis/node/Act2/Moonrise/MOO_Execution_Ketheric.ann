@@ -1,0 +1,47 @@
+game.states.MOO_Execution_Ketheric = State { function ()
+
+    local executionLeaveFlag = Flag("MOO_Execution_Event_KethericLeave_b8718f8f-6313-dc0e-e20d-7435db4b74c4")
+    local executionAD = Dialog("SCL_Ketheric_AD_Execution_02cc92fe-a6e9-db14-34d8-1c17b08137e6")
+    local executionPoint = Entity("S_MOO_KethericHome_3a8e08a4-9029-4b0d-8640-76afabb8eebb")
+    local doingAD = false
+
+    self.CanEnter = function()
+        --Ketheric leaves before the end of the Execution,
+        --So while MOO is still in the Execution, Ketheric is not
+        return not GetFlag(executionLeaveFlag)
+    end
+
+    nodes.AtExecution = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_MOO_KethericHome_3a8e08a4-9029-4b0d-8640-76afabb8eebb]],
+            acceptanceRadius = 1.0
+        },
+        OnEnter = function()
+            EndRepose(me)
+        end,
+        CanEnter = function()
+            return doingAD
+        end
+    }
+
+    nodes.SitOnThrone = Proxy{
+        game.states.Sit,
+        params = {
+            seat = "S_MOO_ExecutionThrone_b90102e8-28ad-4655-81c6-b20133733a2e"
+        }
+    }
+
+    events.DialogActorJoined = function(e)
+        if e.Actor == me and e.Instance.DialogUUID == executionAD.Guid then
+            doingAD = true
+        end
+    end
+
+    events.DialogActorLeft = function(e)
+        if e.Actor == me and e.Instance.DialogUUID == executionAD.Guid then
+            doingAD = false
+        end
+    end
+
+end}

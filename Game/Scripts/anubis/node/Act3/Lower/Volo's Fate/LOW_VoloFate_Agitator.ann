@@ -1,0 +1,134 @@
+game.states.LOW_VoloFate_Agitator = State{function()
+
+    modules = {"shared.dialog"}
+
+    local idleAD = Dialog("LOW_VoloFate_AD_Agitator_dfe66181-99e5-8140-ae0f-27c5d52c89a6")
+    local idleTrigger = Entity("S_LOW_VoloFate_Agitator_IdleTrigger_6f7aae79-dcad-4023-b8a3-66bb13ad0f2a")
+    local idleTriggerString = "S_LOW_VoloFate_Agitator_IdleTrigger_6f7aae79-dcad-4023-b8a3-66bb13ad0f2a"
+
+    local smokePowderBarrel_1 = Entity("S_LOW_VoloFate_SmokepowderBarrel_01_b8692ff0-08e5-8959-5dc3-0656ae31636e")
+    local smokePowderBarrel_2 = Entity("S_LOW_VoloFate_SmokepowderBarrel_02_f4ee4f92-39a6-872d-68eb-eb0cb0521b58")
+    local smokePowderBarrel_3 = Entity("S_LOW_VoloFate_SmokepowderBarrel_03_b9d6ce98-595c-85f4-3806-bc45431b6ed0")
+    local smokePowderBarrel_4 = Entity("S_LOW_VoloFate_SmokepowderBarrel_04_57438a8f-f473-8f51-628b-bf2de4de9bff")
+    local smokePowderBarrel_5 = Entity("S_LOW_VoloFate_SmokepowderBarrel_05_5e4aef83-2b1a-80fd-4c1d-582d4c9d7985")
+    local smokePowderBarrel_6 = Entity("S_LOW_VoloFate_SmokepowderBarrel_06_d9368da1-2da3-8f63-691c-6fa0cd66074f")
+    local smokePowderBarrel_7 = Entity("S_LOW_VoloFate_SmokepowderBarrel_07_87aa9986-0ca0-810c-49b1-19f3577b67db")
+    local smokePowderBarrel_8 = Entity("S_LOW_VoloFate_SmokepowderBarrel_08_7d50ccfe-24a3-82a2-6094-8552736b20fd")
+
+    local smokePowderBarrels = {smokePowderBarrel_1,
+                                smokePowderBarrel_2,
+                                smokePowderBarrel_3,
+                                smokePowderBarrel_4,
+                                smokePowderBarrel_5,
+                                smokePowderBarrel_6,
+                                smokePowderBarrel_7,
+                                smokePowderBarrel_8}
+
+    local smokePowderBarrelsInsideTrigger = {}
+
+    local smokePowderBarrels_Trigger = Entity("S_LOW_VoloFate_SmokepowderBarrels_Trigger_bb7d3407-ec43-4738-a817-84c9fdb557ba")
+    local torch = Entity("S_LOW_VoloFate_Agitator_Torch_c06f471a-7500-4201-942b-39a600a5bb03")
+    local volo = Entity("S_GLO_Volo_2af25a85-5b9a-4794-85d3-0bd4c4d262fa")
+    local volosCart = Entity("S_LOW_VoloFate_ExecutionCart_f1ceb8d9-0122-8051-4345-e45bb5fa7664")
+
+    local agitatorTriedExplodeVoloFlag = Flag("LOW_VoloFate_State_AgitatorTriedExplodeVolo_642e4284-08c0-44cd-bf59-3eba7a877590")
+    local agitatorThrewTorchFlag = Flag("LOW_VoloFate_State_AgitatorThrewTorchAtBarrel_077b8b06-9d86-4eb4-b6cf-cd0b189b29ee")
+    -- Triggers combat with the thugs
+    local agitatorFailedExplodeVoloFlag = Flag("LOW_VoloFate_State_AgitatorFailedExplodeVolo_62e30e6c-58c7-4f61-9bd5-ba99f1919af7")
+
+    local executionSceneDoneFlag = Flag("LOW_VoloFate_State_ExecutionSceneDone_ef057af1-d080-4c75-b454-15f71f1f669a")
+
+    local isTryingThrowingTorch = false    
+    
+    nodes.ExplodeVolo = Action{
+
+        OnEnter = function()
+            isTryingThrowingTorch = true
+        end,
+
+        function()
+            if(HasActiveStatus(volo,"TIED_TO_CHAIR") and helpers.EnoughBarrelsInsideTrigger() == true) then
+                ApplyStatus(torch,"BURNING",true,-1.0)
+                for i=1, #smokePowderBarrelsInsideTrigger do                    
+                    local throwPos = smokePowderBarrelsInsideTrigger[i].Position + Vector3(0,1,0)
+                    UseSpell("Throw_Throw", throwPos, torch, nil, nil, true, true, true)
+                end
+            else
+                SetFlag(agitatorFailedExplodeVoloFlag,nil)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(agitatorTriedExplodeVoloFlag) and not GetFlag(agitatorThrewTorchFlag) and not GetFlag(agitatorFailedExplodeVoloFlag)
+        end,
+
+        OnLeave = function()
+            isTryingThrowingTorch = false
+        end
+    }
+
+    nodes.Agitating = Action{
+        function()
+            LookFrom(idleTrigger)
+            Sleep(math.random(1,3))
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                idleAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 10
+                },
+                me
+            )
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, idleTrigger) <= 2.0 and not GetFlag(executionSceneDoneFlag)
+        end
+    }
+
+    nodes.StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = idleTriggerString
+        }
+    }
+
+    events.SpellCastResult = function(ev)
+        if(ev.Prototype.SpellID == "Throw_Throw" and isTryingThrowingTorch) then
+            if(ev.Success) then
+                SetFlag(agitatorThrewTorchFlag,nil)
+                -- Fail Safe
+                StartTimer(me, "LOW_VoloFate_CheckTorchThrow_Timer", 5.0, 0)
+            else
+                SetFlag(agitatorFailedExplodeVoloFlag,nil)
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_VoloFate_CheckTorchThrow_Timer") then
+            if(not volo.Character.IsDead or (EntityExists(volosCart) and not HasActiveStatus(volosCart,"BURNING"))) then
+                -- Makes sure that the situation resorts to combat still
+                SetFlag(agitatorFailedExplodeVoloFlag,nil)
+            end
+        end
+    end
+
+    helpers.EnoughBarrelsInsideTrigger = function()
+        for i=1, #smokePowderBarrels do
+            if(EntityExists(smokePowderBarrels[i]) and IsInTrigger(smokePowderBarrels[i],smokePowderBarrels_Trigger.Trigger)) then
+                table.insert(smokePowderBarrelsInsideTrigger,smokePowderBarrels[i])
+            else
+                DebugText(me,"This barrel is not in the trigger: [1]", smokePowderBarrels[i].UUID.String)
+            end
+        end
+
+        DebugText(me,"num of barrels inside trigger [1]", tostring(#smokePowderBarrelsInsideTrigger))
+        if(#smokePowderBarrelsInsideTrigger < 4) then
+            SetFlag(agitatorFailedExplodeVoloFlag,nil)
+        else
+            return true
+        end
+    end
+
+end}

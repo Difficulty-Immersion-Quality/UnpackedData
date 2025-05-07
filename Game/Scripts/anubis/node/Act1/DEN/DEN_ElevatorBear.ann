@@ -1,0 +1,66 @@
+game.states.DEN_ElevatorBear = State{function()
+    description = [[Behaviour of the elevator bear. Relaxes next to the elevator.]]
+
+    --Flags
+    local moveFlag = Flag("DEN_General_Event_ElevatorBearMoves_1c1694b8-c0b9-edad-9fdc-cdeedff0512e")
+
+    --Triggers
+    local elevatorArea = Entity("S_DEN_BearElevatorArea_5b6e4f15-6005-41fd-80ac-6cdbb6a7ed40")
+    local relaxPoint = Entity("S_DEN_ElevatorBearPos_68c04fef-51d9-4a09-8d22-d72717379a9e")
+
+    --Animations
+    local restAnim = Animation("STAT_Sleep_01_Loop_a53a9b3c-aed6-45b8-b40d-30c534a6d435")
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.MovingOutOfElevator = Action {
+        CanEnter = function()
+            return (GetDistance2DTo(me, relaxPoint) > 2) and GetFlag(moveFlag)
+        end,
+        OnEnter = function()
+            SetHasOsirisDialog(me, false)
+        end,
+        function()
+            if not IsInDangerousSurfaceFor(relaxPoint, me.Character, 3.0) then
+                try
+                    MoveTo(relaxPoint)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(6.0)
+                end
+            else
+                LookFrom(relaxPoint)
+                Sleep(4.0)
+            end
+        end,
+        OnLeave = function()
+            SetHasOsirisDialog(me, true)
+        end
+    }
+
+    nodes.Sleeping = Action {
+        OnEnter = function()
+            ApplyStatus(me, "SLEEPING", false, -1)
+        end,
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+
+    events.FlagSet = function(e)
+        if e.Flag == moveFlag.Guid then
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end
+    end
+
+    events.LeftTrigger = function(e)
+        if (e.Target == me and e.Trigger == elevatorArea and not GetFlag(moveFlag)) then
+            SetFlag(moveFlag)
+        end
+    end
+end}

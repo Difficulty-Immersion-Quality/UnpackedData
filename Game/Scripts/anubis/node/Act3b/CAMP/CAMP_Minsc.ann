@@ -1,0 +1,150 @@
+game.states.CAMP_Minsc = State {
+    function()
+        description = [[Minsc's state when in camp]]
+
+        --------------- PARAMS ---------------
+
+        local inCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+
+        local boo = Entity("S_GLO_Boo_Summon_d49e3b49-a089-4465-b453-28dc79e82bb3")
+
+        local roastingAnimation = Animation("CUST_EPI_Minsc_Roasting_01_1bc40ed9-cd43-4d5a-86c5-8dbde0af2ede")
+
+        local campfires = {}
+        local campfire = nil
+        local campPos = nil
+
+        local selectedBehaviour = nil
+        local ignoreReselectionUponInterrupt = false
+
+        self.OnEnter = function()
+            selectedBehaviour = nil
+            ignoreReselectionUponInterrupt = false
+        end
+
+        --------------- HELPERS ---------------
+
+        helpers.SetupCampfires = function()
+            campfires["e1a6521c-0665-8b45-5c49-c47f25a7ecdd"]= "LTS_Camp_Campfire_B_000_9c3003a0-394c-8974-3f6c-8497c1039636" -- FARM
+            campfires["cd2a9074-9c76-86a9-36f9-5170a72c89c1"]= "LTS_Camp_Campfire_B_000_4982d916-ccaf-8b22-141f-c01f9d3a3904" -- SLUMS
+            campfires["01044ee4-23ba-8eba-1104-a23fce6b304c"] = nil -- ELFSONG
+        end
+
+
+        --------------- EVENTS ---------------
+
+        events.EntityEvent = function(e)
+            if e.TargetEntity == me then
+                if e.Event == "CampPositionChange" then
+                    if #campfires == 0 then
+                        helpers.SetupCampfires()
+                    end
+                    campPos = e.Params[1]
+                    if campfires[campPos.UUID.String] ~= nil then
+                        campfire = Entity(campfires[campPos.UUID.String])
+                    end
+                elseif e.Event == "InterruptCampBehaviour" then
+                    selectedBehaviour = nil
+                    Interrupt()
+                elseif e.Event == "InterruptCampBehaviour_WithoutReselection" then
+                    Interrupt()
+                end
+            end
+        end
+
+        --------------- NODES ---------------
+
+        self.OnInit = function()
+            helpers.SetupCampfires()
+        end
+
+        nodes = ImmediateSelector {}
+
+        nodes.CAMP = Selector {
+            function(node)
+                -- Check if the behaviour was interrupted and enter it again if still valid
+                if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                    ignoreReselectionUponInterrupt = false
+                    return node.TryGetChild(selectedBehaviour)
+                end
+
+                -- Always clear this, in case it was interrupted but was not able to select a node
+                ignoreReselectionUponInterrupt = false
+
+                -- Select new behaviour
+                local selectedNode = FindWeightedRandomSelectable(node, {
+                    [node.Cooking] = 3,
+                    [node.Shaving] = 3,
+                    [node.PlayingDrums] = 3,
+                    [node.Meditating] = 3,
+                    [node.Waiting] = 6,
+                })
+                selectedBehaviour = selectedNode.Name
+                return node.TryGetChild(selectedBehaviour)
+            end,
+
+            Valid = function()
+                return GetFlag(inCamp,me)
+            end
+        }
+
+        nodes.CAMP.Cooking = Action {
+            function()
+                local moveToResult = MoveTo(campfire, MovementSpeed.Stroll, false, false, 1.5, 2.0, false)
+                if moveToResult == error.MovementError.None then
+                    if not HasActiveStatus(campfire, "BURNING") then
+                        DebugText(me, "Turn on campfire")
+                        Sleep(3.0)
+                        UseItem(campfire.Item)
+                        Sleep(3.0)
+                    end
+                    SteerTo(campfire)
+                    Sleep(1.0)
+                    PlayAnimation(roastingAnimation, true, false)
+                    Sleep(1.0)
+                else
+                    SteerTo(campfire)
+                    Sleep(2.0)
+                end
+            end,
+            CanEnter = function()
+                return campfire ~= nil
+            end
+        }
+
+        nodes.CAMP.Shaving = Proxy {
+            game.states.CAMP_Idle,
+            params = {
+                behaviourPos = "CAMPPOS",
+                idleAnim = "CUST_EPI_Minsc_ShaveHead_01_dea9b80f-6e67-461d-a292-91075be50438",
+                loopIdleAnim = false
+            }
+        }
+
+        nodes.CAMP.PlayingDrums = Proxy {
+            game.states.CAMP_Idle,
+            params = {
+                behaviourPos = "CAMPPOS",
+                idleAnim = "CUST_Minsc_PlayingDrum_01_e7f761fc-8441-4424-9bf5-b43daca47f18",
+                loopIdleAnim = false
+            }
+        }
+
+        nodes.CAMP.Meditating = Proxy {
+            game.states.CAMP_WorldBehaviourAtIdlePos,
+            params = {
+                behaviourPos = "CAMPPOS",
+                worldBehaviourDialog = "BHVR_WRLD_CAMP_Minsc_MeditatingWithBoo_f69b5289-8e09-b99f-9239-098dc6f81134"
+            }
+        }
+
+        nodes.CAMP.Waiting = Proxy {
+            game.states.CAMP_Idle,
+            params = {
+                behaviourPos = "CAMPPOS",
+                sleepDurationMin = 10.0,
+                sleepDurationMax = 15.0
+            }
+        }
+    end
+}

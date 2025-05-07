@@ -1,0 +1,83 @@
+game.states.SCL_Oliver_NonCombat = State
+{
+    function ()
+
+        modules = {"shared.math"}
+
+        local wanderAnchor = Entity("S_SCL_HarpersDuty_OliversHouseMarker_f4dd66c4-ae22-4b6e-854c-19191461f6f5")
+        local steerToPoint = Entity("S_SCL_OliversDiary_HideAndSeekFallbackPoint_64a407e8-3cc5-487c-8d22-9b5ca09b4d74")
+        local gameCompleted = Flag("SCL_OliversDiary_State_LaidToRest_523e7f1c-2e13-428a-b9e9-fe63fa237075")
+        local leftHome = Flag("SCL_LiftingTheCurse_State_OliverLeftHome_0bde59b3-ccc2-4747-8def-ad4209d418f8")
+
+        -- after completing the game, but before leaving the house Oliver can wander around
+        nodes.GameCompleted = Action{
+            function()
+                Wander(8.0, 6.0, MovementSpeed.Walk, wanderAnchor)
+                SteerTo(steerToPoint)
+                Sleep(math.random(6, 9))
+            end,
+            CanEnter = function()
+                return GetFlag(gameCompleted) and not GetFlag(leftHome)
+            end
+        }
+
+        -- otherwise he is just idle
+        nodes.Idle = Action{
+            function()
+                WaitForInterrupt()
+            end,
+        }
+
+    end,
+}
+
+game.states.SCL_Oliver_TownCombat = State
+{
+    function()
+
+        local fledToTownFlag = Flag("SCL_LiftingTheCurse_State_OliverFledToTown_47018478-a3ef-42cc-8334-1516c6ed40f7")
+        local plushAD = Dialog("SCL_OliverShadow_AD_SummoningPlush_09747fb4-10d5-e4a5-0795-584a592d6a3d")
+        local usedShadowSpellFirstTime = false
+        local shadowAD = Dialog("SCL_OliverShadow_AD_FriendsSummoned_ba7b6453-45aa-b7df-7889-fed549c9892b")
+        self.Valid = function()
+            return me.CanActInCombatTeamTurn and GetFlag(fledToTownFlag)
+        end
+
+        nodes.Fight = Action{
+            function()
+                if HasActiveStatus(me, "SCL_OLIVERFIGHT_CANSUMMONPLUSH") then
+                    if not IsInDialog(me, false) then
+                        try
+                            StartAutomatedDialog(plushAD, true, me)
+                        catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                        end
+                    end
+                    UseSpell("Shout_SCL_OliverFight_FluffyMemory", me, nil, nil, nil, true, true, true)
+                    Sleep(2.0)
+                end
+
+                if not usedShadowSpellFirstTime then
+                    if not IsInDialog(me, false) then
+                        try
+                            StartAutomatedDialog(shadowAD, true, me)
+                        catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                        end
+                    end
+                    usedShadowSpellFirstTime = true
+                end
+                UseSpell("Shout_SCL_OliverFight_ShadowCall", me, nil, nil, nil, true, true, true)
+                Sleep(2.0)
+                EndTurn(me)
+            end,
+        }
+
+        nodes.Fallback = Action {
+
+            function()
+                Sleep(6.0)
+            end
+
+        }
+
+    end
+}

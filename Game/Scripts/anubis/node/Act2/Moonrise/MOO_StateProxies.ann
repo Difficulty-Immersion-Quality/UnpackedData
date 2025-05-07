@@ -1,0 +1,118 @@
+game.states.MOO_StateProxies = State { function ()
+
+    description = [[The proxys accociated with each Moonrise Tower state.]]
+
+--------------------------------PARAMS--------------------------------
+    params.Default = {type=EParamType.State, required=true, help=[[The default state (Peace)]]}
+
+    params.ExecutionOngoing = {type=EParamType.State, required=false, help=[[While the execution scene is ongoing. Default State should be for behaviour after the execution.]]}
+    --MOO_GroundFloor_State_ExecutionOver--
+
+    params.JailbreakFailed = {type=EParamType.State, required=false, help=[[The tieflings failed to escape the prison.]]}
+    --MOO_Jailbreak_State_AllPrisonersDied--
+    params.JailbreakSuccess = {type=EParamType.State, required=false, help=[[The tieflings succeeded in escaping the prison.]]}
+    --HAV_SavingPrisoners_State_ReturnReady--
+
+    params.BalthazarReturn = {type=EParamType.State, required=false, help=[[When Balthazar has left SHA (Player sided with him, he appears in COL)]]}
+    --MOO_Necromancer_State_AtMoonrise--
+
+    params.IsobelKidnapped = {type=EParamType.State, required=false, help=[[Isobel is at Moonrise (Last Light Destroyed)]]}
+    --MOO_Isobel_State_AtMoonrise--
+
+    params.Outcast = {type=EParamType.State, required=false, help=[[The tower is hostile towards the player (Attacked Ketheric)]]}
+    --MOO_MoonriseTower_State_Outcast--
+
+    params.NightsongDeath = {type=EParamType.State, required=false, help=[[The tower is hostile towards the player (Killed Nightsong)]]}
+    --SHA_Nightsong_State_Dead--
+
+    --Set Dummy state as default for assault to override past behaviour as everyone participates 
+    params.AssaultMoonrise = {type=EParamType.State, required=false, default = StateRef{game.states.Dummy}, help=[[The tower is under assault]]}
+    --MOO_Assault_State_InProgress--
+   
+    
+--------------------------------LOCAL--------------------------------
+    --State Flags--
+    local executionOverFlag = Flag("MOO_GroundFloor_State_ExecutionOver_1560c0ae-5fec-4e7c-a6e7-35e9c33bbbeb")
+    local jailBreakFailedFlag = Flag("MOO_Jailbreak_State_AllPrisonersDied_78722161-91a2-e044-ba3a-a79492d6ed18")
+    local jailBreakSucceedFlag = Flag("HAV_SavingPrisoners_State_ReturnReady_9b2d498d-5aad-40fa-a0df-d2a76a3b0979")
+    local balthazarReturnFlag = Flag("MOO_Necromancer_State_AtMoonrise_f64507bf-aa53-6de9-0b59-c19d649bb0a5")
+    local isobelKidnappedFlag = Flag("MOO_Isobel_State_AtMoonrise_a95b7f8f-1454-433f-a496-71c9306683ce")
+    local outcastFlag = Flag("MOO_MoonriseTower_State_Outcast_93565546-9052-4776-8563-2a1aca8d899e")
+    local nightsongPermaDeathFlag = Flag("SHA_Nightsong_State_PermaDefeated_d02e8ea4-dec7-4824-8117-efc075dee4ba")
+    local assaultMoonriseFlag = Flag("MOO_Assault_State_Started_60786c6f-0761-4035-a462-3b42a591fdc1") 
+
+--------------------------------NODES--------------------------------
+    nodes.TowerState = ImmediateSelector{}
+
+    nodes.TowerState.AssaultMoonrise = Proxy{
+        params.AssaultMoonrise,
+        Valid = function()
+            return GetFlag(assaultMoonriseFlag)
+        end
+    }    
+
+    nodes.TowerState.NightsongDeath = Proxy{
+        params.NightsongDeath,
+        Valid = function()
+            return GetFlag(nightsongPermaDeathFlag)
+        end
+    }   
+
+    nodes.TowerState.Outcast = Proxy{
+        params.Outcast,
+        Valid = function()
+            return GetFlag(outcastFlag)
+        end
+    }
+
+    nodes.TowerState.IsobelKidnapped = Proxy{
+        params.IsobelKidnapped,
+        Valid = function()
+            return GetFlag(isobelKidnappedFlag)
+        end
+    }
+
+
+    nodes.TowerState.BalthazarReturn = Proxy{
+        params.BalthazarReturn,
+        Valid = function()
+            return GetFlag(balthazarReturnFlag)
+        end
+    }
+
+
+    nodes.TowerState.JailbreakFailed = Proxy{
+        params.JailbreakFailed,
+        Valid = function()
+            return GetFlag(jailBreakFailedFlag)
+        end
+    }
+
+
+    nodes.TowerState.JailbreakSuccess = Proxy{
+        params.JailbreakSuccess,
+        Valid = function()
+            return GetFlag(jailBreakSucceedFlag)
+        end
+    }
+
+
+    --Execution is active from the start by default
+    nodes.TowerState.ExecutionOngoing = Proxy{
+        params.ExecutionOngoing,
+        Valid = function()
+            return not GetFlag(executionOverFlag)
+        end
+    }
+
+    nodes.TowerState.Default = Proxy{
+        params.Default,
+    }
+
+    nodes.FallBack = Proxy{
+        OnEnter = function()
+            DebugLog(me.UUID.String .. " failed to find a TowerState node. Entered Fallback Dummy state.")
+        end,
+        game.states.Dummy
+    }
+end}

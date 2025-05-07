@@ -1,0 +1,90 @@
+game.states.WYR_WyrmRock_MessHallCook = State{function()
+
+    description = [[A cook in Mess hall of Wyrm rock]]
+
+    modules = { "shared.math", "shared.util" }
+
+    --local posTable = Entity("S_WYR_WyrmRock_MessHallCook_AtTablePos_3e000205-8ce7-4ab0-9884-3a3defc4c811")
+    local posPot = Entity("S_WYR_WyrmRock_MessHallCook_AtPotPos_06049647-67fd-4b61-968e-9f6c613281a3")
+    local posStove = Entity("S_WYR_WyrmRock_MessHallCook_AtStovePos_01dc71fd-80e1-470b-b2b5-dbf9033bd3cb")
+
+    local chopBehaviorTrigger = Entity("BHVR_WRLD_WYR_WyrmRock_PreparingSteak_SceneTrigger_fc948168-d412-49e4-a76c-a542e7284e80")
+    local chopBehaviorDialog = Dialog("BHVR_WLRD_WYR_WyrmRock_PreparingSteak_58a3ae9a-e723-cdd8-2971-6ee937bb33f3")
+    local chopBehaviorKnife = Entity("S_WYR_WyrmRock_CookKnife_e73fbcc1-4f2a-4c1e-b32a-53d74032c988")
+    local chopBehaviorMeat = Entity("S_WYR_WyrmRock_CookMeat_8f269d61-939f-4107-bb77-fe2a63697bab")
+
+    local animThink = Animation("CUST_CheckSoup_01_0a2e5fa9-3433-476e-80eb-acbb814b0c7f")
+    local animCheck = {
+        Animation("CUST_CheckSoup_01_0a2e5fa9-3433-476e-80eb-acbb814b0c7f"),
+        Animation("CUST_CheckSoup_02_e9c6030f-d857-49e7-a880-03e18f55cf86"),
+    }
+
+    nodes.Default = Selector{
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+    }
+
+    nodes.Default.Table = Action{
+        function()
+            local moveRes = MoveTo(chopBehaviorTrigger, MovementSpeed.Stroll)
+            if moveRes == error.MovementError.None then
+                StartBehaviorDialog(chopBehaviorDialog, chopBehaviorTrigger.Trigger, true, me, chopBehaviorKnife, chopBehaviorMeat)
+            end
+            mod.util.SleepRandom(2.0, 4.0)
+        end
+    }
+
+    nodes.Default.Pot = Action{
+        function()
+
+            local moveRes = MoveTo(chopBehaviorTrigger, MovementSpeed.Stroll)
+            if moveRes == error.MovementError.None then
+                try
+                    StartBehaviorDialog(chopBehaviorDialog, chopBehaviorTrigger.Trigger, true, me, chopBehaviorKnife, chopBehaviorMeat)
+                catch e then
+                    mod.util.SleepRandom(6.0, 9.0)
+                end
+            end
+            mod.util.SleepRandom(2.0, 4.0)
+
+            if mod.math.CoinToss(0.5) then
+                local moveRes = nil
+                if GetDistanceTo(me, posPot) > 0.2 then
+                    moveRes = MoveTo(posPot, MovementSpeed.Stroll, false, false, 0.1, 0.2, false)
+                end
+                if moveRes == nil or moveRes == error.MovementError.None then
+                    LookFrom(posPot)
+                    if mod.math.CoinToss(0.5) then
+                        PlayAnimation(animCheck[1], true)
+                    else
+                        PlayAnimation(animCheck[2], true)
+                    end
+                    mod.util.SleepRandom(2.0, 4.0)
+                end
+                else
+                    local moveRes = nil
+                if GetDistanceTo(me, posStove) > 0.2 then
+                    moveRes = MoveTo(posStove, MovementSpeed.Stroll, false, false, 0.1, 0.2, false)
+                end
+                if moveRes == nil or moveRes == error.MovementError.None then
+                    LookFrom(posStove)
+                    PlayAnimation(animThink, true)
+                    mod.util.SleepRandom(2.0, 4.0)
+                end
+            end
+
+        end
+    }
+
+    nodes.Default.Wander = Proxy {
+        game.states.GEN_Wander,
+        params = {
+            trigger = [[S_WYR_WyrmRock_MessHallCook_WanderArea_b01d3c0f-da0b-4f17-87cb-4f1e81f38bc4]],
+            wanderMin = 6,
+            wanderMax = 9,
+            sleepMin = 3,
+            sleepMax = 9},
+    }
+
+end}

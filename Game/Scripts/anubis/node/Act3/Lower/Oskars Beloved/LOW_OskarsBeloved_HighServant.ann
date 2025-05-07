@@ -1,0 +1,74 @@
+game.states.LOW_OskarsBeloved_HighServant = State{function()
+    description = [[High Servant with repeated AD solo or with a Servant depending on player interaction]]
+    modules = {"shared.dialog", "shared.util"}
+    local AD = Dialog("LOW_OskarsBeloved_AD_HighServantAlone_ccce5ee3-09a0-815c-a119-3e2f0e659ba8")
+    --Flags
+    local talkingAloneFlag =  Flag("LOW_OskarsBeloved_Event_ServantFired_926ec1e2-4ef6-46a2-8a3b-4fc2d4cf975c")
+    local patrolingFlag = Flag("LOW_OskarsBeloved_Event_ServantStartPatrol_abc5886e-797a-427f-8cc9-a9d897f4eac5")
+    local pausedPatrol = false
+
+
+    -----------------------------------------
+    -- Nodes
+
+
+    nodes.TalkingAlone= Action {
+
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+
+        function()
+
+            if (math.random(1,2) == 1 and GetFlag(talkingAloneFlag)) then
+
+                mod.dialog.StartCheckedAutomatedDialog(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                    },
+                    me
+                )
+            else
+                Sleep(math.random(3,6))
+            end
+            pausedPatrol = false
+
+        end,
+
+        Valid = function()
+            return pausedPatrol
+        end
+    }
+
+
+    nodes.Patrol = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = "S_LOW_HighServantPatrol_3e6bd98a-4a59-41b0-afb8-59174b0e6275",
+            patrolSpeed = "Walk"
+        },
+
+        Valid = function()
+            return GetFlag(patrolingFlag,me) and not pausedPatrol
+        end
+    }
+
+
+    nodes.Waiting = Action{
+         function()
+        WaitForInterrupt()
+         end,
+        Valid = function()
+            return not GetFlag(patrolingFlag,me)
+        end
+
+    }
+
+
+    events.SplineControlPointReached = function(e)
+        pausedPatrol = true
+    end
+
+end
+}

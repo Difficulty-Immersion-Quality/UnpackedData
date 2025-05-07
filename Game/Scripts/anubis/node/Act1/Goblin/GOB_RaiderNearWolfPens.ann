@@ -1,0 +1,280 @@
+game.states.GOB_RaiderNearWolfPens = State{function()
+
+    modules = { "shared.dialog", "shared.util" }
+    description = [[Raider near the Worg Pens area]]
+
+    params.DefaultPos = { type = EParamType.String, required = true, help = [[Default position trigger for the goblin]]}
+    params.partner01 = { type = EParamType.String, required = false, default = "", help = [[first partner]]}
+    params.partner02 = { type = EParamType.String, required = false, default = "", help = [[second partner]]}
+
+    params.canInitiateConversation = { type = EParamType.Bool, required = false, default = false, help = [[this goblin can initiate a conversation with other goblins]]}
+
+    params.Activity01_Position = { type = EParamType.String, required = false, default = nil, help = [[activity position 01 - trigger]]}
+    params.Activity01_Animation = { type = EParamType.String, required = false, default = "", help = [[activity position 01 - animation]]}
+    params.Activity02_Position = { type = EParamType.String, required = false, default = nil, help = [[activity position 02 - trigger]]}
+    params.Activity02_Animation = { type = EParamType.String, required = false, default = "", help = [[activity position 02 - animation]]}
+    params.Activity03_Position = { type = EParamType.String, required = false, default = nil, help = [[activity position 03 - trigger]]}
+    params.Activity03_Animation = { type = EParamType.String, required = false, default = "", help = [[activity position 03 - animation]]}
+
+    params.AD_PrisonerComment = { type = EParamType.String, required = false, default = "", help = [[group AD]]}
+    params.minDistanceToPrisoner = {  type = EParamType.Number, default = 2.0, help = "Min range when approaching the prisoner's body" }
+    params.maxDistanceToPrisoner = {  type = EParamType.Number, default = 4.0, help = "Max range when approaching the prisoner's body" }
+
+    local tr_defaultPos = Entity(params.DefaultPos)
+
+
+    local tr_Activity01 = Entity(params.Activity01_Position)
+    local anim_Activity01 = Animation(params.Activity01_Animation)
+    local tr_Activity02 = Entity(params.Activity02_Position)
+    local anim_Activity02 = Animation(params.Activity02_Animation)
+    local tr_Activity03 = Entity(params.Activity03_Position)
+    local anim_Activity03 = Animation(params.Activity03_Animation)
+
+    -- hack, one goblin eavesdrops on the Drow, but using the ladder interrupts her anubis state, this is a workaround
+    local tr_EavesdroppingArea = Entity("S_GOB_WolfPensBackup_EavesdroppingArea_ee11bc60-794d-4b57-bea5-715c93660795")
+    local tr_EavesdroppingPosition = Entity("S_GOB_WolfPensBackup_EavesdroppingPosition_581ead5f-4f92-48a4-9e52-cd36021daee8")
+    local anim_Eavesdropping = Animation("CUST_ListeningFar_01-09b65b6d-a366-4199-ab36-f92be5251368")
+    local b_eavesdropping = false
+
+    local anim_Bored = Animation("CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef")
+    local anim_Stretching = Animation("CUST_Stretching_01_9af703b0-c02f-4c17-bfee-7e11f1f80d6b")
+
+    local ch_partner01 = Entity(params.partner01)
+    local ch_partner02 = Entity(params.partner02)
+    local dlg_AD = Dialog("GOB_WolfPens_AD_BackupGroup_c5356a97-4bc1-a3a1-b72a-ab091f2a35f0")
+    local fl_ReinforcementIntroduced = Flag("GOB_WolfPens_State_TalkedToReinforcement_88e9d8d1-c9ca-4e28-905a-ed3c5f8d2573")
+    local tr_lookAtTrigger = Entity("S_GOB_WolfPens_ReinforcementAreaLookAtTrigger_d9594c8c-752e-4aae-bdcd-4f2fe15ba734")
+    local tr_wanderTrigger = Entity("S_GOB_WolfPens_BackupArea_4b78357e-a01c-4fca-aae4-47bc6c7ff6ab")
+
+    local PrisonersBody = Entity("S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323")
+    local dlg_AD_PrisonerComment = Dialog(params.AD_PrisonerComment)
+    local minDistanceToPrisoner = params.minDistanceToPrisoner
+    local maxDistanceToPrisoner = params.maxDistanceToPrisoner
+
+    local b_canInitiateConversation = params.canInitiateConversation
+    local b_canAD = true
+    local b_commentedOnPrisonerBody = false
+    local b_alarmed = false
+    local b_waitForAD = true
+    local b_participatingInConversation = false
+
+    -- return to position
+
+    nodes.State_NearWorgPens_Talking = Action{
+        function()
+            if  GetDistance2DTo(me, tr_defaultPos) > 4.0 then
+                try
+                    MoveTo(tr_defaultPos, MovementSpeed.Walk, true, false, 1.0, 2.0)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "Failed MoveTo(tr_defaultPos)")
+                end
+            end
+            SteerTo(tr_lookAtTrigger)
+            if  not IsInDialog(me, false) and mod.dialog.AreSpeakersAvailableAndNear(me, 15.0, false, false, false, { ch_partner01, ch_partner02 }) then
+                StartAutomatedDialog(dlg_AD, true, me, ch_partner01, ch_partner02)
+                b_canAD = false
+            else
+                DebugText(me, "Other speakers are busy")
+            end
+        end,
+        CanEnter = function()
+            return not b_alarmed and b_canInitiateConversation and b_canAD
+        end
+    }
+
+    nodes.State_NearWorgPens_ParticipatingInConversation = Action{
+        function()
+            if  GetDistance2DTo(me, tr_defaultPos) > 4.0 then
+                try
+                    MoveTo(tr_defaultPos, MovementSpeed.Walk, true, false, 1.0, 2.0)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "Failed MoveTo(tr_defaultPos)")
+                end
+            end
+            SteerTo(tr_lookAtTrigger)
+            mod.util.SleepRandom(1.0, 4.0)
+        end,
+        CanEnter = function()
+            return b_participatingInConversation
+        end,
+        Valid = function()
+            return not b_alarmed
+        end
+    }
+
+    -- hack
+    nodes.State_NearWorgPens_Eavesdrop = Action {
+        function ()
+            try
+                MoveTo(tr_EavesdroppingPosition, MovementSpeed.Walk, true, false, 0.5, 1.0)
+                LookFrom(tr_EavesdroppingPosition)
+                PlayAnimation(anim_Eavesdropping, true)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Movement Failed")
+            end
+            mod.util.SleepRandom(3.0, 6.0)
+        end,
+        OnLeave = function()
+            b_eavesdropping = false
+        end,
+        Valid = function()
+            return not b_alarmed and GetFlag(fl_ReinforcementIntroduced) and b_eavesdropping
+        end
+    }
+
+    nodes.State_NearWorgPens_OtherBehavior = Selector {
+        function (nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+
+        Valid = function()
+            return not b_alarmed and GetFlag(fl_ReinforcementIntroduced)
+        end
+    }
+
+    nodes.State_NearWorgPens_OtherBehavior.Activity01 = Action{
+        function()
+            try
+                MoveTo(tr_Activity01, MovementSpeed.Walk, true, false, 0.1, 0.5)
+                LookFrom(tr_Activity01)
+                PlayAnimation(anim_Activity01, true)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Movement Failed")
+            end
+            mod.util.SleepRandom(3.0, 7.0)
+        end,
+        Valid = function()
+            return tr_Activity01 ~= nil
+        end,
+        OnLeave = function()
+            if IsInTrigger(me, tr_EavesdroppingArea.Trigger) then
+                b_eavesdropping = true
+            end
+        end
+    }
+
+    nodes.State_NearWorgPens_OtherBehavior.Activity02 = Action{
+        function()
+            try
+                MoveTo(tr_Activity02, MovementSpeed.Walk, true, false, 0.1, 0.5)
+                LookFrom(tr_Activity02)
+                PlayAnimation(anim_Activity02, true)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Movement Failed")
+            end
+            mod.util.SleepRandom(3.0, 7.0)
+        end,
+        Valid = function()
+            return tr_Activity02 ~= nil
+        end,
+        OnLeave = function()
+            if IsInTrigger(me, tr_EavesdroppingArea.Trigger) then
+                b_eavesdropping = true
+            end
+        end
+    }
+
+    nodes.State_NearWorgPens_OtherBehavior.Activity03 = Action{
+        function()
+            DebugText(me, "Activity 03")
+            try
+                MoveTo(tr_Activity03, MovementSpeed.Walk, true, false, 0.1, 0.5)
+                LookFrom(tr_Activity03)
+                PlayAnimation(anim_Activity03, true)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Movement Failed")
+            end
+            mod.util.SleepRandom(3.0, 7.0)
+        end,
+        Valid = function()
+            return tr_Activity03 ~= nil
+        end
+    }
+
+    nodes.State_NearWorgPens_OtherBehavior.Idle = Action{
+        function()
+            DebugText(me, "Idle")
+            SteerTo(tr_lookAtTrigger)
+            Sleep(6.0)
+        end
+    }
+
+    nodes.Action_CheckPrisoner = Action{
+        function()
+            DebugText(me, "Time to check the prisoner")
+            mod.util.SleepRandom(1.0, 6.0)
+            Wander(4.0, 2.0, MovementSpeed.Walk)
+
+            local moveResult = MoveInRange(PrisonersBody, minDistanceToPrisoner, maxDistanceToPrisoner, MovementSpeed.Walk, nil, false, false)
+
+            if moveResult ~= error.MovementError.None then
+                DebugText(me, "Failed to move to Halsin. Will leave the area.")
+                mod.util.SleepRandom(2.0, 4.0)
+            end
+            SteerTo(PrisonersBody)
+            mod.util.SleepRandom(0.5, 6.5)
+            StartAutomatedDialog(dlg_AD_PrisonerComment, true, me)
+            b_commentedOnPrisonerBody = true
+            mod.util.SleepRandom(0.5, 2.0)
+        end,
+        Valid = function()
+            return b_alarmed and not b_commentedOnPrisonerBody
+        end,
+    }
+
+    nodes.InWolfPens = Action{
+        function()
+            mod.util.SleepRandom(0.5, 3.5)
+            b_alarmed = false
+        end,
+        Valid = function()
+            return b_alarmed
+        end,
+        OnLeave = function()
+            SetEntityEvent(me, "GOB_WolfPens_SendReinforcementBack")
+        end
+    }
+
+    -- fallback
+    nodes.Action_Default = Action{
+        function()
+            mod.util.SleepRandom(3.0, 5.0)
+        end
+    }
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == dlg_AD.Guid then
+            DebugText(me, "Not Participating")
+            b_participatingInConversation = false
+            if b_canInitiateConversation then
+                DebugText(me, "TimerStarted")
+                if GetFlag(fl_ReinforcementIntroduced) then
+                    StartTimer(me, "GOB_WolfPens_Reinforcement_ADTimer", 48.0, 0)
+                else
+                    StartTimer(me, "GOB_WolfPens_Reinforcement_ADTimer", 12.0, 0)
+                end
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "GOB_WolfPens_Reinforcement_ADTimer" then
+            DebugText(me, "TimerFinished")
+            b_canAD = true
+            SetEntityEvent(ch_partner01, "GOB_WolfPens_ParticipateInConversation")
+            SetEntityEvent(ch_partner02, "GOB_WolfPens_ParticipateInConversation")
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.Event == "GOB_WolfPens_Alarmed" and e.TargetEntity == me then
+            DebugText(me, "ALARMED")
+            b_alarmed = true
+            b_commentedOnPrisonerBody = false
+        elseif e.Event == "GOB_WolfPens_ParticipateInConversation" and e.TargetEntity == me then
+            DebugText(me, "I GOTTA TALK TO OTHER GOBLINS")
+            b_participatingInConversation = true
+        end
+    end
+
+end}

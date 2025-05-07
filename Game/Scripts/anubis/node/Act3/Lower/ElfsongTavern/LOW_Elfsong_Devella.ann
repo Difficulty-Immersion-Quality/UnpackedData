@@ -1,0 +1,94 @@
+game.states.LOW_Elfsong_Devella = State{
+
+    function()
+        --------------------------------Description--------------------------------
+        description = [[Behavior of Devella Fountainhead at Elfsong Tavern]]
+
+        --------------------------------Params and modules--------------------------------
+        params.Spline = { type = EParamType.String, help = "Patrol spline for Devella", required = true }
+
+        modules = {"shared.dialog"}
+
+        --------------------------------Flags and variables--------------------------------
+        local goToUpperCityFlag = Flag("LOW_SerialKiller_Event_DevellaGoingUpperCity_5aae63f9-594f-407d-8b34-078a0b688968")
+        local patrolSpline = Spline(params.Spline)
+        local pause = false;
+        local tableObjects = {
+            -- key = value
+            Report = Entity("S_LOW_Elfsong_DevellaReport_eeb8f024-40d6-4691-befb-71f90900bbf2"),
+            Bed = Entity("S_LOW_Elfsong_PrivateRoomBed_f775f5a7-ba08-4825-b470-5f18c0394b53"),
+            Bottle = Entity("S_LOW_Elfsong_EmptyKarabasansGift_da56b1d7-7f11-4f4f-81d2-c9e326a026c1")
+        }
+
+        local pointToSteer = nil
+        local localAD = Dialog("92e84fd6-d672-e57f-127b-685882c573ad")
+        local alreadyMetPlayers = false
+        local flagHasMetDevella = Flag("LOW_Elfsong_DevellaHasMet_55c4521a-5cf9-2e38-1877-bf229e1c57ab")
+
+        --------------------------------Nodes--------------------------------
+
+        nodes.CheckGround = Action {
+            function()
+                Sleep(50 + 10 * math.random())
+            end,
+            Valid = function()
+                return (not alreadyMetPlayers)
+            end
+        }
+
+        nodes.Pause = Action{
+            OnEnter = function()
+                ShortPatrolInterrupt()
+            end,
+            function()
+                SteerTo(pointToSteer)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    localAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                Sleep(4.0)
+                pause = false
+            end,
+            CanEnter = function()
+                return  alreadyMetPlayers
+            end,
+            Valid = function()
+                return pause
+            end,
+
+            OnInterrupt = function()
+                pause = false
+            end
+
+        }
+
+        nodes.Patrol = Action{
+            function()
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll, -1, false)
+            end,
+            Valid = function()
+                return not (GetFlag(goToUpperCityFlag)) or (not pause) and alreadyMetPlayers
+            end
+        }
+
+        events.EntityEvent = function(e)
+            if e.Event == "LOW_ElfSong_MetDevellaFountainhead" then
+                alreadyMetPlayers = true
+            end
+        end
+
+        events.SplineControlPointReached = function(ev)
+            for iteration,element in pairs(tableObjects) do
+                if ev.Event == iteration then
+                    pointToSteer = element
+                    pause = true
+                end
+            end
+        end
+
+    end
+
+}

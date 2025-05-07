@@ -1,0 +1,73 @@
+game.states.SHA_TrapJunction_Thief = State{function()
+    description=[[The thief will select the player with the most gold and ]]
+
+    local itemToSteal = nil
+    local itemStolen = false
+
+    local thiefChest = Entity("S_SHA_TrapJunction_ThiefChest_de0386da-7edb-49c7-b392-8c49009ff5c6")
+
+    nodes.StealItem = Action{
+        function()
+            local moveTarget = itemToSteal
+
+            if itemToSteal.Item.IsInInventory then
+                moveTarget = GetInventoryOwner(itemToSteal)
+            end
+
+            if GetDistanceTo(me, moveTarget) < 1.0 then
+                if itemToSteal.Item.IsInInventory then
+                    local itemOwner = GetInventoryOwner(itemToSteal)
+                    try
+                        UseSpell("Target_SHA_TrapJunction_ThiefPickpocket", itemOwner)
+                    catch e if ls.CheckType(e, error.UseSpellFailed) then
+                        SteerTo(moveTarget)
+                    end
+
+                    Sleep(2.0)
+                else
+                    ToInventory(itemToSteal, thiefChest, 1, false, false)
+                    itemStolen = true
+                end
+            else
+                local moveResult = MoveTo(moveTarget, MovementSpeed.Run, false, false, 0.2, 0.5, false)
+                if moveResult ~= error.MovementError.None then
+                    Sleep(2.0)
+                end
+            end
+        end,
+
+        Valid = function()
+            return itemToSteal ~= nil and itemStolen == false
+        end
+    }
+
+    nodes.Flee = Action{
+        function()
+            FleeFrom(RelationType.Party, 6.0)
+        end,
+
+        Valid = function()
+            return itemStolen == true
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return itemStolen == false or itemToSteal ~= nil
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "SHA_TrapJunction_SetTheftTarget" then
+            itemToSteal = e.Params[1]
+        end
+
+        if e.TargetEntity == me and e.Event == "SHA_TrapJunction_PickpocketSuccess" then
+            itemStolen = true
+        end
+    end
+end}

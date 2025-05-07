@@ -1,0 +1,212 @@
+game.states.LOW_JaheirasHouse_Rion = State{
+    function()
+        modules = {"shared.util", "shared.dialog", "shared.math"}
+
+        params.convoPartnerFig = {type=EParamType.String, required = false, default=nil, help=[[Conversation partners in case of the idle AD involving 3 guards]]}
+        params.convoPartnerTate = {type=EParamType.String, required = false, default=nil, help=[[Conversation partners in case of the idle AD involving 3 guards]]}
+        params.convoPartnerJord = {type=EParamType.String, required = false, default=nil, help=[[Conversation partners in case of the idle AD involving 3 guards]]}
+
+        local bWait = false
+        local convoPartnerFig = Entity(params.convoPartnerFig)
+        local convoPartnerTate = Entity(params.convoPartnerTate)
+        local convoPartnerJord = Entity(params.convoPartnerJord)
+
+        local FigAlertAD = Dialog("LOW_JaheirasHouse_AD_FigAndRion_a83b065d-2b93-b956-0b89-88ca4ec9e72c")
+        local FigPracticeAD = Dialog("LOW_JaheirasHouse_AD_GossipAboutSwordplay_55d39647-65c1-85a1-75f9-24c558a40100")
+        local TateAD = Dialog("LOW_JaheirasHouse_AD_GossipAboutHiding_b480c7d5-78e7-608e-b0d8-bf544bcb954d")
+        local SiblingAD = Dialog("LOW_JaheirasHouse_AD_JordAndRion_17c60a81-617b-e57e-f0a6-52f626a6e129")
+    
+        local WatchingFig = Animation("CUST_Teaching_01_a7904689-893d-482e-924f-2d097d04cb11")
+        local restAnim = Animation("CUST_Thinking_03_9407dc5c-7155-40a6-a2ef-43ec37b0eda0")
+        local LookingAtDistillery = Animation("CUST_Pondering_01_c2a68c82-1b0b-4d0c-8f1a-c9f14984a5fb")
+        local idleAnimStart = Animation("CUST_Reading_Book_01_Start_16107c0f-dbf6-47c4-9596-4c8cca8a683d")
+        local idleAnimLoop = Animation("CUST_Reading_Book_01_Loop_d8db9dc7-c6dd-4b6f-8af0-620c7473d8f8")
+        local idleAnimEnd = Animation("CUST_Reading_Book_01_End_6fda7690-15e7-4668-acc0-1025692de049")
+
+        local patrolSpline = Spline("S_LOW_JaheirasHouse_RionPatrolSpline_0f3966a4-e9b2-4e27-a915-3aa6ef634e5d")
+        local targetSplineIndex = -1
+        local splineEvent = ""
+
+        local JaheiraReturned = Flag("LOW_JaheirasHouse_State_JaheiraSpokeToFamily_efad8157-79e3-46a0-ae9e-3bb6f6a191d0")
+        local FigAlerted = Flag("LOW_JaheirasHouse_State_GranddaughterReadyToStart_f7aa5ec3-2f09-4069-ab3c-d74546c69ebe")
+        local canWalkOnSpline = true
+
+        
+        nodes.WaitNoAlert = Action {
+
+            CanEnter = function()
+                return GetFlag(JaheiraReturned) == false  
+            end,
+            function()
+                if(convoPartnerJord ~= nil and mod.dialog.IsSpeakerAvailable(convoPartnerJord)) then
+                    StopAnimation(me)
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        SiblingAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 10
+
+                        },
+                        me,
+                        convoPartnerJord                        
+                        )
+                else
+                    Sleep(mod.math.random(2.1, 4.4))
+                end
+                PlayLoopingAnimation(idleAnimStart,{idleAnimLoop},idleAnimEnd,false)
+                Sleep(mod.math.random(10.0, 11.0))
+            end,
+            Valid = function()
+            return not GetFlag(FigAlerted)
+        end
+        }
+
+        nodes.WaitAlert = Action {
+            function() 
+                if(convoPartnerFig ~= nil and mod.dialog.IsSpeakerAvailable(convoPartnerFig)) then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        FigAlertAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 10
+                    
+                        },
+                    me,
+                    convoPartnerFig)
+                else
+                    Sleep(mod.math.random(2.1, 4.4))
+                end
+                Sleep(mod.math.random(0.5, 1.2))
+            end,
+            Valid = function()
+                return not GetFlag(JaheiraReturned)
+        end
+        }
+     
+        nodes.Patroling = Action {
+            function()
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll, targetSplineIndex, false)
+            end,
+            OnLeave = function()
+                if canWalkOnSpline then
+                    ShortPatrolInterrupt()
+                end
+            end,
+            Valid = function()
+                return canWalkOnSpline
+            end
+        }
+    
+        nodes.PatrolPointIdle = Selector{
+            function(nodes)
+                if splineEvent == "Fig" then
+                    return nodes.Fig
+                elseif splineEvent == "Tate" then
+                    return nodes.Tate
+                elseif splineEvent == "Anim" then
+                    return nodes.Anim
+                elseif splineEvent == "Wait" then
+                    return nodes.Waiting -- todo
+                else
+                    return nodes.Waiting
+                end
+            end,
+            Valid = function()
+                return not canWalkOnSpline and splineEvent ~= ""
+            end,
+            OnLeave = function()
+                splineEvent = ""
+                canWalkOnSpline = true
+            end,
+            OnInterrupt = function()
+                splineEvent = ""
+                canWalkOnSpline = true
+            end
+        }
+
+        nodes.PatrolPointIdle.Fig = Action {
+            function()
+                LookFrom(patrolSpline)
+                if(convoPartnerFig ~= nil and mod.dialog.IsSpeakerAvailable(convoPartnerFig)) then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        FigPracticeAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 10
+                            
+                        },
+                        me,
+                        convoPartnerFig
+                    )
+                    Sleep(mod.math.random(0.5, 1.2))
+                    canWalkOnSpline = true
+                else
+                    Sleep(mod.math.random(2.1, 4.4))
+                    canWalkOnSpline = true
+                end
+            end
+        }
+
+        nodes.PatrolPointIdle.Tate = Action {
+            function()
+                LookFrom(patrolSpline)
+                if(convoPartnerTate ~= nil and mod.dialog.IsSpeakerAvailable(convoPartnerTate)) then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        TateAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 10
+                            
+                        },
+                        me,
+                        convoPartnerTate
+                    )
+                    Sleep(mod.math.random(0.5, 1.2))
+                    canWalkOnSpline = true
+                else
+                    Sleep(mod.math.random(2.1, 4.4))
+                    canWalkOnSpline = true
+                end
+            end
+        }
+
+        nodes.PatrolPointIdle.Anim = Action {
+            function()
+                LookFrom(patrolSpline)
+                Sleep(1)
+                PlayAnimation(LookingAtDistillery)
+                Sleep(mod.math.random(1.2, 2.5))
+                StopAnimation(me)
+                canWalkOnSpline = true
+            end,
+        }
+
+        nodes.PatrolPointIdle.Waiting = Action {
+            function()
+                LookFrom(patrolSpline)
+                Sleep(mod.math.random(3.1, 5.9))
+                PlayAnimation(restAnim)
+                Sleep(mod.math.random(1.2, 2.5))
+                StopAnimation(me)
+                canWalkOnSpline = true
+            end,
+        }
+ 
+            
+            
+                
+    
+        
+    ----------------------EVENT--------------------
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        if e.Event ~= nil and e.Event ~= "" then
+            canWalkOnSpline = false
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+
+        end
+    end
+end
+    }

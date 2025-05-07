@@ -1,0 +1,144 @@
+game.states.WYR_GnomePrisoner_002 = State{function()
+    description = [[Behavior for gnome prisoner (putting coal into furnace)]]
+
+    modules = { "shared.dialog", "shared.math", "shared.util" }
+
+    local atCoal = "S_WYR_GnomePrisoner_002_AtCoal_fe48da37-60f3-4a8d-a101-cb81990fdbd2"
+    local atCoalPos = Entity("S_WYR_GnomePrisoner_002_AtCoal_fe48da37-60f3-4a8d-a101-cb81990fdbd2")
+    local atBurner = "S_WYR_GnomePrisoner_002_AtBurner_4fa33fb9-be9a-4bfa-bb2f-891c0211c01f"
+    local atBurnerPos = Entity("S_WYR_GnomePrisoner_002_AtBurner_4fa33fb9-be9a-4bfa-bb2f-891c0211c01f")
+    local atSit = "S_WYR_Ironhand_InitPos_Prisoner_002_74fa871a-6ed1-4a86-96b6-5f8eccb43fcf"
+    local atSitPos = Entity("S_WYR_Ironhand_InitPos_Prisoner_002_74fa871a-6ed1-4a86-96b6-5f8eccb43fcf")
+    local wanderZone = Entity("S_WYR_GnomePrisoner_WanderZone_d9ad770d-86a4-449e-9c0a-27c9f27d4e3a")
+
+    local dialog = Dialog("GLO_Ironahnd_AD_GnomePrisoner_002_d5d4877f-4e92-9d05-b504-db307d394a11")
+
+    local digDialog1 = Dialog("WYR_Ironhand_WB_DigCoal_01_b5f27671-d4a4-cdc7-55ec-29040249769c")
+    local digSceneTrigger1 = Entity("WYR_Ironhand_WB_Coal_01_SceneTrigger_6ca98063-28c6-4f99-ad31-174a93b5d09a")
+    local digDialog2 = Dialog("WYR_Ironhand_WB_DigCoal_02_43e2ec30-43e3-fadd-eaf7-c29e730518f0")
+    local digSceneTrigger2 = Entity("WYR_Ironhand_WB_Coal_02_SceneTrigger_c211822e-b32c-4879-871a-23a65dd3cb50")
+
+    local choice = {
+        Coal1 = 1,
+        Coal2 = 2,
+        Sit = 3,
+        Wander = 4,
+    }
+    local currentChoice = 1
+
+    nodes.Coal1 = Selector {
+        CanEnter = function()
+            return choice.Coal1 == currentChoice
+        end
+    }
+
+    nodes.Coal1.Dig = Action {
+        function()
+            --LookFrom(atCoalPos)
+            StartTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog", mod.math.random(15.0,25.0), 1)
+            StartBehaviorDialog(digDialog2, digSceneTrigger2.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+            Sleep(0.5)
+            currentChoice = choice.Coal2
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+        end
+    }
+
+    nodes.Coal2 = Selector {
+        CanEnter = function()
+            return choice.Coal2 == currentChoice
+        end
+    }
+
+    nodes.Coal2.Dig = Action {
+        function()
+            --LookFrom(atBurnerPos)
+            StartTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog", mod.math.random(15.0,25.0), 1)
+            StartBehaviorDialog(digDialog1, digSceneTrigger1.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+            Sleep(0.5)
+            if mod.math.CoinToss(0.7) then
+                currentChoice = choice.Sit
+            end
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+        end
+    }
+
+
+    nodes.Sit = Selector {
+        CanEnter = function()
+            return choice.Sit == currentChoice
+        end
+    }
+
+    nodes.Sit.WalkTo = Proxy {
+        game.states.GLO_StandAtTriggerSplit,
+        params = {
+            trigger = atSit,
+            speed = "Walk",
+        },
+        CanEnter = function()
+            return GetDistanceTo(me, atSitPos) > 0.5
+        end
+    }
+
+    nodes.Sit.Sit = Proxy {
+        OnEnter = function()
+            StartTimer(me, "Timer_WYR_GnomePrisoner_StopSitting", mod.math.random(10.0,20.0), 0)
+        end,
+        game.states.Sit,
+        params = {
+            sitOnGroundAsFallback = true,
+        }
+    }
+
+
+    nodes.Wander = Action {
+        CanEnter = function()
+            return choice.Wander == currentChoice
+        end,
+
+        function()
+            local result = Wander(wanderZone, 10.0, MovementSpeed.Stroll, nil, false)
+            if result == error.MovementFailed then
+                DebugText(me, "Failed Wander()")
+                Sleep(1.0)
+            end
+            for i = 1, 5, 1 do
+                DebugText(me, "Listening around")
+                if mod.math.CoinToss(0.2) then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(dialog, {
+                        minDelay = 60.0
+                    }, me)
+                end
+                Sleep(1.0)
+            end
+            if mod.math.CoinToss(0.4) then
+                if mod.math.CoinToss(0.5) then
+                    currentChoice = choice.Coal1
+                else
+                    currentChoice = choice.Sit
+                end
+            end
+        end
+    }
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_GnomePrisoner_StopSitting" then
+            if mod.math.CoinToss(0.5) then
+                currentChoice = choice.Coal1
+            else
+                currentChoice = choice.Wander
+            end
+        elseif ev.TimerName == "Timer_WYR_Ironhand_StopBehaviorDialog" then
+            DebugText(me, "Graceful Stop")
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    end
+end}

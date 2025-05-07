@@ -1,0 +1,86 @@
+game.states.END_Crown_Combat = State{function()
+    
+    local step = 1
+    local turn = 0
+    local turnAD = Dialog("END_BrainBattle_AD_CrownTurn_52b8a6be-38bc-4da6-5d4c-42fe19783a4c")
+    local portalFlag = Flag("END_BrainBattle_State_PortalOpen_d55bc4d7-eabb-1c01-88e4-28e3456bd1c7")
+	local crown = Entity("S_END_Crown_704f1e91-8d56-4772-98d8-54c5d8a6af20")
+
+    self.Valid = function()
+        return me.IsInCombat
+    end
+
+    nodes.Turn = Action{
+        function()
+            if step == 1 then
+                Sleep(0.5)
+                step = 2
+                SetEntityEvent(me, "END_BrainBattle_Turn")
+            elseif step == 2 then
+                StartAutomatedDialog(turnAD, true, me)
+                Sleep(1.2)
+                step = 3
+            elseif step == 3 then
+                SetEntityEvent(me, "END_BrainBattle_CameraTarget")
+                step = 4
+            elseif step == 4 then
+                Sleep(0.5)
+                SetEntityEvent(me, "END_BrainBattle_CastSpell")
+                step = 5
+            elseif step == 5 then
+                Sleep(2)
+                SetEntityEvent(me, "END_BrainBattle_CastSpell2")
+                if CheckRulesetModifier(Guid("HONOUR_STATS_ef0506df-da9f-40e2-903a-1349523c1ae4"), true) and not HasActiveStatus(crown, "END_KARSUSCOMPULSION_CHANNEL_TARGET") and not GetFlag(portalFlag) then
+                    Sleep(0.25)
+                    SetEntityEvent(me, "END_BrainBattle_CastSpell3")
+                    Sleep(3)
+                end
+                step = 6
+            else
+                Sleep(2)
+                EndTurn(me)
+            end
+        end,
+        Valid = function()
+            return me.CanActInCombatTeamTurn and turn == 4
+        end
+    }
+
+    nodes.Turn = Action{
+        function()
+			if(not GetFlag(portalFlag)) then
+				StartAutomatedDialog(turnAD, true, me)
+			end
+			Sleep(0.5)
+            if CheckRulesetModifier(Guid("HONOUR_STATS_ef0506df-da9f-40e2-903a-1349523c1ae4"), true) and not HasActiveStatus(crown, "END_KARSUSCOMPULSION_CHANNEL_TARGET") and not GetFlag(portalFlag) then
+                Sleep(0.25)
+                SetEntityEvent(me, "END_BrainBattle_CastSpell3")
+                Sleep(3)
+            end
+			EndTurn(me)
+        end,
+        Valid = function()
+            return me.CanActInCombatTeamTurn and turn ~= 4
+        end
+    }
+
+
+    nodes.CombatWait = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not me.CanActInCombatTeamTurn
+        end
+    }
+
+    events.TurnEnded = function(e)
+        step = 1
+    end
+
+    events.TurnStarted = function(e)
+        if(me == Entity("S_END_CrownProxy_b06e8326-a034-4480-8652-6a66b3bd7d0a")) then
+            turn = turn + 1
+        end
+    end
+end}

@@ -1,0 +1,267 @@
+game.states.DEN_DruidLeader = State { function ()
+
+    description = [[The main Shadow Druid, has assumed temporary leadership of the Druid Grove in the leader's absence.]]
+
+    modules = { "shared.moveto"}
+
+    -----------------------------------------
+    --Local variables
+    local ledgePoint = Entity([[S_DEN_DruidLeader_LedgePoint_813cd16e-b8d2-4fc3-9ac5-af92889b26b7]])
+    local frescoPoint = Entity([[S_DEN_DruidLeader_FrescoPoint_99daaf98-21c0-47c8-b82f-424fd66399bb]])
+    local roomPoint = Entity([[S_DEN_DruidLeader_RoomPoint_94752ca1-001a-4ef2-87e0-ff4e1c122f95]])
+    local quarterDoor = Entity([[S_DEN_DruidDormitoryDoor_e762551e-ccce-495a-9995-bb7d6b8a592b]])
+    local quarterTrigger = Entity([[S_DEN_ServantsQuarters_SUB_efbaf4c3-6b73-4891-997d-0b9559a76bff]])
+    local frescoAnims = {
+        Animation("CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef"), --replace by CUST_Bored_01?
+        Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+    }
+    local ledgeAnims = {
+        Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7"),
+        Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+    }
+    local roomAnims = {
+        Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7"),
+        Animation("CUST_LookingFar_01_5643e3dc-9631-4dba-b303-128fc29abfa7")
+    }
+    local doFirstAfterSnakeCourt = true
+
+    -----------------------------------------
+    -- Helpers
+    helpers.action.ObserveThings = function(point, anims)
+        DebugText(me, "new action")
+        if mod.moveto.MoveToPoint(point,MovementSpeed.Stroll,me) then
+            LookFrom(point)
+            Sleep(math.random(2, 4))
+            try
+                PlayAnimation(anims[math.random(#anims)],true,false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                Sleep(6)
+            end
+        end
+        Sleep(math.random(2, 4))
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes = Selector {
+        function(nodes)
+            if doFirstAfterSnakeCourt then
+                return nodes.AtLedge
+            else
+                return FindDifferentRandomSelectable(nodes)
+            end
+        end,
+    }
+
+    nodes.AtLedge = Action {
+        OnEnter = function()
+            doFirstAfterSnakeCourt = false
+        end,
+        function()
+            Sleep(5.0)
+            helpers.ObserveThings(ledgePoint, ledgeAnims)
+        end
+    }
+
+    nodes.AtFresco = Action {
+        function()
+            helpers.ObserveThings(frescoPoint, frescoAnims)
+        end
+    }
+
+    nodes.OpenDoor = Action {
+        CanEnter = function()
+            return quarterDoor.Item.IsClosed
+        end,
+        function()
+            if mod.moveto.MoveToPoint(quartersDoor,MovementSpeed.Stroll,me) then
+                if quartersDoor.Item.IsClosed then
+                    try
+                        UseItem(quartersDoor.Item, true, false, true, false)
+                        Sleep(1)
+                    catch e if ls.CheckType(e, error.UseItemFailed) then
+                        DebugText(me,"Debug : OpenDoor failed")
+                        Open(quartersDoor)
+                    end
+                end
+            else
+                Sleep(math.random(2, 4))
+            end
+        end
+    }
+
+    nodes.AtRoom = Action {
+        CanEnter = function()
+            return quarterDoor.Item.IsOpened
+                --and there's anyone in the quarterTrigger --TODO
+        end,
+        function()
+            helpers.ObserveThings(roomPoint, roomAnims)
+        end
+    }
+
+end}
+
+game.states.DEN_DruidLeader_Persuaded = State { function ()
+
+    description = [[The main Shadow Druid, once she was persuaded to not be a shadow druid.]]
+
+    local denouncingOngoingFlag = Flag([[DEN_ShadowDruid_State_DenouncingSceneInProgress_a9e1b188-80a7-4432-86b2-129c7623cb16]])
+    local waitABitAfterCombat = true
+    local pacifiedAD = Dialog([[DEN_ShadowDruid_AD_LeaderPersuaded_b98b215e-817d-369a-f23d-64df5a2504b5]])
+    local trigger = Entity([[S_DEN_PersuadedDruidLeaderPoint_be9f122b-bf67-4381-8dd1-92e4582b2c63]])
+    local rath = Entity([[S_DEN_DruidOpposed_322cf8d2-32ee-453f-987e-f12b32652b5d]])
+    local canAD = true
+
+    nodes.Denouncing = Action {
+        CanEnter = function()
+            return GetFlag(denouncingOngoingFlag)
+        end,
+        function()
+            Sleep(2)
+        end
+    }
+
+    nodes.BreatherAfterCombat = Action {
+        CanEnter = function()
+            return waitABitAfterCombat
+        end,
+        function()
+            Sleep(3)
+            waitABitAfterCombat = false
+        end
+    }
+
+    nodes.AD = Action {
+        CanEnter = function()
+            return canAD
+                and rath.Character.IsDead
+        end,
+        function()
+            StartAutomatedDialog(pacifiedAD, true, kagha, me)
+            Sleep(2)
+        end
+    }
+
+    nodes.StandAtTrigger = Action {
+        function()
+            if not IsInDangerousSurfaceFor(trigger, me.Character) then
+                if GetDistanceTo(me, trigger) > 2.0 then
+                    try
+                        MoveTo(trigger)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(trigger, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(trigger)
+                end
+            else
+                LookAtEntity(trigger, 3.0)
+            end
+            Sleep(2.0)
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+    events.EnteredCombat = function(e)
+        if (e.Entity == me) and GetFlag(denouncingOngoingFlag) then
+            SetUnicastEntityEvent(me,"ClearPeaceReturn")
+        end
+    end
+
+    events.DialogStarted = function(e)
+        if (e.Instance.DialogUUID == pacifiedAD.Guid) then
+            canAD = false
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == pacifiedAD.Guid) then
+            StopTimer(me, "DEN_DruidLeader_PacifiedADTimer")
+            StartTimer(me, "DEN_DruidLeader_PacifiedADTimer", math.random(40,70), 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_DruidLeader_PacifiedADTimer" then
+            canAD = true
+        end
+    end
+
+end}
+
+game.states.DEN_DruidLeader_DenVictory = State { function ()
+
+    description = [[The main Shadow Druid, after the goblin leadership is killed or attack on den is over. Interacts with Halsin when he is nearby.]]
+
+    modules = {"shared.moveto"}
+
+    local talkedWithHalsinFlag = Flag("GLO_Halsin_Event_TalkedWithDruidLeader_b337012e-aabc-3a99-1f27-225ebb185d58")
+    local withHalsinPoint = Entity("S_DEN_AttackDruidLeaderPos_db7954ab-818d-4757-9f47-7d0726186116")
+    local position = Entity("S_CAMP_DruidLeaderPos_902afca8-a922-40ad-bca2-8f4328adaa20")
+    local standAndDrinkAnim = Animation("CUST_Drinking_01_Drink_Wine_Glass_A_3f6ab5b5-6c83-456d-932e-23a260378b6b")
+    local atCelebration = false
+
+    nodes.AtCelebration = Action {
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, true)
+        end,
+        function()
+            if not IsInDangerousSurfaceFor(position, me.Character)
+                and (GetDistanceTo(me, position) > 2.0) then
+                    try
+                        MoveTo(position, MovementSpeed.Stroll, false, false, 0.5, 1.5)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(6.0)
+                    end
+            else
+                Sleep(6.0)
+            end
+            LookFrom(position)
+            PlayAnimation(standAndDrinkAnim, true, false)
+            mod.util.SleepRandom(3.0, 8.0)
+        end,
+        Valid = function()
+            return atCelebration
+        end
+    }
+
+    nodes.Default = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_AttackDruidLeaderPos_db7954ab-818d-4757-9f47-7d0726186116]]
+        },
+        Valid = function()
+            return not GetFlag(talkedWithHalsinFlag)
+        end
+    }
+
+    nodes.AfterHalsin = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_PacifiedDruidLeaderPoint_be9f122b-bf67-4381-8dd1-92e4582b2c63]]
+        },
+        Valid = function()
+            return GetFlag(talkedWithHalsinFlag)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if(e.Event == "CAMP_GoblinHuntCelebration_Teleported") then
+            atCelebration = true
+            Interrupt()
+        elseif(e.Event == "CAMP_GoblinHuntCelebration_Leave") then
+            atCelebration = false
+            Interrupt()
+        end
+    end
+
+    events.FlagSet = function(e)
+        if(e.Flag == "DEN_AttackOnDen_State_DenVictory_71c7f23e-3ff1-c9b8-3ef5-d75fa1b42c8d" and not GetFlag("GLO_AttackOnDen_State_RaidReady_eb361773-da88-dee4-f4c8-a22acae60948")) then
+            mod.moveto.MoveTo(withHalsinPoint,true,3,"Walk","")
+        end
+    end
+
+end}

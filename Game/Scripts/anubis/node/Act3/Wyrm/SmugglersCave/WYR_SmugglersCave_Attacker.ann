@@ -1,0 +1,83 @@
+game.states.WYR_SmugglersCave_Attacker = State{function()
+    description = [[Behavior of attackers (Guild members) in Smuggler's Cave:
+        - after combat they investigate around
+    ]]
+
+    modules = { "shared.moveto" }
+
+    local postCombat = Flag("WYR_SmugglersCave_Event_PostCombat_67b3c231-5dc4-4bb8-9fee-02d7d1074da3")
+
+    local poses = {
+        Entity("S_WYR_Smugglers_poses_000_1527449e-41b9-41a2-877e-7175f2dc9d4b"),
+        Entity("S_WYR_Smugglers_poses_001_857ee5e0-7b12-4df3-afb4-9e79b1536dc2"),
+        Entity("S_WYR_Smugglers_poses_002_23be36c6-990f-45b7-b2ac-531e20dd8bee"),
+        Entity("S_WYR_Smugglers_poses_003_96574b11-5b36-4a51-b113-21b96655fd51"),
+        Entity("S_WYR_Smugglers_InspectPos_000_befba9b3-17c3-418c-b573-132014fb85ad"),
+        Entity("S_WYR_Smugglers_InspectPos_001_c4407890-68e7-48ab-ba0a-1fdc21b5cc8d"),
+        Entity("S_WYR_Smugglers_InspectPos_002_e1f65f7d-6e4d-4caf-91a7-fffa03cf4463"),
+        Entity("S_WYR_Smugglers_InspectPos_003_ef0189b2-c685-4842-9d25-25306f5d39f2"),
+    }
+    local anims = {
+        Animation("CUST_Investigating_LookingAround_01_dfbe749c-d0c2-4f4f-91cf-f1caaec3f3bf"),
+        Animation("CUST_Investigating_LookingAround_02_ab739447-e85f-4fca-b1d4-fb783d61fa9c"),
+        Animation("CUST_Investigating_LookingAround_03_41d0a2ea-f16e-435c-bbf3-a8499b873fd5"),
+    }
+    local selected = 0
+    local failedMoves = 0
+
+    local moveDist = 1.0
+    local maxMoveRetries = 3
+
+
+    nodes.Investigate = Selector{
+        CanEnter = function()
+            return GetFlag(postCombat)
+        end
+    }
+
+    nodes.Investigate.SelectPos = Action{
+        CanEnter = function()
+            return selected == 0 or failedMoves == maxMoveRetries
+        end,
+
+        function()
+            selected = math.random(1, #poses)
+            --DebugText(me, "Selected pos: " .. tostring(selected))
+            failedMoves = 0
+        end
+    }
+
+    nodes.Investigate.MoveTo = Action{
+        CanEnter = function()
+            return GetDistanceTo(me, poses[selected]) > moveDist
+        end,
+
+        function()
+            local moved = mod.moveto.MoveToPoint(poses[selected], MovementSpeed.Walk, me, moveDist)
+            if not moved then
+                failedMoves = failedMoves + 1
+                --DebugText(me, "Failed moves: " .. tostring(failedMoves))
+            else
+                LookFrom(poses[selected])
+            end
+        end
+    }
+
+    nodes.Investigate.Animate = Action{
+        function()
+            try
+                PlayAnimation(anims[math.random(1,3)], true, false)
+            catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                --DebugText(me, "Failed PlayAnimation(investigate)")
+                Sleep(2.0)
+            end
+            selected = 0
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(1.0)
+        end
+    }
+end}

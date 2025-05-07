@@ -1,0 +1,84 @@
+local m = AnubisModule()
+
+m.action.ThrowFireFlask = function(entity, target)
+    if target ~= nil then
+        try
+            DebugText(entity, tostring(target))
+            UseSpell("Projectile_PLA_FakeAlchemistFire", target, nil, nil, nil, true, true, true)
+            SetEntityEvent(entity, "PLA_ZhentShipment_FireFlaskThrown")
+        catch e if ls.CheckType(e, error.UseSpellFailed) then
+            DebugText(entity, tostring(e))
+        end
+    end
+end
+
+m.action.LookADAnim = function(entity, lookAt, ad, anim, waitADforCompletion, sleepAfterLookAt)
+    if lookAt ~= nil and entity.Visible then
+        LookAtEntity(lookAt, 0.0)
+        Sleep(sleepAfterLookAt or 0.5)
+    end
+    if anim ~= nil then
+        try
+            PlayAnimation(anim, false, false)
+        catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+            DebugText(entity, "PlayAnimationFailed")
+        end
+        Sleep(0.2)
+    end
+    if ad ~= nil and not IsInDialog(entity, false) and entity.Visible then
+        StartAutomatedDialog(ad, waitADforCompletion, entity)
+    end
+end
+
+m.FindClosestEntityTo = function(target, entitiesTable, maxDistance, excludeEntity)
+    local index = -1
+    if #entitiesTable > 0 then
+        local minDist = 2 * maxDistance
+        for i, entity in ipairs(entitiesTable) do
+            if entity.OnStage and excludeEntity ~= entity then
+                local distance = GetDistanceTo(target, entity)
+                if distance < minDist and distance < maxDistance and HasLineOfSight(target, entity) then
+                    minDist = distance
+                    index = i
+                end
+            end
+        end
+    end
+    return index
+end
+
+m.FindRandomEntityTo = function(target, entitiesTable, maxDistance, excludeEntity)
+    local index = -1
+    if #entitiesTable > 0 then
+        local entitiesWithinRange = {}
+        for i, entity in ipairs(entitiesTable) do
+            if entity.OnStage and excludeEntity ~= entity and GetDistanceTo(target, entity) <= maxDistance then
+                table.insert(entitiesWithinRange, entity)
+            end
+        end
+        if #entitiesWithinRange > 0 then
+            index = math.random(1, #entitiesWithinRange)
+        end
+    end
+    return index
+end
+
+m.IsGnoll = function(entity)
+    return IsTagged(entity, Tag("GNOLL_1350164f-85e1-42f9-89c9-eb0c6703e890"))
+end
+
+m.RemoveAbstraction = function(target)
+    --local abstractedStatus = "DISTRACTED"
+    --if HasAppliedStatus(target, abstractedStatus) then
+    --    RemoveStatus(target, abstractedStatus)
+    --end
+end
+
+m.ApplyAbstraction = function(target)
+    --local abstractedStatus = "DISTRACTED"
+    --if not HasAppliedStatus(target, abstractedStatus) then
+    --    ApplyStatus(target, abstractedStatus, true, -1)
+    --end
+end
+
+return m

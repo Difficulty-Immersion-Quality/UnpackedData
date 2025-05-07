@@ -1,0 +1,284 @@
+game.states.UND_SharFort_Turret = State{function()
+    description = [[State for a turret in the Shar Fort, Underdark (copy of Arcane Turret)]]
+
+    modules = { "shared.math" }
+
+    params.DistanceSeeking = { type = EParamType.Number, default = 30.0,
+        help = [[Distance of activation for the turret]]}
+
+    params.DistanceShooting = { type = EParamType.Number, default = 20.0,
+        help = [[Distance of shooting for the turret]]}
+
+    params.ReloadTime = { type = EParamType.Number, default = 0.5,
+        help = [[Reload time controlling rate of fire]]}
+
+    params.PrepareEffectTime = { type = EParamType.Number, default = 0.5,
+        help = [[Time for prepare vfx befire firing.]]}
+
+    params.NumShotsInCombat = { type = EParamType.Number, default = 3,
+        help = [[Number of shots made per turn in combat]]}
+
+    params.ActivationDelay = {type = EParamType.Bool, default = false,
+        help = [[Delay the activation of the turret equal to its ReloadTime (Min: 0.5)]]}
+
+    params.ShootingOffset = { type = EParamType.Vector3, default = Vector3(0,0,0),
+        help = [[Offset of the projectile shooting position]]}
+
+    params.BlindShotsNum = { type = EParamType.Number, default = 3,
+        help = [[Number of quick shots made when blinded]]}
+
+    params.BlindedReloadTime = { type = EParamType.Number, default = 0.5,
+        help = [[Reload time controlling rate of fire when blinded]]}
+
+    local reloadTime = 0.5
+    local characterTarget = nil
+    local acquireTargetZone = Entity("S_UND_SharFort_Turret_AcquireTargetZone_97c614a1-3943-41a2-b011-2936f3494916")
+    local shotsCount = 0
+    local fxPrepareEffect = nil
+    local prepareEffectHandle = nil
+
+    local isBlinded = false
+    local underSussur = false
+    local blindedShotsFired = false
+    local blindedShotsCount = 0
+    local canShootBlindly = false
+    local isTurretActive = true
+    
+    self.OnInit = function()
+        if params.ReloadTime > 0.5 then
+            reloadTime = params.ReloadTime
+        end
+        if fxPrepareEffect == nil then
+            fxPrepareEffect = PrepareEffect("VFX_Spells_Prepare_Arcane_Damage_Radiant_UND_SharFort_Turret_01_84c8aa31-05fb-a0be-5875-67f905a077da")
+        end
+    end
+
+    -- Events
+
+    events.OnShutdown = function()
+        helpers.ClearFX()
+    end
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me then
+            if ev.Event == "ReloadTime" then
+                reloadTime = reloadTime + 0.5
+                if reloadTime > 3.0 then
+                    reloadTime = 0.5
+                end
+            elseif ev.Event == "UND_SharFort_Trap_On" then
+                isTurretActive = true
+            elseif ev.Event == "UND_SharFort_Trap_Off" then
+                isTurretActive = false
+            elseif ev.Event == "UND_SharFort_Trap_SussurApplied" then
+                underSussur = true
+            elseif ev.Event == "UND_SharFort_Trap_SussurRemoved" then
+                underSussur = false
+            elseif ev.Event == "UND_SharFort_Trap_Blinded" and not isBlinded then
+                characterTarget = nil
+                isBlinded = true
+                canShootBlindly = false
+                blindedShotsFired = false
+                blindedShotsCount = 0
+            elseif ev.Event == "UND_SharFort_Trap_BlindnessEnded" and isBlinded then
+                isBlinded = false
+            end
+        end
+    end
+
+    events.TurnStarted = function(ev)
+        shotsCount = 0
+    end
+
+    -- Helpers
+
+    helpers.FindTarget = function()
+        local hidingFlag = Flag("GLO_State_Hiding_ad57af70-2300-4c49-b713-ba0bd8e77ea3")
+        local returnTarget = nil
+        local characters = GetActiveCharacters(me, params.DistanceSeeking)
+        if #characters > 0 then
+            local dist_Min = 2 * params.DistanceSeeking
+            for i, character in ipairs(characters) do
+                local dist_ToChar = GetDistanceTo(me, character)
+                local hasLineOfSight = HasLineOfSight(me, character)
+                local canSee = CanSee(me, character)
+                if IsInTrigger(character,acquireTargetZone.Trigger) then
+                    if dist_ToChar < dist_Min and character.OnStage and not character.Character.IsDead and canSee then
+                        dist_Min = dist_ToChar
+                        returnTarget = character
+                    end
+                end
+            end
+        end
+        return returnTarget
+    end
+
+    helpers.ClearFX = function()
+        if prepareEffectHandle ~= nil then
+            StopEffect(prepareEffectHandle)
+            prepareEffectHandle = nil
+        end
+    end
+
+    helpers.IsInTurnBasedModeOrCombat = function()
+        return me.IsInTurnBasedMode or me.IsInCombat
+    end
+
+    -- Nodes
+
+    ---- Blinded
+
+    nodes.Selector_Blinded = Selector{
+        Valid = function()
+            return isBlinded
+        end
+    }
+
+    nodes.Selector_Blinded.Waiting = Action{
+        function()
+            Sleep(1.0)
+            canShootBlindly = true
+        end,
+        Valid = function()
+            return not canShootBlindly
+        end
+    }
+
+    nodes.Selector_Blinded.Shooting = Action{
+        function()
+            if params.ActivationDelay then
+                Sleep(params.BlindedReloadTime)
+            end
+            ShootProjectileAt("Projectile_UND_SharFort_Turret", me, params.ShootingOffset, TriggerGetRandomPosition(acquireTargetZone.Trigger))
+
+            if not params.ActivationDelay then
+                Sleep(params.BlindedReloadTime)
+            end
+
+            if not blindedShotsFired then
+                blindedShotsCount = blindedShotsCount + 1
+                if blindedShotsCount >= params.BlindShotsNum then
+                    blindedShotsFired = true
+                    if helpers.IsInTurnBasedModeOrCombat() then
+                        EndTurn(me)
+                    end
+                end
+            end
+        end,
+        Valid = function()
+            return not blindedShotsFired and canShootBlindly
+        end,
+        OnLeave = function()
+            helpers.ClearFX()
+        end
+    }
+
+    nodes.Selector_Blinded.Inactive = Action{
+        function()
+            WaitForInterrupt()                        
+        end,
+        Valid = function()
+            return blindedShotsFired
+        end
+    }
+
+    ---- Active
+
+    nodes.Selector_Active = Selector{
+        Valid = function()
+            return 
+                isTurretActive and 
+                not underSussur and 
+                (not helpers.IsInTurnBasedModeOrCombat() or me.CanActInCombatTeamTurn)
+        end
+    }
+
+    nodes.Selector_Active.Selector_Guarding = Selector{
+        Valid = function()
+            return not isBlinded
+        end
+    }
+
+    nodes.Selector_Active.Selector_Guarding.Seeking = Action{
+        function()
+            Sleep(1.0)
+            characterTarget = helpers.FindTarget()
+            if characterTarget == nil and helpers.IsInTurnBasedModeOrCombat() then
+                EndTurn(me)
+            end
+        end,
+        Valid = function()
+            return characterTarget == nil or GetDistance2DTo(me, characterTarget) > params.DistanceSeeking
+        end
+    }
+
+    nodes.Selector_Active.Selector_Guarding.TargetLocked = Selector{
+        Valid = function()
+            return characterTarget ~= nil and GetDistance2DTo(me, characterTarget) <= params.DistanceSeeking
+        end
+    }
+
+    nodes.Selector_Active.Selector_Guarding.TargetLocked.Shooting = Action{
+        function()
+            -- Sleep before shooting if we want a delay before the turret activates
+            -- Useful for alternating turret shots
+            if params.ActivationDelay and not helpers.IsInTurnBasedModeOrCombat() then
+                Sleep(reloadTime-params.PrepareEffectTime)
+            end
+
+            -- Verify that the turret has a valid target before shooting
+            characterTarget = helpers.FindTarget()  
+            if characterTarget then
+                helpers.ClearFX()
+                prepareEffectHandle = PlayEffectAt(fxPrepareEffect, me)
+                Sleep(params.PrepareEffectTime)
+                ShootProjectileAt("Projectile_UND_SharFort_Turret", me, params.ShootingOffset, characterTarget)
+
+                if not params.ActivationDelay then
+                    Sleep(reloadTime)
+                end
+
+                if me.IsInTurnBasedMode or me.IsInCombat then
+                    shotsCount = shotsCount + 1
+                    if shotsCount >= params.NumShotsInCombat then
+                        Sleep(1)
+                        EndTurn(me)
+                    end
+                end
+            elseif helpers.IsInTurnBasedModeOrCombat() then
+                EndTurn(me)
+            end        
+            characterTarget = nil
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, characterTarget) <= params.DistanceShooting
+        end,
+        OnLeave = function()
+            helpers.ClearFX()
+        end
+    }
+
+    nodes.Action_SkipTurn = Action{
+        function()
+            EndTurn(me)
+            Sleep(1)         
+        end,
+        Valid = function()
+            return 
+                (helpers.IsInTurnBasedModeOrCombat() and me.CanActInCombatTeamTurn) and       -- in turn based, its turn, inactive
+                (not isTurretActive or underSussur)
+        end
+    }
+
+    nodes.Action_Inactive = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return
+                (helpers.IsInTurnBasedModeOrCombat() and not me.CanActInCombatTeamTurn) or          -- in turn based, not its turn, OR
+                (not helpers.IsInTurnBasedModeOrCombat() and (not isTurretActive or underSussur))   -- not turn based and disabled
+        end
+    }
+end
+}

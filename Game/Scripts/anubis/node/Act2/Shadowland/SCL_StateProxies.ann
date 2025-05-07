@@ -1,0 +1,46 @@
+game.states.SCL_LevelState = State { function ()
+
+    description = [[Contains a proxy for each state in SCL to avoid repeating checks.]]
+    
+    params.Default = { type = EParamType.State,
+        required = true,
+        help = [[State to be active only when the curse is unmodified.]]
+    }
+    params.CurseLifted = { type = EParamType.State,
+        required = false, default = nil,
+        help = [[State to be active only when the curse has been lifted.]]
+    }
+    local fl_default = Flag("SCL_ShadowCurse_State_Default_13a8d7f3-9942-4c8c-9428-b4af0b433994")
+    local fl_curseLifted = Flag("SCL_ShadowCurse_State_CurseLifted_af78af4a-48b2-46a8-be6f-f25dfa579471")
+    local active = false
+    
+    self.OnEnter = function()
+        active = true
+    end
+    self.OnLeave = function()
+        active = false
+    end
+    events.FlagSet = function(e)
+        if active and (e.Flag == fl_default.Guid or e.Flag == fl_curseLifted.Guid) then 
+            Interrupt()
+        end
+    end
+
+    nodes.Default = Proxy {
+        params.Default,
+        Valid = function()
+            return GetFlag(fl_default)
+        end
+    }
+
+    nodes.CurseLifted = Proxy {
+        params.CurseLifted,
+        Valid = function()
+            return GetFlag(fl_curseLifted)
+        end
+    }
+
+    nodes.InactiveState = Proxy {
+        game.states.Dummy
+    }
+end}

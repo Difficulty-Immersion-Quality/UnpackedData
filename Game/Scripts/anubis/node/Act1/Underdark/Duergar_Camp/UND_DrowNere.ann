@@ -1,0 +1,61 @@
+game.states.UND_DrowNere = State{function()
+    description = [[Behaviour for the Drow Nere, the trapped leader in the Duergar Camp]]
+
+    params.homeTrigger = {type = EParamType.String, help=[[
+        The trigger at which the character stands.
+    ]]}
+    
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is destroyed.
+    ]]}
+
+    local tr_homeTrigger
+    local tr_caveInTrigger
+    local tr_lookAt
+    local flag_CaveInCleared = Flag("UND_DuergarCamp_State_CaveInCleared_e0d8a48b-e0cf-4cc8-96bc-b637b79ce9bd")
+    local flag_SidedDrow = Flag("UND_DuergarCamp_State_SidedDrow_9c15716b-2e73-3bde-7e1c-8580aa4b1850")
+    local flag_SidedLoyal = Flag("UND_DuergarCamp_State_SidedLoyal_74c05609-77b6-4f62-b9e0-9bcb24908d4b")
+
+    self.OnInit = function()
+        tr_homeTrigger = FindEntity(params.homeTrigger)
+        tr_caveInTrigger = FindEntity(params.CaveInPosition)
+        tr_lookAt = FindEntity("S_UND_TheDrowNere_LookAtTrigger_4670dfeb-78c0-40b4-a426-31e5d226f977")
+    end
+
+    nodes.State_PostConfrontation = Action {
+        function()
+            try
+                Wander(3.0,4.0, MovementSpeed.Walk,tr_caveInTrigger)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(tr_lookAt, 3.0)
+                Sleep(2.0)
+            end
+            LookAtEntity(tr_lookAt, 3.0)
+            Sleep(8.0)
+        end,
+        Valid = function()
+            return GetFlag(flag_SidedDrow) or GetFlag(flag_SidedLoyal)
+        end
+    }
+
+    nodes.State_CaveInCleared = Proxy {
+        game.states.UND_DuergarCamp_CaveInCleared,
+        params = {CaveInPosition = params.CaveInPosition},
+        Valid = function()
+            return GetFlag(flag_CaveInCleared)
+        end
+    }
+
+    nodes.State_Trapped = Action {
+        function()
+            try
+                Wander(2.0,1.0, MovementSpeed.Walk,tr_homeTrigger)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(tr_homeTrigger, 3.0)
+                Sleep(2.0)
+            end
+            LookFrom(tr_homeTrigger)
+            Sleep(2.0)
+        end
+    }
+end}

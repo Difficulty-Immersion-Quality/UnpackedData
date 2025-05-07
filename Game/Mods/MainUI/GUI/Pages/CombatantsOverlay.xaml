@@ -1,0 +1,403 @@
+<ls:UIWidget x:Name="CombatantsOverlay"
+             ls:UIWidget.ContextName="Combatants"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+             Template="{StaticResource Hud.Root}" mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance {x:Type ls:DCCombatants}, IsDesignTimeCreatable=True}"
+             d:DesignHeight="2160" d:DesignWidth="3840" Tag="{Binding Path=MaxVisibleIconsAmount, Converter={StaticResource MultiplierConverter}, ConverterParameter=0.11}">
+    <ls:UIWidget.Resources>
+        <ResourceDictionary>
+            <System:Double x:Key="SingleIconOffset">99</System:Double>
+        </ResourceDictionary>
+    </ls:UIWidget.Resources>
+
+    <ls:UIWidget.ContentTemplate>
+        <DataTemplate>
+            <Border x:Name="CombatState"  Tag="NoCombat">
+               
+                <StackPanel x:Name="RootPanel" VerticalAlignment="Top" HorizontalAlignment="Center" SnapsToDevicePixels="True" Orientation="Vertical"
+                Margin="-6,0" RenderTransformOrigin="0.5,0.3" Visibility="Collapsed">
+                    <StackPanel.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform ScaleX="{StaticResource CurrentScaleFactor}" ScaleY="{StaticResource CurrentScaleFactor}"/>
+                            <SkewTransform/>
+                            <RotateTransform/>
+                            <TranslateTransform/>
+                        </TransformGroup>
+                    </StackPanel.RenderTransform>
+                    <Border x:Name="CombatantsListContainer" Margin="0,-180,0,0" Height="600" VerticalAlignment="Top">
+                        <ListBox x:Name="CombatantsList" ItemsSource="{Binding Combatants}" AlternationCount="{Binding Combatants.Count}"  VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel">
+                            <b:Interaction.Behaviors>
+                                <ls:WidgetDataConnectionBehavior/>
+                            </b:Interaction.Behaviors>
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.Template>
+                                <ControlTemplate TargetType="ListBox">
+                                    <Grid x:Name="ControlsContainer" Tag="Splitted">
+                                        <Grid.Resources>
+                                            <Storyboard x:Key="LeftScrollOnHold" BeginTime="0:0:0.05">
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LeftScrollBehavior" Storyboard.TargetProperty="Offset">
+                                                    <LinearDoubleKeyFrame KeyTime="0:0:0.15" Value="-198"/> <!--2*99 aka 2 items-->
+                                                </DoubleAnimationUsingKeyFrames>
+                                            </Storyboard>
+
+                                            <Storyboard x:Key="RightScrollOnHold" BeginTime="0:0:0.05">
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RightScrollBehavior" Storyboard.TargetProperty="Offset">
+                                                    <LinearDoubleKeyFrame KeyTime="0:0:0.15" Value="198"/>
+                                                </DoubleAnimationUsingKeyFrames>
+                                            </Storyboard>
+
+                                        </Grid.Resources>
+
+                                        <Image x:Name="SideDecorLeft" Source="{StaticResource CmbtSideDecorLeftImg}"
+                                   Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-137,-70,0,0" RenderTransformOrigin="0.5, 0.5"/>
+                                        <Border ls:TutorialProperties.TargetID="TUT_Combat" ls:TutorialProperties.TargetStep="1" ls:TutorialProperties.ModalType="Top" ls:TutorialProperties.Padding="{StaticResource TutorialPadding}">
+                                            <ls:LSScrollViewer x:Name="CombatantsScroll" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden" LastElementMaxOffset="90" HorizontalScrollRateToLastElement="0" Background="{x:Null}" ScrollToIndex="{Binding ElementName=CombatantsOverlay,Path=DataContext.FirstActiveIndex}" ScrollToIndexLast="{Binding ElementName=CombatantsOverlay,Path=DataContext.LastActiveIndex}" ScrollElementWidth="{StaticResource SingleIconOffset}" >
+                                                <ls:LSScrollViewer.Resources>
+                                                    <System:Double x:Key="PixelScrollTime">0.01</System:Double>
+                                                </ls:LSScrollViewer.Resources>
+                                                <ls:LSScrollViewer.Tag>
+                                                    <Binding Path="HorizontalDeltaOffset" ElementName="CombatantsScroll" Converter="{StaticResource MultiplierConverter}"
+                                             ConverterParameter="{StaticResource PixelScrollTime}"/>
+                                                </ls:LSScrollViewer.Tag>
+                                                <b:Interaction.Triggers>
+                                                    <b:EventTrigger EventName="TargetPositionChanged">
+                                                        <b:ControlStoryboardAction>
+                                                            <b:ControlStoryboardAction.Storyboard>
+                                                                <Storyboard x:Name="ScrollToTargetAnimation">
+                                                                    <DoubleAnimation Storyboard.TargetName="CombatantsScroll" Storyboard.TargetProperty="HorizontalScrollOffset"
+                                                             From="{Binding Path=HorizontalOffset, ElementName=CombatantsScroll}"
+                                                             To="{Binding Path=TargetPosition, ElementName=CombatantsScroll}"
+                                                             Duration="{Binding Path=Tag, ElementName=CombatantsScroll}"/>
+                                                                </Storyboard>
+                                                            </b:ControlStoryboardAction.Storyboard>
+                                                        </b:ControlStoryboardAction>
+                                                    </b:EventTrigger>
+                                                    <b:EventTrigger EventName="Unloaded">
+                                                        <b:ControlStoryboardAction Storyboard="{Binding ElementName=ScrollToTargetAnimation}" ControlStoryboardOption="Stop" />
+                                                    </b:EventTrigger>
+                                               </b:Interaction.Triggers>
+
+                                                <ItemsPresenter x:Name="ItemsPresenterTest" ls:TutorialProperties.TargetID="TUT_SharedInitiative" ls:TutorialProperties.ModalType="Top" ls:TutorialProperties.Padding="{StaticResource TutorialPadding}"/>
+
+                                                <ls:LSScrollViewer.Triggers>
+                                                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                                        <BeginStoryboard x:Name="UILoading">
+                                                            <Storyboard TargetName="CombatantsScroll" Duration="0:0:1" FillBehavior="Stop" BeginTime="0:0:0.1">
+                                                                <Int32AnimationUsingKeyFrames Storyboard.TargetProperty="ScrollToIndexLast">
+                                                                    <DiscreteInt32KeyFrame KeyTime="00:00:00.00" Value="-1"/>
+                                                                </Int32AnimationUsingKeyFrames>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </EventTrigger>
+                                                </ls:LSScrollViewer.Triggers>
+                                            </ls:LSScrollViewer>
+                                        </Border>
+                                        <Image x:Name="SideDecorRight" Source="{StaticResource CmbtSideDecorRightImg}"
+                                   Stretch="None" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="-4,-70,-136,0" RenderTransformOrigin="0.5, 0.5"/>
+
+                                        <ls:LSButton x:Name="LeftScrollButton" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-60,215,0,0" Panel.ZIndex="1">
+                                            <b:Interaction.Behaviors>
+                                                <ls:ScrollBehavior x:Name="LeftScrollBehavior" ScrollViewer="{Binding ElementName=CombatantsScroll}" Offset="-98" ScrollRate="5"/>
+                                            </b:Interaction.Behaviors>
+                                            <b:Interaction.Triggers>
+                                                <b:EventTrigger EventName="LSButtonPressed">
+                                                    <b:ControlStoryboardAction Storyboard="{StaticResource LeftScrollOnHold}" ControlStoryboardOption="Play"/>
+                                                </b:EventTrigger>
+                                                <b:EventTrigger EventName="LSButtonReleased">
+                                                    <b:ControlStoryboardAction Storyboard="{StaticResource LeftScrollOnHold}" ControlStoryboardOption="Stop"/>
+                                                    <b:ChangePropertyAction TargetName="CombatantsScroll" PropertyName="HorizontalAutoScrollRate" Value="0"/>
+                                                </b:EventTrigger>
+                                                <b:EventTrigger EventName="MouseLeave">
+                                                    <b:ControlStoryboardAction Storyboard="{StaticResource LeftScrollOnHold}" ControlStoryboardOption="Stop"/>
+                                                    <b:ChangePropertyAction TargetName="CombatantsScroll" PropertyName="HorizontalAutoScrollRate" Value="0"/>
+                                                </b:EventTrigger>
+                                                <b:StoryboardCompletedTrigger Storyboard="{StaticResource LeftScrollOnHold}">
+                                                    <b:ChangePropertyAction TargetName="CombatantsScroll" PropertyName="HorizontalAutoScrollRate" Value="-300"/>
+                                                </b:StoryboardCompletedTrigger>
+                                                <b:EventTrigger EventName="Unloaded">
+                                                    <b:ControlStoryboardAction Storyboard="{StaticResource LeftScrollOnHold}" ControlStoryboardOption="Stop" />
+                                                </b:EventTrigger>
+                                            </b:Interaction.Triggers>
+                                            <ls:LSButton.Template>
+                                                <ControlTemplate>
+                                                    <Grid Width="50" Height="50" Background="Transparent" Margin="10, 0">
+                                                        <Image x:Name="LeftButtonBackground" Source="pack://application:,,,/Core;component/Assets/Combatants/btn_small_round_d.png"
+                                                   Stretch="None"/>
+                                                        <Image x:Name="LeftButtonArrow" Source="pack://application:,,,/Core;component/Assets/Combatants/ico_arrow_d.png"
+                                                   Stretch="None" RenderTransformOrigin="0.5, 0.5">
+                                                            <Image.RenderTransform>
+                                                                <RotateTransform Angle="180"/>
+                                                            </Image.RenderTransform>
+                                                        </Image>
+                                                    </Grid>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="LeftButtonBackground" Property="Source" Value="pack://application:,,,/Core;component/Assets/Combatants/btn_small_round_h.png"/>
+                                                            <Setter TargetName="LeftButtonArrow" Property="Source" Value="pack://application:,,,/Core;component/Assets/Combatants/ico_arrow_h.png"/>
+                                                        </Trigger>
+                                                        <DataTrigger Binding="{Binding ElementName=LeftCounter, Path=Tag, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="False">
+                                                            <Setter TargetName="LeftButtonBackground" Property="Source" Value="pack://application:,,,/Core;component/Assets/Combatants/btn_small_round_disabled.png"/>
+                                                            <Setter TargetName="LeftButtonArrow" Property="Source" Value="pack://application:,,,/Core;component/Assets/Combatants/ico_arrow_disabled.png"/>
+                                                        </DataTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </ls:LSButton.Template>
+                                        </ls:LSButton>
+
+                                        <ls:LSButton x:Name="RightScrollButton" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,215,-65,0" Panel.ZIndex="1">
+                                            <b:Interaction.Behaviors>
+                                                <ls:ScrollBehavior x:Name="RightScrollBehavior" ScrollViewer="{Binding ElementName=CombatantsScroll}" Offset="98" ScrollRate="5"/>
+                                            </b:Interaction.Behaviors>
+                                            <b:Interaction.Triggers>
+                                                <b:EventTrigger EventName="LSButtonPressed">
+                                                    <b:ControlStoryboardAction Storyboard="{StaticResource RightScrollOnHold}" ControlStoryboardOption="Play"/>
+                                                </b:EventTrigger>
+                                                <b:EventTrigger EventName="LSButtonReleased">
+                                                    <b:ControlStoryboardAction Storyboard="{StaticResource RightScrollOnHold}" ControlStoryboardOption="Stop"/>
+                                                    <b:ChangePropertyAction TargetName="CombatantsScroll" PropertyName="HorizontalAutoScrollRate" Value="0"/>
+                                                </b:EventTrigger>
+                                                <b:EventTrigger EventName="MouseLeave">
+                                                    <b:ControlStoryboardAction Storyboard="{StaticResource RightScrollOnHold}" ControlStoryboardOption="Stop"/>
+                                                    <b:ChangePropertyAction TargetName="CombatantsScroll" PropertyName="HorizontalAutoScrollRate" Value="0"/>
+                                                </b:EventTrigger>
+                                                <b:StoryboardCompletedTrigger Storyboard="{StaticResource RightScrollOnHold}">
+                                                    <b:ChangePropertyAction TargetName="CombatantsScroll" PropertyName="HorizontalAutoScrollRate" Value="300"/>
+                                                </b:StoryboardCompletedTrigger>
+                                                <b:EventTrigger EventName="Unloaded">
+                                                    <b:ControlStoryboardAction Storyboard="{StaticResource RightScrollOnHold}" ControlStoryboardOption="Stop" />
+                                                </b:EventTrigger>
+                                            </b:Interaction.Triggers>
+                                            <ls:LSButton.Template>
+                                                <ControlTemplate>
+                                                    <Grid Width="50" Height="50" Background="Transparent" Margin="0, 0, 14, 0">
+                                                        <Image x:Name="RightButtonBackground" Source="pack://application:,,,/Core;component/Assets/Combatants/btn_small_round_d.png"
+                                                   Stretch="None"/>
+                                                        <Image x:Name="RightButtonArrow" Source="pack://application:,,,/Core;component/Assets/Combatants/ico_arrow_d.png"
+                                                   Stretch="None"/>
+                                                    </Grid>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="RightButtonBackground" Property="Source"
+                                                        Value="pack://application:,,,/Core;component/Assets/Combatants/btn_small_round_h.png"/>
+                                                            <Setter TargetName="RightButtonArrow" Property="Source" 
+                                                        Value="pack://application:,,,/Core;component/Assets/Combatants/ico_arrow_h.png"/>
+                                                        </Trigger>
+                                                        <DataTrigger Binding="{Binding ElementName=RightCounter, Path=Tag, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}"
+                                                         Value="False">
+                                                            <Setter TargetName="RightButtonBackground" Property="Source"
+                                                        Value="pack://application:,,,/Core;component/Assets/Combatants/btn_small_round_disabled.png"/>
+                                                            <Setter TargetName="RightButtonArrow" Property="Source" 
+                                                        Value="pack://application:,,,/Core;component/Assets/Combatants/ico_arrow_disabled.png"/>
+                                                        </DataTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </ls:LSButton.Template>
+                                            <ls:LSButton.Tag>
+                                                <MultiBinding Converter="{StaticResource AddMultipleConverter}">
+                                                    <Binding Path="HorizontalOffset" ElementName="CombatantsScroll" Converter="{StaticResource MultiplierConverter}" ConverterParameter="-1"/>
+                                                    <Binding Path="ScrollableWidth" ElementName="CombatantsScroll"/>
+                                                </MultiBinding>
+                                            </ls:LSButton.Tag>
+                                        </ls:LSButton>
+
+                                        <Grid x:Name="LeftCounter" HorizontalAlignment="Left" Panel.ZIndex="0" Margin="-55, -30, 0, 0" Tag="{Binding ElementName=CombatantsScroll, Path=HorizontalOffset, 
+                                       Converter={StaticResource DivideAndRoundConverter}, ConverterParameter={StaticResource SingleIconOffset}}"
+                                          Visibility="{Binding RelativeSource={RelativeSource Self}, Path=Tag, Converter={StaticResource CountToVisibilityConverter}}">
+                                            <Image x:Name="LeftCounterBgImage" Source="{StaticResource OverflowNumberBg}" Stretch="None"/>
+                                            <TextBlock x:Name="LeftCounterText" Margin="-6,13" TextAlignment="Center" HorizontalAlignment="Left" Width="75" FontSize="29" VerticalAlignment="Center"
+                                           Text="{Binding ElementName=LeftCounter, Path=Tag, StringFormat='+{0}'}"/>
+                                        </Grid>
+                                        <Grid x:Name="RightCounter" HorizontalAlignment="Right" Panel.ZIndex="0" Margin="0, -30, -60, 0" Tag="{Binding ElementName=RightScrollButton, Path=Tag, 
+                                       Converter={StaticResource DivideAndRoundConverter}, ConverterParameter={StaticResource SingleIconOffset}}"
+                                  Visibility="{Binding RelativeSource={RelativeSource Self}, Path=Tag, Converter={StaticResource CountToVisibilityConverter}}">
+                                            <Image x:Name="RightCounterBgImage" Source="{StaticResource OverflowNumberBg}" Stretch="None"/>
+                                            <TextBlock x:Name="RightCounterText" Margin="-6,13" TextAlignment="Center" HorizontalAlignment="Left" Width="75" FontSize="29" VerticalAlignment="Center"
+                                           Text="{Binding ElementName=RightCounter, Path=Tag, StringFormat='+{0}'}"/>
+                                        </Grid>
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding Layout}" Value="Common">
+                                            <Setter TargetName="ControlsContainer" Property="Tag" Value="NotSplitted"/>
+                                        </DataTrigger>
+
+                                        <DataTrigger Binding="{Binding Data.UIInputMethod}" Value="Controller">
+                                            <Setter TargetName="RightScrollButton" Property="Visibility" Value="Hidden"/>
+                                            <Setter TargetName="LeftScrollButton" Property="Visibility" Value="Hidden"/>
+                                            <Setter TargetName="RightCounter" Property="Margin" Value="0, 0, -87, 78"/>
+                                            <Setter TargetName="LeftCounter" Property="Margin" Value="-82, 0, 0, 78"/>
+                                            <Setter TargetName="SideDecorRight" Property="Source" Value="{StaticResource CombatOrderSideDecor_c}"/>
+                                            <Setter TargetName="SideDecorLeft" Property="Source" Value="{StaticResource CombatOrderSideDecor_c}"/>
+                                            <Setter TargetName="SideDecorLeft" Property="RenderTransform">
+                                                <Setter.Value>
+                                                    <ScaleTransform ScaleX="-1"/>
+                                                </Setter.Value>
+                                            </Setter>
+                                            <Setter TargetName="LeftCounterBgImage" Property="Source" Value="{StaticResource CounterBackground_c}"/>
+                                            <Setter TargetName="RightCounterBgImage" Property="Source" Value="{StaticResource CounterBackground_c}"/>
+                                            <Setter TargetName="LeftCounterText" Property="Margin" Value="-2, 13"/>
+                                            <Setter TargetName="RightCounterText" Property="Margin" Value="-2, 13"/>
+                                            <Setter TargetName="LeftCounterText" Property="FontSize" Value="31"/>
+                                            <Setter TargetName="RightCounterText" Property="FontSize" Value="31"/>
+                                            <Setter TargetName="LeftCounterText" Property="FontWeight" Value="Bold"/>
+                                            <Setter TargetName="RightCounterText" Property="FontWeight" Value="Bold"/>
+                                            <Setter TargetName="CombatantsScroll" Property="ScrollElementWidth" Value="132"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCombatantListOverflowed}" Value="False">
+                                            <Setter TargetName="RightScrollButton" Property="Visibility" Value="Hidden"/>
+                                            <Setter TargetName="LeftScrollButton" Property="Visibility" Value="Hidden"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCombatantListOverflowed}" Value="True">
+                                            <Setter TargetName="CombatantsScroll" Property="Width">
+                                                <Setter.Value>
+                                                    <MultiBinding Converter="{StaticResource AddMultipleConverter}">
+                                                        <Binding Source="{StaticResource SideDecorOffset}"/>
+                                                        <Binding Path="MaxVisibleIconsAmount" Converter="{StaticResource MultiplierConverter}" ConverterParameter="106"/>
+                                                        <Binding Path="ActiveCombatantsCount" Converter="{StaticResource MultiplierConverter}" ConverterParameter="25"/>
+                                                    </MultiBinding>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </DataTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ListBox.Template>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                    <Setter Property="Template" Value="{StaticResource CombatantDataTemplate}"/>
+                                    <Setter Property="Margin" Value="{StaticResource CombatantMargin}"/>
+                                    <Setter Property="Panel.ZIndex" Value="{Binding Path=(ItemsControl.AlternationIndex),RelativeSource={RelativeSource Mode=Self},Converter={StaticResource MultiplierConverter},ConverterParameter=-1}"/>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                        </ListBox>
+                    </Border>
+
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <!--Has Combat-->
+
+                <DataTrigger Binding="{Binding CurrentCombat,Converter={StaticResource NullToBoolFalseConverter},FallbackValue=False}" Value="True">
+                    <Setter TargetName="CombatState" Property="Tag" Value="CombatInProgress"/>
+                    <Setter TargetName="RootPanel" Property="Visibility" Value="Visible"/>
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="CombatStartsSB">
+                            <Storyboard TargetName="CombatState">
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Tag">
+                                    <DiscreteObjectKeyFrame KeyTime="0" Value="CombatStart"/>
+                                    <DiscreteObjectKeyFrame Value="CombatInProgress" KeyTime="{Binding Path=Tag, ElementName=CombatantsOverlay, Converter={StaticResource TimeConverter}}"/>
+                                </ObjectAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="CombatStartsSB"/>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                    <BeginStoryboard x:Name="UILoadingSB">
+                        <Storyboard TargetName="CombatState" Duration="0:0:2" FillBehavior="Stop">
+                            <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Tag">
+                                <DiscreteObjectKeyFrame KeyTime="0" Value="UILoading"/>
+                                <DiscreteObjectKeyFrame KeyTime="0:0:0.1" Value="CombatInProgress"/>
+                            </ObjectAnimationUsingKeyFrames>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+                <!-- When player is in split screen shared combat move player 1 turn order to the center of the screen-->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSharedCombat}" Value="True" />
+                        <Condition Binding="{Binding Layout}" Value="Left" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="RootPanel" Property="Margin">
+                        <Setter.Value>
+                            <MultiBinding Converter="{StaticResource CreateRectConverter}">
+                                <Binding Source="0"/>
+                                <Binding Source="0"/>
+                                <Binding Path="ActualWidth" ElementName="RootPanel" Converter="{StaticResource MultiplierConverter}" ConverterParameter="-0.5"/>
+                                <Binding Source="0"/>
+                            </MultiBinding>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter TargetName="RootPanel" Property="HorizontalAlignment" Value="Right"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSharedCombat}" Value="True" />
+                        <Condition Binding="{Binding Layout}" Value="Right" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="RootPanel" Property="Opacity" Value="0"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Data.LocalPlayers.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=1}" Value="True"/>
+                        <Condition Binding="{Binding IsSharedCombat}" Value="True" />
+                        <Condition Binding="{Binding Layout}" Value="Common" />
+                        <Condition Binding="{Binding PlayerId}" Value="2" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="RootPanel" Property="Opacity" Value="0"/>
+                </MultiDataTrigger>
+
+                <!-- When player is in split screen non shared combat-->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSharedCombat}" Value="False" />
+                        <Condition Binding="{Binding Layout}" Value="Right" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="RootPanel" Property="Opacity" Value="1"/>
+                </MultiDataTrigger>
+
+                <!-- Show the turn order for player 2 when player 1 goes into character panels in shared combat-->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSharedCombat}" Value="True" />
+                        <Condition Binding="{Binding Layout}" Value="Right" />
+                        <Condition Binding="{Binding Data.LocalPlayers[0].UIData.InPlayerPanels}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="RootPanel" Property="Opacity" Value="1"/>
+                </MultiDataTrigger>
+                <!-- Move the turn order centered on player 1's screen when player 2 goes into character panel in shared combat-->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSharedCombat}" Value="True" />
+                        <Condition Binding="{Binding Layout}" Value="Left" />
+                        <Condition Binding="{Binding Data.LocalPlayers[1].UIData.InPlayerPanels}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="RootPanel" Property="Margin" Value="0,0,0,0"/>
+                    <Setter TargetName="RootPanel" Property="HorizontalAlignment" Value="Center"/>
+                </MultiDataTrigger>
+
+                <EventTrigger RoutedEvent="FrameworkElement.Unloaded">
+                    <StopStoryboard BeginStoryboardName="CombatStartsSB"/>
+                    <StopStoryboard BeginStoryboardName="UILoadingSB"/>
+                </EventTrigger>
+
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </ls:UIWidget.ContentTemplate>
+    <b:Interaction.Triggers>
+        <b:PropertyChangedTrigger Binding="{Binding CurrentPlayer.SelectedCharacter.Combat.Participants.Count}">
+            <b:InvokeCommandAction Command="{Binding CombatParticipantsChangedCommand}"/>
+        </b:PropertyChangedTrigger>
+
+        <b:PropertyChangedTrigger Binding="{Binding Layout}">
+            <b:InvokeCommandAction Command="{Binding LayoutChangedCommand}"/>
+        </b:PropertyChangedTrigger>
+        <b:PropertyChangedTrigger Binding="{Binding Data.AspectRatio}">
+            <b:InvokeCommandAction Command="{Binding LayoutChangedCommand}"/>
+        </b:PropertyChangedTrigger>
+
+    </b:Interaction.Triggers>
+</ls:UIWidget>

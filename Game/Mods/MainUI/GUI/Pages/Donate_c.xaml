@@ -1,0 +1,361 @@
+﻿<ls:UIWidget x:Name="Donate_c"
+             ls:UIWidget.ContextName="Donate"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+    		 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+			 mc:Ignorable="d"
+             IsHitTestVisible="False"
+             d:DesignWidth="3840" d:DesignHeight="2160"
+             ls:UIWidget.Focusable="False"
+             FocusDown="UIDown" FocusLeft="UILeft" FocusRight="UIRight" FocusUp="UIUp"
+             CanCacheFocusSurroundingElements="False"
+             ls:MoveFocus.FocusMovementMode="MainAxisTunnel"
+             d:DataContext="{d:DesignInstance Type=ls:DCDonate}" ls:TooltipExtender.Owner="{Binding CurrentPlayer.SelectedCharacter}">
+
+    <ls:UIWidget.Resources>
+
+        <BitmapImage x:Key="BackgroundHeader" UriSource="pack://application:,,,/Core;component/Assets/Shared_c/c_inventoryButton.png"/>
+        <ImageBrush x:Key="GridBackgroundBrush" ImageSource="pack://application:,,,/Core;component/Assets/Shared_c/c_frame_grid116.png" TileMode="Tile" Stretch="Uniform" ViewportUnits="Absolute" Viewport="0,0,232,232"  />
+
+        <LinearGradientBrush x:Key="TradeGridOpacityMask" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#FFFFFFFF" Offset="0.95"/>
+            <GradientStop Color="#00FFFFFF" Offset="1"/>
+        </LinearGradientBrush>
+
+        <Style x:Key="TradeDefaultFontStyle" TargetType="TextBlock">
+            <Style.Resources>
+                <Style TargetType="ls:LSSpan" BasedOn="{StaticResource {x:Type ls:LSSpan}}">
+                    <Style.Triggers>
+                        <Trigger Property="TagType" Value="hl">
+                            <Setter Property="Foreground" Value="{StaticResource LS_accent75TxtColor}"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Style.Resources>
+            <Setter Property="FontFamily" Value="{StaticResource DefaultFont}" />
+            <Setter Property="FontSize" Value="{StaticResource ScaledIntermediateFontSize}" />
+            <Setter Property="Foreground" Value="{StaticResource LS_extraspecialTxtColor}" />
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <DataTemplate x:Key="BarterCellTemplate">
+            <Grid x:Name="SlotRoot" Tag="{Binding Tag, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}" ToolTipService.Placement="Right" ToolTipService.VerticalOffset="110" DataContext="{Binding Object}" Focusable="True" ls:MoveFocus.Focusable="True">
+                <Grid.ToolTip>
+                    <ls:LSTooltip IsHitTestVisible="False" Content="{Binding DataContext.Object, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                </Grid.ToolTip>
+                <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="8,8,0,0">
+
+                    <ls:LSEntityObject x:Name="entityObject" EntityRef="{Binding EntityHandle}" Background="Transparent" Context="Trade" Style="{StaticResource BaseLSEntityObject}">
+                        <ContentPresenter Content="{Binding}" Style="{StaticResource Style.GameObject}" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False"/>
+                    </ls:LSEntityObject>
+                    <Control Template="{StaticResource EquippedItemIconIndicator}" Height="42" Width="54" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="0,0,0,8"/>
+                </Grid>
+                <Image x:Name="Selector" Stretch="UniformToFill" Source="{StaticResource SelectorImage}" Visibility="Collapsed" Margin="-16,-16,-24,-24"/>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=SlotRoot}" Value="True">
+                    <Setter Property="Panel.ZIndex" Value="1"/>
+                    <Setter TargetName="Selector" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <Style x:Key="InventoryListStyle" TargetType="ItemsControl">
+            <Setter Property="ItemsSource" Value="{Binding Slots}"/>
+            <Setter Property="ItemTemplate" Value="{StaticResource BarterCellTemplate}"/>
+            <Setter Property="OpacityMask" Value="{StaticResource TradeGridOpacityMask}"/>
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/>
+            <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel"/>
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <ls:LSGrid x:Name="InvGrid"
+                                   Columns="{DynamicResource invCols}"
+                                   Rows="{DynamicResource invRows}"
+                                   ContainerData="{Binding }"
+                                   CellWidth="{StaticResource InvSlotSize}"
+                                   CellHeight="{StaticResource InvSlotSize}"
+                                   Background="{StaticResource GridBackgroundBrush}"
+                                   ExtendedRows="False"
+                                   UseWidgetNavigation="True"
+                                   ls:MoveFocus.InternalFocusable="True"
+                                   WidgetChainedNavigation="True"
+                                   Focusable="False"
+                                   AutoIndex="True"
+                                   ls:ElementCacheHelper.GroupId="TradeInventory_c"
+                                   FocusElementVisualStyle="{StaticResource Style.FocusVisualStyle}"
+                                   ViewportExtension="4,4"/>
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding (ls:AttachedProperties.InheritedTag), RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource NullToBoolFalseConverter}}" Value="True">
+                    <Setter Property="ItemsSource" Value="{Binding (ls:AttachedProperties.InheritedTag), RelativeSource={RelativeSource Mode=Self}}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+
+        <ControlTemplate x:Key="WeightIconTemplate">
+            <Image x:Name="IconHolder" Source="{StaticResource NormalWeightIcon}" Stretch="None"/>
+
+            <ControlTemplate.Triggers>
+                <!-- Light encumbrance -->
+                <DataTrigger Value="True">
+                    <DataTrigger.Binding>
+                        <MultiBinding Converter="{StaticResource GreaterOrEqualThanMultiConverter}">
+                            <Binding Path="EncumbranceStats.CurrentWeight"/>
+                            <Binding Path="EncumbranceStats.WeightLight"/>
+                        </MultiBinding>
+                    </DataTrigger.Binding>
+                    <Setter TargetName="IconHolder" Property="Source" Value="{StaticResource IconWeightEncumbered}"/>
+                </DataTrigger>
+
+                <!-- Heavy encumbrance -->
+                <DataTrigger Value="True">
+                    <DataTrigger.Binding>
+                        <MultiBinding Converter="{StaticResource GreaterOrEqualThanMultiConverter}">
+                            <Binding Path="EncumbranceStats.CurrentWeight"/>
+                            <Binding Path="EncumbranceStats.WeightHeavy"/>
+                        </MultiBinding>
+                    </DataTrigger.Binding>
+                    <Setter TargetName="IconHolder" Property="Source" Value="pack://application:,,,/Core;component/Assets/Shared/Weight_Encumbrance/ico_weight_heavilyEncumbered.png"/>
+                </DataTrigger>
+
+                <!-- Over encumbrance -->
+                <DataTrigger Value="True">
+                    <DataTrigger.Binding>
+                        <MultiBinding Converter="{StaticResource GreaterOrEqualThanMultiConverter}">
+                            <Binding Path="EncumbranceStats.CurrentWeight"/>
+                            <Binding Path="EncumbranceStats.WeightMaximum"/>
+                        </MultiBinding>
+                    </DataTrigger.Binding>
+                    <Setter TargetName="IconHolder" Property="Source" Value="{StaticResource IconWeightEncumbered}"/>
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <ControlTemplate x:Key="WeightDisplayTemplate">
+            <StackPanel Orientation="Horizontal" Focusable="False" Height="70">
+                <Control Template="{StaticResource WeightIconTemplate}" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding EncumbranceStats.CurrentWeight, Converter={StaticResource UnitConverter}, ConverterParameter='Weight N2'}" Style="{StaticResource TradeDefaultFontStyle}"/>
+                <TextBlock Text="{Binding Source='hd64bfe4cgadadg4468g8b0ag70330ffc717c', Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource TradeDefaultFontStyle}"/>
+                <TextBlock Text="{Binding EncumbranceStats.WeightMaximum, Converter={StaticResource UnitConverter}, ConverterParameter='Weight N2'}" Style="{StaticResource TradeDefaultFontStyle}"/>
+            </StackPanel>
+        </ControlTemplate>
+
+        <Style x:Key="PartyHolderStyle" TargetType="ItemsControl" BasedOn="{StaticResource baseStyle}">
+            <Setter Property="ItemsSource" Value="{Binding DonateSourceInventories}"/>
+            <Setter Property="AlternationCount" Value="{Binding DonateSourceInventories.Count}"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Hidden"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Vertical"/>
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <Expander x:Name="SingleInventoryRoot" HorizontalAlignment="Center" VerticalAlignment="Top" Tag="False" Margin="0,0,0,20" IsExpanded="True" Width="{DynamicResource invWidth}">
+                            <b:Interaction.Behaviors>
+                                <ls:InventoriesMergerBehavior x:Name="PlayerInventoriesMerged" Inventories="{Binding TradeInventories}" MergeSubInventories="False"/>
+                                <ls:CollectionFilterBehavior x:Name="PlayerInventoryFiltered" ItemsSource="{Binding InventoriesSlots, ElementName=PlayerInventoriesMerged}" Predicate="{Binding TradeInventories[0].TabFiltersPredicate}"/>
+                                <ls:CollectionFilterBehavior x:Name="PlayerInventoryDonationsFiltered" ItemsSource="{Binding FilteredItems, ElementName=PlayerInventoryFiltered}" Predicate="{Binding DataContext.NonDonatedItemsPredicate, ElementName=Donate_c}"/>
+                                <ls:CollectionSortBehavior x:Name="PlayerInventoryFilteredSorted" ItemsSource="{Binding FilteredItems, ElementName=PlayerInventoryDonationsFiltered}" Comparer="{Binding DataContext.CurrentPlayer.SelectedCharacter.TradeSortComparer, ElementName=Donate_c}"/>
+                            </b:Interaction.Behaviors>
+                            <Expander.Resources>
+                                <System:UInt32 x:Key="invRows">1</System:UInt32>
+                            </Expander.Resources>
+                            <Expander.Template>
+                                <ControlTemplate TargetType="{x:Type Expander}">
+                                    <DockPanel x:Name="DockRoot">
+                                        <Grid DockPanel.Dock="Top">
+                                            <ls:LSToggleButton x:Name="ExpanderButton" IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                   Tag="InventoryExpanderGroup" Style="{StaticResource FocusableContentControlStyle}">
+                                                <ls:LSNineSliceImage x:Name="GridHeader" Height="108" ImageSource="{StaticResource BackgroundHeader}" Slices="28" DataContext="{Binding OwnerObject}">
+                                                    <Grid Width="{Binding Path=ActualWidth, ElementName=GridHeader}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Image x:Name="Arrow" Grid.Column="0" Source="{StaticResource ListArrowCollapsed}" Stretch="None" Margin="0" VerticalAlignment="Center" />
+                                                        <TextBlock x:Name="CharacterName" Grid.Column="1" TextAlignment="Left" Style="{StaticResource TradeDefaultFontStyle}" TextTrimming="CharacterEllipsis">
+																	            <ls:TextBlockFormatter.SourceText>
+																		            <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+																			            <Binding Source="hfd89b43bg7da3g472fg871bg07d754cce489"/>
+																			            <Binding Path="Name"/>
+																		            </MultiBinding>
+																	            </ls:TextBlockFormatter.SourceText>
+                                                        </TextBlock>
+
+                                                        <Control x:Name="WeightDisplayControl" Grid.Column="3" Template="{StaticResource WeightDisplayTemplate}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,20,0"/>
+                                                    </Grid>
+                                                </ls:LSNineSliceImage>
+                                            </ls:LSToggleButton>
+                                        </Grid>
+                                        <ContentPresenter Name="Content"/>
+                                    </DockPanel>
+
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsExpanded" Value="False">
+                                            <Setter TargetName="Content" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="ExpanderButton" Property="Tag" Value="PartyCollapsed"/>
+                                            <Setter TargetName="Arrow" Property="Source" Value="{StaticResource ListArrowCollapsed}"/>
+                                        </Trigger>
+                                        <Trigger SourceName="ExpanderButton" Property="IsChecked" Value="True">
+                                            <Setter Property="IsExpanded" Value="True"/>
+                                            <Setter TargetName="Arrow" Property="Source" Value="{StaticResource ListArrowExpanded}"/>
+                                        </Trigger>
+
+                                        <DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=ExpanderButton}" Value="True">
+                                            <Setter TargetName="Arrow" Property="Source" Value="{StaticResource ListArrowCollapsedH}"/>
+                                            <Setter TargetName="ExpanderButton" Property="BoundEvent" Value="UIAccept"/>
+                                        </DataTrigger>
+
+                                        <MultiTrigger>
+                                            <MultiTrigger.Conditions>
+                                                <Condition SourceName="ExpanderButton" Property="IsChecked" Value="True"/>
+                                                <Condition SourceName="ExpanderButton" Property="ls:MoveFocus.IsFocused" Value="True"/>
+                                            </MultiTrigger.Conditions>
+                                            <Setter TargetName="Arrow" Property="Source" Value="{StaticResource ListArrowExpandedH}"/>
+                                        </MultiTrigger>
+
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Expander.Template>
+                            <ItemsControl DataContext="{Binding TradeInventory}"
+                                          Style="{StaticResource InventoryListStyle}"
+                                          OpacityMask="White"
+                                          HorizontalAlignment="Left"
+                                          ls:AttachedProperties.InheritedTag="{Binding Path=(b:Interaction.Behaviors)[3].SortedItems, ElementName=SingleInventoryRoot}"/>
+
+
+                        </Expander>
+                        <DataTemplate.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding DataContext.Layout, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Common"/>
+                                    <Condition Binding="{Binding DataContext.Data.AspectRatio, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}} , Converter={StaticResource GreaterThanConverter}, ConverterParameter=0.5625}" Value="False"/>
+                                </MultiDataTrigger.Conditions>
+
+                                <Setter TargetName="SingleInventoryRoot" Property="Width" Value="Auto"/>
+                            </MultiDataTrigger>
+
+
+
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+
+    </ls:UIWidget.Resources>
+
+    <b:Interaction.Triggers>
+        <b:EventTrigger EventName="MoveFocusUp">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="MoveFocusDown">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="MoveFocusLeft">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="MoveFocusRight">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="FocusChanged">
+            <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElement}" CommandParameter="{Binding Path=FocusedElement, ElementName=Donate_c}"/>
+        </b:EventTrigger>
+        <b:DataTrigger Binding="{Binding HasInputEnabled, ElementName=Donate_c}" Value="True">
+            <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElement}" CommandParameter="{Binding Path=FocusedElement, ElementName=Donate_c}"/>
+        </b:DataTrigger>
+    </b:Interaction.Triggers>
+
+    <ls:UIWidget.Style>
+        <Style TargetType="{x:Type ls:UIWidget}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <ControlTemplate.Resources>
+                            <System:UInt32 x:Key="invRows">11</System:UInt32>
+                            <System:UInt32 x:Key="invCols">7</System:UInt32>
+                            <System:Double x:Key="invWidth">844</System:Double>
+                        </ControlTemplate.Resources>
+                        <Grid Background="{StaticResource LS_PopUpBackgroundColor}" x:Name="RootDonatePanel">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <ls:LSNineSliceImage Slices="48 40 48 100" VerticalAlignment="Center" HorizontalAlignment="Center" ImageSource="pack://application:,,,/Core;component/Assets/Container/container_background.png">
+                                    <ls:LSNineSliceImage.Resources>
+                                        <System:Double x:Key="InventoryMinH">342</System:Double>
+                                    </ls:LSNineSliceImage.Resources>
+
+                                    <ScrollViewer Template="{StaticResource MinimalisticScrollViewerTemplate}" HorizontalAlignment="Center" Margin="60, 50, 50, 150" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Height="840" ls:ElementCacheHelper.ScrollViewerGroupId="TradeInventory_c">
+                                        <ItemsControl x:Name="PanelsContainer" Style="{StaticResource PartyHolderStyle}" Margin="10,10,10,10"/>
+                                    </ScrollViewer>
+
+                                </ls:LSNineSliceImage>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,-140,0,140">
+                                    <ls:LSButton x:Name="DonateButton"
+							                    Command="{Binding DonateItemsCommand}"
+                                                CommandParameter="{Binding FocusedElement.DataContext, RelativeSource={RelativeSource Mode=TemplatedParent}}"
+                                                BoundEvent="UIAccept"
+							                    ContentTemplate="{StaticResource ControllerButtonHint}"
+							                    Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIAccept'}"
+							                    Tag="{Binding Source='h613a8245g0881g470bgb9a1ga060c50db2ed', Converter={StaticResource TranslatedStringConverter}}"
+                                                IsEnabled="True"/>
+                                    <ls:LSButton x:Name="CloseButton"
+							                    Command="{Binding CustomEvent}"
+                                                CommandParameter="CloseWidget"
+							                    BoundEvent="UICancel"
+							                    ContentTemplate="{StaticResource ControllerButtonHint}"
+							                    Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICancel'}"
+							                    Tag="{Binding Source='hff1685e4g3845g4846g99bfg219ae73ce55d', Converter={StaticResource TranslatedStringConverter}}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel x:Name="GlobalButtonPromptsHolder" VerticalAlignment="Bottom" HorizontalAlignment="Center" Orientation="Horizontal" Height="180" Focusable="False">
+
+                                <ls:LSButton x:Name="ToggleTooltipButton" ContentTemplate="{StaticResource ControllerButtonHint}"
+                                        Content = "{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIShowInfo'}"
+                                        BoundEvent="UIShowInfo"
+                                        Margin="20,0"
+                                        Tag="{Binding Source='hf8dd4c2fg97e0g4ccdgac1ag3cd1fe5060ef',Converter={StaticResource TranslatedStringConverter}}"
+                                        Command="ls:UIWidget.ToggleTooltipOnUIElementCommand"
+                                        CommandParameter="{Binding Path=FocusedElement, ElementName=Donate_c}" EatInput="False" TapTime="{StaticResource DefaultButtonTapTime}"/>
+
+                                <!-- Toggle Compare Tooltips-->
+                                <Control x:Name="CompareToggle" Template="{StaticResource HoldToggleTemplate}" Tag="Checked"/>
+
+                                <ls:LSInputBinding x:Name="PinTooltipBinding" Style="{StaticResource PinTooltipBindingStyle}"/>
+                            </StackPanel>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding FocusedElement.DataContext, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource TypeConverter}}" Value="ls.VMInventorySlot">
+                                <Setter TargetName="DonateButton" Property="IsEnabled" Value="True"/>
+                            </DataTrigger>
+
+                            <DataTrigger Binding="{Binding ShowUIElementTooltip, ElementName=Donate_c}" Value="True">
+                                <Setter TargetName="ToggleTooltipButton" Property="Tag" Value="{Binding Source='hb33ec471gd611g4ee3gbbffg699af8f79167', Converter={StaticResource TranslatedStringConverter}}"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </ls:UIWidget.Style>
+</ls:UIWidget>

@@ -1,0 +1,130 @@
+game.states.LOW_Guildhall_Member_003 = State {
+    function()
+        modules = { "shared.moveto", "shared.dialog" }
+        
+        local DrinkingCooldown = 20
+        local IsDrinking = true
+        local canDrink = true
+        local isBardPlaying = false
+
+        local standAndDrinkDialog = Dialog("BHVR_WRLD_GLO_StandAndDrink_a4065598-1ea2-8866-d23f-f765b5008273")
+        local bard = Entity("S_LOW_Guildhall_Bard_da9309e9-b13a-49a2-adb6-78fc44aeeb71")
+        local bartender = Entity("S_LOW_Guildhall_Bartender_00c74e3b-5880-4525-9558-860e4f7c77e2")
+        local bard_position = Entity("S_LOW_Guildhall_Point_Bard_90fec578-7cf2-48d5-a954-98973011e8cc")
+        local bardPlaying = Flag("LOW_Guildhall_State_BardPlaying_f62839f1-9db8-4f7f-b28c-cfc271f0db7a")
+        local dancingStartAnimation = Animation("CUST_Guildhall_Dancing_01_Start_a848da2e-5084-4514-9b2f-5383299f8dbd")
+        local dancingLoopAnimation = Animation("CUST_Guildhall_Dancing_01_Loop_3883bac6-0a4c-4878-a32d-df89726101b5")
+        local dancingEndAnimation = Animation("CUST_Guildhall_Dancing_01_End_42946cd7-2834-4138-8be4-e7cce633a549")
+--------------------------------Init--------------------------------
+
+    self.OnInit = function()
+        isBardPlaying = GetFlag(bardPlaying)
+    end
+
+--------------------------------Nodes--------------------------------
+    nodes.Dance = Action {
+        function()
+            local result = MoveInRange(bard, 2.0, 10.0, MovementSpeed.Stroll)
+            if result == error.MovementFailed then
+                DebugText(me, "Movement failed")
+                SteerTo(bard)
+                Sleep(12.0 + 6.0 * math.random())
+            else
+                SteerTo(bard)
+                Sleep(math.random(0, 10))
+                PlayLoopingAnimation(dancingStartAnimation, {dancingLoopAnimation}, dancingEndAnimation, false)    
+                Sleep(math.random(30, 40))
+                StopAnimation(me, false)
+                Sleep(2.0) -- give time for looping animation to end               
+            end
+        end,
+        Valid = function()
+            return isBardPlaying
+        end
+    }
+
+    nodes.Idling = Selector {
+        function(nodes)
+            local node = FindDifferentRandomSelectable(nodes)
+            if node ~= nil then
+                return node
+            else
+                return nodes.DoNothing
+            end
+        end
+    }
+    
+    nodes.Idling.Drink = Action {
+        function()
+            Sleep(math.random(0, 10))
+            try
+                StartBehaviorDialog(standAndDrinkDialog, nil, true, me)
+                Sleep(DrinkingCooldown + math.random(0,10))
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Failed to play".. tostring(sitAndDrinkDialog) .. "sit drink animation. Final animation TBD")
+            end
+            
+        end,
+        CanEnter = function()
+            return canDrink and IsDrinking
+        end,
+        OnLeave = function()
+            canDrink = false
+            StartTimer(me, "DrinkingCooldown", DrinkingCooldown, 0)
+            BehaviorDialogRequestGracefulStop(me, true, standAndDrinkDialog)
+        end
+    }
+
+    nodes.Idling.FetchDrink = Action {
+        function()
+            if mod.moveto.MoveToPoint(bartender,MovementSpeed.Stroll,me) then
+                SteerTo(bartender)
+                Sleep(6.0 + 6.0 * math.random())
+                
+                local result = MoveInRange(bard_position, 2.0, 5.0, MovementSpeed.Stroll)
+
+                if result ~= error.MovementError.None then
+                    SteerTo(bard_position)
+                else
+                    SteerTo(bard_position)
+                    Sleep(12.0 + 6.0 * math.random())    
+                end
+
+            else
+                SteerTo(bartender)
+                Sleep(12.0 + 6.0 * math.random())
+
+            end
+        end,
+        CanEnter = function()
+            return GetDistanceTo(me, bartender) <= 35.0
+        end,
+    }
+
+    nodes.Idling.DoNothing = Action {
+        function()
+            Sleep(math.random(3,8))
+        end
+    }
+
+--------------------------------Events--------------------------------
+    events.TimerFinished = function(e)
+        if e.TimerName == "DrinkingCooldown" then
+            canDrink = true
+        end
+    end
+    
+    events.FlagSet = function(e)
+        if e.Flag == bardPlaying.Guid then
+            isBardPlaying = true
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == bardPlaying.Guid then
+            isBardPlaying = false
+        end
+    end 
+
+end
+}

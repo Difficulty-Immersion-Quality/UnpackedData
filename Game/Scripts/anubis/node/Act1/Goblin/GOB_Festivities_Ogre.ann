@@ -1,0 +1,87 @@
+game.states.GOB_Festivities_Ogre = State{function()
+    modules = {"shared.dialog"}
+
+    description = [[Behaviour for an Ogre guarding entrance to inner temple in Goblin camp]]
+
+    local ch_LookAtGoblin = nil
+    local tg_Goblin = Tag("GOBLIN_608597d9-bf00-4ede-aabe-767457280925")
+    local f_LookDistance = 8.0
+    local tr_LookFromTrigger = Entity("S_GOB_Festivities_OgreDefaultPosition_eba5179c-9415-4123-80b1-a1d7ab0d3719")
+
+    -- Take in mind, this timer is an approximation. The behaviour may be interrupted.
+    -- But alas it doesn't need to be exact, is to give more probabilities for the ogre to play his AD.
+    local notTalkingTimer = 0.0
+    -- Decrease threshold for more probailities of playing the AD
+    local notTalkingThreshold = 8.0
+    local AD = Dialog("GOB_Festivities_AD_Ogre_00_df1b2f0f-7a55-1b8f-dc9c-aa978e06be0b")
+
+    local goblinsLeftCamp = Flag("GOB_DrowCommander_Event_RaidersSortie_26816b01-2d64-b50c-3bf6-bffd7dc5f0b9")
+
+    nodes = Selector{
+        function(nodes)
+            local ADweight = math.floor(notTalkingTimer/notTalkingThreshold)
+
+            return GetWeightedCanEnter(nodes, { [nodes.Action_PlayAD] = ADweight,
+                                                [nodes.Action_LookAtGoblin] = 12,
+                                                [nodes.Action_FindGoblin] = 8,
+                                                [nodes.Action_Idle] = 8})
+        end
+    }
+
+    nodes.Action_PlayAD = Action{
+        function()
+            try
+                if mod.dialog.IsSpeakerAvailable(me) then
+                    notTalkingTimer = 0.0
+                    StartAutomatedDialog(AD, false, me)
+                end
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me, "Error: StartAutomatedDialogFailed")
+                Sleep(3.0)
+            end
+        end
+    }
+
+    nodes.Action_LookAtGoblin = Action{
+        function()
+            notTalkingTimer = notTalkingTimer + 0.5
+            LookAtEntity(ch_LookAtGoblin, 5.0)
+            Sleep(0.5)
+        end,
+        Valid = function()
+            return not GetFlag(goblinsLeftCamp) and ch_LookAtGoblin ~= nil and GetDistanceTo(me, ch_LookAtGoblin) < f_LookDistance
+        end,
+        OnLeave = function()
+            ch_LookAtGoblin = nil
+        end
+    }
+
+    nodes.Action_FindGoblin = Action{
+        function()
+            notTalkingTimer = notTalkingTimer + 2.0
+
+            local ch_Chars = GetActiveCharacters(me, f_LookDistance)
+            for i, ch_Char in ipairs(ch_Chars) do
+                if IsTagged(ch_Char, tg_Goblin) then
+                    ch_LookAtGoblin = ch_Char
+                end
+            end
+
+            if ch_LookAtGoblin == nil then
+                Sleep(2.0)
+            end
+        end,
+        CanEnter = function()
+            return not GetFlag(goblinsLeftCamp)
+        end,
+    }
+
+    nodes.Action_Idle = Action{
+        function()
+            LookFrom(tr_LookFromTrigger)
+            notTalkingTimer = notTalkingTimer + 3.0
+            Sleep(3.0)
+        end
+    }
+end
+}

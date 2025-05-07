@@ -1,0 +1,366 @@
+game.states.DEN_AdventurerLeader = State {function ()
+    
+    modules = { "shared.moveto", "shared.dialog" }
+    --
+    description = [[Behaviour of the grove adventurers' leader]]
+
+    --Flags
+    local denFlag = Flag("DEN_AdventurersQuest_State_AtDen_a76436f9-d1c5-11ea-1340-fc7f5c02f87f")
+    local followFLag = Flag("DEN_RaidingParty_Event_AdventurersToConfrontation_0b553dd3-afc8-4ab7-9046-8dd452bfc455")
+    local confrontEndFlag = Flag("DEN_RaidingParty_Quest_ConfrontationResolved_dc97da68-5ed9-ffe2-7582-2533be0efbcd")
+    local openGateFlag = Flag("DEN_RaidingParty_Event_GateIsOpened_735e0e81-bd67-eb67-87ac-40da4c3e6c49")
+    local raidOverFlag = Flag("DEN_RaidingParty_Quest_GoblinRaidOver_98712d90-c46b-20c4-c4df-02c0117e85a5")
+    local peaceFlag = Flag("DEN_RaidingParty_State_PeacefulResolution_f4529d52-b459-6545-b4bf-8b2fb2cd6f2f")
+
+    --Bools
+    local ally1Ready = false
+    local ally2Ready = false
+    local atDen = true
+    local returnedToCave = false
+    local canAD = true
+    local playAngryAnim = false
+    local canGaze = true
+    local canOrganize = true
+    local kneelAnimStart = true
+
+    --Entities
+    local kanon = Entity("S_DEN_DeadLover_0126a6b5-3452-47db-a3e5-525b7deca82f")
+    local denPoint = Entity("S_DEN_AdventurerArea_001_902982c7-079a-4c5d-be65-2ce3fb8e725d")
+    local confrontPoint = Entity("S_DEN_ConfrontationPos_001_8f3c248e-f78b-46ee-acdf-a167c3e35213")
+    local roadPoint = Entity("S_DEN_DeadPoint_001_5170e97e-e483-4360-a09e-32f37f9d8116")
+    local tieflingLeader = Entity("S_DEN_TieflingLeader_475200ee-cc3c-4dbe-84b1-1820c02ea26a")
+    local ally1 = Entity("S_DEN_RobbedAdventurer_534bceaf-678c-40a0-8ca9-e1134f95ba0d")
+    local ally2 = Entity("S_DEN_RaidAdventurer_4faf77a0-b883-4f7b-acbf-4500973f446d")
+    local deadAdventurer = Entity("S_DEN_DeadAdventurer_004_482f39d8-b77e-443b-ab56-0e53b518c133")
+    local raidAdventurer = Entity("S_DEN_RaidAdventurer_4faf77a0-b883-4f7b-acbf-4500973f446d")
+    local atCavePoint1 = Entity("S_DEN_AdventurerArea_001_902982c7-079a-4c5d-be65-2ce3fb8e725d")
+    local atCavePoint2 = Entity("S_DEN_PostDruidAttack_AdventurerLootPoint1_e9645ba8-d575-4415-95ea-f64bbb4be6c4")
+    local atCavePoint3 = Entity("S_DEN_AdventurerLeaderLookPoint_96af9138-8173-4907-9fa0-318961850c2b")
+
+    --Animations
+    
+    local lookUpAngryLoop = Animation("CUST_LookUpAngry_01_Loop_3a6cb0ac-7ec5-4d0e-8aed-1c32e862f7cb")
+    local lookUpAngryStart = Animation("CUST_LookUpAngry_01_Start_3bc49769-9b8f-4a89-b989-01381508c8cc")
+    local lookUpAngryEnd = Animation("CUST_LookUpAngry_01_End_767ce5e4-93c8-4387-bf21-07c1c35e5528")
+    local kneelAnimLoop = Animation("CUST_Kneeling_Aradin_01_1bf6fc04-0ad3-4be7-b17e-31f21c08a8cd")
+    local drinkingStandAnim = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+    local organizeAnim = Animation("CUST_Organizing_01_0e82e372-b47d-4d62-933b-068725cdfd06")
+
+    --Dialogs
+    local gateAD = Dialog("DEN_RaidingParty_AD_AdventurerLeaderAtGate_772341fb-65e8-8520-f778-0e16b8b0f7b8")
+    local rantAD = Dialog("DEN_RaidingParty_AD_AdventurerLeaderRant_24084768-f7e4-d077-7318-a074917211f8")
+    local enterAD = Dialog("DEN_RaidingParty_AD_AdventurerLeaderToConfrontation_01c58398-d5cd-6663-61fc-3478e802daf7")
+    local roadAD = Dialog("DEN_AdventurersQuest_AD_AtCorpses_ff0c05df-ce99-16ee-fbdb-db199cdb3b40")
+    local groveAD = Dialog("DEN_AdventurersQuest_AD_DrunkenTalk_bcf1116f-f145-7a58-03bd-1b1bb0babdb5")
+
+    helpers.ResetADDelay = function(ADDelay)
+        StopTimer(me, "DEN_AdventurerLeader_ADTimer")
+        StartTimer(me, "DEN_AdventurerLeader_ADTimer", ADDelay, 0)
+        canAD = false
+    end
+
+    self.OnInit = function()
+        
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.OnRoad = Selector {
+        OnEnter = function()
+            mod.moveto.CancelMoveTo()
+            canAD = true
+        end,
+        Valid = function()
+            return not atDen
+        end
+    }
+   
+    nodes.OnRoad.AtCorpses = Action {
+        OnEnter = function()
+            kneelAnimStart = true
+        end,
+        function()
+            if(kneelAnimStart == false) then
+                if mod.moveto.MoveToPoint(roadPoint,MovementSpeed.Stroll,me) then
+                    LookFrom(roadPoint)
+                end
+            end
+            if(kneelAnimStart == true) then
+                PlayAnimation(kneelAnimLoop, false, true)
+                kneelAnimStart = false
+            end
+            Sleep(5)
+        end,
+    }
+
+    nodes.DEN = Selector {
+        Valid = function()
+            return atDen
+        end
+    }
+
+    nodes.DEN.AtCave = Selector{
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return returnedToCave
+        end
+    }
+
+    nodes.DEN.AtCave.NoRaidAdventurer = Proxy{
+        game.states.Sit,
+        params = {
+            seat = "S_DEN_DrinkingStool_001_2cee12e7-d68b-44ce-a658-848e16875fcf",
+            seatTrigger = "S_DEN_AdventurerArea_002_963c5af9-111d-4325-a17b-b555449d3f38",
+            sitIdle = StateRef{game.states.DEN_AdventurerLeader_DENidle},
+            nonSitIdle = StateRef{game.states.DEN_AdventurerLeader_DENidle}
+        },
+        Valid = function()
+            return raidAdventurer.Character.IsDead
+        end
+    }
+
+    nodes.DEN.AtCave.Idle1 = Action{
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(atCavePoint1,MovementSpeed.Stroll,me) then
+                LookFrom(atCavePoint1)
+                StartAutomatedDialog(groveAD, true, me)  
+                PlayAnimation(drinkingStandAnim, true, false)
+                Sleep(math.random(1, 6))
+            end
+        end,
+        CanEnter = function()
+            return not raidAdventurer.Character.IsDead
+        end
+    }
+
+    nodes.DEN.AtCave.Idle2 = Action{
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(atCavePoint2,MovementSpeed.Stroll,me) then
+                LookFrom(atCavePoint2)   
+                StartAutomatedDialog(groveAD, true, me)  
+                PlayAnimation(organizeAnim, true, false)
+                Sleep(math.random(1, 4))
+            end
+            canOrganize = false
+        end,
+        OnLeave = function()
+            StartTimer(me, "DEN_AdventurerLeader_Organize", 120, 0)
+            canOrganize = false
+        end,
+        CanEnter = function()
+            return canOrganize and not raidAdventurer.Character.IsDead
+        end
+    }
+
+    nodes.DEN.AtCave.Idle3 = Action{
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(atCavePoint3,MovementSpeed.Stroll,me) then
+                LookFrom(atCavePoint3)
+                StartAutomatedDialog(groveAD, true, me)  
+                PlayAnimation(drinkingStandAnim, true, false)
+                Sleep(math.random(1, 4))
+            end
+            canGaze = false
+        end,
+        OnLeave = function()
+            StartTimer(me, "DEN_AdventurerLeader_Gaze", 60, 0)
+            canGaze = false
+        end,
+        CanEnter = function()
+            return canGaze and not raidAdventurer.Character.IsDead
+        end
+    }
+
+    nodes.DEN.AtCave.Idle4 = Action{
+        function()            
+            StartAutomatedDialog(groveAD, true, me)  
+            Sleep(math.random(2,4))
+        end,
+        CanEnter = function()
+            return not raidAdventurer.Character.IsDead
+        end
+    }
+
+    nodes.DEN.AtGate = Selector {
+        Valid = function()
+            return not returnedToCave
+        end
+    }
+
+    nodes.DEN.AtGate.ReturnToCave = Action {
+        function()            
+            if(GetFlag(openGateFlag)) then
+                mod.moveto.MoveTo(denPoint,true,1.5,"Walk","DEN_AtDen_ReturnComplete")
+            end
+            Sleep(3)
+            if (tieflingLeader.IsDead) then StartAutomatedDialog(rantAD,true,me) end
+        end,
+        Valid = function()
+            return GetFlag(confrontEndFlag) and GetFlag(peaceFlag)
+        end
+    }
+
+    nodes.DEN.AtGate.BeforeRaid = Action {
+        function()
+            PlayLoopingAnimation(lookUpAngryStart, {lookUpAngryLoop}, lookUpAngryEnd, false)
+            Sleep(5.0)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                gateAD,
+                {
+                    maxDistance = 20.0,
+                    checkSight = false,
+                    cullingDistance = 30.0,
+                    waitForCompletion = false,
+                    minDelay = 30.0,
+                },
+                me,
+                kanon
+            )
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return (not GetFlag(raidOverFlag))
+        end
+    }
+
+    nodes.DEN.AtGate.AfterRaid = Action {
+        function()
+            if(not ally1.Character.IsDead and not ally2.Character.IsDead and ally1Ready and ally2Ready) then
+                SteerTo(ally2)
+            elseif(ally1.Character.IsDead and not ally2.Character.IsDead and ally2Ready) then
+                SteerTo(ally2)
+            elseif(ally2.Character.IsDead and not ally1.Character.IsDead and ally1Ready) then
+                SteerTo(ally1)
+            end
+            if(not IsInDialog(me,true)) then
+                if(GetFlag(openGateFlag,nil)) then
+                    StopTimer(me,"DEN_AdventurerLeader_ADTimer")
+                    canAD = true
+                    StartAutomatedDialog(enterAD,true,me)
+                elseif((canAD) and (not ally1.Character.IsDead or not ally2.Character.IsDead)) then
+                    StartAutomatedDialog(rantAD,true,me)
+                    helpers.ResetADDelay(20)
+                end
+            end
+        end,
+        Valid = function()
+            return (GetFlag(raidOverFlag) and not GetFlag(followFLag) and not GetFlag(confrontEndFlag))
+        end
+    }
+
+    nodes.DEN.AtGate.Confront = Action {
+        function()
+            if mod.moveto.MoveToPoint(confrontPoint,MovementSpeed.Run,me) then
+                SteerTo(tieflingLeader)
+                SetEntityEvent(me, "DEN_GoToConfrontation_MoveComplete")
+            end
+        end,
+        Valid = function()
+            return (GetFlag(followFLag) and not GetFlag(confrontEndFlag))
+        end
+    }
+
+    nodes.DEN.AtGate.Leaving = Action {
+        function()
+            Sleep(5)
+        end,
+        Valid = function()
+            return GetFlag(confrontEndFlag) and not GetFlag(peaceFlag)
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+
+    events.EntityEvent = function(e)
+        if(e.Event == "DEN_BeforeConfrontation_MoveComplete") then
+            if(e.TargetEntity == ally1) then 
+                ally1Ready = true
+            elseif(e.TargetEntity == ally2) then 
+                ally2Ready = true
+            end
+        elseif(e.TargetEntity == me) then
+            if(e.Event == "DEN_AtDen_ReturnToDenPosition") then
+                if(denPoint == nil) then
+                    denPoint = FindEntity("S_DEN_AdventurerArea_001_902982c7-079a-4c5d-be65-2ce3fb8e725d")
+                end
+                mod.moveto.MoveTo(denPoint,true,3,"Walk","DEN_AtDen_ReturnComplete")
+            elseif(e.Event == "DEN_AtDen_ReturnComplete") then
+                returnedToCave = true
+                SetFlag(denFlag,me)
+            elseif(e.Event == "DEN_NPC_LeftDen") then
+                atDen = false
+            elseif(e.Event == "DEN_AdventurersQuest_LeaveRoad") then
+                StopAnimation(me)
+            end
+        end
+    end
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_AdventurerLeader_ADTimer") then 
+            canAD = true
+        elseif(e.TimerName == "DEN_AdventurerLeader_AdventurersFollow") then 
+            SetFlag(followFLag)
+        elseif(e.TimerName == "DEN_AdventurerLeader_Gaze") then
+            canGaze = true
+        elseif(e.TimerName == "DEN_AdventurerLeader_Organize") then  
+            canOrganize = true
+        end
+    end
+    events.FlagSet = function(e)
+        if(e.Flag == Guid("DEN_RaidingParty_Event_AdventurerLeaderToConfrontation_d7fb4647-686e-d4ea-f636-52a4c60aa0ab")) then
+            StartTimer(me,"DEN_AdventurerLeader_AdventurersFollow",1.5,0)
+            mod.moveto.MoveTo(confrontPoint,true,1,"Run","")
+        end
+    end
+end}
+
+game.states.DEN_AdventurerLeader_DENidle = State {function ()
+
+
+    local DenArea = Entity("S_DEN_AdventurerArea_001_902982c7-079a-4c5d-be65-2ce3fb8e725d")
+    local lookTarget = Entity("S_DEN_AdventurerArea_002_963c5af9-111d-4325-a17b-b555449d3f38")
+    local DrunkAD = Dialog("DEN_AdventurersQuest_AD_DrunkenTalk_bcf1116f-f145-7a58-03bd-1b1bb0babdb5")
+    local drunkDualAD = Dialog("DEN_AdventurersQuest_AD_AradinAndRemira_5a37f1a2-6678-ebcf-7692-7874a3d1d67f")
+    local canAD = false
+
+    local drinkingAnim = Animation("CUST_Drinking_Sitting_01_e46d0a23-6ff2-4e20-9760-7896894f2f1a")
+
+    helpers.ResetADDelay = function(ADDelay)
+        StopTimer(me, "DEN_AdventurerLeader_ADTimer")
+        StartTimer(me, "DEN_AdventurerLeader_ADTimer", ADDelay, 0)
+        canAD = false
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Idle = Action {
+        function()     
+            if(not IsInDialog(me,true)) then StartAutomatedDialog(DrunkAD,true,me) end  
+            Sleep(5.0)      
+            PlayAnimation(drinkingAnim, true, false)
+            Sleep(5.0)           
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_AdventurerLeader_ADTimer") then canAD = true end
+    end
+    events.DialogStarted = function(e)
+        if(DrunkAD and (e.Instance.DialogUUID == DrunkAD.Guid or e.Instance.DialogUUID == drunkDualAD.Guid)) then
+            helpers.ResetADDelay(40)
+        end
+    end
+
+end}

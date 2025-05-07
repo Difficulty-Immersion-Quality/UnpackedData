@@ -1,0 +1,166 @@
+    game.states.PLA_ZhentDungeon_Zhent03 = State{function ()
+
+        modules = { "shared.dialog" }
+
+        local PLA_ZhentDungeon_WelcomeTrigger
+        local PLA_ZhentDungeon_Door1
+        local PLA_ZhentDungeon_Door1Key
+        local PLA_ZhentDungeon_State_FallBack
+        local PLA_ZhentDungeon_State_CancelWelcome
+        local PLA_ZhentDungeon_State_TrapDialogueInProgress = Flag("PLA_ZhentDungeon_State_TrapDialogueInProgress_fbe1f682-fea0-44f6-ab2a-d454cc151c12")
+        local IsLookingAtPainting = false
+        local PaintingPlace
+        local home
+        local S_GLO_DoubtingArtist = Entity("S_GLO_DoubtingArtist_3ae152be-8ff6-420c-81a0-68d6a55cd5bd")
+        local PLA_ZhentDungeon_EscapeTrigger3_1 = Entity("S_PLA_ZhentDungeon_EscapeTrigger3_1_8e5a3a17-cb44-499b-8964-74c14175e676")
+        local FreedByBribe
+        local FreedByViolence
+
+        local stillHasPainting = true
+
+        events.EntityEvent=function(e)
+            if e.TargetEntity == me then
+                if e.Event == "PLA_NoMorePainting" then
+                    stillHasPainting = false
+                end
+            end
+        end
+
+        self.OnInit = function()
+            PLA_ZhentDungeon_WelcomeTrigger = FindEntity("S_PLA_ZhentDungeon_WelcomeTrigger_fadb42a8-ae41-4185-bb9b-2d09bfc44701")
+            PLA_ZhentDungeon_State_FallBack = Flag("PLA_ZhentDungeon_State_FallBack_7a94f079-2bc8-495e-99f2-5b04b03a7d1d")
+            PaintingPlace = FindEntity("S_PLA_ZhentDungeon_EscapeTrigger3_1_8e5a3a17-cb44-499b-8964-74c14175e676")
+            home = FindEntity("S_PLA_ZhentDungeon_EscapeTrigger3_1b_e71cc978-200b-41f0-bdf8-6612d5a1233c")            
+            local quest_GLO_DoubtingArtist =  FindQuest("GLO_DoubtingArtist")
+            FreedByBribe = FindQuestUpdate(quest_GLO_DoubtingArtist, "ZhentDungeon_FreedByBribe")
+            FreedByViolence = FindQuestUpdate(quest_GLO_DoubtingArtist, "ZhentDungeon_FreedByViolence")
+        end
+
+        nodes.Action_FallBack = Proxy{
+            game.states.PLA_ZhentDungeon_ZhentsFallBack,
+            params = {backPosition = "S_PLA_ZhentDungeon_EscapeTrigger3_2_f480aceb-77a2-4da8-94c9-e2c14c72a9ae"
+                     },
+            Valid = function()
+                return GetFlag(PLA_ZhentDungeon_State_FallBack, nil)
+            end,
+        }
+
+        nodes.trapNegotiationBehaviour = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params ={trigger = "S_PLA_ZhentDungeon_EscapeTrigger3_WatchTrap_5cd08b26-7ba6-4a23-9899-da4ade9337b2"},
+            CanEnter = function()
+                return GetFlag(PLA_ZhentDungeon_State_TrapDialogueInProgress)
+            end
+    
+        }
+
+        nodes.Selector_Packing = Selector{
+            function(nodes)
+                if IsLookingAtPainting then
+                        if stillHasPainting and
+                           FreedByBribe ~= nil and
+                           FreedByViolence ~= nil and
+                           not QuestUpdateIsUnlocked(FreedByBribe) and
+                           not QuestUpdateIsUnlocked(FreedByViolence) and
+                           mod.dialog.IsSpeakerAvailableAndNear(S_GLO_DoubtingArtist, PLA_ZhentDungeon_EscapeTrigger3_1, 8.0, true, false) then
+                            return
+                            GetWeightedCanEnter(nodes, {
+                                [nodes.Action_Idle1] = 3,
+                                [nodes.Action_AD_Painting]= 2
+                            })
+                        else
+                            return nodes.Action_Idle1
+                        end
+                else
+                    if stillHasPainting then
+                        return
+                        GetWeightedCanEnter(nodes, {
+                            [nodes.Action_Idle1] = 3,
+                            [nodes.Action_Idle2] = 3,
+                            [nodes.Action_AD]= 4
+                        })
+                    else
+                        return
+                        GetWeightedCanEnter(nodes, {
+                            [nodes.Action_Idle1] = 3,
+                            [nodes.Action_Idle3] = 3,
+                            [nodes.Action_AD]= 4
+                        })
+                    end
+                end
+            end,
+        }
+
+        nodes.Selector_Packing.Action_AD = Proxy{
+            game.states.GLO_ADManager,
+            params={
+                AD = "PLA_ZhentDungeon_Zhent03_AD_Zhent04_e7a1d28c-b7ae-9b04-9d70-1fb274587647",
+                regionBlockFlag = "PLA_ZhentDungeon_State_BlockAD_f2d6834a-a9ef-4328-9ed1-a1cb84226d8c",
+                dialogBlockFlag = "PLA_ZhentDungeon_State_BlockAD_Zhent03_c080dcab-107d-4efc-967f-c58d0e248ec9",
+                partners = {"S_PLA_ZhentDungeon_Zhent04_50c17970-3683-4417-b4f3-bd1e117e3176"}
+            }
+        }
+
+        nodes.Selector_Packing.Action_AD_Painting = Proxy{
+            game.states.GLO_ADManager,
+            params={
+                AD = "PLA_ZhentDungeon_Zhent03_AD_ArtCritics_6a949731-cd0a-a5f7-8282-697902eb902e",
+                regionBlockFlag = "PLA_ZhentDungeon_State_BlockAD_f2d6834a-a9ef-4328-9ed1-a1cb84226d8c",
+                dialogBlockFlag = "PLA_ZhentDungeon_State_BlockAD_Zhent03_c080dcab-107d-4efc-967f-c58d0e248ec9"
+            }
+        }
+
+        nodes.Selector_Packing.Action_Idle1 = Proxy{
+            game.states.PLA_ZhentDungeon_ZhentsPacking_Idle,
+            params={
+                home = "S_PLA_ZhentDungeon_EscapeTrigger3_1b_e71cc978-200b-41f0-bdf8-6612d5a1233c",
+            },
+            OnEnter=function()
+                IsLookingAtPainting = false
+            end
+        }
+
+        nodes.Selector_Packing.Action_Idle2 = Action{function()
+            if GetDistanceTo(PaintingPlace, me) > 1.5 then
+                StopAnimation(me)
+                if not IsInDangerousSurfaceFor(PaintingPlace, me.Character) then
+                    try
+                        MoveTo(PaintingPlace)
+                        LookFrom(PaintingPlace)
+                        IsLookingAtPainting = true
+                    catch e then
+                        Sleep(1.0)
+                        return
+                    end
+                else
+                    try
+                        LookAtEntity(PaintingPlace, 3.0)
+                    catch e then
+                        Sleep(1.0)
+                        return
+                    end
+                end
+            end
+            Sleep(math.random()*4.0+math.random()*4.0+3.0) -- Peaked distribution
+        end
+        }
+
+        nodes.Selector_Packing.Action_Idle3 = Action{function()
+            try
+                LookAtEntity(PaintingPlace, 3.0)
+            catch e then
+                Sleep(1.0)
+                return
+            end
+            Sleep(math.random()*4.0+math.random()*4.0+3.0) -- Peaked distribution
+            try
+                LookFrom(home)
+            catch e then
+                Sleep(1.0)
+                return
+            end
+        end
+        }
+
+    end
+    }

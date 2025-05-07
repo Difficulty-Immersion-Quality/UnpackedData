@@ -1,0 +1,41 @@
+game.states.PLA_ChokepointScout = State { function ()
+    description = [[Tiefling Scout that is briefly there.]]
+
+    local lookingAnim = Animation([[CUST_LookingFarDangerLoop_01_93e6e010-6287-4fd6-add2-4a76a136b9ca]])
+    local moveToPoint = Entity([[S_PLA_ScoutPoint_0aa948f4-1fd0-4943-a3dc-4f4fd2cbea91]])
+    local steerToPoint = Entity([[S_PLA_ScoutLookAtPoint_818fab0f-c630-46b9-827a-075f7860f1d9]])
+    local closeToGith = Entity([[S_PLA_ScoutDownBox_198849d7-7f06-4520-a9e6-1ddedfe38660]])
+
+    nodes.AtGith = Action {
+        CanEnter = function()
+            return IsInTrigger(me, closeToGith.Trigger)
+        end,
+        function()
+            ApplyStatus(me, "ANIM_COWER")
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+        end
+    }
+
+    nodes.LookinFar = Action {
+        function()
+            try
+                MoveTo(moveToPoint, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(1)
+            end
+            SteerTo(steerToPoint)
+            PlayAnimation(lookingAnim, false, true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+    }
+
+end}

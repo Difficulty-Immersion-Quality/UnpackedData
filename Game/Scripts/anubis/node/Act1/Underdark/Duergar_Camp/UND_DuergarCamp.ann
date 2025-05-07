@@ -1,0 +1,152 @@
+game.states.UND_DuergarCamp_BattleFormation = State{function()
+    params.BattlePosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move to prepare for battle in the Duergar Camp.
+    ]]}
+
+    local tr_BattlePosition
+
+    self.OnInit = function()
+        tr_BattlePosition = FindEntity(params.BattlePosition)
+    end
+
+    nodes.State_BattleFormation = Action{
+        function()
+            if not IsInDangerousSurfaceFor(tr_BattlePosition, me.Character) then
+                if GetDistanceTo(me, tr_BattlePosition) > 2.0 then
+                    try
+                        MoveTo(tr_BattlePosition,MovementSpeed.Run)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(tr_BattlePosition, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(tr_BattlePosition)
+                end
+            else
+                LookAtEntity(tr_BattlePosition, 3.0)
+            end
+            Sleep(2.0)
+        end
+    }
+end}
+
+game.states.UND_DuergarCamp_CaveInCleared = State{function()
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is about to be destroyed or has been already in the Duergar Camp.
+    ]]}
+
+    local tr_caveInPosition
+
+    self.OnInit = function()
+        tr_caveInPosition = FindEntity(params.CaveInPosition)
+    end
+
+    nodes.State_CaveInCleared = Action{
+        function()
+            if not IsInDangerousSurfaceFor(tr_caveInPosition, me.Character,0.5) then
+                if GetDistanceTo(me, tr_caveInPosition) > 2.0 then
+                    try
+                        MoveTo(tr_caveInPosition,MovementSpeed.Run)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(tr_caveInPosition, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(tr_caveInPosition)
+                end
+            else
+                LookAtEntity(tr_caveInPosition, 3.0)
+            end
+            Sleep(2.0)
+        end
+    }
+end}
+
+game.states.UND_DuergarCamp_CaveInEvacuation = State{function()
+    params.CaveInEvacuationBox = {type = EParamType.String, help=[[
+        The trigger to which the characters will run if the explosives are set near the cave-in.
+    ]]}
+
+    local tr_caveInEvacBox
+    local tr_caveInLookAt
+
+    self.OnInit = function()
+        tr_caveInEvacBox = FindEntity(params.CaveInEvacuationBox)
+        tr_caveInLookAt = FindEntity("S_UND_DuergarCamp_CaveIn_LookAt_1b97fad4-456b-4a5a-ac43-10841fca2711")
+    end
+
+    nodes.State_CaveInEvacuation = Action {
+        function()
+            if GetDistanceTo(me, tr_caveInEvacBox) > 2.0 and not IsInTrigger(me,tr_caveInEvacBox.Trigger) then
+                local tr_randomEvacPos = TriggerGetRandomPosition(tr_caveInEvacBox.Trigger)
+                local tr_validEvacPos = FindValidPosition(tr_randomEvacPos,2.0,me)
+                try
+                    MoveTo(tr_validEvacPos,MovementSpeed.Run)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    LookAtEntity(tr_caveInLookAt, 3.0)
+                    Sleep(2.0)
+                end
+                SteerTo(tr_caveInLookAt)
+                LookAtEntity(tr_caveInLookAt, 3.0)
+            else
+                SteerTo(tr_caveInLookAt)
+                LookAtEntity(tr_caveInLookAt, 3.0)
+            end
+            Sleep(5.0)
+        end
+    }
+end}
+
+game.states.UND_DuergarCamp_PostMutiny = State{function()
+    params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled by either party in the Duergar Camp.
+    ]]}
+
+    modules = {"shared.moveto"}
+
+    local postMutinyPosition = Entity(params.PostMutinyPosition)
+    local liningUp = false
+
+    nodes.LineUp_MoveTo = Action {
+        function()
+			DebugText(me,"Lining up")
+			mod.moveto.MoveTo(postMutinyPosition,true,0,"Run")
+		end,
+        CanEnter = function()
+            return liningUp==true and GetDistanceTo(me, postMutinyPosition) > 0.5
+        end
+    }
+
+	nodes.LineUp_AD = Action {
+        function()
+			LookFrom(postMutinyPosition)
+			DebugText(me,"Looking and speaking")
+			Sleep(6)
+		end,
+        Valid = function()
+            return liningUp==true and GetDistanceTo(me, postMutinyPosition) < 0.5
+        end
+    }
+
+	nodes.Idle = Action{
+		function()
+			Wander(5,24,MovementSpeed.Stroll,postMutinyPosition)
+		end,
+        Valid = function()
+            return liningUp == false
+        end
+	}
+
+    events.EntityEvent = function(e)
+        if e.Event == "UND_DuergarCamp_PostMutiny_LineUp" then
+            DebugText(me,"UND_DuergarCamp_PostMutiny_LineUp")
+            liningUp = true
+        end
+
+        if e.Event == "UND_DuergarCamp_PostMutiny_Dismiss" then
+            DebugText(me,"UND_DuergarCamp_PostMutiny_Dismiss")
+            liningUp = false
+        end
+    end
+
+end}

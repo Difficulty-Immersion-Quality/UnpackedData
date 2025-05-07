@@ -1,0 +1,64 @@
+game.states.LOW_Boo_Idle = State { function()
+    description = [[Behavior for Boo in Abandoned Cistern]]
+
+    modules = { "shared.dialog","shared.moveto","shared.util" }
+
+        local BooArrivedAtMinscCorpse = Flag("LOW_MinscHideout_BooSittingAtMinscCorpse_f0a36d0c-70cb-4987-9332-36e5989d3327")
+        local MinscSavedFromAbsolute = Flag("ORI_Minsc_State_SavedFromAbsolute_62e1d5ec-7c7e-70c2-68de-cadc7c7f5f20")
+        local MinscIsPermaDefeated = Flag("ORI_Minsc_State_PermaDefeated_e61d7a9c-5c7c-4149-809d-49ca73ebf5ef")
+        local Minsc = Entity("S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba")
+        local BooSadAD = Dialog("LOW_MinscHideout_AD_MinscDied_BooSad_c56f158c-45f5-1fdf-27f9-ee9c83ac0277")
+        local BooAngryAD = Dialog("LOW_MinscHideout_AD_MinscDied_BooAngry_15c5dcd7-c7e4-8987-815e-deb168d149c5")
+
+        nodes.MinscDead =
+            ImmediateSelector {
+            Valid = function(nodes)
+                return GetFlag(MinscIsPermaDefeated) and not GetFlag(MinscSavedFromAbsolute)
+            end
+        }
+
+        nodes.MinscDead.GoToMinscCorpse = Action {
+            function()
+                local moveResult = MoveTo(Minsc, MovementSpeed.Run, true, false, 1.0, 2.0)
+                if moveResult ~= error.MovementError.None then
+                    SteerTo(Minsc)
+                    Sleep(2.0)
+                end
+                if (GetDistance2DTo(BursarSpot, me) < 2.0) then
+                    SetFlag(BooArrivedAtMinscCorpse)
+                end
+            end,
+            Valid = function()
+                return GetDistance2DTo(me, Minsc) > 2.0
+            end
+        }
+
+        nodes.MinscDead.ADNearMinscCorpse = Action {
+            function()
+                if Minsc ~= nil then
+                    if mod.moveto.MoveToPoint(Minsc, MovementSpeed.Run, me) then
+                        SteerTo(Minsc)
+                    end
+                end
+                mod.util.SleepRandom(1.0, 4.0)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    BooSadAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 9.0
+                    },
+                    me                
+                )
+            end,
+            Valid = function()
+                return GetDistance2DTo(me, Minsc) <= 2.0
+            end
+        }
+
+        nodes.Wait = Action {
+            function()
+                Sleep(1.0)
+            end
+        }
+    end
+}

@@ -1,0 +1,74 @@
+game.states.LOW_Guildhall_Member_001 = State{function ()
+    
+    modules = { "shared.dialog" }
+
+    local FinishedTalkingToZhentMember = Flag("LOW_Guildhall_State_AD_Intro_ZhentGuild_Finished_4ab206fc-7590-46e5-98c6-395795dae13d")
+    local GuildhallPostCoupState = Flag("LOW_Guildhall_State_PostCoup_f777d823-f99b-42f5-bc0e-05a58b6c792d")
+
+    local GuildMember001_MeetingPosition_STR = "S_LOW_Guildhall_Member_001_MeetingPoint_968108be-1d25-4a07-bf4f-98114f3672d8"
+    local GuildMember001_Position_STR = "S_LOW_Guildhall_Member_001_1f8453f1-adc3-42b6-b415-63186e96441e"
+
+
+    local patrolSpline = Spline("S_LOW_Guildhall_Member_001_PatrolSpline_fb6d0dc5-e128-4264-9dec-598bc88f0ba8")
+    local pause = false
+    local canPatrol = true
+
+    --------------------------------Nodes--------------------------------
+
+    nodes.PreCoup = Selector {
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end
+    }
+
+    nodes.PreCoup.Action_WaitingForMeeting = Proxy {
+        game.states.GLO_StateInTrigger,
+        params = {
+            Trigger = GuildMember001_MeetingPosition_STR
+        },
+        Valid = function() 
+            return not GetFlag(FinishedTalkingToZhentMember) and not GetFlag(GuildhallPostCoupState)
+        end
+    }
+
+    nodes.PreCoup.Patrol = Action{
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Stroll, -1)
+        end,
+
+        Valid = function()
+            return patrolSpline ~= nil and canPatrol
+        end
+    }
+
+    nodes.PreCoup.IdlePrecoup = Action {
+        function()
+            MoveTo(Entity(GuildMember001_Position_STR), MovementSpeed.Stroll, true, false)
+            LookFrom(Entity(GuildMember001_Position_STR))
+            Sleep(18 + 3.0 * math.random())
+        end,
+        OnEnter = function()
+            StartTimer(me, "PatrolCD", 18.0, 0)
+        end,
+    }
+
+    nodes.FallbackIdle = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+     --------------------------------Events--------------------------------
+    events.SplineControlPointReached = function(ev)
+        if ev.Event == "PatrolFinished" then
+            canPatrol = false
+        end
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "PatrolCD" then 
+            canPatrol = true
+        end
+    end
+
+end}

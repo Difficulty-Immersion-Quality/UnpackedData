@@ -1,0 +1,610 @@
+game.states.CHA_FL1_BanditLockpicker = State{ function()
+    -- idle position when BanditGuard call for help
+    local combatPos = Entity("S_CHA_BanditLockpickCombatPos_ccd11041-d1bf-4efa-9309-a838eb55fd2f")
+
+    --idle position after boulder fall
+    local crashPos = Entity("S_CHA_BanditLockpickCrashPosition_499be5b5-524a-4484-a9de-2123cc4da2cf")
+
+    --idle position after finding someone in the corridor and warning BanditSanctum
+    local corridorPos = Entity("S_CHA_BanditLockpickCorridorPos_ba7245e2-8794-492b-84c0-fad0b056964f")
+
+    -- BanditGuard and BanditSanctum
+    local bandit1 = Entity("S_CHA_FL1_BanditGuard_4000f859-71fe-49ef-8400-da44b6fef92a")
+    local bandit2 = Entity("S_CHA_FL1_BanditSanctum_f0945b85-3cfe-4312-b49a-3741b1f0bfc7")
+
+    -- idle patrol : lockedDoor is the door she is trying to lockpick, and patrol3 is the spot from where she can see it opened
+    local patrol1 = Entity("S_CHA_LockedDoorPoint_774f677b-7ea5-4d0f-b38f-a13aa0229d61")
+    local patrol2 = Entity("S_CHA_BarrelRoomPoint_4e688281-823e-4112-a261-050800df566a")
+    local patrol3 = Entity("S_CHA_LockpickerSpotDoorPosition_fd29a024-2235-4dfa-8f9e-b71a2f9b4c9d")
+    local patrolDialog = Dialog("CHA_Crypt_AD_BanditLockpickerLockpicking_889abbce-0566-aa66-e2fc-f6f7a5a355b6")
+
+    -- Path to take and dialogs in the series of event where she find the door open
+    local talkOpenDoor1 = Entity("S_CHA_BanditLockpickerTalkAboutOpenDoor1_099b5f30-d1c4-410d-8af4-5dbbeca90785")
+    local talkOpenDoor2 = Entity("S_CHA_BanditLockpickerTalkAboutOpenDoor2_d3cf2495-65c2-4830-8e89-fd9e11e4d8da")
+    local talkOpenDoorBench = Entity("S_CHA_BanditLockpickerBench_7d182f45-29ef-477b-a6d6-b6532618dcec")
+
+    local spotOpenDoorDialog = Dialog("CHA_Crypt_AD_BanditLockpickerOpenDoor_c2daa63b-9437-7796-bae9-7bdf7f8b8eb0")
+    local OpenDoorBanter = Dialog("CHA_Crypt_AD_BanditOpenDoorBanter_6aab106f-a6e3-2e83-4800-afbe50dc6ab3")
+    local foundDeadBodyDialog = Dialog("CHA_Crypt_AD_BanditLockpickerFoundDeadBandit_6068e9c3-189a-7a37-4ded-a2ef34757288")
+
+    -- Dialog if she surprise the player near the door
+    local spotUnlockDialog = Dialog("CHA_Crypt_AD_BanditLockpickerUnlocked_b547f198-2e0c-f127-fe71-b16d40d9617e")
+    local spotFromBelowDialog = Dialog("CHA_Crypt_AD_BanditLockpickerSurprised_bf3e5e5a-0f9b-6fbd-9e46-dcbead5d75ae")
+
+    -- door between her and BanditSanctum, used only when warning him that someone is in the corridor
+    local sanctumDoor = Entity("S_CHA_FL1_InnerSanctumDoor_6d33d273-9582-4242-b7f5-fe68c0de6f78")
+
+    -- Locked door she is trying to open
+    local lockedDoor = Entity("S_CHA_FL1_Stairs_Door_a1e0afa3-7a19-4607-8113-9b0b4dbe3c10")
+
+    -- if found dead bandit as the most suspicious activity, then wander
+    local wanderArea = Entity("S_CHA_SanctumBanditWanderArea_4badf830-70b5-42d4-88ca-b42434726c85")
+    local deadBanditSleepMax = 10
+    local deadBanditSleepMin = 8
+    local deadBanditWanderDurationMax = 7
+    local deadBanditWanderDurationMin = 3
+    local wanderDialog = Dialog("CHA_Crypt_AD_BanditLockpickerWander_8845233d-7f93-8798-5b49-215cb1765206")
+
+    local pillarCrashed = false
+    local enemyAtTheDoor = false
+    local enemyInTheCorridor = false
+    local enemyInTheCorridor_AlertHasBeenPassed = false
+    local spotUnlock = false
+    local spotFromBelow = false
+    local spotOpenDoor = false
+    local spotGoSit = false
+    local foundDeadBandit = false
+
+    events.EntityEvent=function(e)
+        if e.Event == "CHA_EnemyAtTheCrash" then
+            pillarCrashed = true
+        elseif e.TargetEntity == me then
+            if e.Event == "CHA_EnnemyAtTheDoor" then
+                enemyAtTheDoor = true
+            elseif e.Event == "CHA_BanditSpot" then
+                enemyInTheCorridor = true
+            elseif e.Event == "CHA_CallForHelp" then
+                enemyInTheCorridor_AlertHasBeenPassed = true
+            elseif e.Event == "CHA_BanditSpot_Unlock" then
+                spotUnlock = true
+            elseif e.Event == "CHA_BanditSpot_FromBelow" then
+                spotFromBelow = true
+            elseif e.Event == "CHA_BanditSpot_OpenDoor" then
+                SetEntityEvent(bandit2,"CHA_BanditSpot_OpenDoor")
+                spotOpenDoor = true
+            elseif e.Event == "CHA_GoSit" then
+                spotGoSit = true
+            elseif e.Event == "CHA_GUS303616_ReassignSanctumDoor" then
+                sanctumDoor = Entity("S_CHA_FL1_InnerSanctumDoor_6d33d273-9582-4242-b7f5-fe68c0de6f78")
+            end
+        end
+    end
+
+    nodes = ImmediateSelector{
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Action_EnemyAtTheDoor = Action{
+        function()
+            if bandit1.IsInCombat then
+                try
+                    MoveTo(bandit1,MovementSpeed.Run)
+                    SetEntityEvent(me, "CHA_JoinGuardCombat")
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo failed")
+                    Sleep(1.0)
+                end
+            else
+                if bandit2.IsInCombat then
+                    try
+                        MoveTo(bandit2,MovementSpeed.Run)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me,"Debug : MoveTo failed")
+                        Sleep(1.0)
+                    end
+                else
+                    if IsInDangerousSurfaceFor(combatPos, me.Character) then
+                        LookAtEntity(combatPos, 3.0)
+                        Sleep(1)
+                    else
+                        try
+                            SetWeaponUnsheathed(me, true, false)
+                            MoveTo(combatPos,MovementSpeed.Run)
+                            LookFrom(combatPos)
+                            SetEntityEvent(me,"CHA_InPosition")
+                            WaitForInterrupt()
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            DebugText(me,"Debug : MoveTo/LookFrom failed")
+                            Sleep(1.0)
+                        end
+                    end
+                end
+            end
+        end,
+        Valid = function()
+            return enemyAtTheDoor
+        end
+    }
+
+    nodes.Action_EnnemyInCorridor_Alert = Action{
+        function()
+            if not spotGoSit then
+                if IsInDangerousSurfaceFor(sanctumDoor, me.Character) then
+                    LookAtEntity(sanctumDoor, 3.0)
+                    Sleep(1)
+                else
+                    try
+                        SetWeaponUnsheathed(me, true, false)
+                        MoveTo(sanctumDoor,MovementSpeed.Run)
+                        if sanctumDoor.Item.IsClosed then
+                            try
+                                UseItem(sanctumDoor.Item, true, false, true, false)
+                            catch e if ls.CheckType(e, error.UseItemFailed) then
+                                DebugText(me,"Debug : OpenDoor failed")
+                                Open(sanctumDoor)
+                            end
+                        end
+                        SetUnicastEntityEvent(me,"CHA_CallForHelp")
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me,"Debug : MoveTo failed")
+                        Sleep(1.0)
+                    end
+                end
+            else
+                SetUnicastEntityEvent(me,"CHA_CallForHelp")
+            end
+        end,
+        Valid = function()
+            return (enemyInTheCorridor and not enemyInTheCorridor_AlertHasBeenPassed)
+        end
+    }
+
+    nodes.Action_EnnemyInCorridor = Action{
+        function()
+            if IsInDangerousSurfaceFor(corridorPos, me.Character) then
+                LookAtEntity(corridorPos, 3.0)
+                Sleep(1)
+            else
+                try
+                    SetWeaponUnsheathed(me, true, false)
+                    MoveTo(corridorPos,MovementSpeed.Run)
+                    LookFrom(corridorPos)
+                    SetEntityEvent(me,"CHA_InPosition")
+                    WaitForInterrupt()
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo/LookFrom failed")
+                    Sleep(1.0)
+                end
+            end
+        end,
+        Valid = function()
+            return (enemyInTheCorridor and enemyInTheCorridor_AlertHasBeenPassed)
+        end
+    }
+
+    -- She see the door opening, with the player behind
+    nodes.Action_SpotFromBelow = Action{
+        function()
+            try
+                StartAutomatedDialog(spotFromBelowDialog,false,me)
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me,"Debug : AD failed")
+            end
+            SetEntityEvent(me,"CHA_BanditSpot")
+        end,
+        Valid = function()
+            return spotFromBelow
+        end
+    }
+
+    -- She see the player in the corridor, with the door unlocked next to him
+    nodes.Action_SpotUnlock = Action{
+        function()
+            try
+                StartAutomatedDialog(spotUnlockDialog,true,me)
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me,"Debug : AD failed")
+            end
+            SetEntityEvent(me,"CHA_BanditSpot")
+        end,
+        Valid = function()
+            return spotUnlock
+        end
+    }
+
+    nodes.Action_PillarCrashed = Action{
+        function()
+            if IsInDangerousSurfaceFor(crashPos, me.Character) then
+                LookAtEntity(crashPos, 3.0)
+                Sleep(1)
+            else
+                try
+                    SetWeaponUnsheathed(me, true, false)
+                    MoveTo(crashPos,MovementSpeed.Run)
+                    LookFrom(crashPos)
+                    SetEntityEvent(me,"CHA_InPositionAtTheCrash")
+                    WaitForInterrupt()
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo failed")
+                    Sleep(1.0)
+                end
+            end
+        end,
+        Valid = function()
+            return pillarCrashed
+        end
+    }
+
+    nodes.Action_DeadBandit = Action{
+        function()
+            if wanderArea ~= nil then
+                try
+                    Wander(wanderArea, (math.random()*(deadBanditWanderDurationMax-deadBanditWanderDurationMin) + math.random()*(deadBanditWanderDurationMax-deadBanditWanderDurationMin))/2 + deadBanditWanderDurationMin)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : Wander failed")
+                    Sleep(1.0)
+                end
+            end
+            try
+                StartAutomatedDialog(wanderDialog,false,me)
+            catch e if  ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me,"Debug : AD failed")
+            end
+            SetEntityEvent(me,"CHA_InPosition")
+            Sleep((math.random()*(deadBanditSleepMax-deadBanditSleepMin) + math.random()*(deadBanditSleepMax-deadBanditSleepMin))/2 + deadBanditSleepMin)
+        end,
+        Valid = function()
+            return foundDeadBandit
+        end
+    }
+
+    -- If BanditLockpicker find the door open, she and BanditSanctum will find each other at talkOpenDoor1
+    -- Then, when BanditLockpicker reach talkOpenDoor1 they will talk while going sit on talkOpenDoorBench
+    nodes.Action_SeeDoorOpened_GoSitSomewhere = Action{
+        function()
+            if GetDistance2DTo(me,talkOpenDoor2)>2 and not IsInDangerousSurfaceFor(talkOpenDoor2, me.Character) then
+                try
+                    if sanctumDoor.Item.IsClosed then
+                        UseItem(sanctumDoor.Item, true, false)
+                    end
+                    StartAutomatedDialog(OpenDoorBanter, true, me, bandit2)
+                    SetEntityEvent(bandit2, "CHA_GoSit")
+
+                    MoveTo(talkOpenDoor2,MovementSpeed.Walk)
+                    UseItem(talkOpenDoorBench.Item, true, false)
+                    SetEntityEvent(me,"CHA_InPosition")
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me,"Debug : MoveTo failed")
+                catch e if ls.CheckType(e, error.UseItemFailed) then
+                        DebugText(me,"Debug : Sit failed")
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                        DebugText(me,"Debug : AD failed")
+                end
+            else
+                Sleep(1.0)
+            end
+        end,
+        Valid = function()
+            return spotGoSit
+        end
+    }
+
+    nodes.Action_SeeDoorOpened_LookForBandit = Action{
+        function()
+            if IsInDangerousSurfaceFor(talkOpenDoor1, me.Character) then
+                LookAtEntity(talkOpenDoor1, 3.0)
+                Sleep(1)
+            else
+                try
+                MoveTo(talkOpenDoor1,MovementSpeed.Run)
+                    try
+                        if not bandit2.Character.IsDead then
+                            SetEntityEvent(me,"CHA_GoSit")
+                        else
+                            StartAutomatedDialog(foundDeadBodyDialog,false,me)
+                            foundDeadBandit = true
+                        end
+                    catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                        DebugText(me,"Debug : AD failed")
+                    end
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo failed")
+                end
+            end
+        end,
+        Valid = function()
+            return spotOpenDoor
+        end
+    }
+
+    nodes.Action_Idle = Action{
+        function()
+            if not IsInDangerousSurfaceFor(patrol3, me.Character) then
+                try
+                    MoveTo(patrol3,MovementSpeed.Walk)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo failed")
+                end
+            end
+            if lockedDoor.Item.IsOpened or lockedDoor.Item.IsDestroyed then
+                try
+                    try
+                        if not IsInDangerousSurfaceFor(patrol1, me.Character) then
+                            MoveTo(patrol1,MovementSpeed.Run)
+                            LookFrom(patrol1)
+                        end
+                    catch e if ls.CheckType(e, error.MovementFailed)  then
+                        DebugText(me,"Debug : MoveTo failed")
+                    end
+                    StartAutomatedDialog(spotOpenDoorDialog,true,me)
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    DebugText(me,"Debug : AD failed")
+                end
+                SetEntityEvent(me,"CHA_BanditSpot_OpenDoor")
+            end
+            if not IsInDangerousSurfaceFor(patrol1, me.Character) then
+                try
+                    MoveTo(patrol1,MovementSpeed.Walk)
+                    LookFrom(patrol1)
+                    if lockedDoor.Item.IsLocked then
+                        StartAutomatedDialog(patrolDialog,false,me)
+                    else
+                        Open(lockedDoor)
+                        StartAutomatedDialog(spotOpenDoorDialog,true,me)
+                        SetEntityEvent(me,"CHA_BanditSpot_OpenDoor")
+                    end
+                catch e if ls.CheckType(e, error.MovementFailed) or ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    DebugText(me,"Debug : MoveTo/AD failed")
+                end
+            end
+            Sleep(6.0)
+            if not IsInDangerousSurfaceFor(patrol2, me.Character) then
+                try
+                    MoveTo(patrol2,MovementSpeed.Walk)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo failed")
+                end
+            end
+            Sleep(10.0)
+        end,
+        Valid = function()
+            return not (enemyAtTheDoor or enemyInTheCorridor or pillarCrashed)
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end
+}
+
+game.states.CHA_FL1_BanditLockpicker_Combat = State{function()
+    modules = { "gustav.Act1.Chapel", "shared.items"}
+
+    ----------------------------------------------------------------------------
+    -- Local variables
+    local pillarCrashed = false
+    local enemyAtTheDoor = false
+    local enemyInTheCorridor = false
+    local alertHasBeenPassed = false
+    local sanctumDoor = Entity("S_CHA_FL1_InnerSanctumDoor_6d33d273-9582-4242-b7f5-fe68c0de6f78")
+    local sanctumDoorFallbackPos = Entity("S_CHA_FL1_InnerSanctumDoorFallbackPos_2c767ee8-ae66-4bbd-9acc-93a79b062aae")
+
+    local metalDoor = Entity("S_CHA_FL1_MetalGateReplacement_1c9609ee-fc96-4826-bac1-856a609564ac")
+    local metalDoorLever = Entity("S_CHA_FL1_MetalLever_2_7c41cd46-c233-438c-ad5b-03d79cac9a44")
+    local metalDoorFallbackPos = Entity("S_CHA_FL1_MetalDoorFallbackPos_51bf098d-dc2d-44c2-b177-9940f4dc4379")
+
+    local banditGuard = Entity("S_CHA_FL1_BanditGuard_4000f859-71fe-49ef-8400-da44b6fef92a")
+
+    local AD = Dialog("CHA_Crypt_AD_BanditLockpickerCallHelp_425a12a1-959f-484e-19a8-6161c644d69d")
+
+    local canRunBehaviour = true
+    ----------------------------------------------------------------------------
+
+    ----------------------------------------------------------------------------
+    -- State
+    self.OnEnter = function()
+        -- If the pillar has crashed and the guard is dead, continue with default combat behaviour
+        if pillarCrashed and banditGuard.Character.IsDead then
+            alertHasBeenPassed = false
+        end
+    end
+
+    self.Valid = function()
+        return  me.CanActInCombatTeamTurn          and
+                not me.IsCombatPaused        and
+                mod.Chapel.CanMoveInTurn(me) and
+                canRunBehaviour              and
+                not alertHasBeenPassed
+    end
+    ----------------------------------------------------------------------------
+
+    ----------------------------------------------------------------------------
+    -- Helpers
+    helpers.action.CombatSafeUseItem = function(entity, useDash)
+        DebugText(me,"Try use item")
+        if IsInDangerousSurfaceFor(entity, me.Character) then
+            canRunBehaviour = false
+            return
+        end
+
+        if HasActiveStatus(me, "FLANKED") and CanCast(me.Character, "Shout_Disengage") then
+            UseSpell("Shout_Disengage", me)
+        end
+
+        try
+            UseItem(entity.Item)
+        catch e
+        if ls.CheckType(e, error.UseItemFailed) then
+            DebugText(me,"Debug : UseItem failed, trying to run")
+
+            if useDash and helpers.UseDashIfFarFrom(entity) then
+                helpers.CombatSafeUseItem(entity, false)
+            else
+                ApplyStatus(me, "CHA_BANDIT_ZEROSPEED", true, -1.0)
+                canRunBehaviour = false
+            end
+        end
+    end
+
+    helpers.action.CombatSafeMoveTo = function(pos, useDash)
+        if IsInDangerousSurfaceFor(pos, me.Character) then
+            canRunBehaviour = false
+            return
+        end
+
+        if HasActiveStatus(me, "FLANKED") and CanCast(me.Character, "Shout_Disengage") then
+            UseSpell("Shout_Disengage", me)
+        end
+
+
+        DebugText(me, "Start running")
+        local moveToResult = MoveTo(pos, MovementSpeed.Run, false, false, 0.2, 1.0, false)
+
+        if moveToResult ~= error.MovementError.None then
+            DebugText(me, "Error : MoveTo failed")
+
+            if useDash and helpers.UseDashIfFarFrom(pos) then
+                DebugText(me, "Using Dash")
+                helpers.CombatSafeMoveTo(pos, false)
+            else
+                ApplyStatus(me, "CHA_BANDIT_ZEROSPEED", true, -1.0)
+                canRunBehaviour = false
+            end
+        end
+    end
+
+    helpers.action.UseDashIfFarFrom = function(entity)
+        local distance = GetDistanceTo(me, entity)
+        if distance > 0.2 and CanCast(me.Character, "Shout_Dash_NPC") then
+            UseSpell("Shout_Dash_NPC", me)
+            return true
+        else
+            return false
+        end
+    end
+    ----------------------------------------------------------------------------
+
+    ----------------------------------------------------------------------------
+    -- Nodes
+    nodes = Selector{
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Action_EnemyAtCrash_Alert = Action{
+        function()
+            if not mod.items.SafeIsDestroyed(metalDoor) and metalDoor.Item.IsLocked then -- Door locked: use lever
+                helpers.CombatSafeUseItem(metalDoorLever, true)
+            elseif not mod.items.SafeIsDestroyed(metalDoor) and metalDoor.Item.IsClosed then -- Door closed and unlocked: open door
+                helpers.CombatSafeUseItem(metalDoor, true)
+            elseif not mod.items.SafeIsDestroyed(metalDoor) then
+                helpers.CombatSafeMoveTo(metalDoor, true)
+            else
+                helpers.CombatSafeMoveTo(metalDoorFallbackPos, true)
+            end
+
+            if canRunBehaviour then
+                try
+                    StartAutomatedDialog(AD, false, me)
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    DebugText(me,"Debug : AutomatedDialogStartFailed")
+                end
+
+                SetEntityEvent(me, "CHA_CallForHelp_AtCrash")
+                alertHasBeenPassed = true
+            end
+
+            canRunBehaviour = false
+        end,
+        Valid = function()
+            return  (pillarCrashed or enemyInTheCorridor or enemyAtTheDoor) and -- Enemy placement
+                    not banditGuard.Character.IsDead and -- Andorn is dead or not
+                    not (not mod.items.SafeIsDestroyed(metalDoor) and metalDoor.Item.IsClosed and HasActiveStatus(metalDoor, "ARCANE_LOCK")) -- Door is closed with ARCANE LOCK spell
+        end
+    }
+
+    nodes.Action_EnemyInCorridor_Alert_Combat = Action{
+        function()
+            if not mod.items.SafeIsDestroyed(sanctumDoor) and sanctumDoor.Item.IsClosed then
+                DebugText(me, "Trying to open the door")
+                helpers.CombatSafeUseItem(sanctumDoor, true)
+            elseif not mod.items.SafeIsDestroyed(sanctumDoor) then
+                DebugText(me, "Door open, move to pos")
+                helpers.CombatSafeMoveTo(sanctumDoor, true)
+            else
+                DebugText(me, "Door destroyed, move to fallback")
+                helpers.CombatSafeMoveTo(sanctumDoorFallbackPos, true)
+            end
+
+            if canRunBehaviour then
+                try
+                    StartAutomatedDialog(AD, false, me)
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    DebugText(me, "Debug : AutomatedDialogStartFailed")
+                end
+
+                SetUnicastEntityEvent(me, "CHA_CallForHelp")
+                alertHasBeenPassed = true
+            end
+
+            canRunBehaviour = false
+        end,
+        Valid = function()
+            return
+                    not (not mod.items.SafeIsDestroyed(sanctumDoor) and sanctumDoor.Item.IsClosed and HasActiveStatus(sanctumDoor, "ARCANE_LOCK")) -- Door is closed with ARCANE LOCK spell
+        end
+    }
+    ----------------------------------------------------------------------------
+
+    ----------------------------------------------------------------------------
+    -- Events
+    events.EntityEvent=function(e)
+        if e.Event == "CHA_EnemyAtTheCrash" then
+            pillarCrashed = true
+        elseif e.TargetEntity == me then
+            if e.Event == "CHA_EnnemyAtTheDoor" then
+                enemyAtTheDoor = true
+            elseif e.Event == "CHA_BanditSpot" then
+                enemyInTheCorridor = true
+            elseif e.Event == "CHA_CallForHelp" then
+                alertHasBeenPassed = true
+            elseif e.Event == "CHA_GUS303616_ReassignSanctumDoor" then
+                sanctumDoor = Entity("S_CHA_FL1_InnerSanctumDoor_6d33d273-9582-4242-b7f5-fe68c0de6f78")
+            end
+        end
+    end
+
+    events.TurnStarted = function()
+        -- Pillar has crashed and Andorn is dead: continue with normal combat
+        if pillarCrashed and banditGuard.Character.IsDead then
+            canRunBehaviour = false
+        elseif not alertHasBeenPassed then
+            canRunBehaviour = true
+            Interrupt()
+        end
+    end
+
+    events.LeftCombat = function(e)
+        if e.Entity == me then
+            canRunBehaviour = true
+        end
+
+        if HasActiveStatus(me, "CHA_BANDIT_ZEROSPEED") then
+            RemoveStatus(me, "CHA_BANDIT_ZEROSPEED")
+        end
+    end
+
+    events.TurnEnded = function()
+        if HasActiveStatus(me, "CHA_BANDIT_ZEROSPEED") then
+            RemoveStatus(me, "CHA_BANDIT_ZEROSPEED")
+        end
+    end
+    ----------------------------------------------------------------------------
+end
+}

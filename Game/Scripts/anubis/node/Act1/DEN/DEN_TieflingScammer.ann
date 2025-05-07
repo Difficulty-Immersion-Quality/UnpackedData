@@ -1,0 +1,161 @@
+game.states.DEN_TieflingScammer = State {function ()
+    description = [[Behaviour of the Tiefling Scammer.]]
+
+    local atDen = true
+    local contextFlag = Flag("DEN_TieflingScam_State_IsScamming_9b228f6a-e103-391b-621e-91de05ca266d")
+    local denArea
+
+    self.OnInit = function()
+        denArea = FindEntity("S_DEN_ScamPos_5f0eb7d1-c0da-4e12-871e-42c4a3fca48a")
+    end
+
+    nodes.AtDen = Selector {
+        Valid = function()
+            return atDen
+        end
+    }
+
+    nodes.AtDen.OutsideScamArea = Selector {
+        Valid = function()
+            return not IsInTrigger(me, denArea.Trigger)
+        end
+    }
+
+    nodes.AtDen.OutsideScamArea.GoScam = Action {
+        OnLeave = function()
+            ClearFlag(contextFlag, me)
+        end, 
+        function()
+            try
+                if(not IsInTrigger(me, denArea.Trigger) and not IsInDangerousSurfaceFor(denArea, me.Character, 3.0)) then 
+                    MoveTo(denArea)
+                end
+                    SteerTo(lookTarget)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception")
+            end
+        end
+    }
+
+    nodes.AtDen.InScamArea = Selector {
+        Valid = function()
+            return IsInTrigger(me, denArea.Trigger)
+        end
+    }
+
+    nodes.AtDen.InScamArea.Scamming = Proxy {
+        OnEnter = function()
+            SetFlag(contextFlag, me)
+        end,
+        game.states.Sit,
+        params = {
+            useSeatPositionAsFallBack = false,
+            seat = [[S_DEN_ScammerSeat_48157837-cd9d-43d0-9473-4b062227e6dd]],
+            seatTrigger = [[S_DEN_ScamPos_5f0eb7d1-c0da-4e12-871e-42c4a3fca48a]],
+            sitIdle = StateRef{game.states.DEN_TieflingScammer_ScamWithSeat},
+            nonSitIdle = StateRef{game.states.DEN_TieflingScammer_ScamNoSeat}
+        },
+    }
+end}
+
+game.states.DEN_TieflingScammer_ScamWithSeat = State {function ()
+
+    local sadAnim = Animation("CUST_Sad_01_8029ec3b-d903-45b0-9078-fe581c34cbc9") or nil
+    local musicBoxAnim = Animation("CUST_ListenMusicBox_01_e5af5c0f-f32f-45eb-b749-5d8c2b82a6dd")
+    local musicBoxFlag = Flag("DEN_TieflingScam_State_HasMusicBox_ba1d0634-7436-8dcf-492c-5d12b08b5c0b")
+    local scamFlag = Flag("DEN_TieflingScam_Knows_Scam_3d2c9b13-758a-aad1-fa5d-902248958c15")
+    local denArea
+
+    self.OnInit = function()
+        denArea = FindEntity("S_DEN_ScamPos_5f0eb7d1-c0da-4e12-871e-42c4a3fca48a")
+    end
+
+    nodes.Scamming = Action {
+        OnEnter = function()
+            SetEntityEvent(me, "DEN_TieflingScam_StartMusicBox")
+        end,
+        function()
+            LookFrom(denArea)
+            PlayAnimation(musicBoxAnim, false, true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            SetEntityEvent(me, "DEN_TieflingScam_StopMusicBox")
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return GetFlag(musicBoxFlag, me) and not GetFlag(scamFlag)
+        end
+    }
+
+    nodes.ScamNotFoundOut = Action {
+        function()
+            LookFrom(denArea)
+            PlayAnimation(sadAnim, false, true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return not GetFlag(musicBoxFlag, me) and not GetFlag(scamFlag)
+        end
+    }
+
+    nodes.ScamFoundOut = Action {
+        function()
+            LookFrom(denArea)
+            WaitForInterrupt()
+        end, 
+        Valid = function()
+            return GetFlag(scamFlag)
+        end
+    }
+end}
+
+game.states.DEN_TieflingScammer_ScamNoSeat = State {function ()
+
+    local sadAnim = Animation("CUST_Sad_01_8029ec3b-d903-45b0-9078-fe581c34cbc9") or nil
+    local musicBoxFlag = Flag("DEN_TieflingScam_State_HasMusicBox_ba1d0634-7436-8dcf-492c-5d12b08b5c0b")
+    local musicBoxAnim = Animation("CUST_DebugAsset_CustomAnim_01_Loop_50635108-0b10-4232-820a-aac14df09a75")    --Need one for no seat!
+    local scamFlag = Flag("DEN_TieflingScam_Knows_Scam_3d2c9b13-758a-aad1-fa5d-902248958c15")
+    local denArea
+
+    self.OnInit = function()
+        denArea = FindEntity("S_DEN_ScamPos_5f0eb7d1-c0da-4e12-871e-42c4a3fca48a")
+    end
+
+    nodes.Scamming = Action {
+        OnEnter = function()
+            SetEntityEvent(me, "DEN_TieflingScam_StartMusicBox")
+        end,
+        function()
+            MoveTo(denArea)
+            LookFrom(denArea)
+            PlayAnimation(musicBoxAnim, false, true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            SetEntityEvent(me, "DEN_TieflingScam_StopMusicBox")
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return GetFlag(musicBoxFlag, me) and not GetFlag(scamFlag)
+        end
+    }
+
+    nodes.NotScamming = Action {
+        function()
+            MoveTo(denArea)
+            LookFrom(denArea)
+            PlayAnimation(sadAnim, false, true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return GetFlag(scamFlag) or (not GetFlag(musicBoxFlag, me) and not GetFlag(scamFlag))
+        end
+    }
+end}

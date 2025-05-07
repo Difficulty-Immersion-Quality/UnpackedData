@@ -1,0 +1,362 @@
+game.states.DEN_HarpyMeal_CharmedVictim = State { function ()
+
+    description = [[Charmed Kid on the beach in the Druid Grove]]
+
+    modules = { "shared.math","shared.moveto"}
+    -----------------------------------------
+    -- Local variables
+
+    --Entities
+    local charmedArea = Entity("S_DEN_CharmedArea_f30a5987-630f-4346-a4f7-802eb4b25e23")
+    local uncharmedArea = Entity("S_DEN_UncharmedArea_7fdc16b9-3621-4ab5-9847-e9e61a24ca1e")
+    local hideoutPos = Entity("S_DEN_Thieflings_HarpyKidHideoutArea_01_449f15ea-643c-41d9-91a5-c9fcdd92aaea")
+    local abandonPos = Entity("S_DEN_Thieflings_HarpyKidAbandonArea_e52e8a99-5822-45d4-8ce1-2764bd6ea6f8")
+    local hideoutPos1 = Entity("S_DEN_Thieflings_HarpyKidHideoutArea_01_449f15ea-643c-41d9-91a5-c9fcdd92aaea")
+    local hideoutPos2 = Entity("S_DEN_Thieflings_HarpyKidHideoutArea_02_73f290ba-fa2a-4f44-94ce-e55efc70afdf")
+    local hideoutPos3 = Entity("S_DEN_Thieflings_HarpyKidHideoutArea_03_2f856a80-cb9a-4cd1-bfcd-5a883a44dffd")
+    local hideoutPos4 = Entity("S_DEN_Thieflings_HarpyKidHideoutArea_04_359f3dfb-e936-4428-bb28-7f4ced354f79")
+    local hideoutPos5 = Entity("S_DEN_Thieflings_HarpyKidHideoutArea_05_165001e7-d2f0-4bf9-b872-3e10568dec7b")
+
+    --Ints
+    local ADDelay = 35
+
+    --Dialogs
+    local charmedAD = Dialog("DEN_HarpyMeal_AD_GnomeCharmed_a99f08a1-8d4e-da24-ac91-fe3ec4d78b43")
+    local groupDialog = Dialog("DEN_Thieflings_AD_HideoutGuards_817cb43a-88c4-f8dc-df52-88543e32dd0f")
+
+    --Bools
+    local canAD = false
+    local inGroupDialog = false
+
+
+    --Flags
+    local toHideoutFlag = Flag("DEN_HarpyMeal_Event_KidReturnHideout_8180a3b3-8db8-c60f-4df9-e8b95adb14f4")
+    local abandonFlag = Flag("DEN_Thieflings_Event_HideoutAbandoned_f3808740-25b9-4393-a947-7a1f7a88ebda")
+    local inHideout = Flag("DEN_Thieflings_State_AtHideoutPoint_5f768dc1-8294-49ee-b2d2-964fcb22f5ff")
+    local atAbandon = Flag("DEN_Thieflings_State_AtAbandonPoint_d76525c1-b7e4-46b0-9847-73a1fdad245e")
+    local startAbandon = Flag("DEN_Thieflings_Event_Abandoning_883a6c02-9091-4b29-8bc3-99e070e3648b")
+    local emptyingStash = Flag("DEN_Thieflings_State_EmptyingStash_2203ac44-6623-40e6-967e-1b95a7c9dfb2")
+    local charmed = Flag("DEN_HarpyMeal_State_Charmed_91040326-c989-449b-aaa4-332a344462f4")
+
+    --Animations
+    local flexAnim = Animation("CUST_ActingTough_01_69e12673-d18d-4f24-baac-138a6bfff924")
+    local sniffAnim = Animation("CUST_Sniffing_Air_01_92e7ac17-b123-4a26-8e4f-2f8df2502fc2")
+    local boredAnim = Animation("CUST_Listen_Bored_01_020103b1-f053-46e8-92c0-6e0347bcda1d")
+    local charmAnim = Animation("CUST_Curious_01_09ae2a3e-b6e5-42c3-9299-7e569fb44084")  --replace when charmed animation is ready
+
+    --Tables
+    local abandonAnims = {}
+
+    -----------------------------------------
+    -- Helpers
+
+    helpers.ResetADDelay = function()
+        StopTimer(me, "DEN_HarpyMeal_ADTimer")
+        StartTimer(me, "DEN_HarpyMeal_ADTimer", 10.0, 0)
+        canAD = false
+    end
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        StartTimer(me, "DEN_HarpyMeal_ADTimer", ADDelay, 0)
+        abandonAnims = {
+            sniffAnim,
+            boredAnim
+        }
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.CharmedOnBeach = Action {
+        function()
+            if mod.moveto.MoveToPoint(charmedArea,MovementSpeed.Walk,me) then
+                LookFrom(charmedArea)
+                try
+                    PlayAnimation(charmAnim,false,true)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "Animation Failed")
+                end
+                if canAD then
+                    StartAutomatedDialog(charmedAD, true, me)
+                    helpers.ResetADDelay()
+                end
+                Sleep(2.5)
+            end
+        end,
+        Valid = function()
+            return GetFlag(charmed,me)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Uncharmed= Selector {
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return not GetFlag(toHideoutFlag)
+        end
+    }
+
+    nodes.Uncharmed.Idle = Action {
+        function()
+            if mod.moveto.MoveToPoint(uncharmedArea,MovementSpeed.Walk,me) then
+                LookFrom(uncharmedArea)
+                Sleep(1.0)
+            end
+        end
+    }
+
+    nodes.Uncharmed.Wander = Proxy {
+        game.states.DEN_GeneralGroveStates_Wander,
+        params={
+            anchor = "S_DEN_UncharmedArea_7fdc16b9-3621-4ab5-9847-e9e61a24ca1e",
+            wanderMin = 2.0,
+            wanderMax = 3.0
+        }
+    }
+
+    nodes.EmptyingStash= Action {
+        function()
+            Sleep(1)
+        end,
+        Valid = function()
+            return GetFlag(emptyingStash,me)
+        end
+    }
+
+    nodes.Hideout = Selector {
+        Valid = function()
+            return not (GetFlag(startAbandon,me) or GetFlag(abandonFlag))
+        end,
+        function(nodes)
+            if inGroupDialog then
+                return nodes.Banter
+            else
+                return FindDifferentRandomSelectable(nodes)
+            end
+        end
+    }
+
+    nodes.Hideout.Banter= Action {
+        function()
+            Sleep(2.0)
+            if mod.moveto.MoveToPoint(hideoutPos5,MovementSpeed.Walk,me) then
+                LookFrom(hideoutPos5)
+                Sleep(1.0)
+            end
+        end,
+        Valid = function()
+            return not (GetFlag(startAbandon,me) or GetFlag(abandonFlag)) and inGroupDialog
+        end
+    }
+
+    nodes.Hideout.Loc1 = Action {
+        Valid = function()
+            return not (GetFlag(startAbandon,me) or GetFlag(abandonFlag)) and not inGroupDialog
+        end,
+        function()
+            if mod.moveto.MoveToPoint(hideoutPos1,MovementSpeed.Walk,me) then
+                LookFrom(hideoutPos1)
+                if (mod.math.CoinToss(0.5)) then
+                    PlayAnimation(flexAnim,true,false)
+                else
+                    Sleep(4.0)
+                end
+                LookFrom(hideoutPos2)
+                Sleep(4.0)
+            end
+        end
+    }
+
+    nodes.Hideout.Loc2 = Action {
+        Valid = function()
+            return not (GetFlag(startAbandon,me) or GetFlag(abandonFlag)) and not inGroupDialog
+        end,
+        function()
+            if mod.moveto.MoveToPoint(hideoutPos3,MovementSpeed.Walk,me) then
+                LookFrom(hideoutPos3)
+                if (mod.math.CoinToss(0.3)) then
+                    PlayAnimation(boredAnim,true,false)
+                else
+                    Sleep(4.0)
+                end
+                LookFrom(hideoutPos4)
+                Sleep(4.0)
+            end
+        end
+    }
+
+    nodes.AbandonedHideout = Action {
+        function()
+            if mod.moveto.MoveToPoint(abandonPos,MovementSpeed.Walk,me) then
+                LookFrom(abandonPos)
+                PlayAnimation(abandonAnims[math.random(1,#abandonAnims)],true,false)
+                Sleep(math.random(4.0,7.0))
+            end
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_HarpyMeal_ADTimer") then canAD = true end
+    end
+
+    events.LeftCombat = function(e)
+        if e.Entity == me then
+            SetUnicastEntityEvent(me, "ClearPeaceReturn")
+        end
+    end
+
+    events.FlagSet = function(e)
+        if(e.Flag == toHideoutFlag.Guid) then
+            mod.moveto.MoveTo(hideoutPos,true,1.5,"Run","DEN_Thieflings_ArriveAtHideout",2.5,true,false)
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_Thieflings_AbandonedHideout") then
+                SetFlag(startAbandon,me)
+                mod.moveto.MoveTo(abandonPos,true,1.5,"Run","DEN_Thieflings_ArriveAtAbandon",2.5,true,false)
+            elseif(e.Event == "DEN_Thieflings_ArriveAtAbandon") then
+                SetFlag(atAbandon,me)
+            elseif (e.Event == "DEN_Thieflings_ArriveAtHideout") then
+                SetFlag(inHideout,me)
+            end
+        end
+    end
+
+    events.DialogStarted = function(e)
+        if groupDialog then
+            if(e.Instance.DialogUUID == groupDialog.Guid) then
+                inGroupDialog = true
+            end
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if groupDialog then
+            if(e.Instance.DialogUUID == groupDialog.Guid) then
+                inGroupDialog = false
+            end
+        end
+    end
+
+end}
+
+game.states.DEN_HarpyMeal_CharmedCombat = State { function ()
+
+    -- Local params
+    local harpySceneDoneFlag = Flag("DEN_HarpyMeal_State_HarpyEncounterOver_48fd55cd-a79a-8b4a-8dd6-901910b5d739")
+    local charmed = Flag("DEN_HarpyMeal_State_Charmed_91040326-c989-449b-aaa4-332a344462f4")
+    local moveToCowerSpotFlag = Flag("DEN_HarpyMeal_State_GoCower_dbe0ef4a-49c4-4fac-912e-552447766b76")
+    local cowerPosition = Entity("S_DEN_BeachCowerArea_0fe4096d-608a-47b4-8b2b-bab73640f09c")
+
+    self.Valid = function()
+        return me.IsInCombat and not GetFlag(harpySceneDoneFlag) and not GetFlag(charmed,me)
+    end
+
+    nodes.CoweringAtSpotInTurn = Action {
+        function()
+            try
+                FleeFrom(RelationType.All, 5.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me,"Failed FleeFrom All")
+            end
+            EndTurn(me)
+        end,
+        Valid = function()
+            return me.CanActInCombatTeamTurn and not GetFlag(moveToCowerSpotFlag)
+        end
+    }
+
+    nodes.MoveToCowerSpot = Action{
+        function()
+            Sleep(1.0)
+            if not HasActiveStatus(me, "DISENGAGE") then
+                UseSpell("Shout_Disengage", me, nil, nil, nil, true, true, true)
+            end
+            if not HasActiveStatus(me, "DASH") then
+                UseSpell("Shout_Dash", me, nil, nil, nil, true, true, true)
+            end
+            Sleep(1.0)
+            if me.Character.CanMove then
+                local moveResult = MoveTo(cowerPosition, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+                if moveResult == error.MovementError.None then
+                    DebugText(me, "MOVEMENT FINISHED")
+                    EndTurn(me)
+                else
+                    DebugText(me, "Movement to the cower spot failed!")
+                    Sleep(1.0)
+                    EndTurn(me)
+                end
+            else
+                EndTurn(me)
+            end
+        end,
+        CanEnter = function()
+            return me.CanActInCombatTeamTurn and GetFlag(moveToCowerSpotFlag)
+        end
+    }
+
+    nodes.CoweringOutOfTurn = Action {
+        Valid = function()
+            return not me.CanActInCombatTeamTurn
+        end,
+        OnEnter = function()
+            ApplyStatus(me, "ANIM_COWER")
+        end,
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+        end,
+        function()
+            Sleep(3)
+        end,
+    }
+
+end}
+
+game.states.DEN_HarpyMeal_CharmedVictim_NoPeace = State { function ()
+
+    description = [[Charmed Kid during Attack On Den (saved from Harpies)]]
+
+    local bardDeadFlag = Flag("DEN_TieflingBard_State_Dead_99e83ea4-4b03-2e22-0fb0-8cbbcd68e665")
+
+    nodes.TellStory = Proxy{
+        game.states.DEN_GeneralGroveStates_AnimateAtPointAndTalk,
+        params={
+            moveTarget = "S_DEN_AttackBardPos_0338cd9c-7fa2-4775-b297-88add42b865a",
+            lookFromMoveTarget = true,
+            AD = "DEN_AttackOnDen_AD_CharmedKidStory_4e22b0bb-a725-802a-cf9f-013504343a5c",
+            ADWaitForCompletion = true,
+            ADWait = 60,
+        },
+        Valid = function()
+            return GetFlag(bardDeadFlag)
+        end
+    }
+
+    nodes.ListenToStory = Proxy{
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_AttackKidPos_008_73b56c53-dc5a-49e5-8780-6f870a6b3c99",
+            anim = "CUST_Listen_Interested_01_250d6f06-32c5-437b-accc-5c20367eed8d",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0,
+            loopingAnim = true
+        },
+        Valid = function()
+            return not GetFlag(bardDeadFlag)
+        end
+    }
+
+end}

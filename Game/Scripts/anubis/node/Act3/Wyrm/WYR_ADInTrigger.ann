@@ -1,0 +1,54 @@
+game.states.WYR_ADInTrigger = State { function ()
+    description = [[ Generic script to play an AD in trigger. ]]
+
+    modules = { "shared.dialog","shared.moveto","shared.util" }
+
+    params.trigger = {type = EParamType.String, required = false, help=[[
+        The trigger at which the character stands.
+    ]]}
+
+    params.AD = {type = EParamType.String, required = false, help=[[
+        NPCs AD to play.
+    ]]}
+
+    params.minDelay = { type = EParamType.Number, required = false, default = 15.0, help = [[
+        Delay in between AD playing.
+    ]]}
+
+    params.pauseBetweenChecks = { type = EParamType.Number, required = false, default = 4.0, help = [[
+        Delay in between AD play checks, and before the first AD will be played.
+    ]]}
+
+    local AD = nil
+    local trigger = nil
+
+    self.OnInit = function()
+        if params.trigger ~= nil then
+            trigger = Entity(params.trigger)
+        end
+        if params.AD ~= nil then
+            AD = Dialog(params.AD)
+        end
+    end
+
+    nodes.PlayADFromTrigger = Action {
+        function()
+            if trigger ~= nil then
+                if mod.moveto.MoveToPoint(trigger, MovementSpeed.Walk, me) then
+                    LookFrom(trigger)
+                end
+            end
+            if AD ~= nil then
+                mod.util.SleepRandom(1.0,params.pauseBetweenChecks)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = params.minDelay
+                    },
+                    me                
+                )
+            end
+        end
+    }
+end}

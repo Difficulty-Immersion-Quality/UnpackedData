@@ -1,0 +1,133 @@
+game.states.HAV_TieflingSurvivors_WeaponSmith = State {function ()
+
+    description = [[Behaviour of Dammon the weaponsmith in Haven]]
+
+    modules = {"shared.moveto", "shared.dialog", "shared.util"}
+
+    local scimitarTag = Tag("WPN_SCIMITAR_206f9701-7b24-4eaf-9ac4-a47746c251e2")
+    local workplace1 = Entity("S_HAV_TieflingSurvivors_BlacksmithSpot_1_cfe93bf1-55c4-423d-8d85-f650bfb2afef")
+    local inspectingTools = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+
+    local anvilAnimation = Dialog("BHVR_WRLD_DEN_WeaponSmith_Anvil_76b162f7-e424-4ac7-e028-4241b7ff1599") -- Reuse DEN animations
+    local anvilTrigger = Entity("BHVR_WRLD_HAV_DammonUsingAnvil_SceneTrigger_c9a2723a-925a-4aff-9e8d-d79219cd935c")
+    local anvil = Entity("S_HAV_DammonsAnvil_1939b3f5-898f-4b6c-ac74-e0810f8c281e")
+
+    local grindAnimation = Dialog("BHVR_WRLD_DEN_WeaponSmith_Whetstone_2eadef89-54de-ac11-839a-b3218d632f43") -- Reuse DEN animations
+    local grindTrigger = Entity("BHVR_WRLD_HAV_DammonGrindingScimitar_SceneTrigger_bf3985bb-1e72-4b2a-a1c1-fee703f18e32")
+    local grindingStone = Entity("S_HAV_DammonGrindingStone_e9af18c3-67a7-45d7-889a-90880a5426c4")
+
+    --reaction to ox monster variables
+    local oxMonsterKilled = Flag("HAV_DevilishOx_State_Dead_ad25ab08-e632-4279-9e10-30e610fbe4a3")
+    local reactedToOx = false
+    local monsterOx = Entity("S_GLO_DevilishOx_49eb5b4b-c6ed-4d37-8f68-97b1128b7d56")
+    local reactingToMonsterOx = Dialog("HAV_DevilishOx_AD_WeaponSmithReactionToOx_4d939533-500f-02fd-55c2-47bd1e954df2")
+    local inspectingOxMonsterCorpse = Animation("CUST_BanditLookingAtHole_01_5aa2427f-b8ab-4213-ae48-57c10a619239")
+
+    local forceRestart = false
+
+    nodes.RestartingOnSavegameLoad = Action {
+        function()
+            BehaviorDialogRequestGracefulStop(me, false)
+            forceRestart = false
+        end,
+        CanEnter = function()
+            return forceRestart
+        end,
+    }
+    events.SavegameLoaded = function(ev)
+        forceRestart = true
+        oxMonsterKilled = Flag("HAV_DevilishOx_State_Dead_ad25ab08-e632-4279-9e10-30e610fbe4a3")
+    end
+
+    nodes.OxReaction = Action {
+        function()
+            if not IsInDangerousSurfaceFor(monsterOx, me.Character)
+                and GetDistanceTo(me, monsterOx) >= 1.5 then
+                    local moveResult = MoveTo(monsterOx,MovementSpeed.Walk, false, false, 1.0, 1.5, false)
+            end
+            LookAtEntity(monsterOx, 3.0)
+            PlayAnimation(inspectingOxMonsterCorpse, false, true)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                reactingToMonsterOx,
+                {
+                    waitForCompletion = false,
+                    minDelay = 7.0,
+                },
+                me
+            )
+
+            Sleep(10.0)
+            reactedToOx = true
+        end,
+        Valid = function()
+            return GetFlag(oxMonsterKilled) and not reactedToOx
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.State_Working = Selector{
+        function(nodes)
+            return GetRandomCanEnter(nodes)
+        end
+    }
+
+    nodes.State_Working.Action_LookingForTools = Action {
+        function()
+            if mod.moveto.MoveToPoint(workplace1, MovementSpeed.Stroll, me, 0.0) then
+                LookFrom(workplace1)
+                DebugText(me, "Using tools animation.")
+                PlayAnimation(inspectingTools, true)
+                mod.util.SleepRandom(2.0, 4.0)
+            else
+                SteerTo(workplace1)
+                Sleep(3.0)
+            end
+        end,
+    }
+
+    nodes.State_Working.Action_UsingGrinder = Action {
+        function()
+            DebugText(me, "Grinding animation.")
+
+            try
+                mod.util.SleepRandom(2.0, 4.0)
+                SetWeaponUnsheathed(me, true, false)
+                StartBehaviorDialog(grindAnimation, grindTrigger.Trigger, false, me, grindingStone)
+                mod.util.SleepRandom(12.0, 18.0)
+                BehaviorDialogRequestGracefulStop(me, false, nil)
+                while IsPerformingWorldBehaviour(me) do
+                    Sleep(1.0)
+                end
+                SetWeaponUnsheathed(me, false, false)
+                Sleep(3.0)
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me, "Error: AutomatedDialogStartFailed")
+                SetWeaponUnsheathed(me, false, false)
+                Sleep(3.0)
+            end
+
+        end,
+        OnLeave = function()
+            SetWeaponUnsheathed(me, false, true)
+        end,
+        CanEnter = function()
+            local equippedWeapon = GetEquippedItem(me.Character, EquipmentSlot.MeleeMainHand)
+            return equippedWeapon ~= nil and IsTagged(equippedWeapon, scimitarTag)
+        end
+    }
+
+    nodes.State_Working.Action_UsingAnvil = Action {
+        function()
+            mod.util.SleepRandom(2.0, 4.0)
+            StartBehaviorDialog(anvilAnimation, anvilTrigger.Trigger, false, me, anvil)
+            mod.util.SleepRandom(30.0, 40.0)
+            BehaviorDialogRequestGracefulStop(me, false, nil)
+            while IsPerformingWorldBehaviour(me) do
+                Sleep(1.0)
+            end
+        end,
+    }
+
+end}

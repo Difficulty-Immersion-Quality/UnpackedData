@@ -1,0 +1,149 @@
+game.states.GOB_AttackOnDen_Victory_DummyFighters_Companion = State { 
+    function ()
+    
+        modules = {"shared.dialog"}
+
+        description = [[State for goblin raiders that AD in pairs after the victory of the DEN. This one is for second speakers, so they don't AD themselves. 
+        Namely S_GOB_AttackOnDen_Ranged_001 and RaiderHardy]]
+    
+        ---------------------------------------------------
+        -- Params
+        
+        params.lootingPosition = {type = EParamType.String, required=false, default="", help =[[Position this character will initially move to when victory has been achieved in the Den.]]}
+
+        ---------------------------------------------------
+        -- local vars
+        
+        local pos = Entity(params.lootingPosition)
+        local dummy = Entity("S_DEN_TraineeDummy_003_10635d2f-a6e6-4cfb-aab1-8938d59daa22")
+        local AD = Dialog("DEN_AttackOnDen_AD_StupidAndDummy_1dc451aa-0b13-0d6a-91b2-6aa5618b70e3")
+        local canAD = true
+        local companion = Entity("S_GOB_GoblinLush_d738c9a4-a031-4dd9-912f-93cda8d8d8b7")
+        local anim = {Animation("CMBT_Melee_RHand_01_Attack_f4ac302b-1569-404f-bd52-1fe443e265df"),Animation("CMBT_Melee_LHand_01_Attack_722df2d7-7898-4b0b-b930-5a850b55ccf0")}
+        local i=1
+        ---------------------------------------------------
+        --state nodes
+    
+        nodes.MoveTo = Action{
+            function()
+                MoveTo(pos,MovementSpeed.Walk)
+            end,
+            CanEnter = function()
+                return (pos~=nil and GetDistanceTo(me,pos) >3)
+            end
+        }
+    
+        nodes.OnPosition = Selector{
+            CanEnter = function()
+                return pos~=nil
+            end
+        }
+
+    
+        nodes.OnPosition.Attack = Action{
+            function()
+                SteerTo(dummy)
+                PlayAnimation(anim[i])
+                Sleep(6)
+                i=i+1
+                if i>2 then
+                    i=1
+                end
+                Sleep(1)
+                SetDoNotFace(me, true)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 40.0,
+                    },
+                    me,
+                    companion
+                )
+                SetDoNotFace(me, false)
+            end,
+            CanEnter = function()
+                return true
+            end
+        }
+    
+        nodes.FallbackSleep = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            CanEnter = function()
+                return true
+            end
+        }
+
+    end
+    }
+    
+    
+    game.states.GOB_AttackOnDen_Victory_DummyFighters_Main = State { 
+    function ()
+        
+            description = [[State for goblin raiders that AD in pairs after the victory of the DEN. Namely S_GOB_AttackOnDen_Melee_001 and RaiderBold]]
+        
+            modules = {"shared.util", "shared.moveto"}
+            ---------------------------------------------------
+            -- Params
+            
+            params.lootingPosition = {type = EParamType.String, required=false, default="", help =[[Position this character will initially move to when victory has been achieved in the Den.]]}
+            params.companion = {type = EParamType.String, required=false, default="", help =[[Second Speaker for ADs.]]}
+    
+            ---------------------------------------------------
+            -- local vars
+            local pos = Entity(params.lootingPosition)
+            local companion = Entity(params.companion)
+            local anim = Animation("CUST_Angry_01_5295fe1e-abec-4873-a09a-23ae6e895a63")
+            ---------------------------------------------------
+            --state nodes
+        
+            nodes.MoveTo = Action{
+                function()
+                    MoveTo(pos,MovementSpeed.Walk)
+                end,
+                CanEnter = function()
+                    return (pos~=nil and GetDistanceTo(me,pos)>3)
+                end
+            }
+        
+            nodes.OnPosition = Selector{
+                CanEnter = function()
+                    return pos~=nil
+                end
+            }
+        
+            nodes.OnPosition.AD = Action{
+                function()
+                    Sleep(12)
+                end,
+                CanEnter = function()
+                    return IsInDialog(me,false)
+                end
+            }
+        
+            nodes.OnPosition.Wander = Action{
+                function()
+                    Wander(3,12,MovementSpeed.Stroll,pos,false)
+                    SteerTo(companion)
+                    PlayAnimation(anim)
+                    Sleep(6)
+                end,
+                CanEnter = function()
+                    return true
+                end
+            }
+        
+            nodes.FallbackSleep = Action{
+                function()
+                    WaitForInterrupt()
+                end,
+                CanEnter = function()
+                    return true
+                end
+            }
+
+    end
+    }

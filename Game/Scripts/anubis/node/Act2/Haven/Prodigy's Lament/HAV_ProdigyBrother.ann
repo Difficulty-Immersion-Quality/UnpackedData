@@ -1,0 +1,197 @@
+game.states.HAV_ProdigyBrother = State {function ()
+
+    modules = {"shared.dialog", "shared.moveto", "shared.math"}
+
+    description = [[Behaviour of Lia in Haven]]
+
+    local waitingRolanPos = Entity("S_HAV_ProdigyPos_e458d512-a43b-45ab-861c-6f18b02d60c4")
+    local postReunionPos = Entity("S_HAV_ProdigyBrotherPos_ccc5fd1b-99a5-4500-9c40-838ac3105808")
+    local angryPos = Entity("S_HAV_AngryProdigySiblingPos_288d9b31-6c1d-451b-ac5d-f1338cb01ad0")
+    local meetingPos = Entity("S_HAV_ReunionBrotherPos_15db6e37-d07d-48c1-8fa6-11e65661df51")
+
+    local prodigy = Entity("S_GLO_ProdigySister_44d09b0b-0568-456c-b18d-559a0a3f981d")
+    local rolanIsPresent = false
+
+    local soloWaitingAD = Dialog("HAV_ProdigyLament_AD_BrotherWaitingAlone_54ffbd19-b450-c1d2-58ca-ee69be436fe7")
+    local angryAD = Dialog("HAV_ProdigyLament_AD_AngryBrother_358248ef-4b85-97d8-254e-57649f6629d9")
+    local dejectedAnimStart = Animation("CUST_Dejected_01_Start_55dac046-b8d2-4681-906d-f263c263071c")
+    local dejectedAnimLoop = Animation("CUST_Dejected_01_Loop_487b6cb3-1ca3-4041-acba-bcac93cfcbe5")
+    local dejectedAnimEnd = Animation("CUST_Dejected_01_End_c49344c6-72ce-460a-b55c-94708983e6be")
+
+
+
+    local reunionDoneFlag = Flag("HAV_ProdigyLament_State_ReunionDone_d71cdc91-884a-c64d-81b7-81a3b43c5270")
+    local waitingForRolanFlag = Flag("HAV_ProdigyLament_State_WaitingForRolan_898c0413-8b0d-4470-b1a6-6dfb9dbdb9f0")
+    local rolanInHavenFlag = Flag("GLO_Prodigy_State_InHaven_fe9b4527-9d66-45db-8e04-490fd51b7be5")
+    local sisterDefeatedFlag = Flag("GLO_Prodigy_State_SisterDefeated_85a3e024-8a95-4ef3-9ff8-248c90ab92ad")
+    local angrySiblingFlag = Flag("HAV_ProdigyLament_Event_AngrySibling_3a835b03-f0c8-4369-8c68-604d8c9b6781")
+
+    local leaveInspectionFlag = Flag("HAV_SavingPrisoners_Event_PrisonersLeaveInspection_6582e781-ba50-4dcc-b88c-cf0bc4c144b1")
+    local inspectionPos = nil
+
+    nodes.WaitForInspection = Action{
+        function()
+            Sleep(math.random(0,2))
+            SetEntityEvent(me, "HAV_SavingPrisoners_AppearedAtHaven_Boat")
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos == nil
+        end
+    }
+
+    nodes.Inspection = Action{
+        function()
+            if mod.moveto.MoveToPoint(inspectionPos,  MovementSpeed.Stroll, me) then
+                LookFrom(inspectionPos)
+                SetEntityEvent(me, "HAV_SavingPrisoners_AtInspectionPos")
+                WaitForInterrupt()
+            else
+                SteerTo(inspectionPos)
+            end
+            Sleep(4)
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos ~= nil
+        end
+    }
+
+    nodes.AngryWithRolan = Action{
+        CanEnter = function()
+            return GetFlag(angrySiblingFlag)
+        end,
+        function()
+            Sleep(1)
+            if mod.moveto.MoveToPoint(angryPos, MovementSpeed.Walk, me) then
+                LookFrom(angryPos)
+                PlayLoopingAnimation(dejectedAnimStart, {dejectedAnimLoop}, dejectedAnimEnd, false)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    angryAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 40.0,
+                    },
+                    me
+                )
+            else
+                SteerTo(angryPos)
+            end
+            Sleep(math.random(5, 10))
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.WaitingForRolan = Action{
+        Valid = function()
+            return GetFlag(waitingForRolanFlag) and not GetFlag(reunionDoneFlag) and not rolanIsPresent
+        end,
+        OnEnter = function()
+            meetingPos = Entity("S_HAV_ReunionBrotherPos_002_a95839bd-de54-47f1-95ba-cd41f42c88d3")
+        end,
+        function()
+            if mod.moveto.MoveToPoint(waitingRolanPos, MovementSpeed.Walk, me) then
+                LookFrom(waitingRolanPos)
+            else
+                SteerTo(waitingRolanPos)
+            end
+            Sleep(math.random(8,12))
+            if(GetFlag(sisterDefeatedFlag) and not GetFlag(rolanInHavenFlag)) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    soloWaitingAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0,
+                    },
+                    me
+                )
+            end
+        end
+    }
+
+    nodes.AfterReunion = Proxy {
+        game.states.Sit,
+        params = {
+            seat = "S_HAV_BrotherSeat_f5958d6f-7ced-4738-813a-0b8ef69cb045",
+            seatTrigger = "S_HAV_BrotherSeatArea_675831ce-7687-4e6a-8588-1a582dd3d423",
+            sitIdle = StateRef{game.states.HAV_ProdigyBrother_Sitting},
+            nonSitIdle = StateRef{game.states.HAV_ProdigyBrother_Standing},
+            useSeatPositionAsFallBack = false,
+            sitOnGroundAsFallback = false
+        },
+        Valid = function()
+            return GetFlag(reunionDoneFlag)
+        end
+    }
+
+    nodes.BeforeReunion = Action{
+        function()
+            if mod.moveto.MoveToPoint(meetingPos, MovementSpeed.Walk, me) then
+                LookFrom(meetingPos)
+            else
+                SteerTo(prodigy)
+            end
+            Sleep(2)
+        end
+    }
+
+    events.FlagCleared = function(e)
+        if e.Flag == waitingForRolanFlag.Guid then
+            meetingPos = Entity("S_HAV_ReunionBrotherPos_002_a95839bd-de54-47f1-95ba-cd41f42c88d3")
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if(e.Event == "HAV_SavingPrisoners_SetInspectionPos") then
+                inspectionPos = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "HAV_ProdigyLament_RolanArrived") then
+                rolanIsPresent = true
+            end
+        end
+    end
+
+end}
+
+game.states.HAV_ProdigyBrother_Sitting = State {function ()
+
+    modules = {"shared.math"}
+
+    description = [[Cal is sitting at the bar]]
+
+    local drinkingAnim = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+
+    nodes.Default = Action {
+        function()
+            Sleep(2.0)
+            PlayAnimation(drinkingAnim)
+            Sleep(5.0 + 8.0 * math.random())
+        end
+    }
+
+end}
+
+game.states.HAV_ProdigyBrother_Standing = State {function ()
+
+    modules = {"shared.math"}
+
+    description = [[Cal is standing by the bar]]
+
+    local postReunionPos = Entity("S_HAV_ProdigyBrotherPos_ccc5fd1b-99a5-4500-9c40-838ac3105808")
+    local drinkingAnim = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+
+    nodes.Default = Action {
+        function()
+            if mod.moveto.MoveToPoint(postReunionPos, MovementSpeed.Walk, me) then
+                LookFrom(postReunionPos)
+                Sleep(2.0)
+                PlayAnimation(drinkingAnim)
+            else
+                SteerTo(postReunionPos)
+            end
+            Sleep(5.0 + 8.0 * math.random())
+        end
+    }
+
+end}

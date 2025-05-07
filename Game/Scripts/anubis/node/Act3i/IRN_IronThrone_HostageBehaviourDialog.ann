@@ -1,0 +1,94 @@
+game.states.IRN_IronThrone_HostageBehaviourDialog = State 
+{
+    function()
+    description = [[World behaviour for character]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.BehaviourDialog = {type = EParamType.String, required = true, help=[[
+        Behaviour dialog for character
+    ]]}
+
+    params.BehaviourItem = {type = EParamType.String, required = false, default = "", help=[[
+        Optional Item for behaviour
+    ]]}
+
+    params.SceneTrigger = {type = EParamType.String, required = true, help=[[
+        Scene Trigger for the behaviour
+    ]]}
+
+    params.PauseBetweenLoops = {type = EParamType.Number, required = false, default = 0, help=[[
+        Seconds pause between loops
+    ]]}
+
+    
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local bhvrDialog = Dialog(params.BehaviourDialog)
+    local sceneTrigger = Entity(params.SceneTrigger)
+    local bhvrItem = nil
+
+    self.OnInit = function()
+        if params.BehaviourItem ~= "" then
+            bhvrItem = Entity(params.BehaviourItem)
+        end
+    end
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    
+    nodes.Action_BehaviourDialog = Action
+    {
+        function ()
+            DebugText(me, "Trying Behaviour Dialog")
+            Sleep(2)
+            try
+                if bhvrItem ~= nil then
+                    StartBehaviorDialog(bhvrDialog, sceneTrigger.Trigger, true, me, bhvrItem)
+                else
+                    StartBehaviorDialog(bhvrDialog, sceneTrigger.Trigger, true, me)
+                end
+                Sleep(1.0)
+                if params.PauseBetweenLoops > 0 then 
+                    Sleep(params.PauseBetweenLoops)
+                end
+            catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                Sleep(1.0)
+            end
+        end,
+
+        OnInterrupt = function()
+            BehaviorDialogRequestGracefulStop(me, true, bhvrDialog)
+        end,
+        
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true, bhvrDialog)
+        end
+        
+    }
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if (e.Event == "IRN_IronThrone_PrisonerFreed") then
+                BehaviorDialogRequestGracefulStop(me, true, bhvrDialog)
+            end
+        end
+    end
+    --------------------------------
+end
+}

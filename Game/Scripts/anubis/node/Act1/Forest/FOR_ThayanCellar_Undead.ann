@@ -1,0 +1,144 @@
+game.states.FOR_ThayanCellar_TombFinding = State{function()
+
+    params.Casket = {type = EParamType.String, required = true,
+    help = [[Casket the undead is trapped in]]}
+    params.CombatPos = {type = EParamType.String, required = false,
+    help = [[Position skeleton will move to when out of crypts to open]]}
+    params.IsInCombat = {type = EParamType.Bool, required = false, default = false,
+    help = [[Is in Combat]]}
+    params.openTomb = {type = EParamType.Bool, required = false, default = false,
+    help = [[Open crypt behaviour active]]}
+
+    local TombSearch = true
+    local ThayanCrypts = {}
+    local openTomb = params.openTomb
+    local OpenedFlag
+    local EmptyFlag = Flag("FOR_ThayanCellar_State_TombsEmpty_808119f1-b6c7-4d85-8831-77b404e77105") -- set once all caskets are empty
+    local bestTomb = nil
+    local bestDistance = 100.0
+    local OutCrypt = Flag("FOR_ThayanCellar_State_OutOfCrypt_a5f29cbf-abb5-4530-be4a-cda4a26832fe")
+    local MyCrypt = Entity(params.Casket)
+    local CombatPos = Entity(params.CombatPos)
+
+    self.OnInit = function()
+        ThayanCrypts[1] = FindEntity("S_FOR_Crypt_002_d22904ef-0759-47eb-9ceb-bcd107edc6d0")
+        ThayanCrypts[2] = FindEntity("S_FOR_Crypt_003_8c5e3d51-2244-499e-ba59-2d7b0041b3db")
+        ThayanCrypts[3] = FindEntity("S_FOR_Crypt_004_91bcb042-868e-4629-a345-45747864e6d8")
+        ThayanCrypts[4] = FindEntity("S_FOR_Crypt_005_83da924f-91a9-48ee-bf50-24d9b050ea4a")
+        ThayanCrypts[5] = FindEntity("S_FOR_Crypt_006_7668d12b-f129-4e34-b882-c94d569a90fc")
+        ThayanCrypts[6] = FindEntity("S_FOR_Crypt_007_1c01b1fc-6032-41f5-a705-94334e72d97e")
+        ThayanCrypts[7] = FindEntity("S_FOR_Crypt_008_bfa6370c-b65a-4a7e-8a35-3c69a4b4f427")
+
+        OpenedFlag = Flag("FOR_ThayanCellar_State_TombOpened_a19ade94-68fe-42a0-9c7a-ee1c6338c10f")
+    end
+
+    nodes = Selector{
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    self.CanEnter = function()
+        return TombSearch
+    end
+
+    self.OnEnter = function()
+        if GetFlag(EmptyFlag) then
+            openTomb = false
+        elseif not params.IsInCombat then
+            openTomb = true
+        end
+    end
+
+    nodes.Action_CryptEmergePause = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not GetFlag(OutCrypt, me)
+        end
+    }
+
+    --Looks for the closest undead tomb.
+    nodes.Action_CryptSearch = Action{
+        function()
+            local i= 1
+            while i <= #ThayanCrypts do
+                local Crypt = ThayanCrypts[i]
+                if
+                    GetFlag(OpenedFlag, Crypt) or Crypt.Item.IsDestroyed
+                then
+                    table.remove(ThayanCrypts, i)
+                else
+                    i = i + 1
+                end
+            end
+            bestTomb = nil
+            bestDistance = 100.0
+
+            for index, crypt in ipairs(ThayanCrypts) do
+            local currentDistance = GetDistanceTo(me, crypt)
+                if
+                    currentDistance < bestDistance
+                then
+                    bestDistance = currentDistance
+                    bestTomb = crypt
+                end
+            end
+
+            try
+                MoveTo(bestTomb, MovementSpeed.Run, false, false, 2.0)
+                UseItem(bestTomb.Item)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Couldn't reach tomb")
+            end
+                if params.IsInCombat then
+                    openTomb = false
+                end
+        end,
+        CanEnter = function()
+            return openTomb and GetFlag(OutCrypt, me)
+        end
+    }
+
+
+    events.TurnStarted = function()
+        if params.IsInCombat then
+            if not GetFlag(EmptyFlag) then
+                openTomb = true
+            else
+                TombSearch = false
+            end
+        end
+    end
+
+    nodes.Action_CombatMove = Action{
+        function()
+            if not IsInDangerousSurfaceFor(CombatPos, me.Character, 1.0) then
+                local moveResult = MoveTo(CombatPos, MovementSpeed.Run, true, false, 0.5, 4.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                    else
+                        WaitForInterrupt()
+                    end
+            end
+        end,
+        Valid = function()
+            return not openTomb and GetFlag(OutCrypt, me) and not params.IsInCombat
+        end
+    }
+
+    events.FlagSet = function(e)
+        if e.Flag == EmptyFlag.Guid and not params.IsInCombat then
+            openTomb = false
+        end
+    end
+
+    self.Valid = function()
+        return not me.IsInTurnBasedMode or
+               not me.IsInCombat or
+               me.CanActInCombatTeamTurn
+    end
+end
+
+}

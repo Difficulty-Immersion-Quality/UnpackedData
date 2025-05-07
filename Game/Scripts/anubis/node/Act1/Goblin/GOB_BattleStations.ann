@@ -1,0 +1,263 @@
+game.states.GOB_BattleStations = State { function ()
+
+    description = [[Battlestations logic for battle stations in GOB camp]]
+
+    -----------------------------------------
+    -- Params
+
+    params.guardPoint = {type=EParamType.String, required=false, default=nil, help=[[Position this characters stands at during Battlestations state. Not used if there is a spline.]],}
+    params.guardSpline = {type=EParamType.String, required=false, default=nil, help=[[Spline this character patrols on during Battlestations state.]],}
+
+    params.GOBIdle = { type=EParamType.State, required = false,
+        default = nil,
+        help = [[Behaviour of this goblin before getting pulled into Battlestations.]]
+    }
+
+    local battleStationsFlag = Flag("GOB_BattleStations_Event_ToStation_03a8bd66-c23f-4989-9a7b-775cf475104b")
+    local battleStationsDisabled = false
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.BattleStations = Proxy{
+        game.states.GOB_BattleStations_Guarding,
+        params = {
+            guardPoint = params.guardPoint,
+            guardSpline = params.guardSpline
+        },
+        Valid = function()
+            return GetFlag(battleStationsFlag) and not battleStationsDisabled
+        end
+    }
+
+    nodes.GOBIdle = Proxy{
+        params.GOBIdle,
+        Valid = function()
+            return not GetFlag(battleStationsFlag) and params.GOBIdle~=nil
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not GetFlag(battleStationsFlag) and params.GOBIdle == nil
+        end
+    }
+
+end,
+}
+
+game.states.GOB_BattleStations_Guarding = State{ function()
+
+    modules = {"shared.util"}
+
+    params.guardPoint = {type=EParamType.String, required=false, default=nil, help=[[Position this characters stands at during Battlestations state. Not used if there is a spline.]],}
+    params.guardSpline = {type=EParamType.String, required=false, default=nil, help=[[Spline this character patrols on during Battlestations state.]],}
+
+    --Bool
+
+    local atGuardPos = false
+    local isReinforcing = false
+
+    --Entities
+    local guardPos = Entity(params.guardPoint)
+    local drum
+    local battleStationsFlag = Flag("GOB_BattleStations_Event_ToStation_03a8bd66-c23f-4989-9a7b-775cf475104b")
+
+    --Patrol
+    local patrolSpline = Spline(params.guardSpline)
+    local canWalkOnSpline = true
+    local patrolSpeed = "Run"
+
+    self.OnEnter = function()
+        SetWeaponUnsheathed(me, true, true)
+    end
+
+    nodes.Reinforcing = Action{
+        function()
+            local reinforceLoop = 0
+            while reinforceLoop < 5 do
+                local moveResult = Wander(5.0, 4.0, MovementSpeed.Stroll, drum)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: Wander failed")
+                    Sleep(1)
+                else
+                    Sleep(math.random(2, 4))
+                end
+                reinforceLoop = reinforceLoop + 1
+            end
+            isReinforcing = false
+        end,
+        Valid = function()
+            return isReinforcing
+        end
+    }
+
+    nodes.Standing = Action{
+        function()
+            if not IsInDangerousSurfaceFor(guardPos, me.Character) and (GetDistanceTo(me, guardPos) > 2.0) then
+                local moveResult = MoveTo(guardPos, MovementSpeed.Run, false, false, 0.5, 1.5)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: Moveto failed")
+                    SteerTo(guardPos)
+                    Sleep(6.0)
+                else 
+                    LookFrom(guardPos)
+                end
+            else
+                LookFrom(guardPos)
+            end
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return patrolSpline == nil
+        end
+    }
+
+    nodes.Patrolling = Selector{
+        Valid = function()
+            return patrolSpline ~= nil
+        end
+    }
+
+    nodes.Patrolling.Patrol = Action{
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed[patrolSpeed])
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    nodes.Patrolling.Idle = Action{
+        OnEnter = function()
+            ShortPatrolInterrupt()
+            if(not atGuardPos) then
+                SetEntityEvent(me, "GOB_BattleStations_AtGuardPos")
+            end
+        end,
+        function()
+            LookFrom(patrolSpline)
+            mod.util.SleepRandom(4.0, 6.0)
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end
+    }
+
+    --Events
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+    end
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me and e.Event == "GOB_BattleStations_AtGuardPos") then
+            atGuardPos = true
+            patrolSpeed = "Walk"
+        elseif(e.TargetEntity == me and e.Event == "GOB_BattleStations_GoReinforce") then
+            isReinforcing = true
+            drum = e.Params[1]
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        if isReinforcing then
+            isReinforcing = false
+        end
+    end
+end
+}
+
+game.states.GOB_BattleStations_Combat = State { function()
+
+    modules = { "shared.items" }
+    ------------------------------------------------------
+    -- local variables
+
+    local alarmDrums
+    local alarmUsePos
+    local playDrumAnim = Animation("CUST_Playing_Drum_01_5ad03263-20d9-485f-aa7a-bef408deee7c")
+    local mustTriggerAlarm = false
+    local battleStationsFlag = Flag("GOB_BattleStations_Event_ToStation_03a8bd66-c23f-4989-9a7b-775cf475104b")
+    ------------------------------------------------------
+    -- State nodes
+
+    self.Valid = function()
+        return not GetFlag(battleStationsFlag) and mustTriggerAlarm and me.CanActInCombatTeamTurn
+    end
+
+    nodes.UseDrums = Action{
+        function()
+            local moveResult = MoveTo(alarmUsePos, MovementSpeed.Run, false, true, 0.0, 1.0, false)
+            if moveResult == error.MovementError.None then
+                DebugText(me, "movement done") -- can also mean that the movement was stopped by sentinel feat
+            elseif moveResult == error.MovementError.NoResources then
+                DebugText(me, "will keep moving to the alarm next turn!")
+                EndTurn(me)
+                return
+            else
+                DebugText(me,"DEBUG : Fail to Move")
+                mustTriggerAlarm = false
+            end
+
+            if  not mod.items.SafeIsDestroyed(alarmDrums) and 
+                not HasActiveStatus(alarmDrums, "SILENCED") and
+                GetDistanceTo(me, alarmUsePos) < 1.5 then
+                try
+                    DebugText(me, "arrived to the drum!")
+                    LookFrom(alarmUsePos)
+                    PushUnsheathedState(me, UnsheathState.Sheathed)
+                    ApplyStatus(alarmDrums, "WARDRUM_ALERTED", true, -1.0)
+                    PlayAnimation(playDrumAnim, true, false)
+                    PopUnsheathedState(me)
+                    SetEntityEvent(alarmDrums, "GOB_BattleStations_StrikingDrum")
+                    mustTriggerAlarm = false
+                catch e if ls.CheckType(e, error.UseItemFailed) then
+                    mustTriggerAlarm = false
+                    EndTurn(me)
+                    return
+                end
+            else
+                DebugText(me,"Cancelling UseDrums")
+                mustTriggerAlarm = false
+            end
+        end,
+        OnLeave = function()
+            if(not mustTriggerAlarm and alarmDrums ~= nil) then
+                RemoveStatus(alarmDrums, "WARDRUM_ALERTED")
+            end
+        end
+    }
+
+    -----------------------------------------------------
+    -- Nodes
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "GOB_BattleStations_GoToAlarmPos") then
+                mustTriggerAlarm = true
+                alarmUsePos = e.Params[1]
+            elseif(e.Event == "GOB_BattleStations_GoTriggerAlarm") then
+                alarmDrums = e.Params[1]
+            end
+        end
+    end
+
+    events.Destroyed = function(e)
+        if(mustTriggerAlarm)
+            and alarmDrums ~= nil
+            and e.Entity == alarmDrums then
+                mustTriggerAlarm = false
+        end
+    end
+end
+}

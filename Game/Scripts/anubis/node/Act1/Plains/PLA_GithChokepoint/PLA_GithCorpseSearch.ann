@@ -1,0 +1,79 @@
+game.states.PLA_GithCorpseSearch = State { function ()
+    description = [[Used by githyanki raiders at the gith Chokepoint]]
+
+
+    params.corpseList = {
+        type = EParamType.String,
+        required = false,
+        default = "1",
+        help = [['1', '2' or '3' (3 = generic else)]]
+    }
+
+    -----------------------------------------
+    -- Local variables
+    local corpses = {}
+    local animation = Animation([[CUST_InspectingCorpse_01_88e057b6-22df-45a5-9074-1f5eb6e85892]])
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        if params.corpseList == [[1]] then
+            table.insert(corpses, {corpse = Entity("S_PLA_GithVictim_000_5f2b2080-16d2-4ee0-bda0-020ec8223f20")})
+            table.insert(corpses, {corpse = Entity("S_PLA_GithVictim_001_0ce8aa3c-cfbd-4527-8b0b-4bcb79a12635")})
+            table.insert(corpses, {corpse = Entity("S_PLA_DeadZorruFriend_2e5a05d0-66ef-407c-806d-a12d4ab0c1df")})
+        elseif params.corpseList == [[2]] then
+            table.insert(corpses, {corpse = Entity("S_PLA_GithVictim_000_5f2b2080-16d2-4ee0-bda0-020ec8223f20")})
+            table.insert(corpses, {corpse = Entity("S_PLA_GithVictim_001_0ce8aa3c-cfbd-4527-8b0b-4bcb79a12635")})
+        else
+            table.insert(corpses, {corpse = Entity("S_PLA_GithVictim_000_5f2b2080-16d2-4ee0-bda0-020ec8223f20")})
+            table.insert(corpses, {corpse = Entity("S_PLA_GithVictim_002_039598c3-6f98-4001-9f23-d7c8634be120")})
+        end
+    end
+
+    nodes.RemainHidden = Action {
+        CanEnter = function()
+            return HasActiveStatus(me, "INVISIBILITY")
+        end,
+        function()
+            Sleep(5)
+        end
+    }
+
+    nodes.PostDragonEvent = Action {
+        function()
+            Sleep(math.random(2,6))
+            local corpse = corpses[math.random(#corpses)].corpse
+            try
+                if CanSee(me, corpse) then
+                    MoveTo(corpse, MovementSpeed.Stroll)
+                    SteerTo(corpse)
+                    PlayAnimation(animation, true)
+                    if math.random(1,2) < 2 then
+                        Sleep(math.random(3,5))
+                    else
+                        Wander(2.0, 1.0, MovementSpeed.Stroll)
+                    end
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                SteerTo(corpse)
+                Sleep(math.random(5,10))
+            end
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_GithChokepoint_AddCorpseToList" then
+                table.insert(corpses, {corpse = Entity(e.Params[1].UUID)})
+            elseif e.Event == "PLA_GithChokepoint_RemoveCorpseFromList" then
+                for i,corpse in pairs(corpses) do
+                    if corpse.UUID == e.Params[1].UUID then
+                        table.remove(corpses, i)
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+end}

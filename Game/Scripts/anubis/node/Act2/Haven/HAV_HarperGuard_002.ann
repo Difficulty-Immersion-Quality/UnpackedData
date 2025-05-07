@@ -1,0 +1,105 @@
+game.states.HAV_HarperGuard_002_Patrol = State{
+    function()
+        description = [[]]
+
+        local b_Stop = false
+
+        events.SplineControlPointReached = function(e)        
+            b_Stop = (e.Index == 0 or e.Index == 2)
+        end
+
+        nodes.PatrolStop = Action {
+            function()                        
+                Sleep(6.0)
+                b_Stop = false
+            end
+        }
+
+    end
+}
+
+game.states.HAV_HarperGuard_002 = State{
+    function()
+
+
+        local guardFlag = Flag([[HAV_TakingIsobel_Event_HarperGuardIsobel_7316cac0-c33c-4bb7-94b4-62c7eb10de86]])
+
+        nodes.Patrol = Proxy{
+            game.states.GEN_Patrol,
+            params = {patrolSpline = [[S_HAV_HarperGuard_002_PatrolSpline_cfef6ad6-4d3c-45ba-a6b9-7ca5993c6863]],
+                      patrolActions = StateRef{game.states.HAV_HarperGuard_002_Patrol}},
+            Valid = function()
+                return not GetFlag(guardFlag)
+            end                    
+        }
+
+        nodes.GuardIsobel = Proxy {
+            game.states.GLO_StandAtTrigger,
+            params = {trigger = [[S_HAV_IsobelGuardPoint2_4bd40020-5d87-4e0f-b551-ddbfb1f369f7]]},
+            Valid = function()
+                return GetFlag(guardFlag)
+            end
+            
+        }
+
+
+    end
+}
+
+game.states.HAV_HarperGuard_002_Peaceful = State{
+    function()
+        ----------------------------------
+        -- Local variables
+
+        modules = {"shared.moveto", "shared.dialog"}
+
+        local triggers
+        
+        local Mirkon = Entity("S_DEN_CharmedKid_3b92c689-6024-4446-a6c9-584e9e8d77ca")
+        local AD = Dialog("HAV_HarperGuard_002_AD_WithMirkon_da85d053-7d86-4ef9-d7f8-ea5c6f70d4f4")
+        local i = 1
+
+        local guardFlag = Flag([[HAV_TakingIsobel_Event_HarperGuardIsobel_7316cac0-c33c-4bb7-94b4-62c7eb10de86]])
+        local completedFlag = Flag([[HAV_TieflingSurvivors_State_FinishedTreasureHunt_fd6a1c5f-c674-4c1d-92e7-be7aec75efcc]])
+
+
+        self.OnInit = function()
+            triggers = {{FindEntity("S_HAV_HarperGuard_002_DefaultPosition_ee3f9e65-7ccd-494a-895c-e2c7c80dc7f3"), 18},
+                        {FindEntity("S_HAV_HarperGuard_002_IntermediatePosition_1043c0d1-5185-4d93-a4e6-709bea7929ea"), 9},
+                        {FindEntity("S_HAV_TieflingSurvivors_TreasureHunters_MainRoom_7939197e-b625-485f-98be-e53efd83c841"), 9}}
+        end
+        ----------------------------------
+        -- Nodes
+
+
+        nodes.Idle = Action {
+            function()
+                mod.moveto.MoveToPoint(triggers[i][1], MovementSpeed.Walk, me) 
+                LookFrom(triggers[i][1])
+                    if i == 3 then  
+                        if not GetFlag(completedFlag) then
+                            mod.dialog.StartCheckedAutomatedDialog(AD, {waitForCompletion = true}, me, Mirkon)
+                        else
+                            Sleep(triggers[i][2])
+                        end
+                    else
+                    Sleep(triggers[i][2])
+                    end
+                i = (i % 3 )+1
+            end,
+            Valid = function()
+                return not GetFlag(guardFlag)
+            end
+        }
+
+        nodes.GuardIsobel = Proxy {
+            game.states.GLO_StandAtTrigger,
+            params = {trigger = [[S_HAV_IsobelGuardPoint2_4bd40020-5d87-4e0f-b551-ddbfb1f369f7]]},
+            Valid = function()
+                return GetFlag(guardFlag)
+            end
+            
+        }
+
+    end
+}

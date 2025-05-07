@@ -1,0 +1,75 @@
+game.states.WYR_Axe_Guard_02 = State{function()
+    description = [[Danthelon's Axe guard. Walks between 3 positions]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local atDoor = Flag("WYR_Axe_GuardAtDoor_516190a2-f223-4777-9019-24438e0c5688")
+    local positions = {
+        Entity("S_WYR_Axe_Guard_02_Pos_00_92f8ffe2-6316-4e63-b6d4-58337d86d3f4"),
+        Entity("S_WYR_Axe_Guard_02_Pos_01_8523926b-7f18-4ad9-bc5e-13f73b8f3b3c"),
+        Entity("S_WYR_Axe_Guard_02_Pos_02_85166320-12f3-4fc2-8040-21ed92b476a7"),
+    }
+    local posAtDoor = Entity("S_WYR_Axe_Guard_02_Pos_003_70cc8b34-0534-435a-8a14-143cf80c0ca7")
+    local myPos = positions[1]
+
+    self.OnInit = function()
+        myPos = positions[1]
+        StartTimer(me, "Timer_WYR_Axe_Guard_ChangePos", mod.math.random(30.0, 40.0), 0)
+    end
+
+    nodes.AtDoor = Action{
+        CanEnter = function()
+            return GetFlag(atDoor)
+        end,
+        function()
+            if GetDistanceTo(me, posAtDoor) > 1.0 then
+                local moveResult = MoveTo(posAtDoor, MovementSpeed.Walk, false, false, 0.1, 1.0, false)
+                if moveResult ~= error.MovementError.None then
+                    SteerTo(posAtDoor)
+                    Sleep(2.0)
+                end
+            end
+            LookFrom(posAtDoor)
+            Sleep(1.0)
+        end
+    }
+
+    nodes.LookAtDestination = Action{
+        CanEnter = function()
+            return IsInDangerousSurfaceFor(myPos, me.Character)
+        end,
+        function()
+            SteerTo(trigger)
+            Sleep(2.0)
+        end
+    }
+
+    nodes.WalkToPosition = Action{
+        CanEnter = function()
+            return GetDistanceTo(me, myPos) > 1.0
+        end,
+        function()
+            local moveResult = MoveTo(myPos, MovementSpeed.Stroll, false, false, 0.1, 1.0, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(myPos)
+                Sleep(2.0)
+            end
+        end
+    }
+
+    nodes.Stand = Action{
+        function()
+            LookFrom(myPos)
+            Sleep(1.0)
+        end
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_Axe_Guard_ChangePos" then
+            local i
+            i, myPos = mod.util.RandomFrom(positions)
+            StartTimer(me, "Timer_WYR_Axe_Guard_ChangePos", mod.math.random(30.0, 40.0), 0)
+        end
+    end
+end}

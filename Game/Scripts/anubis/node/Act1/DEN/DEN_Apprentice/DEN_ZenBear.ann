@@ -1,0 +1,121 @@
+game.states.DEN_ZenBear = State { function ()
+
+    modules = { "shared.moveto", "shared.dialog" }
+    --
+    description = [[Not-so-Zen-anymore-bear is worried about his friend Halsin.]]
+
+    -----------------------------------------
+    -- local state section
+    local halsinFlag = Flag("GLO_Halsin_State_Returned_5af86099-47f9-ba69-199a-fe91292a41bd")
+    local rewardPoint = Entity("S_DEN_ZenBearRewardPoint_116290f4-e860-440c-b8d0-37a821be7149")
+    local fishHelper = Entity("S_DEN_ZenBearFishHelper_ec560fe6-dd5a-4fe2-958d-5405afbce994")
+    local point = Entity("S_DEN_ZenBearPoint_9e3bb1f9-6157-485b-ac04-8abcf677ddff")
+    local fishBox = Entity("S_DEN_ZenBearFishBox_c77cec9a-c6e2-491d-9a02-7bad4a880cec")
+    local fishes = {}
+    local eating = false
+    local protofish
+    local AD = Dialog("DEN_ZenBear_AD_2824589f-0543-cb77-43ef-d2d943b0e7ad")
+    local consumeAnim = Animation("UTIL_Consume_01_88f95a55-7bc5-4f12-b507-d6569d745856")
+    local consumeEffect
+    local fishingAnimation = Animation("CUST_BearFishing_01_f3adbbf5-5b73-45b6-9f97-ac3e1aa9f144")
+    -----------------------------------------
+    -- helpers
+    helpers.indexOf = function(table,target)
+        for i,e in ipairs(table) do
+            if e == target then
+                return i
+            end
+        end
+        return nil
+    end
+
+    helpers.action.AD = function()
+        mod.dialog.StartCheckedAutomatedDialogRateLimited(
+            AD,
+            {
+                waitForCompletion = false,
+                minDelay = 65.0
+            },
+            me
+        )
+    end
+    -----------------------------------------
+    -- state init function
+    self.OnInit = function()
+        protofish = FindTemplate("CONS_GEN_Food_Fish_A_7dfc4b31-a0fb-48a4-8950-83b61c03fae5")
+        consumeEffect = PrepareEffect("VFX_Combat_GroundImpact_Round_VerySmall_01_Blood_1b8a16c2-67d8-649c-8080-8e8fc4c4815d")
+    end
+
+    -----------------------------------------
+    -- state event functions
+    events.EnteredTrigger = function(e)
+        if e.Trigger == fishBox and e.Target.IsItem and e.Target.Item.Template == protofish and not helpers.indexOf(fishes,e.Target) then
+            table.insert(fishes,e.Target)
+            if #fishes > 3 then
+                eating = true
+            end
+        end
+    end
+    events.LeftTrigger = function(e)
+        local i = helpers.indexOf(fishes,e.Target)
+        if i ~= nil then
+            table.remove(fishes,i)
+        end
+    end
+
+    -----------------------------------------
+    -- state node functions
+    nodes = ImmediateSelector {}
+    nodes.Eat = Action {
+        function()
+            helpers.AD()
+            Sleep(2)
+            for i = #fishes, 1, -1 do
+                if not (EntityExists(fishes[i]) and fishes[i].IsItem and not fishes[i].Item.IsDestroyed and fishes[i].OnStage) then
+                    table.remove(fishes,i)
+                end
+            end
+            for i,fish in ipairs(fishes) do
+                if CanSee(me, fish) then
+                    SteerTo(fish, false, 30.0)
+                    DebugText(me, "Consume Anim")
+                    PlayAnimation(consumeAnim, true, false)
+                    PlayEffectAt(consumeEffect, fish)
+                    Sleep(0.4)
+                    SetOnStage(fish, false)
+                    SetEntityEvent(fish, "DEN_ZenBear_DeleteOffStageFish")
+                    Sleep(math.random(7,15))
+                    return
+                end
+            end
+            eating = false
+        end,
+
+        Valid = function()
+            return eating
+        end
+    }
+    nodes.Fish = Action {
+        function()
+            if mod.moveto.MoveToPoint(point, MovementSpeed.Walk, me) then
+                SteerTo(point, false, 30.0)
+                Sleep(math.random(15,30))
+                SetEntityEvent(me,"DEN_ZenBear_Fish")
+                PlayAnimation(fishingAnimation, true, false)
+                helpers.AD()
+            end
+        end,
+        Valid = function()
+            return not GetFlag(halsinFlag,nil)
+        end
+    }
+    nodes.HalsinBack = Action {
+        function()
+            if mod.moveto.MoveToPoint(rewardPoint, MovementSpeed.Walk, me) then
+                LookFrom(rewardPoint)
+                helpers.AD()
+            end
+            Sleep(8.0)
+        end
+    }
+end}

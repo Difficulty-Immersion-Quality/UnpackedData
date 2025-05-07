@@ -1,0 +1,68 @@
+game.states.LOW_Guildhall_Bartender = State {
+    function()
+
+        modules = { "shared.dialog" }
+
+        params.CleaningCooldown = {type = EParamType.Number, help = "[[Seconds between cleaning]]", required = false, default = 10 }
+        params.AutomatedDialog = {type = EParamType.String, help = "[[AD that gets played every so often]]", required = false, default = nil }
+
+        local cleaningBehavior = Dialog("BHVR_WRLD_LOW_Guildhall_BartenderWipes_19c59986-988f-afa4-2d93-aeaab2b1a1ed")
+        local cleaningTrigger = Entity("S_LOW_Guildhall_TimelineScene_BartenderWipes_e589e16b-2e77-43d6-9d8e-ddb747389729")
+        local canClean = true
+        local canAD = true
+
+        events.TimerFinished = function(e)
+            if e.TimerName == "LOW_Guildhall_Bartender_CleaningCooldown" then
+                canClean = true
+            elseif e.TimerName == "LOW_Guildhall_Bartender_ADCooldown" then
+                canAD = true
+            end
+        end
+
+        nodes.Idling = Selector {
+            function(nodes)
+                local node = FindDifferentRandomSelectable(nodes)
+                if node ~= nil then
+                    return node
+                else
+                    return nodes.DoNothing
+                end
+            end
+        }
+
+        nodes.Idling.Clean = Action {
+            function()
+                DebugText(me, "Cleaning")
+                StartBehaviorDialog(cleaningBehavior, cleaningTrigger.Trigger, true, me)
+                DebugText(me, "Cleaning over")
+                Sleep(params.CleaningCooldown + math.random(2,5))
+            end,
+            CanEnter = function()
+                return canClean
+            end,
+            OnLeave = function()
+                canClean = false
+                StartTimer(me, "LOW_Guildhall_Bartender_CleaningCooldown", params.CleaningCooldown, 0)
+            end
+        }
+
+        nodes.Idling.AD = Action {
+            function()
+                StartAutomatedDialog(Dialog(params.AutomatedDialog), true, me)
+            end,
+            CanEnter = function()
+                return canAD and params.AutomatedDialog ~= nil
+            end,
+            OnLeave = function()
+                canAD = false
+                StartTimer(me, "LOW_Guildhall_Bartender_ADCooldown", math.random(10,15), 0)
+            end
+        }
+
+        nodes.Idling.DoNothing = Action {
+            function()
+                Sleep(math.random(3,8))
+            end
+        }
+    end
+}

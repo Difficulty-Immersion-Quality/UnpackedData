@@ -1,0 +1,95 @@
+game.states.TWN_Hospital_Surgeon = State { function()
+
+    modules = { "shared.dialog", "shared.math" }
+
+    params.StandAtTrigger = {type = EParamType.String, help=[[
+            The trigger at which the character stands while watching.
+        ]]}
+
+    params.Anchor = {type = EParamType.String, help=[[
+        The trigger for wandering around.
+    ]]}
+
+    local fl_PatientReleased = Flag("TWN_Hospital_State_PatientReleased_2d47b88f-3c8e-4f74-8833-6934c7a6b70d")
+    local fl_HostileResolution = Flag("TWN_Hospital_State_HostileResolution_b183f1f4-2935-4995-a9df-5731c0f65cf3")
+    local fl_OperationParticipantDied = Flag("TWN_Hospital_State_OperationParticipantDied_a8a7c54f-5cbc-4270-b368-77a3b322885d")
+    local anim_OperatingOnPatient = Animation("CUST_TheRiteOfThornsStill_01_Loop_bf6be5eb-5bf8-428b-a855-b054f476ef20")
+    local dlg_AD = Dialog("TWN_Hospital_AD_Surgeon_48f0aad5-b0ae-d19e-7ac3-2bae51c21126")
+    local tr_anchor = Entity(params.Anchor)
+    local tr_StandAtTrigger = Entity(params.StandAtTrigger)
+
+    local b_LoopingAnim = false
+
+    nodes.Wander = Action {
+        function()
+            Sleep(mod.math.random(1, 4))
+            Wander(tr_anchor, mod.math.random(12, 20), MovementSpeed.Walk)
+            if GetFlag(fl_PatientReleased) then
+                try
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        dlg_AD,
+                        {                        
+                            minDelay = 10.0,
+                            cullingDistance = 20.0,
+                            waitForCompletion = false
+                        },
+                        me)
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    --
+                end
+            end
+            Sleep(mod.math.random(3, 6))
+        end,
+        CanEnter = function()
+            return GetFlag(fl_PatientReleased) or GetFlag(fl_OperationParticipantDied)
+        end,
+    }
+
+    nodes.StandAtTrigger = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.StandAtTrigger,
+        },
+        CanEnter = function()
+            return not GetFlag(fl_PatientReleased) and GetDistance2DTo(me, tr_StandAtTrigger) > 2.0
+        end
+    }
+
+    nodes.Operation = Action {
+        function()
+
+            -- b_LoopingAnim = true
+
+            -- PlayAnimation(anim_OperatingOnPatient, false, true)
+            LookFrom(tr_StandAtTrigger)
+            try
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    dlg_AD,
+                    {                        
+                        minDelay = 10.0,
+                        cullingDistance = 20.0,
+                        waitForCompletion = false
+                    },
+                    me)
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                --
+            end
+        end,
+        CanEnter = function()
+            return not GetFlag(fl_PatientReleased)
+        end,
+        OnLeave = function()
+            if b_LoopingAnim then
+                b_LoopingAnim = false
+                StopAnimation(me)
+            end
+        end,
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+
+end}

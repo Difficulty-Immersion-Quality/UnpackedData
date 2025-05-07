@@ -1,0 +1,155 @@
+game.states.PLA_ZhentShipment_MoveToDeadGnoll = State { function ()
+    description = [[
+        Keeping all dead gnolls in the table and after all of them are dead - use this to approach closest of them.
+    ]]
+
+    modules = { "shared.math", "shared.dialog", "gustav.Act1.ZhentShipment" }
+
+    -----------------------------------------
+    -- params section
+    params.maxDistance = { type = EParamType.Number, required = false, default = 30.0, help = [[
+        Max distance for dead body searching
+    ]]}
+
+    params.isCycled = {type = EParamType.Bool, required = false, default = false, help=[[
+        Will reset dead gnolls table when it becomes empty
+    ]]}
+
+    params.allowGnollTake = {type = EParamType.Bool, required = false, default = false, help=[[
+        Allow taking gnolls bodies exclusivly by one of the agents (so other agent will not move to the same body)
+    ]]}
+
+    params.areaTrigger = { type = EParamType.String, required = true, help = [[
+        Trigger where dead bodies will be collected
+    ]]}
+
+    local initialized = false
+    local deadGnollsCurrent = {}
+    local deadGnolls = {}
+    local gnollsFaction = nil
+    local flindFaction = nil
+    local deadBody = nil
+    local finished = false
+    local isFirstRun = true
+    local areaTrigger = nil
+
+    -----------------------------------------
+    -- helpers
+    helpers.IsOurGnoll = function(entity)
+        local result = entity.Faction == gnollsFaction or entity.Faction == flindFaction
+        return result
+    end
+
+    helpers.FindIndexOf = function(target, charactersTable)
+        if #charactersTable > 0 then
+            for i, character in ipairs(charactersTable) do
+                if target == character then
+                    return i
+                end
+            end
+        end
+        return -1
+    end
+
+    helpers.Init = function()
+        if not initialized then
+            initialized = true
+            areaTrigger = FindEntity(params.areaTrigger)
+            gnollsFaction = FindFaction("ACT1_PLA_ConflictedFlind_GnollPack_6f5c2543-dadb-7f16-94d4-9c7e5f23acf2")
+            flindFaction = FindFaction("ACT1_PLA_ConflictedFlind_Flind_df4d741f-a2b3-c281-a3a4-111dac02f109")
+        end
+    end
+
+    -----------------------------------------
+    -- node section
+
+    self.OnInit = function()
+        helpers.Init()
+    end
+
+    self.OnLeave = function()
+        finished = false
+        deadBody = nil
+    end
+
+    nodes = Selector {
+        Valid = function(node)
+            return CheckAnySelectable(node) and not finished
+        end
+    }
+
+    nodes.FindBody = Action{
+        function()
+            if deadGnollsCurrent == nil or #deadGnollsCurrent == 0 then
+                if isFirstRun or (params.isCycled and #deadGnolls > 1) then
+                    deadGnollsCurrent = {table.unpack(deadGnolls)}
+                    isFirstRun = false
+                end
+            end
+            if #deadGnollsCurrent > 0 then
+                local index = mod.ZhentShipment.FindClosestEntityTo(me, deadGnollsCurrent, params.maxDistance)
+                if index >= 0 then
+                    deadBody = deadGnollsCurrent[index]
+                    table.remove(deadGnollsCurrent, index)
+                    if params.allowGnollTake then
+                        SetEntityEvent(me, "PLA_ZhentShipment_Event_GnollTaken", deadBody)
+                    end
+                end
+            end
+            if deadBody == nil then
+                SetEntityEvent(me, "PLA_ZhentShipment_Event_CancelWaitingForDeadBody")
+                finished = true
+            end
+        end,
+        Valid = function()
+            return deadBody == nil
+        end
+    }
+
+    nodes.MoveToBody = Action{
+        function()
+            try
+                local validPos = FindValidPosition(deadBody, 2, me)
+                if validPos ~= nil and not IsInDangerousSurfaceFor(validPos, me.Character) then
+                    MoveTo(validPos, MovementSpeed.Walk, false, false, 0.5, 1)
+                    SetEntityEvent(me, "PLA_ZhentShipment_Event_MoveToDeadBodyFinished", deadBody)
+                    finished = true
+                else
+                    local index = helpers.FindIndexOf(deadBody, deadGnolls)
+                    if index >= 0 then
+                        table.remove(deadGnolls, index)
+                    end
+                    deadBody = nil
+                end
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed")
+                Sleep(2)
+                deadBody = nil
+            end
+        end,
+        Valid = function()
+            return deadBody ~= nil
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.Dying = function(e)
+        helpers.Init()
+        if me.Active and helpers.IsOurGnoll(e.Target) and IsInTrigger(e.Target, areaTrigger.Trigger) then
+            table.insert(deadGnolls, e.Target)
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if params.allowGnollTake and e.TargetEntity ~= me and e.Event == "PLA_ZhentShipment_Event_GnollTaken" and e.Params[1] ~= nil then
+            if e.Params[1] == deadBody then
+                deadBody = nil
+            end
+            local index = helpers.FindIndexOf(e.Params[1], deadGnollsCurrent)
+            if index >= 0 then
+                table.remove(deadGnollsCurrent, index)
+            end
+        end
+    end
+end}

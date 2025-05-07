@@ -1,0 +1,176 @@
+game.states.WYR_Ironhand_Artificer_001 = State{function()
+    description = [[A behavior for gnome artificer. He's preparing materials for the gnome merhant smith]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local atTable1 = "S_WYR_Ironhand_InitPos_Artificer_001_dced96be-14e4-4a00-8916-b381c7599e5e"
+    local atTable1Pos = Entity("S_WYR_Ironhand_InitPos_Artificer_001_dced96be-14e4-4a00-8916-b381c7599e5e")
+    local atTable2 = "S_WYR_Ironhand_Artificer001_AtTable_a4f5d0dd-b885-418a-a7cb-b7dea145c3ab"
+    local atTable2Pos = Entity("S_WYR_Ironhand_Artificer001_AtTable_a4f5d0dd-b885-418a-a7cb-b7dea145c3ab")
+    local atBox = "S_WYR_Ironhand_Artificer001_AtBox_d130110c-230f-4a31-8d24-91f1a6c4c603"
+    local atBoxPos = Entity("S_WYR_Ironhand_Artificer001_AtBox_d130110c-230f-4a31-8d24-91f1a6c4c603")
+    local atPile = "S_WYR_Ironhand_Artificer001_AtPile_e9d99482-09ba-4076-8017-5776521e829f"
+    local atPilePos = Entity("S_WYR_Ironhand_Artificer001_AtPile_e9d99482-09ba-4076-8017-5776521e829f")
+    local toPile = "S_WYR_Ironhand_Artificer001_ToPile_7cfad2b7-5b1e-46cf-af3d-d82db2c20de9"
+    local toPilePos = Entity("S_WYR_Ironhand_Artificer001_ToPile_7cfad2b7-5b1e-46cf-af3d-d82db2c20de9")
+
+    local pickupPileDialog = Dialog("WYR_Ironhand_WB_Pickup_Pile_093aee24-e63f-8594-c08c-f28f2df20993")
+    local pickupDialog = Dialog("WYR_Ironhand_WB_Pickup_fde811f3-0fa4-9a0b-d470-e14617c3d014")
+    local pickupSceneTriggerAtPile = Entity("WYR_Ironhand_WB_Pickup_SceneTrigger_AtPile_000_a5da9655-11c9-4f3b-9331-6d9f09f90952")
+    local pickupSceneTriggerAtBox = Entity("WYR_Ironhand_WB_Pickup_SceneTrigger_AtBox_07f81877-8160-4842-b71b-cc6a1ee0658a")
+    local dropoffDialog = Dialog("WYR_Ironhand_WB_Dropoff_dc6b28cf-5086-f50a-1a42-0ba1ae8e97af")
+    local dropoffSceneTrigger = Entity("WYR_Ironhand_WB_Dropoff_SceneTrigger_69ae01f0-5f05-48b0-8c48-56b6f6b7339e")
+
+    local disassembleDialog = Dialog("WYR_Ironhand_WB_Disassemble_01_830c0dc3-4d28-fdc1-8050-d0cdc33e976d")
+    local disassembleSceneTrigger1 = Entity("WYR_Ironhand_WB_Disassemble_01_SceneTrigger_0f05e6ba-3419-4e8f-a878-204a91f4ee89")
+    local disassembleSceneTrigger2 = Entity("WYR_Ironhand_WB_Disassemble_02_SceneTrigger_4c1bf3aa-fe7b-40ea-b195-f6e5be8a646a")
+
+    local pickup = Animation("CUST_PickUp_01_73059636-3720-4bf9-9709-772bbf9ff685")
+    local dropoff = Animation("CUST_DropItem_01_a61ba17e-affb-47af-a915-90e1f3f07439")
+
+    local choice = {
+        Grab = 1,
+        Table = 2,
+        Drop = 3,
+    }
+    local currentChoice = 1
+    local currentGrab = 1
+    local currentTable = 2
+    local pickedUpOnce = false
+
+    local probReGrab = 0.6
+    local probToTable2 = 0.75
+    local probToDrop = 0.2
+
+    nodes.Grab = Selector {
+        CanEnter = function()
+            return choice.Grab == currentChoice
+        end,
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        OnLeave = function()
+            pickedUpOnce = false
+        end
+    }
+
+    nodes.Grab.Pile = Selector {
+        CanEnter = function()
+            return currentGrab == 1
+        end
+    }
+    nodes.Grab.Box = Selector {
+        CanEnter = function()
+            return currentGrab == 2
+        end
+    }
+
+    nodes.Grab.Pile.Pickup = Action {
+        function()
+            --LookFrom(atPilePos)
+            StartBehaviorDialog(pickupPileDialog, pickupSceneTriggerAtPile.Trigger, true, me)
+            Sleep(0.5)
+            currentChoice = choice.Table
+            if not pickedUpOnce then
+                if mod.math.CoinToss(probReGrab) then
+                    currentChoice = choice.Grab
+                    currentGrab = 2
+                end
+            end
+            pickedUpOnce = true
+        end
+    }
+
+    nodes.Grab.Box.Pickup = Action {
+        function()
+            --LookFrom(atBoxPos)
+            StartBehaviorDialog(pickupDialog, pickupSceneTriggerAtBox.Trigger, true, me)
+            Sleep(0.5)
+            currentChoice = choice.Table
+            if not pickedUpOnce then
+                if mod.math.CoinToss(probReGrab) then
+                    currentChoice = choice.Grab
+                    currentGrab = 1
+                end
+            end
+            pickedUpOnce = true
+        end
+    }
+
+
+    nodes.Tables = Selector {
+        CanEnter = function()
+            return choice.Table == currentChoice
+        end,
+        OnLeave = function()
+            currentTable = 2
+        end
+    }
+
+    nodes.Tables.Table1 = Selector{
+        CanEnter = function()
+            return 1 == currentTable
+        end
+    }
+    nodes.Tables.Table2 = Selector{
+        CanEnter = function()
+            return 2 == currentTable
+        end
+    }
+
+    nodes.Tables.Table1.Work = Action {
+        function()
+            --LookFrom(atTable1Pos)
+            StartTimer(me, "Timer_WYR_Ironhand_Artificer_001_GracefulStop", mod.math.random(15.0, 20.0), 1)
+            StartBehaviorDialog(disassembleDialog, disassembleSceneTrigger1.Trigger, true, me)
+            Sleep(0.5)
+            currentChoice = choice.Drop
+            --if mod.math.CoinToss(probToTable2) then
+            --    currentTable = 2
+            --end
+            --if mod.math.CoinToss(probToDrop) then
+            --    currentChoice = choice.Drop
+            --end
+        end
+    }
+
+    nodes.Tables.Table2.Work = Action {
+        function()
+            --LookFrom(atTable2Pos)
+            StartTimer(me, "Timer_WYR_Ironhand_Artificer_001_GracefulStop", mod.math.random(15.0, 20.0), 1)
+            StartBehaviorDialog(disassembleDialog, disassembleSceneTrigger2.Trigger, true, me)
+            Sleep(0.5)
+            currentChoice = choice.Drop
+            --if mod.math.CoinToss(1 - probToTable2) then
+            --    currentTable = 1
+            --end
+            --if mod.math.CoinToss(probToDrop) then
+            --    currentChoice = choice.Drop
+            --end
+        end
+    }
+
+
+    nodes.Drop = Selector {
+        Valid = function()
+            return choice.Drop == currentChoice
+        end
+    }
+
+    nodes.Drop.Drop = Action {
+        function()
+            --LookFrom(toPilePos)
+            StartBehaviorDialog(dropoffDialog, dropoffSceneTrigger.Trigger, true, me)
+            DebugText(me, "DropOff")
+            Sleep(3.0)
+            currentChoice = choice.Grab
+        end
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_Ironhand_Artificer_001_GracefulStop" then
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    end
+end}

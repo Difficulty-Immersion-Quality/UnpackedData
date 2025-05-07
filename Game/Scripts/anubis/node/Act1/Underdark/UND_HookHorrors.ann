@@ -1,0 +1,55 @@
+game.states.UND_HookHorror_CorpseEater = State{function ()
+
+    description = [[Behaviour of Hook Horror that is eating a corpse]]
+
+    modules = { "shared.util" }
+
+    params.Corpse = { type = EParamType.String, required = true,
+        help = [[Corpse of a character to eat]] }
+
+    params.LurkAreas = { type = EParamType.String, arrayRange = "1..", required = true,
+        help = [[Area triggers that Hook Horror Hunter is traversing after consuming the corpse]]}
+
+    local anim_EatingCorpse = Animation("CUST_EatingCorpse_01_ea42da9e-15b5-4404-8fe2-9c0080b019c9")
+    local ch_Corpse = nil
+    local b_EatingCorpse = true
+
+    self.OnInit = function()
+        ch_Corpse = FindEntity(params.Corpse)
+        b_EatingCorpse = true
+    end
+
+    nodes.EatCorpse = Action{
+        function()
+            try
+                MoveTo(ch_Corpse)
+                PlayAnimation(anim_EatingCorpse, false, true)
+                Sleep(3.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed to Corpse")
+            end
+
+            mod.util.SleepRandom(3.0, 10.0)
+        end,
+
+        Valid = function()
+            return b_EatingCorpse
+        end,
+
+        OnLeave = function()
+            SetEntityEvent(me, "UND_HookHorror_CorpseEater_Interrupted")
+            b_EatingCorpse = false
+        end
+    }
+
+    nodes.NotEatCorpse = Proxy{
+        game.states.UND_HookHorror_Hunter,
+        params = { LurkAreas = params.LurkAreas }
+    }
+
+    nodes.IdleFallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

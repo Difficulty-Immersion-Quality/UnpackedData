@@ -1,0 +1,118 @@
+game.states.LOW_WaterQueensHouse_SingingWaveservant = State{function ()
+    description = [[Singing waveservant behaviour]]
+
+    modules = {"shared.moveto"}
+    ------------------------------------------------
+    -- Params   
+    ------------------------------------------------
+    params.DefaultPos = {
+        type = EParamType.String,
+        required = true,
+        help=[[Default position for the character to be in]]
+    }
+    params.FuneralEndPos = {
+        type = EParamType.String,
+        required = true,
+        help=[[After funeral position for the character to be in]]
+    }
+
+    params.StartSingingAnim = {
+        type = EParamType.String,
+        required = true,
+        help=[[Singing Start]]
+    }
+    params.SingingLoopAnim = {
+        type = EParamType.String,
+        required = true,
+        help=[[Singing Loop]]
+    }
+    params.EndSingingAnim = {
+        type = EParamType.String,
+        required = true,
+        help=[[Singing End]]
+    }
+    ------------------------------------------------
+    -- Local State variables
+
+    local ambushFlag = Flag("LOW_BellyOfTheBeast_State_WaveservantsInAmbush_b5d448d1-36c9-4deb-8426-45c0fa67f9d1")
+    local endFuneralFlag = Flag("LOW_WaterQueensHouse_State_FuneralEnded_cebde540-6e92-ea5d-2187-c40eb9f5f95f")
+
+    local defaultPos = Entity(params.DefaultPos)
+    local endPos = Entity(params.FuneralEndPos)
+
+    local startSingingAnim = Animation(params.StartSingingAnim)
+    local singingAnim = { Animation(params.SingingLoopAnim) }
+    local stopSingingAnim = Animation(params.EndSingingAnim)
+
+    
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    nodes.Action_Singing = Action
+    {
+        function ()
+            if mod.moveto.MoveToPoint(defaultPos, MovementSpeed.Walk, me) then 
+                LookFrom(defaultPos)
+                PlayLoopingAnimation(startSingingAnim, singingAnim, stopSingingAnim)
+            else
+                SteerTo(defaultPos)
+                if GetDistanceTo(me, defaultPos) < 2 then
+                    PlayLoopingAnimation(startSingingAnim, singingAnim, stopSingingAnim)
+                else
+                    Sleep(3.0)
+                end                
+            end            
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return not GetFlag(ambushFlag) and not GetFlag(endFuneralFlag)
+        end
+    }
+
+    nodes.EndPosition = Action 
+    {
+        function ()        
+            if mod.moveto.MoveToPoint(endPos, MovementSpeed.Walk, me) then
+                LookFrom(endPos)
+                WaitForInterrupt()
+            else
+                SteerTo(endPos)
+                Sleep(2.0)
+            end
+        end,
+
+        Valid = function()
+            return not GetFlag(ambushFlag) and GetFlag(endFuneralFlag)
+        end
+    }
+
+    nodes.Fallback = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end
+    }
+
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

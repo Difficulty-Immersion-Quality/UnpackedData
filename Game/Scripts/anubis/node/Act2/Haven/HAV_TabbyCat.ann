@@ -1,0 +1,128 @@
+game.states.HAV_TabbyCat = State{function()
+    ----------------------------------
+    -- Local variables
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    local canNap = true
+
+    local gnome = Entity("S_FOR_UnfortunateGnome_6e45a00b-bad2-40bb-9403-147b9e92d976")
+    local napPoint = Entity("S_HAV_CatNapPoint_0ff7da7a-453e-4fc3-bd9e-ae67e8347b09")
+    local workshopArea = Entity("S_HAV_GnomeWorkshopArea_64368783-efa2-4b16-b9ab-bf094b6c587c")
+    local mainAnchor = Entity("S_HAV_CatWanderPoint_001_185149a7-d22a-417b-822b-785ebf55bb84")
+    local upstairsAnchor = Entity("S_HAV_CatWanderPoint_002_c6831720-9630-4d5b-8d9c-27a9d86a617b")
+    local sideAnchor = Entity("S_HAV_CatWanderPoint_003_9ad0781d-d753-4b52-8d5f-754f3181ed6a")
+
+    local wanderAnchors = {}
+    local wanderAnchorIndex = 1
+
+    local AD = Dialog("HAV_WrootRequest_AD_GnomeAndCat_61192811-7619-2951-269e-6b846cb6a461")
+
+    local goToWulbrenFlag = Flag("HAV_WrootRequest_Event_BarcusGoesToWulbren_01da3925-f97b-c096-e15b-615fc03f2934")
+    local reunionOverFlag = Flag("HAV_WrootRequest_Event_FriendTalkOver_ae967954-99fd-5e27-e083-98884ba8f9f0")
+
+    self.OnInit = function()
+        table.insert(wanderAnchors, mainAnchor)
+        table.insert(wanderAnchors, upstairsAnchor)
+        table.insert(wanderAnchors, sideAnchor)
+    end
+
+    ----------------------------------
+    -- Nodes
+
+    nodes.GoNap = Action {
+        CanEnter = function()
+            return canNap
+        end,
+        function()
+            if mod.moveto.MoveToPoint(napPoint, MovementSpeed.Stroll, me, 0.1) then
+                lookFrom(napPoint)
+                canNap = false
+                StartTimer(me, "HAV_Cat_NapDelay", 180, 0)
+                StartTimer(me, "HAV_Cat_NapTimer", 20, 0)
+                ApplyStatus(me, "SLEEPING", false, -1)
+                WaitForInterrupt()
+            end  
+        end
+    }
+
+    nodes.WithGnome = Selector{
+        function(nodes)
+            return GetWeightedCanEnter(nodes, {
+                [nodes.WanderWorkshop] = 80,
+                [nodes.SpeakWithGnome] = 20,
+            })
+        end,
+        Valid = function()
+            return not gnome.Character.IsDead and IsInTrigger(gnome, workshopArea.Trigger) and not (GetFlag(goToWulbrenFlag))
+        end
+    }
+
+    nodes.WithGnome.WanderWorkshop = Action {
+        function()
+            Wander(4, 5, MovementSpeed.Stroll, workshopArea)
+            Sleep(6)
+        end
+    }
+
+    nodes.WithGnome.SpeakWithGnome = Action {
+        function()
+            if mod.moveto.MoveToPoint(gnome, MovementSpeed.Stroll, me) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 60.0,
+                    },
+                    me,
+                    gnome
+                )
+            end
+        end
+    }
+
+    nodes.WanderNoGnome = Action {
+        function()
+            if mod.moveto.MoveToPoint(wanderAnchors[wanderAnchorIndex], MovementSpeed.Stroll, me, 1.0, true) then
+                Wander(4, 5, MovementSpeed.Stroll, mainWanderPoint)
+                Sleep(6)
+                Wander(4, 5, MovementSpeed.Stroll, mainWanderPoint)
+                Sleep(6)
+                Wander(4, 5, MovementSpeed.Stroll, mainWanderPoint)
+                Sleep(6)
+                local i = math.random()
+                if i < 0.25 then
+                    wanderAnchorIndex = 3
+                elseif i < 0.6 and i >= 0.25 then
+                    wanderAnchorIndex = 2
+                else
+                    wanderAnchorIndex = 1
+                end
+            end
+        end
+    }
+
+
+    ----------------------------------
+    -- Events
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "HAV_Cat_NapTimer" then
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        elseif e.TimerName == "HAV_Cat_NapDelay" then
+            canNap = true
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me then
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end
+    end
+
+end
+}

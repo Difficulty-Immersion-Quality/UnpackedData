@@ -1,0 +1,578 @@
+game.states.CAMP_Companion = State{function()
+    description = [[Shared camp behaviour to determine if camp behaviours are valid]]
+
+    -- used to detect if our config was reset and we need to request a re-init of camppost
+    local campPos = nil
+
+     -- Params
+    params.nightBehaviour = {   type = EParamType.State,
+        required = false, default = nil,
+        help = [[Behaviours unique to important camp nights]]
+    }
+
+    params.defaultBehaviour = {type = EParamType.State, required = true,
+        help=[[Default behaviour to use in the camp]]}
+
+    params.avatarBehaviour = { type = EParamType.State, required= false, default = StateRef{game.states.CAMP_AvatarIdle},
+        help=[[Default behaviour for an uncontrolled avatar in camp]]}
+
+    -- Flags
+    local CAMP_GLO_State_InCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+    local GLO_CAMP_NightMode = Flag("GLO_CAMP_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+
+    -- Standing behavior, prevents the companions from returing to their positions in the default behavior
+    local GLO_CAMP_StandingStill = Flag("GLO_CAMP_StandingStill_776de2de-871c-4cf4-bcbb-72d26f244489")
+
+    -- Tags
+    local avatarTag = Tag("AVATAR_306b9b05-1057-4770-aa17-01af21acd650")
+    local wildshapeTag = Tag("WILDSHAPE_04ae77c4-f708-4ffa-8b8c-763b062a2e6e")
+
+    self.Valid = function()
+        return GetFlag(CAMP_GLO_State_InCamp, me)
+    end
+
+    nodes = ImmediateSelector {}
+
+    nodes.InitCampPosBackup = Action{
+    	function()
+            SetUnicastEntityEvent(me,"CampPosRequest")
+            Sleep(2.0)
+        end,
+
+	    CanEnter = function()
+	        return
+	            campPos == nil
+	    end
+	}
+
+    nodes.CampAvatar = Proxy {
+        params.avatarBehaviour,
+
+        Valid = function()
+            return IsTagged(me, avatarTag) and not HasActiveStatusWithGroup(me, "SG_Polymorph")
+        end
+    }
+
+
+
+    nodes.CampNight = Proxy {
+        params.nightBehaviour,
+
+        Valid = function()
+            return GetFlag(GLO_CAMP_NightMode) and not HasActiveStatusWithGroup(me, "SG_Polymorph")
+        end
+    }
+
+    -- this blocks the default day behavior
+    nodes.CampStandingStill = Proxy {
+        game.states.CAMP_Companion_StandingStill,
+
+        Valid = function()
+            return GetFlag(GLO_CAMP_StandingStill, me) and not HasActiveStatusWithGroup(me, "SG_Polymorph")
+        end
+    }
+
+    -- this blocks any behaviors when character is polymorphed
+    nodes.CampPolymorphedStandingStill = Proxy {
+        game.states.CAMP_Companion_StandingStill,
+
+        Valid = function()
+            return HasActiveStatusWithGroup(me, "SG_Polymorph")
+        end
+    }
+
+    nodes.CampIdle = Proxy {
+        params.defaultBehaviour
+    }
+
+    events.EntityEvent = function(e)
+        -- Camp Position Changed
+        if e.TargetEntity == me and e.Event == "CampPositionChange" then
+            campPos = e.Params[1]
+        end
+    end
+end}
+
+game.states.CAMP_AvatarIdle = State{function()
+    description=[[Generic behaviour for an avatar idling at the campsite]]
+    modules = {"shared.util"}
+
+    nodes.Idle = Action{
+        function()
+            Sleep(2.0)
+            WaitForInterrupt()
+        end
+     }
+end}
+
+game.states.CAMP_Idle = State{function()
+    description=[[Generic behaviour for idling at the campsite]]
+    modules = {"shared.util"}
+
+    params.behaviourPos = {type = EParamType.String, required = true,
+        help = [[Name_GUID of point trigger where the character will stand for the behaviour or 'CAMPPOS' for requesting it from Osiris]]}
+
+    params.idleAnim = {type = EParamType.String, required = false,
+        help=[[Name_GUID of the animation to use]]}
+    params.idleAnimStart = {type = EParamType.String, required = false,
+        help=[[Name_GUID of the start animation to use]]}
+    params.idleAnimEnd = {type = EParamType.String, required = false,
+        help=[[Name_GUID of the end animation to use]]}
+    params.loopIdleAnim = {type = EParamType.Bool, required = false, default = true,
+        help=[[If the animation will loop indifinetely]]}
+    params.idleAnimLength = {type = EParamType.Number, required = false, default = 20.0,
+        help=[[If the animation does not loop, for how long will it play in seconds]]}
+    params.idleAnimEndLength = {type = EParamType.Number, required = false, default = 10.0,
+        help=[[Exit time for the animation to stop and leave the action]]}
+    params.sleepDurationMin = {type = EParamType.Number, required = false, default = 0.5,
+        help=[[Amount of time to sleep before doing the animation.]]}
+    params.sleepDurationMax = {type = EParamType.Number, required = false, default = 2.0,
+        help=[[Amount of time to sleep before doing the animation.]]}
+
+    local campPos = nil
+    local idlePos = nil
+    local idleAnim = Animation(params.idleAnim)
+    local idleAnimStart = nil
+    local idleAnimEnd = nil
+    local actionActive = false
+    local sleepDurationMin = 0.5
+    local sleepDurationMax = 2.0
+
+    self.OnInit = function()
+        if (params.idleAnimStart ~= nil and params.idleAnimStart ~= "") then
+            idleAnimStart = Animation(params.idleAnimStart)
+        end
+        if (params.idleAnimEnd ~= nil and params.idleAnimEnd ~= "") then
+            idleAnimEnd = Animation(params.idleAnimEnd)
+        end
+        if (params.sleepDurationMin ~= nil) then
+            sleepDurationMin = params.sleepDurationMin
+        end
+        if (params.sleepDurationMax ~= nil) then
+            sleepDurationMax = params.sleepDurationMax
+        end
+    end
+
+    nodes.Idle = Action{
+        function()
+            if params.behaviourPos == "CAMPPOS" then
+                if campPos == nil or campPos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                    SetUnicastEntityEvent(me,"CampPosRequest")
+                    Sleep(2.0)
+                    return
+                end
+
+                idlePos = campPos
+
+            else
+                idlePos = Entity(params.behaviourPos)
+            end
+
+            if idlePos == nil or idlePos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                Sleep(2.0)
+                return
+            end
+
+            if IsInDangerousSurfaceFor(idlePos, me.Character) then
+                SteerTo(idlePos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(idlePos, MovementSpeed.Walk, true, false, 0.5, 1.5, false)
+
+            if moveResult ~= error.MovementError.None then
+                SteerTo(idlePos)
+                Sleep(2.0)
+                return
+            end
+
+            LookFrom(idlePos)
+
+            mod.util.SleepRandom(sleepDurationMin, sleepDurationMax)
+            if (idleAnim ~= nil) then
+                if (idleAnimStart ~= nil and idleAnimEnd ~= nil) then
+                    if params.loopIdleAnim then
+                        PlayLoopingAnimation(idleAnimStart,{idleAnim},idleAnimEnd,false) --TODO: hard-coded animation sleep fix
+                        WaitForInterrupt()
+                    else
+                        PlayLoopingAnimation(idleAnimStart,{idleAnim},idleAnimEnd) --TODO: hard-coded animation sleep fix
+                        Sleep(params.idleAnimLength)
+                        StopAnimation(me)
+                        Sleep(params.idleAnimEndLength) -- Gives time for the animation to end and reevaluate tree
+                        return
+                    end
+                else
+                    if params.loopIdleAnim then
+                        PlayAnimation(idleAnim, false, true)
+                        WaitForInterrupt()
+                    else
+                        PlayAnimation(idleAnim, true, false)
+                        return
+                    end
+                end
+            end
+        end,
+
+        OnEnter = function()
+            actionActive = true
+        end,
+
+        OnLeave = function()
+            actionActive = false
+            StopAnimation(me)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        -- Camp Position Changed
+        if e.TargetEntity == me and e.Event == "CampPositionChange" then
+            campPos = e.Params[1]
+            if actionActive then
+                Interrupt()
+            end
+        end
+   end
+
+end}
+
+game.states.CAMP_WorldBehaviourAtIdlePos = State{function()
+    description=[[Generic behaviour for playing a world behaviour at the campsite idle pos, only for world behaviours that don't need a scene trigger]]
+    modules = {"shared.dialog", "shared.util"}
+
+    params.behaviourPos = {type = EParamType.String, required = true,
+        help = [[Name_GUID of point trigger where the character will stand for the behaviour or 'CAMPPOS' for requesting it from Osiris]]}
+    params.worldBehaviourDialog = {type = EParamType.String, required = false,
+        help=[[Name_GUID of the world behaviour dialog resource]]}
+
+    local campPos = nil
+    local idlePos = nil
+    local bhvrDialog = Dialog(params.worldBehaviourDialog)
+    local actionActive = false
+    local sleepDurationMin = 0.5
+    local sleepDurationMax = 2.0
+    local inPartyFlag = Flag("ORI_State_Recruited_e78c0aab-fb48-98e9-3ed9-773a0c39988d")
+
+    nodes.Idle = Action{
+        function()
+            if params.behaviourPos == "CAMPPOS" then
+                if campPos == nil or campPos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                    SetUnicastEntityEvent(me,"CampPosRequest")
+                    Sleep(2.0)
+                    return
+                end
+                idlePos = campPos
+
+            else
+                idlePos = Entity(params.behaviourPos)
+            end
+
+            if idlePos == nil or idlePos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                Sleep(2.0)
+                return
+            end
+
+            if IsInDangerousSurfaceFor(idlePos, me.Character) then
+                SteerTo(idlePos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(idlePos, MovementSpeed.Walk, true, false, 0.5, 1.5, false)
+
+            if moveResult ~= error.MovementError.None then
+                SteerTo(idlePos)
+                Sleep(2.0)
+                return
+            end
+
+            LookFrom(idlePos)
+
+            mod.util.SleepRandom(sleepDurationMin, sleepDurationMax)
+            if (bhvrDialog ~= nil) then
+                --DebugText(me,"Starting behaviour dialog")
+                try
+                    StartBehaviorDialog(bhvrDialog, nil, true, me)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    Sleep(1.0)
+                    --DebugText(me, "Behaviour failed to start: [1]",e)
+                end
+                Sleep(2.0)
+            end
+            --DebugText(me,"Completed")
+        end,
+
+        OnEnter = function()
+            actionActive = true
+            StopAnimation(me)
+        end,
+
+        OnLeave = function()
+            actionActive = false
+            BehaviorDialogRequestGracefulStop(me, false, bhvrDialog)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        -- Camp Position Changed
+        if e.TargetEntity == me and e.Event == "CampPositionChange" then
+            campPos = e.Params[1]
+            if actionActive then
+                Interrupt()
+            end
+        end
+   end
+
+end}
+
+game.states.CAMP_Sitting = State{function()
+    description=[[Generic behaviour for sitting on the ground at the campsite]]
+
+    params.behaviourPos = {type = EParamType.String, required = true,
+    help = [[Name_GUID of point trigger where the character will stand for the behaviour]]}
+
+    local campPos = nil
+    local idlePos = nil
+    local actionActive = false
+
+    nodes.Idle = Action{
+        function()
+            if params.behaviourPos == "CAMPPOS" then
+                if campPos == nil or campPos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                    SetUnicastEntityEvent(me,"CampPosRequest")
+                    Sleep(2.0)
+                    return
+                end
+
+                idlePos = campPos
+
+            else
+                idlePos = Entity(params.behaviourPos)
+            end
+
+            if idlePos == nil or idlePos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                Sleep(2.0)
+                return
+            end
+
+            if IsInDangerousSurfaceFor(idlePos, me.Character) then
+                SteerTo(idlePos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(idlePos, MovementSpeed.Walk, true, false, 1.5, 2.5, false)
+
+            if moveResult ~= error.MovementError.None then
+                SteerTo(idlePos)
+                Sleep(2.0)
+                return
+            end
+
+            LookFrom(idlePos)
+            if not me.IsReposedSitting then
+                SitOnGround(me)
+            end
+            WaitForInterrupt()
+        end,
+
+        OnEnter = function()
+            actionActive = true
+        end,
+
+        OnLeave = function()
+            actionActive = false
+            if me.IsReposedSitting then
+                EndRepose(me)
+            end
+        end
+    }
+
+    events.EntityEvent = function(e)
+        -- Camp Position Changed
+        if e.TargetEntity == me and e.Event == "CampPositionChange" then
+            campPos = e.Params[1]
+            if actionActive then
+                Interrupt()
+            end
+        end
+   end
+
+end}
+
+game.states.CAMP_WorldBehaviour = State{function()
+    description=[[World behaviour to play at the campsite]]
+    modules = {"shared.util"}
+
+    params.timelineSceneTrigger = {type = EParamType.String, required = true,
+        help = [[Name_GUID of point trigger where the character will stand for the behaviour or 'CAMPPOS' for requesting it from Osiris]]}
+
+    params.idleAnim = {type = EParamType.String, required = false,
+        help=[[Name_GUID of the animation to use]]}
+    params.idleAnimStart = {type = EParamType.String, required = false,
+        help=[[Name_GUID of the start animation to use]]}
+    params.idleAnimEnd = {type = EParamType.String, required = false,
+        help=[[Name_GUID of the end animation to use]]}
+
+    local campPos = nil
+    local idlePos = nil
+    local idleAnim = Animation(params.idleAnim)
+    local idleAnimStart = nil
+    local idleAnimEnd = nil
+    local actionActive = false
+    local sleepDurationMin = 0.5
+    local sleepDurationMax = 2.0
+
+    self.OnInit = function()
+        if (params.idleAnimStart ~= nil and params.idleAnimStart ~= "") then
+            idleAnimStart = Animation(params.idleAnimStart)
+        end
+        if (params.idleAnimEnd ~= nil and params.idleAnimEnd ~= "") then
+            idleAnimEnd = Animation(params.idleAnimEnd)
+        end
+    end
+
+    nodes.Idle = Action{
+        function()
+            if params.behaviourPos == "CAMPPOS" then
+                if campPos == nil or campPos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                    SetUnicastEntityEvent(me,"CampPosRequest")
+                    Sleep(2.0)
+                    return
+                end
+
+                idlePos = campPos
+
+            else
+                idlePos = Entity(params.behaviourPos)
+            end
+
+            if idlePos == nil or idlePos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                Sleep(2.0)
+                return
+            end
+
+            if IsInDangerousSurfaceFor(idlePos, me.Character) then
+                SteerTo(idlePos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(idlePos, MovementSpeed.Walk, true, false, 0.5, 1.5, false)
+
+            if moveResult ~= error.MovementError.None then
+                SteerTo(idlePos)
+                Sleep(2.0)
+                return
+            end
+
+            LookFrom(idlePos)
+
+            mod.util.SleepRandom(sleepDurationMin, sleepDurationMax)
+            if (idleAnim ~= nil) then
+                if (idleAnimStart ~= nil and idleAnimEnd ~= nil) then
+                    PlayLoopingAnimation(idleAnimStart,{idleAnim},idleAnimEnd,false) --TODO: hard-coded animation sleep fix
+                else
+                    PlayAnimation(idleAnim, false, true)
+                end
+            end
+
+            WaitForInterrupt()
+        end,
+
+        OnEnter = function()
+            actionActive = true
+        end,
+
+        OnLeave = function()
+            actionActive = false
+            StopAnimation(me)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        -- Camp Position Changed
+        if e.TargetEntity == me and e.Event == "CampPositionChange" then
+            campPos = e.Params[1]
+            if actionActive then
+                Interrupt()
+            end
+        end
+   end
+
+end}
+
+
+game.states.CAMP_Drinking = State{function()
+    description=[[Generic behaviour for drinking at the campsite]]
+
+    params.behaviourPos = {type = EParamType.String, required = true,
+        help = [[Name_GUID of point trigger where the character will stand for the behaviour]]}
+
+    local drinkingAnim = Animation("CUST_Drinking_01_Drink_Wine_Glass_A_3f6ab5b5-6c83-456d-932e-23a260378b6b")
+
+    local campPos = nil
+    local drinkPos = nil
+    local actionActive = false
+
+    nodes.Drink = Action{
+        function()
+            if params.behaviourPos == "CAMPPOS" then
+                if campPos == nil or campPos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                    SetUnicastEntityEvent(me,"CampPosRequest")
+                    Sleep(2.0)
+                    return
+                end
+
+                drinkPos = campPos
+
+            else
+                drinkPos = Entity(params.behaviourPos)
+            end
+
+            if drinkPos == nil or drinkPos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                Sleep(2.0)
+                return
+            end
+
+            if IsInDangerousSurfaceFor(drinkPos, me.Character) then
+                SteerTo(drinkPos)
+                Sleep(2.0)
+                return
+            end
+
+            MoveTo(drinkPos, MovementSpeed.Walk, true, false, 1.5, 2.5, false)
+            LookFrom(drinkPos)
+
+            try
+                PlayAnimation(drinkingAnim)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                --DebugText(me, "Anim Failed: CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636" )
+                Sleep(2.0)
+                return
+            end
+
+            Sleep(math.random(2, 10))
+        end,
+
+        OnEnter = function()
+            actionActive = true
+        end,
+
+        OnLeave = function()
+            actionActive = false
+            StopAnimation(me)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        -- Camp Position Changed
+        if e.TargetEntity == me and e.Event == "CampPositionChange" then
+            campPos = e.Params[1]
+            if actionActive then
+                Interrupt()
+            end
+        end
+   end
+
+end}

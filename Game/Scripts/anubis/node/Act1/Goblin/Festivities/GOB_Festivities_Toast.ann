@@ -1,0 +1,143 @@
+game.states.GOB_Festivities_Toast = State{function ()
+    description = [[State where goblin takes part as crowd listening to toast and drinking]]
+
+    modules = { "shared.util", "shared.dialog", "gustav.Act1.Goblins" }
+
+    params.NonToastState = { type = EParamType.State, required = true,
+        help = [[Behaviour while there's no Toast event]]}
+
+    params.ToastPos = { type = EParamType.String, required = false, default = nil,
+        help = [[Trigger position for the Toast]]}
+
+    params.WaitToastAD = { type = EParamType.String, required = false, default = nil,
+        help = [[AD when goblin waits for the toast]] }
+
+    params.Toaster = { type = EParamType.String, required = false, default = "S_GOB_Festivities_Goblin_004_Ranger_05_e63401de-04ea-40b6-a988-b2f90a90f748",
+        help = [[Goblin that will start the Toast]]}
+
+
+    local fl_CrowdGathered = Flag("GOB_GoblinToast_State_CrowdGathered_0b99e023-2c0f-4a9d-8e37-5677f50ccd00")
+    local fl_ToastInProgress = Flag("GOB_GoblinToast_State_ToastIsOn_99a0dc3a-289e-48b3-9710-60388f0d72ed")
+    local fl_ToastEnded = Flag("GOB_GoblinToast_State_ToastEnded_dbfb6871-4498-4050-b5f1-a0741cf30217")
+    local fl_ToastWasWithoutPlayer = Flag("GOB_GoblinToast_ToastWasWithoutPlayer_d2fe6e01-7fb2-48d9-9e85-3153ee3799b2")
+    local tg_GOBLIN = Tag("GOBLIN_608597d9-bf00-4ede-aabe-767457280925")
+    local tg_HUMAN = Tag("HUMAN_69fd1443-7686-4ca9-9516-72ec0b9d94d7")
+    local b_CanPlayGoblinAnimations = false
+
+    local tr_ToastPos = nil
+    local dlg_WaitToastAD = Dialog(params.WaitToastAD)
+    local ch_Toaster = nil
+    local tr_ToasterPos = nil
+    local anim_Cheers = { Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0"),
+                          Animation("CUST_Cheering_02_5e23b082-f75a-4daa-86e1-ab73ec6d30b7"),
+                          Animation("CUST_Cheering_03_34ac373e-2928-4d83-8427-13f34573c64a") }
+    local anim_Drinking = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+    local b_AfterToastOnce = true
+
+    local b_CanDoAD = false
+    local s_CanDoADTimer = "GOB_Festivities_Toast.AD.CanDoAD"
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, 15.0, 0)
+    end
+
+
+    self.OnInit = function()
+        b_CanPlayGoblinAnimations = IsTagged(me, tg_GOBLIN) or IsTagged(me, tg_HUMAN)
+
+        if params.ToastPos ~= nil then
+            tr_ToastPos = FindEntity(params.ToastPos)
+        end
+        b_CanDoAD = (dlg_WaitToastAD ~= nil)
+        ch_Toaster = FindEntity(params.Toaster)
+        tr_ToasterPos = FindEntity("S_GOB_GoblinToast_ToastPoint_e363d352-2a2b-4c01-87e4-1494eb8a46ad")
+    end
+
+
+    nodes.NonToastState = Proxy{
+        params.NonToastState,
+
+        Valid = function()
+            return not GetFlag(fl_CrowdGathered)
+                and not GetFlag(fl_ToastInProgress)
+                and not GetFlag(fl_ToastEnded)
+        end
+    }
+
+    -- before the toast
+    nodes.Toast_Wait = Action{
+        function()
+            helpers.MoveToToastPos()
+            if b_CanDoAD then
+                StartAutomatedDialogImmediate(dlg_WaitToastAD, me)
+                helpers.CanDoADReset()
+            end
+            SteerTo(tr_ToasterPos)
+            if b_CanPlayGoblinAnimations then
+                PlayAnimation(anim_Cheers[math.random(#anim_Cheers)])
+            end
+            mod.util.SleepRandom(6.0, 8.0)
+        end,
+
+        Valid = function()
+            return GetFlag(fl_CrowdGathered)
+        end
+    }
+
+    -- during the toast
+    nodes.Toast_Speech = Action{
+        function()
+            helpers.MoveToToastPos()
+            SteerTo(ch_Toaster)
+            if b_CanPlayGoblinAnimations then
+                PlayAnimation(anim_Cheers[math.random(#anim_Cheers)])
+            end
+            mod.util.SleepRandom(1.0, 4.0)
+        end,
+
+        Valid = function()
+            return GetFlag(fl_ToastInProgress)
+        end
+    }
+
+    nodes.AfterToast_Drinking = Action{
+        function()
+            mod.util.SleepRandom(0.5, 2.0)
+            if GetFlag(fl_ToastWasWithoutPlayer) then
+                PlayAnimation(anim_Drinking, true)
+            end
+            b_AfterToastOnce = false
+        end,
+
+        Valid = function()
+            return b_AfterToastOnce and GetFlag(fl_ToastEnded)
+        end
+    }
+
+    nodes.AfterToast_Standing = Action{
+        function()
+            Sleep(4.0)
+        end,
+
+        Valid = function()
+            return not b_AfterToastOnce and GetFlag(fl_ToastEnded)
+        end
+    }
+
+    helpers.action.MoveToToastPos = function()
+        if tr_ToastPos ~= nil then
+            if GetDistance2DTo(me, tr_ToastPos) > 1.0 then
+                try
+                    MoveTo(tr_ToastPos,MovementSpeed.Walk, false, false, 0.0, 1.0)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "Failed MoveTo(tr_ToastPos)")
+                end
+            end
+        end
+    end
+end}

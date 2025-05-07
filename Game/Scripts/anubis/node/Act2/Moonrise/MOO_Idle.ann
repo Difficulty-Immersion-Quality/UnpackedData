@@ -1,0 +1,126 @@
+game.states.MOO_Idle = State{function ()
+
+    params.AD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play.
+    ]]}
+
+    params.regionBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks the ADs for the entire group of characters (prevents overlap)
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks this specific AD from happening (prevents repetition)
+    ]]}
+
+    params.partners = {type = EParamType.String, arrayRange = "1..", required = false,  default = nil, help = [[
+        Dialog Partner list
+    ]]}
+
+    params.loopAnim = {type = EParamType.String, required=false, default=nil, help=[[
+        Looping animation while in idle.
+    ]]}
+
+    params.anim = {type = EParamType.String, required=false, default=nil, help=[[
+        Periodic animation interrupting the loop.
+    ]]}
+
+    params.home = {type = EParamType.String, required=false, default=nil, help=[[
+        Home trigger
+    ]]}
+
+
+    local loopAnim
+    local anim
+    local home
+    local loopAnimName
+    local animName
+
+    self.OnInit = function()
+
+        if params.loopAnim then
+            loopAnim = Animation(params.loopAnim) -- If you can't find the animation, assume it hasn't been made yet.
+            loopAnimName = params.loopAnim
+        end
+        if params.anim then
+            anim = Animation(params.anim)
+            animName = params.anim
+        end
+        if params.home then
+            home = FindEntity(params.home)
+        end
+    end
+
+    self.OnLeave = function()
+        if loopAnim then
+            StopAnimation(me)
+        end
+    end
+
+    nodes.Selector_Idle = Selector{
+        function(nodes)
+            return
+                FindWeightedRandomSelectable(nodes, {
+                                                     [nodes.Action_Idle] = 3,
+                                                     [nodes.Action_AD]= 2
+                                             })
+        end
+    }
+
+    nodes.Selector_Idle.Action_AD = Proxy{
+        game.states.GLO_ADManager,
+        params={
+            AD = params.AD,
+            regionBlockFlag = params.regionBlockFlag,
+            dialogBlockFlag = params.dialogBlockFlag,
+            partners = params.partners
+            }
+    }
+
+    nodes.Selector_Idle.Action_Idle = Action{function()
+        if home then
+            if GetDistanceTo(home, me) > 1.5 then
+                StopAnimation(me)
+                if not IsInDangerousSurfaceFor(home, me.Character) then
+                    try
+                        MoveTo(home)
+                        LookFrom(home)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(1.0)
+                        return
+                    end
+                else
+                    LookAtEntity(home, 3.0)
+                end
+            else
+                LookFrom(home)
+            end
+        end
+
+        if loopAnim then
+            try
+                PlayAnimation(loopAnim, false, true)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Loop animation play failed "..loopAnim)
+            end
+        elseif loopAnimName then
+            DebugText(me, "DEBUG: Animation "..loopAnimName.." (does not exist yet).")
+        end
+
+        Sleep(math.random()*3.0+5.0)
+
+        if not (loopAnim or loopAnimName) or math.random() < 0.7 then
+            if anim then
+                try
+                    PlayAnimation(anim, true, false)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "Animation play failed")
+                end
+            elseif animName then
+                DebugText(me, "DEBUG: Animation "..animName.." (does not exist yet).")
+            end
+        end
+    end
+
+    }
+end
+}

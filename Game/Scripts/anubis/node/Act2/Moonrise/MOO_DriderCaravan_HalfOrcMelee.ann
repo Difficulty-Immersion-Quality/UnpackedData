@@ -1,0 +1,48 @@
+game.states.MOO_DriderCaravan_HalfOrc = State{ function()
+    --------------------------------MODULE--------------------------------
+    --------------------------------PARAMS--------------------------------
+    --------------------------------LOCAL---------------------------------
+    local hasArrived = false
+    local bed = Entity("S_MOO_BedBunk_ec3ce5e0-c16b-45c5-8ed4-4e1649c9b0eb")
+    --------------------------------NODES---------------------------------
+
+    nodes.Sleeping = Action{
+    CanEnter = function()
+        return hasArrived
+    end,
+    function()
+        UseItem(bed.Item)
+        ApplyStatus(me, "SLEEPING", false, -1)
+        WaitForInterrupt()
+    end, 
+    OnInterrupt = function()
+        hasArrived = false
+    end}
+
+    nodes.GoingToSleep = Action{
+    function()
+        if not IsInDangerousSurfaceFor(bed, me.Character) then
+            local moveToResult = MoveTo(bed, MovementSpeed.Walk, false, false, 0.5, 1.0, false)
+            if moveToResult ~= error.MovementError.None then
+                DebugText(me, "Error: MovementFailed")
+                Sleep(3.0)
+                return
+            end
+
+            hasArrived = true
+        else
+            DebugText(me, "Bed on dangerous surface")
+            SteerTo(bed)
+            Sleep(3.0)
+        end
+    end,
+    Valid = function()
+        return not hasArrived
+    end}
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

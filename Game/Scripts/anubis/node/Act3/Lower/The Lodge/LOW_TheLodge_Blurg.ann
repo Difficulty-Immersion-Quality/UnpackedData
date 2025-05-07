@@ -1,0 +1,64 @@
+game.states.LOW_TheLodge_Blurg = State{function()
+    
+    modules = {"shared.dialog", "shared.math"}
+
+    local triggerString = "S_LOW_TheLodge_BlurgPos_77789b4d-4437-48f2-aa0f-1c8a20fd9921"
+    local trigger
+
+    local idleAnimations = {
+        Animation("CUST_Pondering_01_c2a68c82-1b0b-4d0c-8f1a-c9f14984a5fb"),
+        Animation("CUST_Pondering_02_c6b5f1ab-aa50-4b19-8139-fa66ee0abafe"),
+        Animation("CUST_Pondering_03_7872d8f3-fda0-4d85-931e-ea73988fe743")
+    }
+    local omeluumReturnedAnimation = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+
+    local OmeluumPresentAD = Dialog("LOW_TheLodge_AD_OmeluumAndBlurgChatting_84bfbbf7-dab8-f405-e84e-a48fd59c9826")
+    local SoloAD = Dialog("LOW_TheLodge_AD_Blurg_Idle_1ef82072-7697-8b77-8969-5754827130d0")
+
+    local omeluumReturnedFlag = Flag("LOW_TheLodge_State_OmeluumArrived_a43b5a2a-2cd8-91df-0394-3a698f8c5da0")
+
+    local omeluum = Entity("S_GLO_SocietyOfBrilliance_MindFlayer_1f9937ef-9207-4db6-a833-e4083d571f53")
+
+    self.OnInit = function()
+        trigger = Entity(triggerString)
+    end
+
+    nodes.Idle = Action{        
+        function()
+            if(GetFlag(omeluumReturnedFlag) and omeluum.OnStage and not omeluum.Character.IsDead 
+            and GetDistanceTo(me, omeluum) < 10) then
+                SteerTo(omeluum)
+                PlayAnimation(omeluumReturnedAnimation, false, true)
+            else
+                LookFrom(trigger)
+                PlayAnimation(idleAnimations[math.random(#idleAnimations)], false, true)
+            end
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                OmeluumPresentAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 60,
+                    fallbackSoloDialog = SoloAD
+                },
+                me,
+                omeluum
+            )
+            Sleep(mod.math.random(20,30))
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, trigger) <= 2.0
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = triggerString
+        }
+    }
+end}

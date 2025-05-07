@@ -1,0 +1,73 @@
+game.states.GOB_Warlock = State{
+    function()
+
+    modules = {"shared.math", "shared.dialog", "shared.util"}
+    description = [[Behaviour script for Warlock making a deal with player in Goblin camp]]
+
+    local campZone = Entity("S_CAMP_Korrilla_CampZone_16f702d4-525f-434c-af66-cfe3b003bbe7")
+    local patrolSpline = Spline("S_CAMP_Korrila_WalkSpline_d876050b-ba16-4fe3-bf3a-0d503c5e0856")
+    local stopAndWatch = true
+    local splineEvent = ""
+
+    --Korrilla sneaks around in camp and every time she arrives at a node, she looks at the player for a bit
+    nodes.CelebrationSneaking = Action{
+            OnEnter = function()
+                splineEvent = ""
+            end,
+
+            function()
+            if stopAndWatch then
+                local targetchar = nil
+                local actives = GetActiveCharacters(me,  50)
+                for _,char in pairs(actives) do
+                    if char.Character.IsPlayer then
+                        if targetchar == nil then
+                            targetchar = char
+                        else                        
+                            if GetDistanceTo(me, targetchar) > GetDistanceTo(me, char) then
+                                targetchar = char
+                            end
+                        end
+                    end
+                end
+                if targetchar then
+                    SteerTo(targetchar, false, 20)
+                    LookAtEntity(targetchar, 4.0)
+                end
+                stopAndWatch=false
+            else
+                try
+                    DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+                catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                    LookFrom(patrolSpline)
+                    Sleep(1)
+                end 
+            end
+        end,
+        Valid = function()
+            return IsInTrigger(me, campZone.Trigger)
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+
+        if e.EndReached then
+            SetEntityEvent(me, "CAMP_GoblinHuntCelebration_KorrillaArrived")
+        else
+            stopAndWatch = true
+        end
+    end
+
+    nodes.Idle = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+end}

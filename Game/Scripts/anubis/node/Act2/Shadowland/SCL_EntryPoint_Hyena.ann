@@ -1,0 +1,65 @@
+game.states.SCL_Hyena = State {function ()
+    modules = {"shared.dialog", "shared.util", "shared.character"}
+
+    description = [[Behaviour of the worg pup at the mountain pass entrance to SCL]]
+    local goblin = Entity("S_SCL_DriderCaravan_GoblinMelee_001_0648b227-b64b-471f-a6ac-d71af926dfb4")
+    local bark = Dialog("SCL_Hyena_AD_f8d4c8a1-019f-0913-36e8-32fce37a338c")
+
+    local hyenaStays = Flag("SCL_EntryPoint_State_HyenaStaysAtCheckpoint_12abbcb8-a894-4b39-8e4b-4763f8ad0363")
+    local wanderArea = Entity("S_SCL_HyenaWander_460fc3ae-e8f6-41c5-87f9-616386e61b70")
+
+    nodes = ImmediateSelector{}
+
+    nodes.Action_WanderAtCheckpoint = Action{
+        function()
+            try
+                Wander(wanderArea, math.random(2.0, 4.0), MovementSpeed.Walk, wanderArea)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Error: wander failed")
+            end
+
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                bark,
+                {
+                    waitForCompletion = true,
+                    minDelay = 15.0,
+                },
+                me)
+
+            mod.util.SleepRandom(2.0, 6.0)
+        end,
+        Valid = function()
+            return GetFlag(hyenaStays) or mod.character.IsDefeated(goblin)
+        end
+    }
+
+    nodes.Action_Idle = Action {
+        function()
+            try
+                Wander(3.0, math.random(2.0, 4.0), MovementSpeed.Sprint, goblin)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Error: wander failed")
+            end
+
+            mod.util.SleepRandom(2.0, 4.0)
+
+            try
+                Wander(3.0, 2.0, MovementSpeed.Walk, goblin)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Error: wander failed")
+            end
+
+            Sleep(1.0)
+
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                bark,
+                {
+                    waitForCompletion = true,
+                    minDelay = 30.0,
+                },
+                me)
+
+            mod.util.SleepRandom(3.0, 14.0)
+        end
+    }
+end}

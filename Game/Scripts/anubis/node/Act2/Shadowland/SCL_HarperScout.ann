@@ -1,0 +1,299 @@
+game.states.SCL_HarperScouts_Idle = State{function()
+
+    params.PatrolAD = { type = EParamType.String, required = false, default= nil,
+    help = [[one-shot AD that played when scouting]]}
+
+    params.PatrolDestination = { type = EParamType.String, required = false,
+    help = [[Patrol Destination]]}
+
+    params.ScoutingAnimation = { type = EParamType.String, required = false,
+    help = [[Scouting Animation]]}
+
+    params.AmbushBehaviour = { type = EParamType.State, required = false, default = nil,
+    help = [[Caravan ambush behaviour.]]}
+
+    params.AtHavenBehaviour = { type = EParamType.State, required = false, default = nil,
+    help = [[Scout at Haven behaviour.]]}
+
+
+    local JoinedAmbush = Flag("SCL_Drider_State_ScoutJoinedAmbush_ae2912ea-6ee2-42db-b0bf-d0bfa77d70bd")
+
+    self.OnInit = function()
+        SetWeaponUnsheathed(me, true, true)
+    end
+
+    nodes = ImmediateSelector{}
+
+    nodes.Proxy_Ambush = Proxy{
+        params.AmbushBehaviour,
+        Valid = function()
+            return params.AmbushBehaviour ~= nil and GetFlag(JoinedAmbush, me)
+        end
+    }
+
+    nodes.Proxy_Escort = Proxy{
+        game.states.SCL_HarperScouts_Escort,
+        params = {
+            PatrolDestination = params.PatrolDestination,
+            PatrolAD = params.PatrolAD,
+            ScoutingAnimation = params.ScoutingAnimation,
+        }
+    }
+
+    nodes.Proxy_AtHaven = Proxy{
+        params.AtHavenBehaviour,
+    }
+
+    nodes.ScoutFallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    -- this only works outside combat, and Edouard is okay with that
+    -- combat case should be handled by combat AI
+    events.EntityEvent = function(ev)
+        if ev.Event == "HAV_Torches_Reequip" then
+            local torch = ev.Params[1]
+            Unequip(me.Character, torch.Item)
+            Equip(me.Character, torch.Item, true)
+        end
+    end
+end
+}
+
+game.states.SCL_HarperScouts_AtHaven = State{
+function()
+    modules = { "shared.math", "shared.dialog", "shared.moveto" }
+
+    params.BridgePoint = { type = EParamType.String, required = false,
+    help = [[Where to stand on the Bridge]]}
+
+    params.CanPray = { type = EParamType.Bool, required = false, default= false,
+    help = [[Harper can pray in front of Yonas' altar.]]}
+
+    params.GravePoint = { type = EParamType.String, required = true,
+    help = [[Where to stand near the memorial]]}
+
+    params.ArriveAD = { type = EParamType.String, required = false, default= nil,
+    help = [[one-shot AD that played when arriving at Last Light]]}
+
+    params.PatrolSpline = {type=EParamType.String, required = true,
+            help = [[Spline to be patrolled]]}
+
+
+    local PlayerFinished = Flag("SCL_HarperScouts_State_InspectionFinished_5356e1fa-6d0b-43cd-9635-62a309096ad1")
+    local BridgeEvent = Flag("SCL_HarperScout_State_ArrivedAtBridge_f7204d3b-5abc-40ad-989d-dcc39f77bcca")
+    local GraveEvent = Flag("SCL_HarperScouts_State_Ritual_752f9d97-907d-44f0-b879-478b5c74a353")
+    local ArrivedAD = Flag("SCL_HarperScouts_State_ArrivedAtLastLight_a601f3de-a13e-49e4-bf7f-f51eefb3eeda")
+    local LeftBehind = Flag("SCL_HarperScouts_State_LeftBehind_b2c44b59-7484-482b-90d9-3605bf93ba3d")
+    local NightsongFreed = Flag("SHA_NightsongPrison_State_NightsongFreed_24f27b06-6665-79ed-d7bf-e4bf356ca2fa")
+
+    local Trig_BridgePoint = Entity(params.BridgePoint)
+    local Scout_ArriveAD = Dialog(params.ArriveAD)
+    local EscortFinished = false
+
+    local Trig_GravePoint = Entity(params.GravePoint)
+    local Trig_Grave = Entity("S_HAV_RitualSite_81dbf918-b89b-42e8-a4ff-ce9479b35c08")
+
+    local pray = Animation("CUST_Praying_01_7f50198e-dda0-4763-a217-0935865ce76c")
+
+    local patrol = Spline(params.PatrolSpline)
+    local patrolFallback = Entity("S_SCL_Drider_Harper_Ranger_001_SiegePos_43a797d9-88f9-41ec-a37c-0225d7f6f59e")
+
+    nodes = ImmediateSelector{}
+
+    nodes.ScoutArrival = Action{
+        function()
+            if not IsInDangerousSurfaceFor(Trig_BridgePoint, me.Character, 1.0) then
+                local moveResult = MoveTo(Trig_BridgePoint, MovementSpeed.Walk, true, false, 0.0, 1.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                    else
+                        LookFrom(Trig_BridgePoint)
+                        SetFlag(BridgeEvent, me)
+                    end
+            end
+            if Scout_ArriveAD ~= nil then
+                Sleep(mod.math.random(0.8, 1.5))
+                if mod.dialog.IsSpeakerAvailable(me) and not GetFlag(ArrivedAD) and not GetFlag(LeftBehind) then
+                    SetFlag(ArrivedAD)
+                    StartAutomatedDialog(Scout_ArriveAD, true, me)
+                end
+            end
+        end,
+        Valid = function()
+            return EscortFinished and not GetFlag(PlayerFinished)
+        end
+    }
+
+    nodes.GraveIdle = Action{
+        function()
+            if not IsInDangerousSurfaceFor(Trig_GravePoint, me.Character, 1.0) then
+                local moveResult = MoveTo(Trig_GravePoint, MovementSpeed.Walk, true, false, 0.5, 4.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        SteerTo(Trig_Grave)
+                        DebugText(me, "Error: MoveTo failed")
+                        Sleep(3.0)
+                    else
+                        SetFlag(GraveEvent)
+                        DebugText(me, "Performing Memorial Ritual")
+                        if params.CanPray then
+                            LookFrom(Trig_GravePoint)
+                            PlayAnimation(pray, false, true)
+                            WaitForInterrupt()
+                        else
+                            SteerTo(Trig_Grave)
+                            WaitForInterrupt()
+                        end
+                    end
+            end
+        end,
+        Valid = function()
+            return GetFlag(PlayerFinished) and not GetFlag(NightsongFreed)
+        end
+    }
+
+    nodes.NightsongFreed = Action{
+        function()
+            try
+            DoPatrol(patrol, false, MovementSpeed.Walk, -1, true)
+            catch e if ls.CheckType(e, error.MissingComponent) then
+                if not IsInDangerousSurfaceFor(patrolFallback, me.Character, 1.0) then
+                    try
+                    MoveTo(patrolFallback, MovementSpeed.Walk)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(2.0)
+                    end
+                else
+                    Sleep(2.0)
+                end
+            end
+        end,
+        Valid = function()
+            return GetFlag(NightsongFreed)
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if e.EndReached then
+            EscortFinished = true
+        end
+    end
+end
+}
+
+game.states.SCL_HarperScouts_Escort = State{
+function()
+    modules = { "shared.math", "shared.dialog" }
+
+    params.PatrolDestination = { type = EParamType.String, required = false,
+    help = [[Patrol Destination]]}
+    local Pos_Patrol = Entity(params.PatrolDestination)
+
+    params.PatrolAD = { type = EParamType.String, required = false, default= nil,
+    help = [[one-shot AD that played when scouting]]}
+
+    params.ScoutingAnimation = { type = EParamType.String, required = false,
+    help = [[Scouting Animation]]}
+
+    local PatrolFlag = Flag("SCL_HarperScouts_Event_StartScouting_f2bb497a-6cde-4b1a-a96d-1d8ff3114411")
+    local FightFinishedFlag = Flag("SCL_HarperScouts_State_ShadowsDefeated_bae50f7d-7347-4fb7-ae8a-9fda8f84fc9f")
+    local ScoutDepart = Flag("SCL_HarperScouts_Event_DepartFromBattle_4705c3d6-b8fd-4486-827e-d100e6b5c5fd")
+
+    local PatrolSpline = Spline("S_SCL_HarperEscort_000_ea6acf3c-369f-4b96-8940-fe8f9189c369")
+
+    local Scout_PatrolAD = Dialog(params.PatrolAD)
+
+    local Scout_ArrivedAtSite = false
+    local EscortFinished = false
+
+    local Anim_Scouting = Animation(params.ScoutingAnimation)
+
+    nodes = ImmediateSelector{
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Action_Escort = Action{
+        OnEnter = function()
+            if not Scout_ArrivedAtSite then
+                Scout_ArrivedAtSite = true
+            end
+        end,
+        function()
+            try
+                DoPatrol(PatrolSpline, false, MovementSpeed.Run, -1, false)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(PatrolSpline)
+                Sleep(1)
+            end
+        end,
+        Valid = function()
+            return GetFlag(ScoutDepart) and not EscortFinished
+        end
+    }
+
+    nodes.HarperScoutIdle = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(PatrolFlag)
+        end
+    }
+
+    nodes.HarperScoutPatrol = Action{
+        function()
+            if not IsInDangerousSurfaceFor(Pos_Patrol, me.Character, 1.0) then
+                local moveResult = MoveTo(Pos_Patrol, MovementSpeed.Walk, true, false, 0.5, 4.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                    else
+                        if Scout_PatrolAD ~= nil then
+                            Sleep(mod.math.random(0.8, 1.5))
+                            if mod.dialog.IsSpeakerAvailable(me) then
+                                StartAutomatedDialog(Scout_PatrolAD, true, me)
+                            end
+                        end
+
+                        Scout_ArrivedAtSite = true
+                    end
+                        Sleep(1)
+            end
+        end,
+        Valid = function()
+            return not GetFlag(PatrolFlag) and not Scout_ArrivedAtSite
+        end
+    }
+
+    nodes.Wander = Action {
+        function()
+            Sleep(math.random(5, 8))
+            Wander(3.0,2.0,MovementSpeed.Stroll, Pos_Patrol)
+            PlayAnimation(Anim_Scouting, false, true)
+        end,
+        Valid = function()
+            return not GetFlag(PatrolFlag) and Scout_ArrivedAtSite and not GetFlag(FightFinishedFlag)
+        end
+    }
+
+    nodes.ScoutsWaiting = Action {
+        function()
+            Sleep(math.random(5, 8))
+            Wander(3.0,2.0,MovementSpeed.Stroll, Pos_Patrol)
+            PlayAnimation(Anim_Scouting, false, true)
+        end,
+        Valid = function()
+            return GetFlag(FightFinishedFlag) and not GetFlag(ScoutDepart)
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if e.EndReached then
+            EscortFinished = true
+        end
+    end
+end
+}

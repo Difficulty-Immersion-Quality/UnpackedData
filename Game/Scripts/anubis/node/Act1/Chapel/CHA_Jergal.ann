@@ -1,0 +1,125 @@
+game.states.CHA_Jergal = State{
+    function()
+
+        ------------------------------------------------
+        -- Local variables
+        local attemptedAttackFlag = Flag("CHA_Jergal_Event_AttemptedAttack_c2fc2844-dfe7-4eb2-6ab6-301eea35fe4e")
+        local isOutsideTombFlag = Flag("GLO_Jergal_State_OutOfTomb_55294438-06e2-467c-9873-757f74d20645")
+
+        local commentFlag = Flag("CHA_Crypt_Event_JergalTalksToSkeleton_29e21896-3491-46a3-b74b-870b7653007a")
+        local AD = Dialog("CHA_Crypt_AD_JergalWandering_5f660fe2-b5c2-ac82-ef80-036a2b8fea5a")
+
+        local wanderPositions = {
+            Entity("S_CHA_Crypt_JergalWanderPos_000_511ebf20-d91d-4331-b620-ca242d06ec37"),
+            Entity("S_CHA_Crypt_JergalWanderPos_001_f5164701-377e-4c36-a555-ec641440e480"),
+            Entity("S_CHA_Crypt_JergalWanderPos_002_6af1ac24-7c85-43fa-9c74-8d73a66891c4"),
+            Entity("S_CHA_Crypt_JergalWanderPos_003_92aea03e-78ce-4ae9-b0ce-5bafe935ef03")
+        }
+        local wanderPos = nil
+
+        local undeadSkeletons = {
+            Entity("S_CHA_FL0_DeadSkeleton_Melee_01_ebf854f1-7971-4f81-a2b7-e4b79b550b85"),
+            Entity("S_CHA_FL0_DeadSkeleton_Melee_02_7af3fa6c-7f7a-4920-acaf-f091e7c62373"),
+            Entity("S_CHA_FL0_DeadSkeleton_Ranger_01_1535feb9-7ff9-4132-be09-191ba3f8c2e1"),
+            Entity("S_CHA_FL0_DeadSkeleton_Ranger_02_462f0982-35c4-4a34-a3bf-399f37e686ee"),
+            Entity("S_CHA_FL0_DeadSkeleton_Ranger_03_cb4c2c8f-b6db-4c53-b7e3-395aef311a39")
+        }
+        local skeleton = nil
+
+        local outsideLadder = Entity("S_CHA_FL0_LadderToOutside_a7c7ffa0-a495-42c5-bcd1-fc1767d2affd")
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Helpers
+        helpers.callback.CanMove = function()
+            return not GetFlag(attemptedAttackFlag, me) and GetFlag(isOutsideTombFlag)
+        end
+
+        helpers.action.GetRandomFromTable = function(prevValue, table)
+            if #table == 0 then
+                return nil
+            end
+
+            if #table == 1 then
+                return table[1]
+            end
+
+            local newValue = prevValue
+            while prevValue == newValue do
+                newValue = table[math.random(1, #table)]
+            end
+            return newValue
+        end
+        ------------------------------------------------
+
+        ------------------------------------------------
+        -- Nodes
+        nodes = Selector{
+            function(nodes)
+
+                return GetWeightedCanEnter(nodes, { [nodes.Action_Fallback] = 1,
+                                                    [nodes.Action_Wander] = 3,
+                                                    [nodes.Action_ApproachSkeleton] = 1})
+            end
+        }
+
+        nodes.Action_Wander = Action{
+            function()
+                wanderPos = helpers.GetRandomFromTable(wanderPos, wanderPositions)
+                if wanderPos ~= nil and not IsInDangerousSurfaceFor(wanderPos, me.Character) then
+                    try
+                        MoveTo(wanderPos)
+                        LookFrom(wanderPos)
+                        StartAutomatedDialog(AD, true, me)
+                        Sleep(3.0)
+                    catch e if ls.CheckType(e, error.MovementFailed) or ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                        DebugText(me, "Error: movement/AD failed")
+                        Sleep(3.0)
+                    end
+                else
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return helpers.CanMove()
+            end
+        }
+
+        nodes.Action_ApproachSkeleton = Action{
+            function()
+                skeleton = helpers.GetRandomFromTable(skeleton, undeadSkeletons)
+                if skeleton ~= nil and not IsInDangerousSurfaceFor(skeleton, me.Character) then
+                    try
+                        MoveInRange(skeleton, 0.2, 0.5)
+                        LookAtEntity(skeleton, 3.0)
+                        SetFlag(commentFlag, me)
+                        StartAutomatedDialog(AD, true, me)
+                        Sleep(3.0)
+                    catch e if ls.CheckType(e, error.MovementFailed) or ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                        DebugText(me, "Error: movement/AD failed")
+                        Sleep(3.0)
+                    end
+                else
+                    Sleep(3.0)
+                end
+            end,
+            OnLeave = function()
+                ClearFlag(commentFlag, me)
+            end,
+            Valid = function()
+                return helpers.CanMove()
+            end
+        }
+
+        nodes.Action_Fallback = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return not helpers.CanMove()
+            end
+        }
+        ------------------------------------------------
+
+    end
+}

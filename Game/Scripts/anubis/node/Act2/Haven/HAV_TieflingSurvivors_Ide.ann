@@ -1,0 +1,128 @@
+game.states.HAV_TieflingSurvivors_Ide = State {function ()
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    description = [[Behaviour of Ide in Haven]]
+
+    ----------Flags
+
+    local alertFlag = Flag("HAV_Mood_State_Alert_b073eeb9-1d29-449f-baf5-74307e63d085")
+    local prodigyIntroFlag = Flag("HAV_TieflingSurvivors_Event_ProdigyIntro_95cd5597-af9a-1fac-aada-e857199dae88")
+
+    ----------Characters
+    
+    local umi = Entity("S_DEN_Trainee_001_1f839ad2-2bcb-47d2-8de9-db7a1fb5d67f")
+    
+    ----------Triggers
+
+    local alertPos = Entity("S_HAV_TieflingSurvivors_IdePositionAfterGhoulAttack_a7d36238-040d-4d72-b128-bc1f4e2064a0")
+    local withProdigyPos = Entity("S_HAV_BarKidPos_002_f3609dc6-470d-45a0-90a3-a2579c947c96")
+    local highShelfPos = Entity("S_HAV_BrowseAlcoholPos_002_b5154efd-7c8f-43d1-8862-12e3d007d869")
+    local lowShelfPos = Entity("S_HAV_BrowseAlcoholPos_001_072c0e79-0152-45df-95ad-94fd9ab21920")
+    local counterPos = Entity("S_HAV_BrowseAlcoholPos_003_20cfefc6-f0d0-429c-a57c-6e2cab7d2449")
+    local billboardPos = Entity("S_HAV_BrowseAlcoholPos_004_2517b82b-5fd4-47b7-b5a7-57a1f5994775")
+
+    ----------Animations
+
+    local armsCrossedAnim = Animation("CUST_ArmsCrossed_01_e52783f3-520a-4f34-aaca-8f48e3c9336f")
+    local inspectingAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local cleanGlassDialog = Dialog("BHVR_WRLD_HAV_CleaningGlass_5e2884bb-a749-cdc9-cc38-1fab544e8345")
+    local glass = Entity("S_HAV_KidGlass_001_5a0c0067-1b73-4563-82b5-073df3233a75")
+    local cleanGlassTrigger = Entity("S_BHVR_WRLD_HAV_CleaningGlass_001_0d5ae392-81ad-4a8e-97a4-480c6ad7f69d")
+
+    ----------Dialogs
+
+    local bartendingAD = Dialog("HAV_TieflingSurvivors_AD_BartendingKids_5dd24a64-49bd-5cb9-989b-d479fd649468")
+
+    nodes.AlertIdle = Action {
+        function()
+            MoveTo(alertPos, MovementSpeed.Walk)
+            LookFrom(alertPos)
+            Sleep(4.0)
+            --WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return GetFlag(alertFlag)
+        end
+    }
+
+    nodes.WithProdigy = Action{
+        function()
+            PlayAnimation(armsCrossedAnim, false, true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return not GetFlag(prodigyIntroFlag)
+        end
+    }
+
+    nodes.Bartending = Selector{
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+    }
+
+    nodes.Bartending.HighShelf = Action{
+        function()
+            if mod.moveto.MoveToPoint(highShelfPos,MovementSpeed.Stroll,me) then
+                LookFrom(highShelfPos)
+                PlayAnimation(armsCrossedAnim, false, true)
+            end
+            Sleep(math.random(1,3))
+        end,
+    }
+
+    nodes.Bartending.LowShelf = Action{
+        function()
+            if mod.moveto.MoveToPoint(lowShelfPos,MovementSpeed.Stroll,me) then
+                LookFrom(lowShelfPos)
+                PlayAnimation(inspectingAnim, true, false)
+            end
+            Sleep(math.random(2,4))
+        end,
+    }
+
+    nodes.Bartending.Billboard = Action{
+        function()
+            if mod.moveto.MoveToPoint(billboardPos,MovementSpeed.Stroll,me) then
+                LookFrom(billboardPos)
+                PlayAnimation(inspectingAnim, true, false)
+            end
+            Sleep(math.random(2,4))
+        end,
+    }
+
+    nodes.Bartending.Counter = Action{
+        function()
+            if mod.moveto.MoveToPoint(counterPos,MovementSpeed.Stroll,me) then
+                LookFrom(counterPos)
+                StartBehaviorDialog(cleanGlassDialog, cleanGlassTrigger.Trigger, true, me, glass)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    bartendingAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 40,
+                    },
+                    me,
+                    umi
+                )
+            end
+            Sleep(math.random(5,8))
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+    }
+
+    nodes.Default = Action {
+        function()
+            DebugText(me, "I'm Ide. Default state")
+            Sleep(4.0)
+            --WaitForInterrupt()
+        end
+    }
+
+end}

@@ -1,0 +1,111 @@
+game.states.CRA_Astarion = State {function ()
+    description = [[Behaviour of Astarion]]
+
+    modules = { "shared.math" }
+
+    local tr_WorriedPos = Entity("S_CRA_Astarion_WorriedPosition_70109511-9e95-46c6-a411-21aa05083af7")
+    local anim_Worried = Animation("CUST_Worried_01_a4616816-be6d-4fa1-a65a-2da057196af4")
+    local fl_AstarionMet = Flag("ORI_Astarion_HasMet_7c64a986-6bfd-ae42-ba29-b35b7f2cd6cf")
+
+    local b_MoveToFirstTrigger = false
+    local tr_NotRecruited_Trigger_001 = Entity("S_CRA_Astarion_NotRecruited_Trigger_001_9f61a8ae-c452-4550-bd8f-ee4c78e8032c")
+    local tr_NotRecruited_Trigger_002 = Entity("S_CRA_Astarion_NotRecruited_Trigger_002_3637c8b4-77e5-4cd4-b9c1-eca3935628ff")
+
+    local dlg_AD = Dialog("CRA_AstarionRecruitment_Recruitment_AD_d1ef05c4-c9cd-ac5e-55cb-325746affbaa")
+    local b_CanDoAD = true
+    local s_CanDoADTimer = "CRA_AstarionRecruitment.AD.CanDoAD"
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(12.0, 18.0), 0)
+    end
+
+    self.Valid = function()
+        return CheckCurrentGameLevel("WLD_Main_A")
+    end
+
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+
+    nodes.NotRecruited_Point_001 = Action {
+        function()
+            try
+                if GetDistance2DTo(me, tr_NotRecruited_Trigger_001) > 1.0 then
+                    MoveTo(tr_NotRecruited_Trigger_001, MovementSpeed.Stroll)
+                end
+                LookFrom(tr_NotRecruited_Trigger_001)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+            end
+            Sleep(math.random(6, 12))
+            b_MoveToFirstTrigger = false
+        end,
+        CanEnter = function()
+            return GetFlag(fl_AstarionMet) and b_MoveToFirstTrigger
+        end
+    }
+
+    nodes.NotRecruited_Point_002 = Action {
+        function()
+            try
+                if GetDistance2DTo(me, tr_NotRecruited_Trigger_002) > 1.0 then
+                    MoveTo(tr_NotRecruited_Trigger_002, MovementSpeed.Stroll)
+                end
+                LookFrom(tr_NotRecruited_Trigger_002)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+            end
+            Sleep(math.random(6, 12))
+            b_MoveToFirstTrigger = true
+        end,
+        CanEnter = function()
+            return GetFlag(fl_AstarionMet) and not b_MoveToFirstTrigger
+        end
+    }
+
+    nodes.AD = Action{
+        function()
+            if b_CanDoAD then
+                StartAutomatedDialog(dlg_AD, true, me)
+                helpers.CanDoADReset()
+            end
+        end,
+        CanEnter = function()
+            return not GetFlag(fl_AstarionMet) and dlg_AD ~= nil and b_CanDoAD and not IsInDialog(me, false)
+        end
+    }
+
+    nodes.Worried = Action {
+        function()
+            try
+                if(GetDistance2DTo(me, tr_WorriedPos) > 1.5 and not IsInDangerousSurfaceFor(tr_WorriedPos, me.Character, 1.5)) then
+                    MoveTo(tr_WorriedPos)
+                end
+                LookFrom(tr_WorriedPos)
+                PlayAnimation(anim_Worried, false, true)
+            catch e then
+                if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Move Exception")
+                elseif ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me,"Animation Failed")
+                end
+            end
+        end,
+        CanEnter = function()
+            return not GetFlag(fl_AstarionMet)
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+
+end}

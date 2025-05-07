@@ -1,0 +1,151 @@
+game.states.DEN_DruidAttack_UniqueKids = State {function ()
+
+    params.moveTarget = {type = EParamType.String, required = false, default = nil, help=[[MoveTo Before Attack (specific)]]}
+    params.dialogPartner = {type = EParamType.String, required = false, default = nil, help=[[MoveTo Before Attack (specific)]]}
+    params.attackAD = {type=EParamType.String, required=false, default=nil, help=[[Default AD]]}
+    params.attackAnim = {type=EParamType.String, required=false, default=nil, help=[[Animation to play while hiding]]}
+    params.attackAnimLoop = {type=EParamType.String, required=false, default=nil, help=[[Animation to play while hiding]]}
+    params.attackAnimStart = {type=EParamType.String, required=false, default=nil, help=[[Animation to play while hiding]]}
+    params.attackAnimEnd = {type=EParamType.String, required=false, default=nil, help=[[Animation to play while hiding]]}
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    --
+    local forceUpdating = false
+    local moveTarget = Entity("S_DEN_DruidAttack_KidHideoutArea_e8a80f38-6bfa-45d7-9ca9-b31d3be98495")
+    local dialogPartner = Entity(params.dialogPartner)
+    local inPositionFlag = Flag("DEN_DruidAttack_State_InPosition_fb382926-afc1-492c-85ba-65198765b3fd")
+    local combatActiveFlag = Flag("DEN_DruidAttack_State_Attacking_a161639d-ea59-4adc-a858-ac9297684057")
+
+    local attackAD = Dialog(params.attackAD)
+    local canAD = false
+    local aDDelay = 30.0
+
+    local attackAnim = Animation(params.attackAnim)
+    local attackAnimLoop = Animation(params.attackAnimLoop)
+    local attackAnimStart = Animation(params.attackAnimStart)
+    local attackAnimEnd = Animation(params.attackAnimEnd)
+    -----------------------------------------
+    -- Helpers
+
+    helpers.action.MoveToPoint = function(target,entity)
+        if(not IsInDangerousSurfaceFor(target,entity.Character,2.0)) then
+            local moveResult = MoveTo(target,MovementSpeed.Run,false,true,0.5,4.0,false,PathClimbingMode.Enabled)
+            if moveResult ~= error.MovementError.None then
+                DebugText(entity,"Move Failed")
+                return false
+            else
+                return true 
+            end
+        end
+    end
+
+    helpers.action.SayAD = function()
+        if canAD and attackAD then
+            if dialogPartner and mod.dialog.IsSpeakerAvailable(dialogPartner) then
+                helpers.ResetADDelay()
+                StartAutomatedDialog(attackAD, false, me,dialogPartner)
+            else
+                helpers.ResetADDelay()
+                StartAutomatedDialog(attackAD, false, me)
+            end
+        end
+    end
+
+    helpers.ResetADDelay = function()
+        StopTimer(me, "DEN_DruidAttack_ADTimer")
+        StartTimer(me, "DEN_DruidAttack_ADTimer", aDDelay, 0)
+        canAD = false
+    end
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnEnter = function()
+        if not forceUpdating then
+            forceUpdating = true
+            SetForceUpdate(me, true)
+        end
+    end
+
+    self.OnLeave = function()
+        if attackAnim ~= nil or attackAnimLoop ~= nil then
+            StopAnimation(me)
+        end
+    end
+
+    self.OnInit = function()
+        if params.moveTarget ~= nil then
+            moveTarget = Entity(params.moveTarget)
+        end
+        StartTimer(me, "DEN_DruidAttack_ADTimer", math.random(2.0, 6.0), 0)
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.MoveToHideout = Action {
+        function()
+            if helpers.MoveToPoint(moveTarget,me) then
+                if not GetFlag(inPositionFlag,me) then
+                    SetFlag(inPositionFlag,me)
+                end
+            end
+        end,
+        Valid = function()
+            return not GetFlag(inPositionFlag,me)
+        end
+    }
+
+    nodes.HideoutActions = Action {
+        function()
+            if GetDistance2DTo(moveTarget,me) < 3 or helpers.MoveToPoint(moveTarget,me) then
+                if attackAnim ~= nil then
+                    try
+                        PlayAnimation(attackAnim,false,true)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "Animation Failed")
+                    end
+                elseif attackAnimLoop ~= nil then
+                    PlayLoopingAnimation(attackAnimStart, { attackAnimLoop }, attackAnimEnd, false)
+                end
+                helpers.SayAD()
+                LookFrom(moveTarget)
+            end
+            Sleep(1.0)
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_DruidAttack_ADTimer") then
+            canAD = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == inPositionFlag.Guid and e.Entity == me then
+            if forceUpdating then
+                forceUpdating = false
+                SetForceUpdate(me, false)
+            end
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == combatActiveFlag.Guid and forceUpdating then
+            forceUpdating = false
+            SetForceUpdate(me, false)
+        end
+    end
+
+    events.OnStageChanged = function(e)
+        if not e.OnStage and forceUpdating then
+            forceUpdating = false
+            SetForceUpdate(me, false)
+        end
+    end
+
+end}

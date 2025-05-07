@@ -1,0 +1,246 @@
+game.states.HAV_Prodigy = State {function ()
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    description = [[Behaviour of Rolan in Haven]]
+
+    local drinkingDialog = Dialog("BHVR_WRLD_GLO_StandAndDrink_a4065598-1ea2-8866-d23f-f765b5008273")
+    local worriedAnim = Animation("CUST_Worried_01_a4616816-be6d-4fa1-a65a-2da057196af4")
+    local startDrinking = true
+
+    local atBarPos = Entity("S_HAV_ProdigyPos_e458d512-a43b-45ab-861c-6f18b02d60c4")
+    local umi = Entity("S_DEN_Trainee_001_1f839ad2-2bcb-47d2-8de9-db7a1fb5d67f")
+    local umiAD = Dialog("HAV_ProdigyLament_AD_RolanAndKid_9f9410fb-8591-51e1-cdc7-5a3304bf014f")
+    local prodigyIntroFlag = Flag("HAV_ProdigyLament_Event_Intro_95cd5597-af9a-1fac-aada-e857199dae88")
+
+    local brother = Entity("S_GLO_ProdigyBrother_d0187724-c0e2-4019-a01d-a03ee8153f1b")
+    local sister = Entity("S_GLO_ProdigySister_44d09b0b-0568-456c-b18d-559a0a3f981d")
+
+    local didMeetingAD = false
+    local meetingAD = Dialog("HAV_ProdigyLament_AD_RolanReturns_00eddff8-6a27-dfb2-d682-cd149e52639a")
+    local meetingPos = Entity("S_HAV_ReunionProdigyPos_e20a9e7e-ecb2-4499-befe-57683e3f2225")
+    local returningPos = Entity("S_HAV_ReunionProdigyPos_002_a8ce2fdf-09f5-4413-9154-bbad4edd3f95")
+    local beforeReunionAD = Dialog("HAV_ProdigyLament_AD_BeforeReunion_5befecae-67ad-f2b1-87e0-100c19bd4991")
+    local afterReunionAD = Dialog("HAV_ProdigyLament_AD_AfterReunion_5dac2ca1-b7d5-78e0-7064-28e66e697d14")
+    local siblingsReturnAD = Dialog("HAV_ProdigyLament_AD_SiblingsReturn_3bbff999-507e-e4e2-251d-ac290f200768")
+    local rolanReturnsAD = Dialog("HAV_ProdigyLament_AD_RolanReturns_00eddff8-6a27-dfb2-d682-cd149e52639a")
+
+    local reunionDoneFlag = Flag("HAV_ProdigyLament_State_ReunionDone_d71cdc91-884a-c64d-81b7-81a3b43c5270")
+    local returnCompletedFlag = Flag("HAV_SavingPrisoners_State_ReturnCompleted_3d6f8326-f5cc-c124-b810-3f03fe1d6b62")
+    local sisterReturnedFlag = Flag("HAV_SavingPrisoners_State_SisterReturned_54cbf85c-163b-d0f7-2519-93ff58c843aa")
+    local brotherReturnedFlag = Flag("HAV_SavingPrisoners_State_BrotherReturned_2b696962-1d09-4cb6-b034-34d86d73dba0")
+    local waitingForRolanFlag = Flag("HAV_ProdigyLament_State_WaitingForRolan_898c0413-8b0d-4470-b1a6-6dfb9dbdb9f0")
+    local siblingsArgueFlag = Flag("HAV_ProdigyLament_Event_SiblingsArgue_3a835b03-f0c8-4369-8c68-604d8c9b6781")
+    local prodigyInShadowlandsFlag = Flag("HAV_ProdigyLament_State_InShadowlands_68d204cb-3017-455e-9d80-c02abbc9f477")
+
+    nodes.ReturningToSiblings = Selector{
+        Valid = function()
+            return GetFlag(waitingForRolanFlag) and ((GetFlag(brotherReturnedFlag)) or (GetFlag(sisterReturnedFlag)))
+        end
+    }
+
+    nodes.ReturningToSiblings.BeforeReunion = Action{
+        Valid = function()
+            return not GetFlag(reunionDoneFlag)
+        end,
+        function()
+            Sleep(1)
+            if(not didMeetingAD) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                    meetingAD,
+                    {
+                        waitForCompletion = false,
+                        allowNilSpeakers = true
+                    },
+                    me,
+                    brother,
+                    sister
+                )
+                SetEntityEvent(brother, "HAV_ProdigyLament_RolanArrived")
+                SetEntityEvent(sister, "HAV_ProdigyLament_RolanArrived")
+                Sleep(1)
+            else
+                if mod.moveto.MoveToPoint(returningPos, MovementSpeed.Walk, me) then
+                    LookFrom(returningPos)
+                else
+                    SteerTo(meetingPos)
+                end
+                Sleep(math.random(8,12))
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    beforeReunionAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0,
+                        allowNilSpeakers = true
+                    },
+                    me,
+                    brother,
+                    sister
+                )
+            end
+        end
+    }
+
+    nodes.ReturningToSiblings.AfterReunion = Action{
+        function()
+            Sleep(3)
+            if mod.moveto.MoveToPoint(atBarPos, MovementSpeed.Walk, me) then
+                LookFrom(atBarPos)
+            else
+                SteerTo(atBarPos)
+            end
+            Sleep(math.random(2,4))
+            if(not GetFlag(siblingsArgueFlag)) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    afterReunionAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0,
+                        allowNilSpeakers = true
+                    },
+                    me,
+                    brother,
+                    sister
+                )
+            end
+        end,
+    }
+
+
+    nodes.WaitingForSiblings = Selector{
+        Valid = function()
+            return GetFlag(returnCompletedFlag) and ((GetFlag(brotherReturnedFlag)) or (GetFlag(sisterReturnedFlag)))
+        end
+    }
+
+    nodes.WaitingForSiblings.BeforeReunion = Action{
+        Valid = function()
+            return not GetFlag(reunionDoneFlag)
+        end,
+        function()
+            Sleep(1)
+            if(not didMeetingAD) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                    meetingAD,
+                    {
+                        waitForCompletion = false,
+                        allowNilSpeakers = true
+                    },
+                    me,
+                    brother,
+                    sister
+                )
+                Sleep(1)
+            else
+                if mod.moveto.MoveToPoint(meetingPos, MovementSpeed.Walk, me) then
+                    LookFrom(meetingPos)
+                else
+                    SteerTo(meetingPos)
+                end
+                Sleep(math.random(8,12))
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    beforeReunionAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0,
+                        allowNilSpeakers = true
+                    },
+                    me,
+                    brother,
+                    sister
+                )
+            end
+        end
+    }
+
+    nodes.WaitingForSiblings.AfterReunion = Action{
+        function()
+            if not IsPerformingWorldBehaviour(me) then
+                StartBehaviorDialog(drinkingDialog, nil, true, me)
+            end
+            SLeep(0.5)
+            if mod.moveto.MoveToPoint(atBarPos, MovementSpeed.Walk, me) then
+                LookFrom(atBarPos)
+            else
+                SteerTo(atBarPos)
+            end
+            Sleep(math.random(10,14))
+            if(not GetFlag(siblingsArgueFlag)) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    afterReunionAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0,
+                        allowNilSpeakers = true
+                    },
+                    me,
+                    brother,
+                    sister
+                )
+            end
+        end
+    }
+
+    nodes.OutInShadowlads = Action{
+        Valid = function()
+            return GetFlag(prodigyInShadowlandsFlag)
+        end,
+        function()
+            if nervousAnim ~= nil then
+            PlayAnimation(worriedAnim, true, true)
+            else
+                Sleep(2.0)
+            end
+        end
+    }
+
+    nodes.DrunkAtBar = Action{
+        function()
+            if not IsPerformingWorldBehaviour(me) then
+                StartBehaviorDialog(drinkingDialog, nil, true, me)
+            end
+            Sleep(math.random(8,12))
+            if mod.moveto.MoveToPoint(atBarPos,MovementSpeed.Stroll,me) then
+                LookFrom(atBarPos)
+                if(not GetFlag(prodigyIntroFlag)) then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        umiAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 40,
+                        },
+                        me,
+                        umi
+                    )
+                end
+            end
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    }
+
+
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "HAV_ProdigyLament_SiblingsReturn" then
+            meetingAD = siblingsReturnAD
+        elseif e.TargetEntity == brother and e.Event == "HAV_ProdigyLament_Defeated" then
+            brother = nil
+        elseif e.TargetEntity == sister and e.Event == "HAV_ProdigyLament_Defeated" then
+            sister = nil
+        end
+    end
+
+    events.FlagSet = function(e)
+        if(e.Flag == returnCompletedFlag.Guid) then
+            Interrupt()
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if(e.Instance.DialogUUID == meetingAD.Guid) then
+            didMeetingAD = true
+        end
+    end
+end}

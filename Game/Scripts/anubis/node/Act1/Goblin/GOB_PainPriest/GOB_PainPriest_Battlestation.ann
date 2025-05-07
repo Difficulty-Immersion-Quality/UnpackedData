@@ -1,0 +1,78 @@
+game.states.GOB_PainPriest_Battlestation = State { function ()
+
+    description = [[The Pain Priest battlestation state.]]
+
+    modules = { "shared.items", "shared.moveto"}
+
+    --[[    Battlestation   ]]
+    local painPenanceSub = Entity("S_GOB_PainPenance_SUB_3189cec7-0f63-468c-a147-6a5fe426f518")
+    local packUpItems = {}
+    local packingIndex = 1
+    local isPackedUp = false
+    local leavingAD = Dialog("GOB_PainPriest_AD_Battlestation_9bfd6cf2-4da6-78be-7e35-ae5a70dc5cfe")
+
+    local leavePointList = {
+        Entity("S_GOB_PainPriestFleePoint1_2188a786-0d48-4372-9fa2-2c1ec7efcd78"),
+        Entity("S_GOB_PainPriestFleePoint2_24dbc200-0073-42c7-911c-87fd6b295f44"),
+        Entity("S_GOB_PainPriestFleePoint3_62b16f7b-5c16-470e-b83d-ba68e2ff7171")
+    }
+
+    helpers.ItemIsAvailable = function (item)
+        if mod.items.ItemIsValid(item) then
+            if not item.Item.IsInInventory and IsInTrigger(item, painPenanceSub.Trigger) then
+                return true
+            end
+        end
+        return false
+    end
+
+    helpers.GotoGoblinCampEntrance = function()
+        isPackedUp = true
+        mod.moveto.MoveToList(leavePointList,true,1.5,"Walk","GOB_PainPriest_GotToEntrance",2.5,true,false)
+        --Orisis does a flee out of sight when this event pops
+    end
+
+    self.OnInit = function()
+        packUpItems = {
+            FindEntity("S_GOB_PainBackpack_a7e15b01-415d-4c01-b1e8-94a9ac92a6c5"),
+            FindEntity("S_GOB_PainBible_cde9e487-07e4-43a8-a07c-a29890a1abd2"),
+            FindEntity("S_GOB_PenancePiercing_da629f99-adbc-4c77-ae5f-a06b997b3a8a"),
+            FindEntity("S_GOB_PenanceSlashing_fa96689e-264c-4e98-ba30-33be0a3b5371"),
+            FindEntity("S_GOB_PenanceScourge_ecd4e32e-0cd1-4d9a-b4ab-8b42917d666f")
+        }
+    end
+
+    nodes.PackUp = Action {
+        CanEnter = function()
+            return not isPackedUp
+        end,
+        function()
+            while packingIndex < (#packUpItems + 1) do
+                Sleep(0.5)
+                if canAD and not IsInDialog(me, false) then
+                    canAD = false
+                    StartAutomatedDialog(leavingAD, false, me)
+                end
+                if helpers.ItemIsAvailable(packUpItems[packingIndex]) then
+                    try
+                        MoveTo(packUpItems[packingIndex])
+                        PickUpItem(packUpItems[packingIndex])
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(0.5)
+                    end
+                end
+                packingIndex = packingIndex + 1
+            end
+            Sleep(0.5)
+            helpers.GotoGoblinCampEntrance()
+        end,
+    }
+    nodes.Sleep = Action {
+        -- Priest is then relying on the generic goto and cower actions
+        -- when he gets to the entrance of the goblin camp, osiris makes him disappear out of sight
+        function()
+            Sleep(1)
+        end
+    }
+
+end}

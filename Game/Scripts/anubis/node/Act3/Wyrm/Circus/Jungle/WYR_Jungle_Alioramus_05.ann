@@ -1,0 +1,62 @@
+game.states.WYR_Jungle_Alioramus_05 = State { function ()
+
+    description = [[ 
+        Sleeping jungle dino behaviour. 
+    ]]
+
+    modules = { "shared.util", "shared.moveto", "shared.math" }
+
+    local sniffAnim = Animation("CUST_Sniffing_Air_01_92e7ac17-b123-4a26-8e4f-2f8df2502fc2") 
+    local isSleeping = true
+
+    local sniffAnimLoop = { Animation("CUST_Sniffing_Air_01_Loop_92e7ac17-b123-4a26-8e4f-2f8df2502fc2") }
+    local sniffAnimStart = Animation("CUST_Sniffing_Air_01_Start_671e923e-9017-4684-899f-38e5ed0e7ffd")
+    local sniffAnimEnd = Animation("CUST_Sniffing_Air_01_End_ecad4a02-26d6-436c-bb77-3ef386442429")
+
+    nodes.WaitingIntroStart = Action {
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return isSleeping
+        end
+    }
+
+    nodes.Jump = Proxy {
+        game.states.WYR_Jungle_AlioramusIntro,
+        params = {
+            introSpline = "S_WYR_Jungle_Alioramus_05_PatrolSpline_Cave_c6798b50-44e3-44c5-95d1-d7a27ecd6fbe",
+            movementSpeed = "Run"
+        },
+        Valid = function()
+            return not isSleeping
+        end
+    }
+
+    nodes.Sniffing = Action {
+        function()
+            PlayLoopingAnimation(sniffAnimStart, sniffAnimLoop, sniffAnimEnd)
+        end,
+        Valid = function()
+            return not isSleeping
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    -- Events
+    events.EnteredCombat = function(e)
+        if e.Entity == me then
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end
+    end
+
+    events.StatusRemoved = function(e)
+        if e.Status.StatusID == "SLEEPING" then
+            isSleeping = false
+        end
+    end
+end}

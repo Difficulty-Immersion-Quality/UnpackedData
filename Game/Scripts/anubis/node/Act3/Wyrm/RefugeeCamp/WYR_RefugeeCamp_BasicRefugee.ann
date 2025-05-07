@@ -1,0 +1,90 @@
+game.states.WYR_RefugeeCamp_BasicRefugee = State { function ()
+    description = [[ Plays looping animation between ADs. ]]
+
+    modules = { "shared.dialog","shared.moveto","shared.util","shared.params" }
+
+    params.trigger = {type = EParamType.String, required = false, help=[[
+        The trigger at which the character stands.
+    ]]}
+
+    params.pairNPCs = {type = EParamType.String, arrayRange = "1..", required = false, help=[[
+        List of other NPCs to play AD with.
+    ]]}
+
+    params.AD = {type = EParamType.String, required = false, help=[[
+        Two-NPCs AD to play.
+    ]]}
+
+    params.animStart = {type = EParamType.String, required = false, help=[[
+        Start for the looping anim
+    ]]}
+
+    params.animLoops = {type = EParamType.String, arrayRange = "1..", required = false, help=[[
+        Loop for the looping anim
+    ]]}
+
+    params.animEnd = {type = EParamType.String, required = false, help=[[
+        End for the looping anim
+    ]]}
+
+
+    local AD = nil
+    local trigger = nil
+    local pairNPCs = nil
+
+    local animStart = Animation(params.animStart)
+    local animLoops = {}
+    local animEnd = Animation(params.animEnd)
+
+    local updateRotation = false
+
+    self.OnInit = function()
+        if params.trigger ~= nil then
+            trigger = Entity(params.trigger)
+        end
+        pairNPCs = mod.params.ParamArrayToEntityList(params.pairNPCs)
+        AD = Dialog(params.AD)
+        animLoops = mod.params.ParamArrayToAnimationsList(params.animLoops)
+    end
+
+    nodes.PlayADFromTrigger = Action {
+        OnEnter = function()
+            updateRotation = true
+        end,
+        function()
+            if trigger ~= nil then
+                if mod.moveto.MoveToPoint(trigger, MovementSpeed.Walk, me) then
+                    if updateRotation then
+                        LookFrom(trigger)
+                        updateRotation = false
+                    end
+                else
+                    updateRotation = true
+                end
+            end
+
+            Sleep(1)
+            PlayLoopingAnimation(animStart, animLoops, animEnd, false)
+            mod.util.SleepRandom(5, 7)
+            StopAnimation(me)
+
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 15.0,
+                    cullingDistance =20.0,
+                    checkSight = false
+                },
+                me,
+                pairNPCs
+            )
+        end,     
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+    }
+end}

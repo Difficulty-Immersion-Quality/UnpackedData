@@ -1,0 +1,167 @@
+game.states.HAV_FlirtyTiefling = State {function ()
+
+    modules = {"shared.moveto", "shared.math"}
+
+    description = [[Behaviour of Lakrissa in Haven]]
+
+    local bard = Entity("S_DEN_Bard_4a405fba-3000-4c63-97e5-a8001ebb883c")
+    local position = Entity("S_HAV_FlirtyTieflingPos_e310f982-5765-49a2-afc9-32dddcb2018d")
+    local armsCrossedAnim = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+    local reunionOverFlag = Flag("HAV_AlfiraTale_State_ReunionDone_5159d798-4bb5-ce40-b215-1b5dc7bbfbbb")
+
+    local leaveInspectionFlag = Flag("HAV_SavingPrisoners_Event_PrisonersLeaveInspection_6582e781-ba50-4dcc-b88c-cf0bc4c144b1")
+    local inspectionPos = nil
+
+    nodes.WaitForInspection = Action{
+        function()
+            Sleep(math.random(0,2))
+            SetEntityEvent(me, "HAV_SavingPrisoners_AppearedAtHaven_Boat")
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos == nil
+        end
+    }
+
+    nodes.Inspection = Action{
+        function()
+            if mod.moveto.MoveToPoint(inspectionPos,  MovementSpeed.Walk, me) then
+                LookFrom(inspectionPos)
+                SetEntityEvent(me, "HAV_SavingPrisoners_AtInspectionPos")
+                WaitForInterrupt()
+            else
+                SteerTo(inspectionPos)
+            end
+            Sleep(4)
+        end,
+        Valid = function()
+            return not GetFlag(leaveInspectionFlag) and inspectionPos ~= nil
+        end
+    }
+
+    nodes.WaitingForReunion = Action{
+        function()
+            if mod.moveto.MoveToPoint(position, MovementSpeed.Walk, me) then
+                LookFrom(position)
+            else
+                SteerTo(position)
+            end
+            PlayAnimation(armsCrossedAnim, false, true)
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not bard.Character.IsDead and not GetFlag(reunionOverFlag)
+        end
+    }
+
+    nodes.Sitting = Proxy {
+        game.states.Sit,
+        params = {
+            seat = "S_HAV_FlirtySeat_c18715b9-45ae-4316-aecb-4036956d65e3",
+            seatTrigger = "S_HAV_FlirtySeatArea_4af89d17-83cd-4c2b-b3b7-5efff600cca8",
+            sitIdle = StateRef{game.states.HAV_FlirtyTiefling_Sitting},
+            nonSitIdle = StateRef{game.states.HAV_FlirtyTiefling_Standing},
+            useSeatPositionAsFallBack = false,
+            sitOnGroundAsFallback = false
+        }
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if(e.Event == "HAV_SavingPrisoners_SetInspectionPos") then
+                inspectionPos = e.Params[1]
+                Interrupt()
+            end
+        end
+    end
+
+end}
+
+game.states.HAV_FlirtyTiefling_Sitting = State {function ()
+
+    modules = {"shared.dialog"}
+
+    description = [[Behaviour of Lakrissa in Haven while he is sitting]]
+
+    local bard = Entity("S_DEN_Bard_4a405fba-3000-4c63-97e5-a8001ebb883c")
+    local AD = Dialog("HAV_AlfiraTale_AD_WithFlirty_2765351f-dca2-560e-b6d7-e3fedb631084")
+
+    nodes.WithBard = Action {
+        function()
+            Sleep(4.0)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 30.0,
+                },
+                me,
+                bard
+            )
+        end,
+        CanEnter = function()
+            return not bard.Character.IsDead
+        end
+    }
+
+    nodes.NoBard = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+end}
+
+game.states.HAV_FlirtyTiefling_Standing = State {function ()
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    description = [[Behaviour of Lakrissa in Haven while he is standing]]
+
+    local bard = Entity("S_DEN_Bard_4a405fba-3000-4c63-97e5-a8001ebb883c")
+    local armsCrossedAnim = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+    local position = Entity("S_HAV_FlirtySitPos_f46b9b20-cac4-402b-843b-e008a4031c0b")
+    local AD = Dialog("HAV_AlfiraTale_AD_WithFlirty_2765351f-dca2-560e-b6d7-e3fedb631084")
+
+    nodes.WithBard = Action {
+        CanEnter = function()
+            return not bard.Character.IsDead
+        end,
+        function()
+            if mod.moveto.MoveToPoint(position, MovementSpeed.Walk, me) then
+                LookFrom(position)
+            else
+                SteerTo(position)
+            end
+            PlayAnimation(armsCrossedAnim, false, true)
+            SetDoNotFace(me, true)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 30.0,
+                },
+                me,
+                bard
+            )
+            SetDoNotFace(me, false)
+            Sleep(4)
+        end,
+        OnLeave = function()
+            SetDoNotFace(me, false)
+        end
+    }
+
+    nodes.NoBard = Action {
+        function()
+            if mod.moveto.MoveToPoint(position, MovementSpeed.Walk, me) then
+                LookFrom(position)
+            else
+                SetDoNotFace(me, true)
+                SteerTo(position)
+            end
+            PlayAnimation(armsCrossedAnim, false, true)
+            Sleep(4.0)
+        end,
+    }
+
+end}

@@ -1,0 +1,239 @@
+--Migrate to new trap system once in place
+game.states.MOO_BookTrapBlood = State{function ()
+    description = [[Spikes that come out of the ground]]
+
+    --TODO: Need animated spikes, proper spell for peircing damage. (Spike_Trap looks more like a poison explosion?)
+    --This script is just for some flavour (floor draining blood), is handled by behaviour script currently
+
+    local isTriggered = false
+    local bloodDrainBox = Entity("S_MOO_BloodDrainBox_50841945-adfb-4e8b-a927-da10ef1b8867")
+    local spikes = {}
+    local spike1 = Entity("S_BookSpikes_001_e32a8860-c9e0-4b8b-ad3b-7da437929c16")
+    local spike2 = Entity("S_BookSpikes_002_b9372af3-bbcb-4783-b617-1a70bf0181a3")
+    local activeStatueEffect = nil
+
+    self.OnInit = function()
+        table.insert(spikes, spike1)
+        table.insert(spikes, spike2)
+        activeStatueEffect = PrepareEffect("VFX_Script_PUZ_GEN_Trap_Gargoyle_Statue_Turret_Head_A_01_d273ee46-3261-4e24-d58a-9c2beafd9865")
+    end
+
+    nodes = ImmediateSelector{}
+
+    nodes.TriggerSpikes = Action {
+        function()
+            local activeVFX = PlayEffectAt(activeStatueEffect, me)
+            Sleep(0.5)
+            for i, spike in ipairs(spikes) do
+                SetEntityEvent(spike,"MOO_BalthazarsSecrets_SpikesOff")
+                RemoveSurfaceLayerAt(spike, SurfaceLayer.GROUND, bloodDrainBox, false, 3, 2)
+            end
+            if activeVFX ~= nil then
+                StopEffect(activeVFX)
+                activeVFX = nil
+            end
+            isTriggered = false
+        end,
+
+        Valid = function()
+            return isTriggered
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "MOO_BalthazarsSecrets_Spikes" then
+            Interrupt()
+            isTriggered = true
+        end
+    end
+
+end
+}
+
+game.states.MOO_BookTrapResurrection = State{function ()
+    description = [[Resurrect any valid dead targets in the room]]
+
+    local isCasting = false
+    local roomRegion = Entity("S_MOO_BalthazarRoomRegion_24ad78c8-a74d-4d49-9d72-f791ae87b6b8")
+    local usedTargetTag = Tag("ACT2_MOO_BOOKANIMATEDTARGET_4e97c12f-b77a-4a7d-a42d-9a157c8ec7f5")
+    local maxTargetCount = 10 --In case cheeky players find a way to fill the room with a lot of bodies
+    local activeStatueEffect = nil
+
+    helpers.action.GetRezTargets = function()
+        local characters = GetActiveCharacters(me, 30)
+        local targets = {}
+
+        for i, character in ipairs(characters) do
+            if IsInTrigger(character, roomRegion.Trigger) and
+               not character.Character.IsPartyMember and
+               character.Character.IsDead and
+               not character.Character.IsSummon and
+               not IsTagged(character, Tag('BLOCK_RESURRECTION_22a75dbb-1588-407e-b559-5aa4e6d4e6a6')) and
+               not IsTagged(character, usedTargetTag) then
+                table.insert(targets, character)
+            end
+        end
+
+        return targets
+    end
+
+    self.OnInit = function()
+        activeStatueEffect = PrepareEffect("VFX_Script_PUZ_GEN_Trap_Gargoyle_Statue_Turret_Head_C_01_7a38e1b8-b159-b4c3-547f-e1c65c3a290f")
+    end
+
+    nodes = ImmediateSelector{}
+
+    nodes.Resurrect = Action {
+        function()
+            local activeVFX = PlayEffectAt(activeStatueEffect, me)
+            local deadTargets = helpers.GetRezTargets()
+            local currentTargetCount = 0
+            for i, target in ipairs(deadTargets) do
+                if currentTargetCount < maxTargetCount then
+                    ShootProjectileAt("Projectile_MOO_BalthazarsSecrets_AnimateZombie", me, ls.math.Vector3(2, 0, 0), target)
+                    AddTag(target, usedTargetTag)
+                    currentTargetCount = currentTargetCount + 1
+                end
+                Sleep(1)
+            end
+            if activeVFX ~= nil then
+                StopEffect(activeVFX)
+                activeVFX = nil
+            end
+            isCasting = false
+        end,
+
+        Valid = function()
+            return isCasting
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "MOO_BalthazarsSecrets_CastResurrect" then
+            isCasting = true
+        end
+    end
+
+end
+}
+
+game.states.MOO_BookTrapPoison = State{function ()
+    description = [[Releases a poison cloud into the room and locks the doors]]
+
+    local hasReleasedPoison = false
+    local isTrapTimerActive = false
+    local roomRegion = Entity("S_MOO_BalthazarRoomRegion_24ad78c8-a74d-4d49-9d72-f791ae87b6b8")
+    local sourcePoint = Entity("S_MOO_PoisonStartPoint_ae8cd596-e83a-4d57-ac20-40762578664c")
+    local sourceObject = Entity("S_MOO_PoisonReleaseHole_97fc28bc-8a4d-4249-abfc-3972fbd68319")
+    local doors = {
+        Entity("S_MOO_NecroRoomDoor_001_fa33a896-363c-49a0-8618-7d9555bafaae"),
+        Entity("S_MOO_NecroRoomDoor_002_d4e4c212-d279-4ed9-8d88-7be3c870dc0d"),
+        Entity("S_MOO_NecroRoomDoor_003_99432bb0-3ca4-4d42-ae2d-648cbb63edff")
+    }
+    local unlockedDoors = {}
+    local isSFXPaused = true
+    local activeStatueEffect = nil
+    --TODO: Door 003 needs to be handled slightly different, blocking the lever during the trap
+
+    helpers.SortUnlockedDoors = function()
+        --Only need to know which doors are unlocked already and not destroyed
+        for i, door in ipairs(unlockedDoors) do
+            table.remove(unlockedDoors, i)
+        end
+
+        for i, door in ipairs(doors) do
+            if not door.Item.IsLocked and not door.Item.IsDestroyed then
+                table.insert(unlockedDoors, door)
+            end
+        end
+    end
+
+    self.OnInit = function()
+        activeStatueEffect = PrepareEffect("VFX_Script_PUZ_GEN_Trap_Gargoyle_Statue_Turret_Head_B_01_d4495296-9b99-e0e6-2564-71970be46b92")
+    end
+
+    nodes = ImmediateSelector{}
+
+    nodes.ReleasePoison = Action {
+        OnEnter = function()
+            isSFXPaused = true
+        end,
+
+        function()
+            PlaySound(sourceObject,"MOO_Balthazar_Puzzle_GasTrap_Start")
+            local activeVFX = PlayEffectAt(activeStatueEffect, me)
+            if isSFXPaused then
+                Sleep(5.4)
+                isSFXPaused = false
+            end
+
+            if not isTrapTimerActive then
+                helpers.SortUnlockedDoors()
+                for i, door in ipairs(unlockedDoors) do
+                    Close(door)
+                    Lock(door, "MOO_BookTrap") --Masterkey will not work
+                    DebugText(door, "Locked by trap")
+                end
+
+                local radius = 1.0
+                local lifeTime = 26
+                --Reduce lifeTime per step is so the the growth behaves correctly while in FTB
+                StartTimer(me, "MOO_BalthazarsSecrets_TempLock", 26.0, 0, true)
+                isTrapTimerActive = true
+                for i = 1, 14, 1 do
+                    CreateSurfaceAt(sourcePoint, SurfaceType.POISON_CLOUD, radius, lifeTime, false, me)
+                    Sleep(1.6)
+                    radius = radius + 1.3
+                    lifeTime = lifeTime - 1.57
+                end
+            end
+            if activeVFX ~= nil then
+                StopEffect(activeVFX)
+                activeVFX = nil
+            end
+            PlaySound(sourceObject,"MOO_Balthazar_Puzzle_GasTrap_End")
+            hasReleasedPoison = false
+        end,
+
+        Valid = function()
+            return hasReleasedPoison
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "MOO_BalthazarsSecrets_ReleasePoison" then
+            DebugText(me, "Called")
+            hasReleasedPoison = true
+        end
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "MOO_BalthazarsSecrets_TempLock" then
+            for i, door in ipairs(unlockedDoors) do
+                Unlock(door)
+                DebugText(door, "Unlocked by trap")
+            end
+            isTrapTimerActive = false
+        end
+    end
+
+end
+}

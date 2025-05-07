@@ -1,0 +1,334 @@
+game.states.HAG_HagSpawn_SurrogateMother = State{function ()
+
+        local HAG_HagSpawn_SurrogateMother_State_InLair = Flag("HAG_HagSpawn_SurrogateMother_State_InLair_400601e6-9c76-4d93-a4bf-d561de28cc10")
+        local HAG_HagSpawn_ResurrectionHappening = Flag("HAG_HagSpawn_State_ResurrectionHappening_14c80b7a-d066-4f8f-944f-196d0c4243c9")
+
+        nodes.Action_Sit = Proxy{
+            game.states.Sit,
+            params = {seat = "S_HAG_Hagspawn_MotherChair_1da54818-6916-484b-b56a-65e0d15ab5f2",
+                      seatTrigger = "S_HAG_Hagspawn_MotherChairBox_c1095437-960e-4491-9aa6-13167ab91898"
+                      },
+            Valid = function()
+                return not GetFlag(HAG_HagSpawn_SurrogateMother_State_InLair, nil) and
+                        not GetFlag(HAG_HagSpawn_ResurrectionHappening, nil)
+            end
+            }
+
+        nodes.State_Resurrection = Proxy{
+            game.states.Hag_HagSpawn_SurrogateMother_Resurrection,
+            Valid = function()
+                return GetFlag(HAG_HagSpawn_ResurrectionHappening, nil)
+            end
+        }
+
+        nodes.Action_Idle = Action{function()
+            Sleep(2.0)
+        end
+        }
+
+    end
+    }
+
+    game.states.Hag_HagSpawn_SurrogateMother_Resurrection = State{function()
+
+        local HAG_Resurrection_MotherPos = Entity("S_HAG_Resurrection_MotherPos_36560fcb-e9e7-40f0-8112-2191e4277b6d")
+        local HAG_Resurrection_JakePos = Entity("S_HAG_Resurrection_JakePos_26567fe8-23b2-4a20-b0f7-46f85d482707")
+        --local HAG_GraveFlowers = Entity("S_HAG_GraveFlowers_62cd9c8c-114a-4ad8-ae11-9a1b32673b4e")
+        local HAG_ResurrectionSceneBox = Entity("S_HAG_ResurrectionSceneBox_5a710238-f259-4b3c-840c-f070c2fef46c")
+        local HAG_HagSpawn_State_DugUpHusband = Flag("HAG_HagSpawn_State_DugUpHusband_59a20c10-f5be-47b5-900a-73a8960a062f")
+        local HAG_Hagspawn_State_HagSeesDugUpHusbandCorpse = Flag("HAG_Hagspawn_State_HagSeesDugUpHusbandCorpse_d9ec2b4a-fb2d-44ad-baf6-d81011323a4e")
+        local HAG_HagSpawn_Event_ResurrectedHusbandWithWand = Flag("HAG_HagSpawn_Event_ResurrectedHusbandWithWand_939cfa41-11e0-4825-a1eb-b2ac5d26f0b8")
+        local CUST_StandingAtHusbandGrave_01_Loop = Animation("CUST_StandingAtHusbandGrave_01_Loop_7ba6aac6-36f8-4995-893f-c699cd4bda48")
+
+        nodes.GoHome = Action{function()
+            if not IsInDangerousSurfaceFor(HAG_Resurrection_MotherPos, me.Character) then
+                if GetDistanceTo(me, HAG_Resurrection_MotherPos) > 2.0 then
+                    try
+                        MoveTo(HAG_Resurrection_MotherPos, MovementSpeed.Walk)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(HAG_Resurrection_MotherPos, 3.0)
+                        Sleep(2.0 + math.random())
+                    end
+                else
+                    LookFrom(HAG_Resurrection_MotherPos)
+                end
+            else
+                LookAtEntity(HAG_Resurrection_MotherPos, 3.0)
+            end
+            Sleep(2.5 + math.random() * 4.0)
+        end,
+        CanEnter = function()
+            return
+                GetDistanceTo(me, HAG_Resurrection_MotherPos) > 2.0
+        end
+        }
+
+        nodes.Action_LookAtGrave = Action{function()
+            SteerTo(HAG_Resurrection_JakePos)
+            LookAtEntity(HAG_Resurrection_JakePos, 3.0)
+            PlayAnimation(CUST_StandingAtHusbandGrave_01_Loop, false, true)
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return
+                GetDistanceTo(me, HAG_Resurrection_MotherPos) <= 2.0
+        end
+        }
+
+    end
+    }
+
+    game.states.HAG_HagSpawn_SurrogateMother_Combat = State{function ()
+
+        local HAG_HagLair_PenOpened = Flag("HAG_HagLair_PenOpened_caa8579f-036d-4884-87df-89ef6fd6b91b")
+        local HAG_Hag_State_HagDefeated = Flag("HAG_Hag_State_HagInLair_b1559527-2aa5-41e1-bab2-89ace2bf450c")
+        local HAG_HagLair_WomanSpot = Entity("S_HAG_HagLair_WomanSpot_b18b7488-dbad-433e-b89b-af06a0bc415e")
+        local HAG_HagLair_WomanCombatFleeSpot = Entity("S_HAG_HagLair_WomanCombatFleeSpot_41cf48af-5364-41cb-a35d-f5509459b711")
+        local HAG_HagLair_AD_SurrogateMotherInCage = Dialog("HAG_HagLair_AD_SurrogateMotherInCage_4986e653-6891-d7ce-7a33-afa56207957b")
+        local HAG_HagSpawn_SurrogateMother_State_InLair = Flag("HAG_HagSpawn_SurrogateMother_State_InLair_400601e6-9c76-4d93-a4bf-d561de28cc10")
+        local HAG_CMB_MayrinaIllusion_Real = Flag("HAG_CMB_MayrinaIllusion_Real_289009b8-4d9f-403f-aa56-102f1b64dc6d")
+        local HAG_HagLair_AD_MayrinaIllusion_Real = Dialog("HAG_HagLair_AD_MayrinaIllusion_Real_eeb9ed5d-1348-3036-4258-2c914dd634fe")
+        local HAG_HagSpawn_ResurrectionHappening = Flag("HAG_HagSpawn_State_ResurrectionHappening_14c80b7a-d066-4f8f-944f-196d0c4243c9")
+        local hag = Tag("HAG_fe8308ce-d51c-4f41-a986-217a9c6dac5f")
+
+        nodes = Selector{
+            Valid = function(node)
+                return CheckAnySelectable(node)
+            end
+        }
+
+        helpers.HasHostilesBesidesHag = function()
+            if not me.IsInCombat then
+                return false
+            end
+            for _, enemy in ipairs(GetCombatEntities(me)) do
+                if enemy ~= nil and
+                   enemy.IsCharacter and
+                   IsEnemy(me.Character, enemy.Character) and
+                   not IsTagged(enemy, hag) then
+                    return true
+                end
+            end
+            return false
+        end
+
+        nodes.Action_Transformed = Action{function()
+            Sleep(0.5)
+            StartAutomatedDialog(HAG_HagLair_AD_MayrinaIllusion_Real,false,me)
+            Sleep(2.0)
+            EndTurn(me)
+        end,
+        Valid = function()
+            return GetFlag(HAG_CMB_MayrinaIllusion_Real, nil) and
+                    me.CanActInCombatTeamTurn and
+                    not GetFlag(HAG_HagSpawn_ResurrectionHappening)
+        end
+        }
+
+        nodes.Action_FleeCage = Action{
+            function()
+                local validPosition
+                local moveResult
+                Sleep(1.0)
+                validPosition = FindValidPosition(HAG_HagLair_WomanCombatFleeSpot, 5.0, me, true)
+                if validPosition ~= nil then
+                    moveResult = MoveTo(validPosition, MovementSpeed.Run, false, true, 1.5, 2.5, false)
+                end
+                if validPosition == nil or
+                   moveResult  ~= error.MovementError.None then
+                    Sleep(2.0) -- She can't get out of the cage for some reason.
+                end 
+                if me.IsInCombat then
+                    EndTurn(me)
+                end
+            end,
+            CanEnter = function()
+                return IsInTrigger(me, HAG_HagLair_WomanSpot.Trigger)
+            end,
+            Valid=function()
+                return  GetFlag(HAG_HagSpawn_SurrogateMother_State_InLair, nil) and
+                        GetFlag(HAG_HagLair_PenOpened, nil) and
+                        ((me.IsInCombat and
+                          me.CanActInCombatTeamTurn) or
+                          not me.IsInCombat) and
+                        not GetFlag(HAG_HagSpawn_ResurrectionHappening)
+            end,
+        }
+
+        nodes.Action_OutsideCage = Action{
+            function()
+                --FleeFrom(RelationType.All,6.0) Commented out so she doesn't run off into an abyss.
+                Sleep(2.5)
+                EndTurn(me)
+            end,
+            Valid=function()
+                return  GetFlag(HAG_HagSpawn_SurrogateMother_State_InLair, nil) and
+                        me.IsInCombat and
+                        me.CanActInCombatTeamTurn and
+                        (not IsInTrigger(me, HAG_HagLair_WomanSpot.Trigger) or
+                         GetFlag(HAG_HagLair_PenOpened, nil)) and
+                        not GetFlag(HAG_HagSpawn_ResurrectionHappening) and
+                        not helpers.HasHostilesBesidesHag()
+            end
+        }
+
+        nodes.Action_InCage = Action{function()
+            if me.IsInCombat or not GetFlag(HAG_Hag_State_HagDefeated, nil) then
+                if me.IsInCombat and me.CanActInCombatTeamTurn then
+                    StartAutomatedDialog(HAG_HagLair_AD_SurrogateMotherInCage, true, me)
+                    Sleep(1.0)
+                else
+                    Sleep(1.5)
+                end
+            end
+            if me.IsInCombat and
+            me.CanActInCombatTeamTurn then
+                EndTurn(me)
+            else
+                StartAutomatedDialog(HAG_HagLair_AD_SurrogateMotherInCage, true, me)
+                Sleep(12.0)
+            end
+        end,
+        Valid=function()
+            return GetFlag(HAG_HagSpawn_SurrogateMother_State_InLair, nil) and
+                   not GetFlag(HAG_HagLair_PenOpened, nil) and
+                   IsInTrigger(me, HAG_HagLair_WomanSpot.Trigger)  and
+                   not GetFlag(HAG_HagSpawn_ResurrectionHappening)
+        end,
+
+        }
+
+        nodes.DefaultCombat = Proxy{
+            game.states.DefaultCombat,
+            Valid = function()
+               return not GetFlag(HAG_HagSpawn_SurrogateMother_State_InLair, nil) or
+                      (me.IsInCombat and 
+                       (not me.CanActInCombatTeamTurn or
+                        GetFlag(HAG_HagSpawn_ResurrectionHappening))) or
+                      (helpers.HasHostilesBesidesHag() and
+                       (not IsInTrigger(me, HAG_HagLair_WomanSpot.Trigger) or
+                        GetFlag(HAG_HagLair_PenOpened, nil)))
+            end
+
+        }
+    end
+    }
+
+    game.states.HAG_HagSpawn_Cower = State{function ()
+
+        local HAG_HagSpawn_Quest_SurrogateReleased = Flag("HAG_Hag_State_HagInLair_b1559527-2aa5-41e1-bab2-89ace2bf450c")
+        local HAG_HagSpawn_SurrogateMother_State_InLair = Flag("HAG_HagSpawn_Quest_SurrogateReleased_dafa0dd7-c2bb-be04-6881-ed81a87373fd")
+
+        local HAG_SurrogateMother_FleePoint = Entity("S_HAG_SurrogateMother_FleePoint_74adffc9-fdaa-4cbc-9b2f-d31c79c3bf62")
+        local spottedCombatAround = false
+
+        nodes = Selector{
+            Valid = function(node)
+                return CheckAnySelectable(node)
+            end
+        }
+
+        events.TimerFinished  = function(e)
+            if e.TimerName == "ScanForCombat" then
+                local myChar = me.Character
+                local actives = GetActiveCharacters(me, myChar.SightRange)
+                for _,char in pairs(actives) do
+                    if char ~= me then
+                        if char.IsInCombat then
+                            spottedCombatAround = true
+                            return
+                        end
+                    end
+                end
+                spottedCombatAround = false
+            end
+        end
+
+        nodes.Action_CowerInHouse = Action{function()
+            MoveTo(HAG_SurrogateMother_FleePoint, MovementSpeed.Run, false, true, 1.5, 2.5)
+            Sleep(2.0)
+        end,
+        Valid=function()
+            return spottedCombatAround and
+                     not GetFlag(HAG_HagSpawn_SurrogateMother_State_InLair, nil) and
+                     not IsInDangerousSurfaceFor(HAG_SurrogateMother_FleePoint, me.Character) and
+                     not GetFlag(HAG_HagSpawn_Quest_SurrogateReleased, nil)
+        end,
+        OnEnter = function()
+            ApplyStatus(me, "ANIM_COWER")
+        end,    
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+        end
+        }
+
+
+        nodes.DefaultCombat = Proxy{
+            game.states.CombatCower
+        }
+    end
+    }
+
+    game.states.HAG_HagSpawn_Crimes = State{function ()
+
+        local HAG_HagSpawn_Quest_SurrogateReleased = Flag("HAG_Hag_State_HagInLair_b1559527-2aa5-41e1-bab2-89ace2bf450c")
+        local HAG_HagSpawn_SurrogateMother_State_InLair = Flag("HAG_HagSpawn_Quest_SurrogateReleased_dafa0dd7-c2bb-be04-6881-ed81a87373fd")
+
+        local HAG_SurrogateMother_FleePoint = Entity("S_HAG_SurrogateMother_FleePoint_74adffc9-fdaa-4cbc-9b2f-d31c79c3bf62")
+        local fleeing = false
+        local crimeID
+        local HAG_Hag_State_HagDefeated = Flag("HAG_Hag_State_HagDefeated_7a1acad0-589f-ae02-f712-f0d24080d720")
+        local cowerAnimation = Animation("CUST_DebugAsset_CustomAnim_01_Loop_50635108-0b10-4232-820a-aac14df09a75")
+
+        events.DisturbanceReactionRequest = function(ev)
+            local actionToPerform
+            if ev.ReactionName then
+                actionToPerform = string.gsub(ev.ReactionName, ".*_(.*)", "%1", 1)
+               if (actionToPerform == "Flee" or
+                   actionToPerform == "CallHelpFlee" or
+                   actionToPerform == "FleeWithAD") then
+                    fleeing = true
+                    crimeID = ev.CrimeID
+                end
+            end
+            DebugText(me, "Fleeing, reaction [1]", actionToPerform)
+        end
+
+        events.DisturbanceCanceled  = function(e)
+            if (e.CrimeID == crimeID) then
+                fleeing = false
+                crimeID = nil
+            end
+        end
+
+        nodes = Selector{
+            CanEnter = function(node)
+                return CheckAnySelectable(node)
+            end
+        }
+
+        nodes.Action_CowerInHouse = Action{function()
+            if GetDistanceTo(me, HAG_SurrogateMother_FleePoint) >= 3.0 then
+                MoveTo(HAG_SurrogateMother_FleePoint, MovementSpeed.Run, false, true, 1.5, 2.5)
+            end
+            PlayAnimation(cowerAnimation,false, true)
+        end,
+        Valid=function()
+            return
+                     not GetFlag(HAG_HagSpawn_SurrogateMother_State_InLair) and
+                     not IsInDangerousSurfaceFor(HAG_SurrogateMother_FleePoint, me.Character) and
+                     not GetFlag(HAG_HagSpawn_Quest_SurrogateReleased) and
+                     not GetFlag(HAG_Hag_State_HagDefeated) and
+                     fleeing
+        end,
+        OnLeave = function()
+            --Clear animation
+        end
+        }
+
+
+        nodes.DefaultCrimes = Proxy{
+            game.states.CrimesHumanoid,
+        }
+    end
+    }

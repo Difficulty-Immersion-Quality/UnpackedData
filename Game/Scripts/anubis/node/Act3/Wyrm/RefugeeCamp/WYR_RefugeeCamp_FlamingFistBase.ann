@@ -1,0 +1,55 @@
+game.states.WYR_RefugeeCamp_FlamingFistBase = State { function ()
+    
+    description = [[ 
+        Base idle for the flaming fists related to Big Barn situation.
+    ]]
+
+    modules = { "shared.moveto" }
+
+    params.preAlertIdle = { type = EParamType.State, required = true, help = [[
+        The idle before the player triggers the toys inside of the barn.
+    ]]}
+
+    params.postAlertedIdle = { type = EParamType.State, required = true, help = [[
+        The idle after the player triggers the toys and after being interrogated by manip.
+    ]]}
+
+    params.alertedPosTrigger = {type = EParamType.String, required = true, help=[[
+        The trigger at which the character runs to after being alerted by the toys.
+    ]]}
+
+    local alertedFlag = Flag("WYR_RefugeeCamp_State_GuardsAlerted_2ef42687-4116-4ddb-96b1-dedb0c7c1704")
+    local toysInvestigatedFlag = Flag("WYR_RefugeeCamp_State_ManipInvestigatedToys_f8dc3fc7-744f-575b-b0a4-b90beafb3a70")
+    local alertedPosTrigger = Entity(params.alertedPosTrigger)
+
+    nodes.PreAlertIdle = Proxy {
+        params.preAlertIdle,
+        Valid = function()
+            return not GetFlag(alertedFlag) and not GetFlag(toysInvestigatedFlag)
+        end
+    }
+
+    nodes.Alerted = Action {
+        function()
+            SetWeaponUnsheathed(me, true, false)
+            SteerTo(alertedPosTrigger)
+            Sleep(3)
+            if mod.moveto.MoveToPoint(alertedPosTrigger, MovementSpeed.Run, me) then
+                LookFrom(alertedPosTrigger)
+            end
+        end,
+        Valid = function()
+            return GetFlag(alertedFlag) and not GetFlag(toysInvestigatedFlag)
+        end,
+        OnLeave = function()
+            SetWeaponUnsheathed(me, false, false)
+        end
+    }
+
+    nodes.PostAlertedIdle = Proxy {
+        params.postAlertedIdle,
+        Valid = function()
+            return GetFlag(toysInvestigatedFlag)
+        end
+    }
+end}

@@ -1,0 +1,198 @@
+game.states.UND_FearfulRothe_Guard = State{function ()
+
+    modules = { "shared.math", "shared.util" }
+
+    params.AD = { type = EParamType.String, required = false, help = [[AD]]}
+    params.ADPartner = { type = EParamType.String, required = false, help = [[AD partner]]}
+    params.OneTimeAD = { type = EParamType.String, required = false, help = [[]]}
+    params.OtherSpeaker = { type = EParamType.String, required = false, help = [[Other Guard that can talk]]}
+    params.StandAtTriggerState = {type=EParamType.State, required=false, default=nil, help=[[Stand at trigger state]]}
+
+    params.Animation_RotheCautious = {type = EParamType.String, required = false, default = nil, help=[[Animation when the Rothe are cautious]]}
+    params.Animation_RotheDead_001 = {type = EParamType.String, required = false, default = "", help=[[First animation when the Rothe are dead]]}
+    params.Animation_RotheDead_002 = {type = EParamType.String, required = false, default = "", help=[[Second animation when the Rothe are dead]]}
+    params.Animation_RotheCalmed = {type = EParamType.String, required = false, default = "", help=[[Animation when the Rothe are calmed]]}
+
+    params.Trigger_RotheDead_001 = {type = EParamType.String, required = false, default = "", help=[[First Trigger for when the Rothe are dead]]}
+    params.Trigger_RotheDead_002 = {type = EParamType.String, required = false, default = "", help=[[Second Trigger for when the Rothe are dead]]}
+    params.Trigger_RotheCalmed = {type = EParamType.String, required = false, default = "", help=[[Trigger for when the Rothe are calmed]]}    
+    params.RotheToLookAt = {type = EParamType.String, required = true, help=[[]]}    
+    params.WhippingCane = {type = EParamType.String, required = false, default = nil, help=[[]]}    
+
+    local fl_RotheCalm = Flag("UND_FearfulRothe_State_ConvincedRotheToAttackRubble_1f26371b-dbc7-0dcc-123b-3d3b6b06cc0f")
+    local fl_RotheDead = Flag("UND_FearfulRothe_State_RotheAreDead_3edcda99-833f-4f49-9aed-a493d451eec3")
+
+    local anim_RotheCautious = Animation(params.Animation_RotheCautious)
+    local anim_RotheDead_001 = Animation(params.Animation_RotheDead_001)
+    local anim_RotheDead_002 = Animation(params.Animation_RotheDead_002)
+    local anim_RotheCalmed = Animation(params.Animation_RotheCalmed)
+    
+    local tr_RotheDead_001 = Entity(params.Trigger_RotheDead_001)
+    local tr_RotheDead_002 = Entity(params.Trigger_RotheDead_002)
+    local tr_RotheCalmed = Entity(params.Trigger_RotheCalmed)
+
+    local it_WhippingCane = Entity(params.WhippingCane)
+
+    local dlg_AD = Dialog(params.AD)
+    local dlg_OneTimeAD = Dialog(params.OneTimeAD)
+    local ch_ADParther = Entity(params.ADPartner)
+    local ch_OtherSpeaker = Entity(params.OtherSpeaker)
+    local b_CanDoAD = true
+    local b_CanDoOneTimeAD = true
+    local s_CanDoADTimer = "UND_FearfulRothe_Guard.AD.CanDoAD"
+
+    local ch_Rothe = Entity(params.RotheToLookAt)
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(12.0, 18.0), 0)
+    end    
+
+    nodes.OneTimeADRotheStartedWorking = Action {
+        function()
+            StartAutomatedDialog(dlg_OneTimeAD, true, me)
+            b_CanDoOneTimeAD = false
+        end,
+        Valid = function()
+            return GetFlag(fl_RotheCalm) and b_CanDoOneTimeAD and dlg_OneTimeAD ~= nil
+        end        
+    }
+
+    nodes.AD = Action{
+        function()
+            if b_CanDoAD then
+                if ch_ADParther ~= nil then
+                    StartAutomatedDialog(dlg_AD, true, me, ch_ADParther)
+                else
+                    StartAutomatedDialog(dlg_AD, true, me)
+                end
+                helpers.CanDoADReset()
+            end
+        end,
+
+        CanEnter = function()
+            return dlg_AD ~= nil and b_CanDoAD and not IsInDialog(ch_OtherSpeaker, false) and not IsInDialog(me, false) and not IsInDialog(ch_Rothe, false) and not GetFlag(fl_RotheCalm)
+        end
+    }
+
+    nodes.RotheDead = Selector {
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        CanEnter = function()
+            return GetFlag(fl_RotheDead)
+        end
+    }
+
+    nodes.RotheDead.Activity_001 = Action {
+        function()
+            DebugText(me, "RotheDead.Activity_001")
+            try
+                if GetDistance2DTo(me, tr_RotheDead_001) > 1.5 then
+                    MoveTo(tr_RotheDead_001, MovementSpeed.Walk)
+                end
+                LookFrom(tr_RotheDead_001)
+                if (anim_RotheDead_001 ~= nil) then
+                    PlayAnimation(anim_RotheDead_001, true)
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+            end
+            Sleep(math.random(3, 6))
+        end
+    }
+
+    nodes.RotheDead.Activity_002 = Action {
+        function()
+            DebugText(me, "RotheDead.Activity_002")
+            try
+                if GetDistance2DTo(me, tr_RotheDead_002) > 1.5 then
+                    MoveTo(tr_RotheDead_002, MovementSpeed.Walk)
+                end
+                LookFrom(tr_RotheDead_002)
+                if (anim_RotheDead_002 ~= nil) then
+                    PlayAnimation(anim_RotheDead_002, true)
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+            end
+            Sleep(math.random(3, 6))
+        end
+    }
+
+    nodes.RotheCalmed = Selector {
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        CanEnter = function()
+            return GetFlag(fl_RotheCalm)
+        end
+    }
+
+    nodes.RotheCalmed.Activity_001 = Action {
+        function()
+            DebugText(me, "RotheCalmed.Activity_001")
+            try
+                if GetDistance2DTo(me, tr_RotheCalmed) > 1.5 then
+                    MoveTo(tr_RotheCalmed, MovementSpeed.Walk)
+                end
+                LookFrom(tr_RotheCalmed)
+                Sleep(math.random(3, 6))
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+            end
+            Sleep(math.random(3, 6))
+        end
+    }
+
+    nodes.RotheCalmed.Activity_002 = Action {
+        function()
+            DebugText(me, "RotheCalmed.Activity_002")
+            try
+                if GetDistance2DTo(me, tr_RotheCalmed) > 1.5 then
+                    MoveTo(tr_RotheCalmed, MovementSpeed.Walk)
+                end
+                LookFrom(tr_RotheCalmed)
+                PlayAnimation(anim_RotheCalmed, true)                
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+            end
+            Sleep(math.random(3, 6))
+        end
+    }
+
+    nodes.RothePanicking = Selector {
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end
+    }
+
+    nodes.RothePanicking.Activity_001 = Proxy{
+        params.StandAtTriggerState
+    }
+
+    nodes.RothePanicking.Activity_002 = Action {
+        function()
+            DebugText(me, "RothePanicking.Activity_002")
+            SteerTo(ch_Rothe)
+            Sleep(math.random(3, 6))
+            
+            try
+                PlayAnimation(anim_RotheCautious, true)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                Sleep(math.random(4, 8))
+            end
+            Sleep(math.random(4, 8))
+        end,
+        CanEnter = function()
+            return not IsInDialog(me, false)
+        end
+    }
+
+end
+}

@@ -1,0 +1,146 @@
+game.states.WYR_South_GoldGuard_00 = State{function()
+    description = [[Patrolling guard near around gold chest at WYR South checkpoint]]
+
+    modules = { "shared.dialog" }
+
+    local spline = Spline("S_WYR_South_GoldPatrol_00_911d7f3f-1abb-471d-8ce3-b5983644d502")
+    local destPoint = 1
+    local doPatrol = true
+    local otherGuard = Entity("S_WYR_South_GoldGuard_01_0797d0f6-db97-49d2-8606-40793025556d")
+    local alone = false
+    local chair1 = Entity("S_WYR_South_GoldGuard_Chair_00_9776e212-5ab2-4573-97de-181299738894")
+    local chair2 = Entity("S_WYR_South_GoldGuard_Chair_01_be8ab879-a81a-4ca5-8086-18ee774408e3")
+    local chairZone1 = Entity("S_WYR_South_GoldGuard_ChairZone_00_70c1e152-ef59-46d1-99a5-7d93e4c65553")
+    local chairZone2 = Entity("S_WYR_South_GoldGuard_ChairZone_01_5eca35f9-debb-4af3-be6d-e4e5634f697f")
+    local letsChat = false
+    local dialog = Dialog("WYR_South_AD_GoldGuards_06c33ffb-eb4c-5200-25aa-1cb3d45076ee")
+
+    helpers.ContinuePatrol = function()
+        doPatrol = true
+        if not alone then
+            SetUnicastEntityEvent(otherGuard, "WYR_South_Gold_ContinuePatrol", destPoint)
+        end
+    end
+
+    self.OnInit = function()
+        StartRealtimeTimer(me, "WYR_South_GoldGuard_ChatTimeout", 60.0, -1)
+    end
+
+    nodes.Chat = Action {
+        CanEnter = function()
+            return letsChat
+        end,
+
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(dialog, {
+                minDelay = 60.0
+            }, me, otherGuard)
+            letsChat = false
+        end,
+
+        OnLeave = function()
+            letsChat = false
+            StartRealtimeTimer(me, "WYR_South_GoldGuard_ChatTimeout", 5.0, -1)
+        end
+    }
+
+    nodes.Sit = Selector{
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end,
+        OnEnter = function()
+            SetUnicastEntityEvent(otherGuard, "WYR_South_Gold_ImSitting")
+        end,
+        OnLeave = function()
+            SetUnicastEntityEvent(otherGuard, "WYR_South_Gold_ImNotSitting")
+        end,
+    }
+
+    -- TODO: rotate the chair so that guard watches the chest
+    nodes.Sit.Chair1 = Proxy {
+        CanEnter = function()
+            return CanReposeOn(me, chair1) and IsInTrigger(chair1, chairZone1.Trigger)
+        end,
+        game.states.Sit,
+        params = {
+            seat = "S_WYR_South_GoldGuard_Chair_00_9776e212-5ab2-4573-97de-181299738894",
+            seatTrigger = "S_WYR_South_GoldGuard_ChairZone_00_70c1e152-ef59-46d1-99a5-7d93e4c65553",
+            useSeatPositionAsFallBack = false,
+        }
+    }
+
+    nodes.Sit.Chair2 = Proxy {
+        CanEnter = function()
+            return CanReposeOn(me, chair2) and IsInTrigger(chair2, chairZone2.Trigger)
+        end,
+        game.states.Sit,
+        params = {
+            seat = "S_WYR_South_GoldGuard_Chair_01_be8ab879-a81a-4ca5-8086-18ee774408e3",
+            seatTrigger = "S_WYR_South_GoldGuard_ChairZone_01_5eca35f9-debb-4af3-be6d-e4e5634f697f",
+            useSeatPositionAsFallBack = false,
+        }
+    }
+
+    nodes.PatrolForward = Action{
+        CanEnter = function()
+            return doPatrol and destPoint == 1
+        end,
+        function()
+            DoPatrol(spline, false, MovementSpeed.Stroll, 0, false)
+        end
+    }
+
+    nodes.PatrolBackward = Action{
+        CanEnter = function()
+            return doPatrol and destPoint == 0
+        end,
+        function()
+            DoPatrol(spline, true, MovementSpeed.Stroll, 0, false)
+        end
+    }
+
+    nodes.StandBegin = Action{
+        CanEnter = function()
+            return destPoint == 0
+        end,
+        function()
+            Sleep(1.0)
+            helpers.ContinuePatrol()
+        end
+    }
+
+    nodes.StandEnd = Action{
+        CanEnter = function()
+            return destPoint == 1
+        end,
+        function()
+            Sleep(1.0)
+            helpers.ContinuePatrol()
+        end
+    }
+
+    nodes.Default = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.Died = function(ev)
+        if ev.Target == otherGuard then
+            alone = true
+        end
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "WYR_South_GoldGuard_ChatTimeout" then
+            letsChat = true
+        end
+    end
+
+    events.SplineControlPointReached = function(ev)
+        if ev.EndReached then
+            destPoint = 1 - destPoint
+            doPatrol = false
+        end
+    end
+end}

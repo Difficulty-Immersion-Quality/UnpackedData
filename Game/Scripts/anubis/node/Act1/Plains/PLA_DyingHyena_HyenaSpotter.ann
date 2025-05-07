@@ -1,0 +1,74 @@
+game.states.PLA_DyingHyena_HyenaSpotter = State { function()
+    description = [[
+        Behaviour for the neutral healthy hyena that uses Osiris's Spot events
+        to start spotting player character, approach and growl.
+    ]]
+
+    modules = { "shared.math", "shared.dialog" }
+
+    params.growlingAnim = {type = EParamType.String, required = false, help=[[
+        Animations to play while seeing the player
+    ]]}
+
+    params.growlingAD = {type = EParamType.String, required = false, help=[[
+        AD to play while seeing the player
+    ]]}
+
+    params.baseBehaviour = {type = EParamType.State, required = true, help = [[
+        Base Dying Hyena behaviour.
+    ]]}
+
+    local playerSpotted = nil
+    local posWhenSpotPlayer = nil
+    local growlingAD = nil
+    local growlingAnim = nil
+
+    self.OnInit = function()
+        if params.growlingAD ~= nil then
+            growlingAD = Dialog(params.growlingAD)
+        end
+        if params.growlingAnim ~= nil then
+            growlingAnim = Animation(params.growlingAnim)
+        end
+    end
+
+    nodes.MoveToPlayer = Action {
+        OnEnter = function()
+            SetWeaponUnsheathed(me, true, false);
+        end,
+        function()
+            SteerTo(playerSpotted)
+            Sleep(mod.math.random(0.8, 1.5))
+            PlayAnimation(growlingAnim, false, false)
+            if growlingAD ~= nil then
+                Sleep(mod.math.random(0.8, 1.5))
+                if mod.dialog.IsSpeakerAvailable(me) then
+                    StartAutomatedDialog(growlingAD, false, me)
+                end
+            end
+        end,
+        Valid = function()
+            return playerSpotted ~= nil
+        end
+    }
+
+    nodes.BaseBehaviour = Proxy {
+        params.baseBehaviour,
+        Valid = function()
+            return playerSpotted == nil
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DB_PLA_DyingHyena_Event_PlayerSpotted" and e.Params[1] ~= nil then
+                playerSpotted = e.Params[1]
+                posWhenSpotPlayer = me.Position
+            elseif e.Event == "DB_PLA_DyingHyena_Event_PlayerUnspotted" and e.Params[1] == playerSpotted then
+                playerSpotted = nil
+            end
+        end
+    end
+end}

@@ -1,0 +1,876 @@
+<ls:UIWidget x:Name="TurnModeInfo"
+             ls:UIWidget.ContextName="FTBParticipants"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance {x:Type ls:DCFTBParticipants}, IsDesignTimeCreatable=True}"
+             d:DesignWidth="3840" d:DesignHeight="2160">
+    <ls:UIWidget.Resources>
+        <ResourceDictionary>
+            <System:Double x:Key="SingleIconOffset">126</System:Double>
+            <ImageBrush x:Key="EnvironmentIcon" ImageSource="pack://application:,,,/Core;component/Assets/Combatants/WorldTurnPortrait_big.png"/>
+        </ResourceDictionary>
+    </ls:UIWidget.Resources>
+    <ls:UIWidget.Template>
+        <ControlTemplate>
+            <Grid x:Name="ParticipantsListContainer" Margin="0,20" HorizontalAlignment="Center" Visibility="Collapsed" SnapsToDevicePixels="True">
+                <Grid.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform ScaleX="{StaticResource CurrentScaleFactor}" ScaleY="{StaticResource CurrentScaleFactor}"/>
+                        <SkewTransform/>
+                        <RotateTransform/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </Grid.RenderTransform>
+                <b:Interaction.Behaviors>
+                    <ls:CollectionSortBehavior x:Name="SortBehavior" ItemsSource="{Binding Participants}" Comparer="{Binding ParticipantSorter}"/>
+                </b:Interaction.Behaviors>
+                <ItemsControl ItemsSource="{Binding SortedItems, ElementName=SortBehavior}" AlternationCount="{Binding Participants.Count}" VerticalAlignment="Top" HorizontalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Template>
+                        <ControlTemplate TargetType="ItemsControl">
+                            <Grid x:Name="ControlsContainer" Tag="Splitted">
+                                <ls:LSScrollViewer x:Name="ParticipantsScroll" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden" LastElementMaxOffset="126"
+                                                   ScrollOvershoot="378" HorizontalScrollRateToLastElement="0" Background="{x:Null}">
+                                    <ls:LSScrollViewer.Resources>
+                                        <System:Double x:Key="PixelScrollTime">0.01</System:Double>
+                                    </ls:LSScrollViewer.Resources>
+                                    <ls:LSScrollViewer.Tag>
+                                        <Binding Path="HorizontalDeltaOffset" ElementName="ParticipantsScroll" Converter="{StaticResource MultiplierConverter}"
+                                             ConverterParameter="{StaticResource PixelScrollTime}"/>
+                                    </ls:LSScrollViewer.Tag>
+                                    <b:Interaction.Triggers>
+                                        <b:DataTrigger Binding="{Binding IsFTBListOverflowed}" Value="False">
+                                            <b:ChangePropertyAction TargetName="ParticipantsScroll" PropertyName="Width" Value="NaN"/>
+                                        </b:DataTrigger>
+                                        <b:DataTrigger Binding="{Binding IsFTBListOverflowed}" Value="True">
+                                            <b:ChangePropertyAction TargetName="ParticipantsScroll" PropertyName="Width">
+                                                <b:ChangePropertyAction.Value>
+                                                    <Binding Path="DataContext.MaxVisibleIconsAmount" RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}"
+                                                         Converter="{StaticResource MultiplierConverter}" ConverterParameter="126"/>
+                                                </b:ChangePropertyAction.Value>
+                                            </b:ChangePropertyAction>
+                                        </b:DataTrigger>
+                                        <b:EventTrigger EventName="TargetPositionChanged">
+                                            <b:ControlStoryboardAction>
+                                                <b:ControlStoryboardAction.Storyboard>
+                                                    <Storyboard x:Name="ScrollToTargetAnimation">
+                                                        <DoubleAnimation Storyboard.TargetName="ParticipantsScroll" Storyboard.TargetProperty="HorizontalScrollOffset"
+                                                                     From="{Binding Path=HorizontalOffset, ElementName=ParticipantsScroll}"
+                                                                     To="{Binding Path=TargetPosition, ElementName=ParticipantsScroll}"
+                                                                     Duration="{Binding Path=Tag, ElementName=ParticipantsScroll}"/>
+                                                    </Storyboard>
+                                                </b:ControlStoryboardAction.Storyboard>
+                                            </b:ControlStoryboardAction>
+                                        </b:EventTrigger>
+                                        <b:EventTrigger EventName="Unloaded">
+                                            <b:ControlStoryboardAction Storyboard="{Binding ElementName=ScrollToTargetAnimation}" ControlStoryboardOption="Stop" />
+                                        </b:EventTrigger>
+                                    </b:Interaction.Triggers>
+                                    <ItemsPresenter ls:TutorialProperties.TargetID="TUT_SharedInitiative" ls:TutorialProperties.ModalType="Top" ls:TutorialProperties.Padding="{StaticResource TutorialPadding}"/>
+                                </ls:LSScrollViewer>
+
+                                <Border x:Name="LeftHiddenCounter" Visibility="Hidden" Tag="{Binding ElementName=ParticipantsScroll, Path=HorizontalOffset, 
+                                       Converter={StaticResource DivideAndRoundConverter}, ConverterParameter={StaticResource SingleIconOffset}}"/>
+
+                                <Grid x:Name="LeftCounterContainer" HorizontalAlignment="Left" VerticalAlignment="Top" Panel.ZIndex="0" Margin="-50, 0, 0, 0"
+                                  Visibility="{Binding ElementName=LeftHiddenCounter, Path=Tag, Converter={StaticResource CountToVisibilityConverter}}">
+                                    <Grid.Tag>
+                                        <MultiBinding Converter="{StaticResource AddMultipleConverter}">
+                                            <Binding Path="HorizontalOffset" ElementName="ParticipantsScroll" Converter="{StaticResource MultiplierConverter}" ConverterParameter="-1"/>
+                                            <Binding Path="ScrollableWidth" ElementName="ParticipantsScroll"/>
+                                        </MultiBinding>
+                                    </Grid.Tag>
+                                    <Image x:Name="LeftCounterBgImage" Source="{StaticResource OverflowNumberBg}" Stretch="None"/>
+                                    <TextBlock x:Name="LeftCounterText" Margin="-6,13" TextAlignment="Center" HorizontalAlignment="Left" Width="75" FontSize="29" VerticalAlignment="Center"
+                                           Text="{Binding ElementName=LeftHiddenCounter, Path=Tag, StringFormat='+{0}'}"/>
+                                </Grid>
+
+                                <Border x:Name="RightHiddenCounter" Visibility="Hidden" Tag="{Binding ElementName=LeftCounterContainer, Path=Tag, 
+                                       Converter={StaticResource DivideAndRoundConverter}, ConverterParameter={StaticResource SingleIconOffset}}"/>
+
+                                <Grid x:Name="RightCounterContainer" HorizontalAlignment="Right" Panel.ZIndex="0" Margin="0, 0, -55, 0" VerticalAlignment="Top"
+                                      Visibility="{Binding ElementName=RightHiddenCounter, Path=Tag, Converter={StaticResource CountToVisibilityConverter}}">
+                                    <Image x:Name="RightCounterBgImage" Source="{StaticResource OverflowNumberBg}" Stretch="None"/>
+                                    <TextBlock x:Name="RightCounterText" Margin="-6,13" TextAlignment="Center" HorizontalAlignment="Left" Width="75" FontSize="29" VerticalAlignment="Center"
+                                           Text="{Binding ElementName=RightHiddenCounter, Path=Tag, StringFormat='+{0}'}"/>
+                                </Grid>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Layout}" Value="Common">
+                                  <Setter TargetName="ControlsContainer" Property="Tag" Value="NotSplitted"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding DataContext.Data.UIInputMethod, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Controller">
+                                    <Setter TargetName="RightCounterContainer" Property="Margin" Value="0, -100, -65, 0"/>
+                                    <Setter TargetName="LeftCounterContainer" Property="Margin" Value="-70, -100, 0, 0"/>
+                                    <Setter TargetName="LeftCounterBgImage" Property="Source" Value="{StaticResource CounterBackground_c}"/>
+                                    <Setter TargetName="RightCounterBgImage" Property="Source" Value="{StaticResource CounterBackground_c}"/>
+                                    <Setter TargetName="LeftCounterText" Property="Margin" Value="-2, 13"/>
+                                    <Setter TargetName="RightCounterText" Property="Margin" Value="-2, 13"/>
+                                    <Setter TargetName="LeftCounterText" Property="FontSize" Value="31"/>
+                                    <Setter TargetName="RightCounterText" Property="FontSize" Value="31"/>
+                                    <Setter TargetName="LeftCounterText" Property="FontWeight" Value="Bold"/>
+                                    <Setter TargetName="RightCounterText" Property="FontWeight" Value="Bold"/>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </ItemsControl.Template>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Margin" Value="-22,0,-21,0"/>
+                            <Setter Property="Panel.ZIndex" Value="{Binding Path=(ItemsControl.AlternationIndex),RelativeSource={RelativeSource Mode=Self},Converter={StaticResource MultiplierConverter},ConverterParameter=-1}"/>
+                            <Style.Triggers>
+                                <DataTrigger  Binding="{Binding DataContext.Data.UIInputMethod, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Controller" >
+                                    <Setter Property="Margin" Value="-4, 0,-4,0"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate  DataType="{x:Type ls:Participant}">
+                            <DataTemplate.Resources>
+                                <Storyboard x:Key="AddOverflowedStoryboard">
+                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="frame" Storyboard.TargetProperty="Tag">
+                                        <DiscreteObjectKeyFrame KeyTime="0" Value="OverflowedIconAdded"/>
+                                    </ObjectAnimationUsingKeyFrames>
+                                </Storyboard>
+
+                                <Storyboard x:Key="RemoveOverflowedStoryboard">
+                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="frame" Storyboard.TargetProperty="Tag">
+                                        <DiscreteObjectKeyFrame KeyTime="0" Value="OverflowedIconRemoved"/>
+                                    </ObjectAnimationUsingKeyFrames>
+                                </Storyboard>
+                            </DataTemplate.Resources>
+                            <Border x:Name="ElementContainer">
+                                <Border.Tag>
+                                    <!--previous member is highlighted in game-->
+                                    <MultiBinding Converter="{StaticResource EqualConverter}">
+                                        <Binding RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}" Path="DataContext.CurrentPlayer.CurrentTarget"/>
+                                        <Binding Path="PreviousTeamMember" />
+                                    </MultiBinding>
+                                </Border.Tag>
+
+                                <Grid x:Name="CharacterContainer" Width="132" DataContext="{Binding CurrentCombatant}" VerticalAlignment="Top"
+                                          RenderTransformOrigin="0.5,0.1" Tag="Unselected" ToolTipService.PlacementTarget="{Binding ElementName=ParticipantsListContainer}">
+                                    <Grid.RenderTransform>
+                                        <TransformGroup>
+                                            <ScaleTransform ScaleX="{StaticResource TurnOrderScale}" ScaleY="{StaticResource TurnOrderScale}"/>
+                                            <SkewTransform/>
+                                            <RotateTransform/>
+                                            <TranslateTransform/>
+                                        </TransformGroup>
+                                    </Grid.RenderTransform>
+
+                                    <Rectangle x:Name="IconContainer" Stretch="Fill" Fill="{Binding Icon}" Width="108" Height="159" Margin="12,13,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Tag="Intro"/>
+                                    <!-- Grey Overlay -->
+                                    <Rectangle x:Name="ActedThisRoundAlready" Fill="DimGray" Width="106" Height="159" Margin="12,12,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" Opacity="0.7" Visibility="Collapsed"/>
+                                    <!-- Health-->
+                                    <ProgressBar Template="{DynamicResource DefaultProgressBarTemplate}"  VerticalAlignment="Top" HorizontalAlignment="Left" Width="106" Height="159" 
+                                             Margin="12,13,0,0" Style="{StaticResource HealthBarStyle}"/>
+
+                                    <!-- Vector Background-->
+                                    <Path x:Name="frame" Stretch="Fill" VerticalAlignment="Top" HorizontalAlignment="Left" Width="120" Stroke="{StaticResource LS_PanelSelectedBorder}" StrokeThickness="1" Fill="{StaticResource LS_PanelSelectedBorder}" Data="{StaticResource standardFrame}" Height="173" Margin="6,7,0,0" />
+
+                                    <Path x:Name="FrameBGDisabled" Stretch="Fill" VerticalAlignment="Top" HorizontalAlignment="Left" Visibility="Collapsed" Width="120" Fill="{StaticResource LS_tint20}" Data="{StaticResource standardFrame}" Height="174" Margin="6,6,0,0" Opacity="0.8" />
+
+                                    <Image x:Name="Selected" Margin="0,0,0,0" Visibility="Collapsed"  VerticalAlignment="Top" IsHitTestVisible="False" Source="{StaticResource DefaultFrameSelected}"
+                                       Stretch="None" >
+                                        <Image.Tag>
+                                            <MultiBinding Converter="{StaticResource EqualConverter}">
+                                                <Binding RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}" Path="DataContext.CurrentPlayer.CurrentTarget"/>
+                                                <Binding Path="DataContext" ElementName="CharacterContainer" />
+                                            </MultiBinding>
+                                        </Image.Tag>
+                                    </Image>
+
+                                    <Image x:Name="frameCover" Visibility="Visible" Height="188" Source="{StaticResource DefaultFrame}" Stretch="None" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top">
+                                        <Image.Tag>
+                                            <!--current character is controlled by the current player-->
+                                            <MultiBinding Converter="{StaticResource EqualConverter}">
+                                                <Binding RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}" Path="DataContext.CurrentPlayer.UserId"/>
+                                                <Binding Path="PlayerCharacterProperties.OwnerUserID"/>
+                                            </MultiBinding>
+                                        </Image.Tag>
+                                    </Image>
+
+                                    <!-- Hourglass icon, if end turn was requested -->
+                                    <Control x:Name="turnTakenIndicator" Template="{StaticResource HourglassTemplate}" Margin="0,0,10,0"/>
+
+                                    <Image x:Name="SelectionArrowIcon" Width="48" Stretch="UniformToFill" VerticalAlignment="Bottom" Visibility="Collapsed" Margin="0,0,0,-25" Source="{StaticResource UpArrowActive}"/>
+
+                                    <!-- Workaround for the Command "Select character", as there is a known crash (fixed in Noesis 3.0.8) related to the
+                                         multibinding in triggers if it's deleted.-->
+                                    <Border x:Name="CanSelectCharacter">
+                                        <Border.Tag>
+                                            <MultiBinding Converter="{StaticResource BoolAndConverter}">
+                                                <Binding Path="IsCurrentTurn"/>
+                                                <Binding Path="DataContext.CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.IsCasting" RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}" Converter="{StaticResource InvertBoolConverter}"/>
+                                            </MultiBinding>
+                                        </Border.Tag>
+                                    </Border>
+
+                                    <!-- Status Effects -->
+                                    <StackPanel x:Name="StatusHolder" HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Horizontal" Margin="6,0,0,-224" Visibility="Collapsed">
+
+                                        <!-- Statuses -->
+                                        <ItemsControl x:Name="StatusList" ItemsSource="{Binding StatusEffects}" Visibility="{Binding StatusEffects.Count, Converter={StaticResource CountToVisibilityConverter}}" ScrollViewer.VerticalScrollBarVisibility="Disabled" MaxHeight="130" BorderBrush="Transparent" Background="Transparent" HorizontalAlignment="Center" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AlternationCount="{Binding StatusEffects.Count}" ItemTemplate="{StaticResource TinyStatusTemplate}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel IsItemsHost="True" Orientation="Horizontal" RenderTransformOrigin="0.5,0.5">
+                                                        <StackPanel.RenderTransform>
+                                                            <!-- Flip horizontally to change order. Items will do the same to unmirror -->
+                                                            <ScaleTransform ScaleX="-1"/>
+                                                        </StackPanel.RenderTransform>
+                                                    </StackPanel>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemContainerStyle>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Setter Property="Margin" Value="0,0"/>
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+                                                    <Setter Property="RenderTransform">
+                                                        <Setter.Value>
+                                                            <!-- Undo scale from it's parent container -->
+                                                            <ScaleTransform ScaleX="-1"/>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource Self}, Converter={StaticResource LessThanConverter}, ConverterParameter={StaticResource MaxDisplayedStatusesTurnOrder}}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ItemsControl.ItemContainerStyle>
+                                        </ItemsControl>
+                                        <TextBlock x:Name="OverflowText" Height="60" Text="{Binding StatusEffects.Count, Converter={StaticResource AddConverter}, ConverterParameter={StaticResource InverseMaxDisplayedStatusesTurnOrder}, StringFormat={}+{0}}" FontSize="{StaticResource ScaledSmallFontSize}" Margin="0,0,0,0" Visibility="{Binding StatusEffects.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter={StaticResource MaxDisplayedStatusesTurnOrder}}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <ls:LSEntityObject EntityRef="{Binding EntityHandle}" Background="Transparent"/>
+
+                                    <Grid x:Name="ConcentrationGrid" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,20" Visibility="{Binding ConcentrationSpell, Converter={StaticResource NullToCollapsedConverter}}" ToolTipService.Placement="Right" ToolTipService.IsEnabled="True">
+                                        <Grid.ToolTip>
+                                            <ls:LSTooltip x:Name="ConcentrationTooltip" ls:TooltipExtender.Owner="{Binding Path=DataContext, ElementName=CharacterContainer}">
+                                                <ls:LSTooltip.Content>
+                                                    <MultiBinding Converter="{StaticResource TooltipContextMultiConverter}">
+                                                        <Binding Source="Spell" />
+                                                        <Binding Path="(ls:TooltipExtender.Owner).ConcentrationSpell.PrototypeID" ElementName="ConcentrationTooltip"/>
+                                                    </MultiBinding>
+                                                </ls:LSTooltip.Content>
+                                            </ls:LSTooltip>
+                                        </Grid.ToolTip>
+                                        <Ellipse Fill="{Binding ConcentrationSpell.Icon}" HorizontalAlignment="Center" VerticalAlignment="Center" Width="50" Height="50"/>
+                                        <Image x:Name="ConcentrationBorder" Source="{StaticResource ConcentrationBorderIcon}" Stretch="UniformToFill" IsHitTestVisible="False" Width="66" Height="66"/>
+                                    </Grid>
+
+
+                                    <b:Interaction.Triggers>
+                                        <b:EventTrigger EventName="MouseLeftButtonUp" >
+                                            <b:InvokeCommandAction IsEnabled="{Binding DataContext.CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.IsCasting, Converter={StaticResource InvertBoolConverter}, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" 
+                                                               Command="{Binding DataContext.SetCameraOnGameObject, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}" />
+                                            <b:InvokeCommandAction IsEnabled="{Binding Path=Tag, ElementName=CanSelectCharacter}" Command="{Binding DataContext.SelectCharacter, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
+                                            <b:InvokeCommandAction IsEnabled="{Binding Path=Tag, ElementName=CanSelectCharacter}" Command="{Binding DataContext.PlaySelectCharacterReaction, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
+                                            <ls:LSPlaySound Sound="UI_HUD_SelectCharacter"/>
+                                            <b:InvokeCommandAction Command="{Binding DataContext.TargetGameobjectCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
+                                        </b:EventTrigger>
+                                        <b:EventTrigger EventName="MouseEnter">
+                                            <b:InvokeCommandAction Command="{Binding DataContext.HighlightGameobject, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
+                                            <b:InvokeCommandAction Command="{Binding DataContext.ShowGameobjectInTarget, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
+                                            <ls:LSPlaySound Sound="UI_Shared_Hover"/>
+                                            <b:InvokeCommandAction Command="{Binding DataContext.SetDebugUIEntityCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding EntityHandle}"/>
+                                        </b:EventTrigger>
+                                        <b:EventTrigger EventName="MouseLeave">
+                                            <b:InvokeCommandAction Command="{Binding DataContext.ClearHighlightGameobject, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
+                                            <b:InvokeCommandAction Command="{Binding DataContext.HideGameobjectInTarget, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
+                                            <b:InvokeCommandAction Command="{Binding DataContext.ClearDebugUIEntityCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"/>
+                                        </b:EventTrigger>
+                                    </b:Interaction.Triggers>
+                                </Grid>
+                                <b:Interaction.Triggers>
+                                    <b:DataTrigger Binding="{Binding Path=DataContext.IsNew, ElementName=ElementContainer}" Value="True">
+                                        <b:ControlStoryboardAction >
+                                            <b:ControlStoryboardAction.Storyboard>
+                                                <Storyboard x:Name="AddToCombatAnimation">
+                                                    <DoubleAnimationUsingKeyFrames Storyboard.TargetName="CharacterContainer" Storyboard.TargetProperty="Width" >
+                                                        <EasingDoubleKeyFrame KeyTime="0" Value="0"/>
+                                                        <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="132">
+                                                            <EasingDoubleKeyFrame.EasingFunction>
+                                                                <CubicEase EasingMode="EaseOut"/>
+                                                            </EasingDoubleKeyFrame.EasingFunction>
+                                                        </EasingDoubleKeyFrame>
+                                                    </DoubleAnimationUsingKeyFrames>
+
+                                                    <DoubleAnimationUsingKeyFrames Storyboard.TargetName="CharacterContainer" 
+                                                                           Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[3].(TranslateTransform.Y)" >
+                                                        <EasingDoubleKeyFrame KeyTime="0:0:0" Value="300"/>
+                                                        <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="300"/>
+                                                        <EasingDoubleKeyFrame KeyTime="0:0:1.2" Value="0">
+                                                            <EasingDoubleKeyFrame.EasingFunction>
+                                                                <CubicEase EasingMode="EaseOut"/>
+                                                            </EasingDoubleKeyFrame.EasingFunction>
+                                                        </EasingDoubleKeyFrame>
+                                                    </DoubleAnimationUsingKeyFrames>
+
+                                                    <DoubleAnimationUsingKeyFrames Storyboard.TargetName="CharacterContainer" Storyboard.TargetProperty="(UIElement.Opacity)" >
+                                                        <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0"/>
+                                                        <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0"/>
+                                                        <EasingDoubleKeyFrame KeyTime="0:0:1.2" Value="1">
+                                                            <EasingDoubleKeyFrame.EasingFunction>
+                                                                <CubicEase EasingMode="EaseOut"/>
+                                                            </EasingDoubleKeyFrame.EasingFunction>
+                                                        </EasingDoubleKeyFrame>
+                                                    </DoubleAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </b:ControlStoryboardAction.Storyboard>
+                                        </b:ControlStoryboardAction>
+                                    </b:DataTrigger>
+
+                                    <b:DataTrigger Binding="{Binding ElementName=CharacterContainer,Path=Visibility}" Value="Collapsed">
+                                        <b:InvokeCommandAction Command="{Binding DataContext.RemoveFinishedCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
+                                    </b:DataTrigger>
+
+                                    <b:PropertyChangedTrigger Binding="{Binding ElementName=CharacterContainer, Path=Tag}">
+                                        <b:Interaction.Behaviors>
+                                            <b:ConditionBehavior >
+                                                <b:ConditionalExpression>
+                                                    <b:ComparisonCondition LeftOperand="{Binding Path=DataContext.IsNew, ElementName=ElementContainer}" Operator="Equal" RightOperand="True"/>
+                                                </b:ConditionalExpression>
+                                            </b:ConditionBehavior>
+                                        </b:Interaction.Behaviors>
+                                        <b:InvokeCommandAction Command="{Binding DataContext.AddFinishedCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
+                                    </b:PropertyChangedTrigger>
+
+                                    <b:DataTrigger Binding="{Binding ElementName=frame, Path=Tag}" Value="OverflowedIconAdded">
+                                        <b:ChangePropertyAction TargetName="ParticipantsScroll" PropertyName="Width">
+                                            <b:ChangePropertyAction.Value>
+                                                <Binding Path="DataContext.MaxVisibleIconsAmount" RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}"
+                                                         Converter="{StaticResource MultiplierConverter}" ConverterParameter="132"/>
+                                            </b:ChangePropertyAction.Value>
+                                        </b:ChangePropertyAction>
+                                    </b:DataTrigger>
+
+                                    <b:PropertyChangedTrigger Binding="{Binding Path=Tag, ElementName=ControlsContainer}">
+                                        <b:Interaction.Behaviors>
+                                            <b:ConditionBehavior >
+                                                <b:ConditionalExpression>
+                                                    <b:ComparisonCondition LeftOperand="{Binding Path=Tag, ElementName=frame}" Operator="Equal" RightOperand="OverflowedIconAdded"/>
+                                                </b:ConditionalExpression>
+                                            </b:ConditionBehavior>
+                                        </b:Interaction.Behaviors>
+                                        <b:ChangePropertyAction TargetName="ParticipantsScroll" PropertyName="Width">
+                                            <b:ChangePropertyAction.Value>
+                                                <Binding Path="DataContext.MaxVisibleIconsAmount" RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}"
+                                                         Converter="{StaticResource MultiplierConverter}" ConverterParameter="132"/>
+                                            </b:ChangePropertyAction.Value>
+                                        </b:ChangePropertyAction>
+                                        <b:ChangePropertyAction TargetName="ParticipantsScroll" PropertyName="ScrollToElement" Value="{Binding ElementName=CharacterContainer}"/>
+                                    </b:PropertyChangedTrigger>
+
+                                    <b:DataTrigger Binding="{Binding ElementName=Selected, Path=Tag}" Value="True">
+                                        <b:ChangePropertyAction TargetName="ParticipantsScroll" PropertyName="ScrollToElement" Value="{Binding ElementName=CharacterContainer}"/>
+                                    </b:DataTrigger>
+
+                                    <b:PropertyChangedTrigger Binding="{Binding Path=DataContext.CurrentCombatant.IsSelectedCharacter, ElementName=ElementContainer}">
+                                        <b:Interaction.Behaviors>
+                                            <b:ConditionBehavior >
+                                                <b:ConditionalExpression>
+                                                    <b:ComparisonCondition LeftOperand="{Binding Path=DataContext.CurrentCombatant.IsSelectedCharacter, ElementName=ElementContainer}" Operator="Equal" RightOperand="True"/>
+                                                </b:ConditionalExpression>
+                                            </b:ConditionBehavior>
+                                        </b:Interaction.Behaviors>
+                                        <b:ChangePropertyAction TargetName="ParticipantsScroll" PropertyName="ScrollToElement" Value="{Binding ElementName=CharacterContainer}"/>
+                                    </b:PropertyChangedTrigger>
+
+                                    <b:PropertyChangedTrigger Binding="{Binding ElementName=CharacterContainer, Path=Tag}">
+                                        <b:Interaction.Behaviors>
+                                            <b:ConditionBehavior >
+                                                <b:ConditionalExpression>
+                                                    <b:ComparisonCondition LeftOperand="{Binding Path=DataContext.CurrentCombatant.IsSelectedCharacter, ElementName=ElementContainer}" Operator="Equal" RightOperand="True"/>
+                                                    <b:ComparisonCondition LeftOperand="{Binding ElementName=CharacterContainer, Path=Tag}" Operator="Equal" RightOperand="Selected"/>
+                                                </b:ConditionalExpression>
+                                            </b:ConditionBehavior>
+                                        </b:Interaction.Behaviors>
+                                        <b:ChangePropertyAction TargetName="ParticipantsScroll" PropertyName="ScrollToElement" Value="{Binding ElementName=CharacterContainer}"/>
+                                    </b:PropertyChangedTrigger>
+
+                                    <b:PropertyChangedTrigger Binding="{Binding ElementName=CharacterContainer, Path=Tag}">
+                                        <b:Interaction.Behaviors>
+                                            <b:ConditionBehavior >
+                                                <b:ConditionalExpression>
+                                                    <b:ComparisonCondition LeftOperand="{Binding Path=DataContext.IsEnvironment, ElementName=ElementContainer}" Operator="Equal" RightOperand="True"/>
+                                                    <b:ComparisonCondition LeftOperand="{Binding ElementName=CharacterContainer, Path=Tag}" Operator="Equal" RightOperand="Selected"/>
+                                                </b:ConditionalExpression>
+                                            </b:ConditionBehavior>
+                                        </b:Interaction.Behaviors>
+                                        <b:ChangePropertyAction TargetName="ParticipantsScroll" PropertyName="ScrollToElement" Value="{Binding ElementName=CharacterContainer}"/>
+                                    </b:PropertyChangedTrigger>
+                                </b:Interaction.Triggers>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding ElementName=IconContainer, Path=Tag}" Value="Intro"/>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="False"/>
+                                        <Condition Binding="{Binding DataContext.Data.UIInputMethod, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Keyboard"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="KBIntroBS1">
+                                            <Storyboard FillBehavior="HoldEnd">
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                                                           Storyboard.TargetName="CharacterContainer">
+                                                    <DiscreteDoubleKeyFrame KeyTime="0" Value="0.8"/>
+                                                </DoubleAnimationUsingKeyFrames>
+
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                                                           Storyboard.TargetName="CharacterContainer">
+                                                    <DiscreteDoubleKeyFrame KeyTime="0" Value="0.8"/>
+                                                </DoubleAnimationUsingKeyFrames>
+                                                <ThicknessAnimationUsingKeyFrames Storyboard.TargetProperty="Margin">
+                                                    <DiscreteThicknessKeyFrame KeyTime="0" Value="-17, 0,-17,0"/>
+                                                </ThicknessAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="IconContainer" Storyboard.TargetProperty="Tag" >
+                                                    <DiscreteObjectKeyFrame KeyTime="0:0:0.1" Value="LoadedIntro"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </MultiDataTrigger.EnterActions>
+                                </MultiDataTrigger>
+                                
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding ElementName=IconContainer, Path=Tag}" Value="Intro"/>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="True"/>
+                                        <Condition Binding="{Binding DataContext.Data.UIInputMethod, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Keyboard"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="KBIntroBS2">
+                                            <Storyboard>
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                                                           Storyboard.TargetName="CharacterContainer">
+                                                    <DiscreteDoubleKeyFrame KeyTime="0" Value="1.0"/>
+                                                </DoubleAnimationUsingKeyFrames>
+
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                                                           Storyboard.TargetName="CharacterContainer">
+                                                    <DiscreteDoubleKeyFrame KeyTime="0" Value="1.0"/>
+                                                </DoubleAnimationUsingKeyFrames>
+
+                                                <ThicknessAnimationUsingKeyFrames Storyboard.TargetProperty="Margin">
+                                                    <DiscreteThicknessKeyFrame KeyTime="0" Value="-5,4,-5,0"/>
+                                                </ThicknessAnimationUsingKeyFrames>
+
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="IconContainer" Storyboard.TargetProperty="Tag" >
+                                                    <DiscreteObjectKeyFrame KeyTime="0:0:0.1" Value="LoadedIntro"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </MultiDataTrigger.EnterActions>
+                                </MultiDataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding ElementName=IconContainer, Path=Tag}" Value="Intro"/>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="False"/>
+                                        <Condition Binding="{Binding DataContext.Data.UIInputMethod, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Controller" />
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="PADIntroBS1">
+                                            <Storyboard FillBehavior="HoldEnd">
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                                                           Storyboard.TargetName="CharacterContainer">
+                                                    <DiscreteDoubleKeyFrame KeyTime="0" Value="1"/>
+                                                </DoubleAnimationUsingKeyFrames>
+
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                                                           Storyboard.TargetName="CharacterContainer">
+                                                    <DiscreteDoubleKeyFrame KeyTime="0" Value="1"/>
+                                                </DoubleAnimationUsingKeyFrames>
+                                                <ThicknessAnimationUsingKeyFrames Storyboard.TargetProperty="Margin">
+                                                    <DiscreteThicknessKeyFrame KeyTime="0" Value="-4,0,-4,0"/>
+                                                </ThicknessAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="IconContainer" Storyboard.TargetProperty="Tag" >
+                                                    <DiscreteObjectKeyFrame KeyTime="0:0:0.1" Value="LoadedIntro"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </MultiDataTrigger.EnterActions>
+                                </MultiDataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding ElementName=IconContainer, Path=Tag}" Value="Intro"/>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="True"/>
+                                        <Condition Binding="{Binding DataContext.Data.UIInputMethod, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Controller" />
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="PADIntroBS2">
+                                            <Storyboard>
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                                                           Storyboard.TargetName="CharacterContainer">
+                                                    <DiscreteDoubleKeyFrame KeyTime="0" Value="1.2"/>
+                                                </DoubleAnimationUsingKeyFrames>
+
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                                                           Storyboard.TargetName="CharacterContainer">
+                                                    <DiscreteDoubleKeyFrame KeyTime="0" Value="1.2"/>
+                                                </DoubleAnimationUsingKeyFrames>
+
+                                                <ThicknessAnimationUsingKeyFrames Storyboard.TargetProperty="Margin">
+                                                    <DiscreteThicknessKeyFrame KeyTime="0" Value="8,6,8,0"/>
+                                                </ThicknessAnimationUsingKeyFrames>
+
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="IconContainer" Storyboard.TargetProperty="Tag" >
+                                                    <DiscreteObjectKeyFrame KeyTime="0:0:0.1" Value="LoadedIntro"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </MultiDataTrigger.EnterActions>
+                                </MultiDataTrigger>
+
+                                <DataTrigger Binding="{Binding Path=DataContext.ShouldBeRemoved, ElementName=ElementContainer}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="RemoveParticipantAnimated" Storyboard="{StaticResource ParticipantAnimatedRemoveStoryboard}"/>
+                                    </DataTrigger.EnterActions>
+                                </DataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding CurrentCombatant.PlayerRelation}" Value="Player"/>
+                                        <Condition Binding="{Binding ElementName=frameCover, Path=Tag}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.Setters>
+                                        <Setter TargetName="frame" Property="Fill" Value="{StaticResource frameTint.Party}" />
+                                        <Setter TargetName="frame" Property="Stroke" Value="{StaticResource frameTint.Party}" />
+                                    </MultiDataTrigger.Setters>
+                                </MultiDataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding CurrentCombatant.PlayerRelation}" Value="Player"/>
+                                        <Condition Binding="{Binding ElementName=frameCover, Path=Tag}" Value="False"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.Setters>
+                                        <Setter TargetName="frame" Property="Fill" Value="{StaticResource frameTint.Coop}" />
+                                        <Setter TargetName="frame" Property="Stroke" Value="{StaticResource frameTint.Coop}" />
+                                    </MultiDataTrigger.Setters>
+                                </MultiDataTrigger>
+
+                                <!-- Add New Joined Frames -->
+                                <!-- Character is joined to the right -->
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding PreviousTeamMember, Converter={StaticResource NullToBoolTrueConverter}}" Value="True"/>
+                                        <Condition Binding="{Binding NextTeamMember, Converter={StaticResource NullToBoolTrueConverter}}" Value="False"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="frameCover" Property="Source" Value="{StaticResource DefaultFrameBegin}" />
+                                    <Setter TargetName="frame" Property="Data" Value="{StaticResource joinBeginFrame}" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Data" Value="{StaticResource joinBeginFrame}" />
+                                    <Setter TargetName="frameCover" Property="Margin" Value="0,0,0,0" />
+                                    <Setter TargetName="frame" Property="Margin" Value="6,7,-8,0" />
+                                    <Setter TargetName="frame" Property="Width" Value="128" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Margin" Value="6,6,-8,0" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Width" Value="128" />
+                                    <Setter TargetName="Selected" Property="Margin" Value="0,0,-8,0" />
+                                    <Setter TargetName="Selected" Property="Source" Value="{StaticResource DefaultFrameBeginSelected}" />
+                                    <Setter TargetName="SelectionArrowIcon" Property="Margin" Value="-8,0,0,-25" />
+                                    <Setter TargetName="ConcentrationGrid" Property="Margin" Value="-8,0,0,20" />
+                                    <Setter TargetName="turnTakenIndicator" Property="Margin" Value="0,0,22,3" />
+                                </MultiDataTrigger>
+
+                                <!-- Character is joined to the left -->
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding PreviousTeamMember, Converter={StaticResource NullToBoolTrueConverter}}" Value="False"/>
+                                        <Condition Binding="{Binding NextTeamMember, Converter={StaticResource NullToBoolTrueConverter}}" Value="True"/>
+                                        <Condition Binding="{Binding IsEnvironment}" Value="False"/>
+
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="frameCover" Property="Source" Value="{StaticResource DefaultFrameEnd}" />
+                                    <Setter TargetName="frame" Property="Data" Value="{StaticResource joinEndFrame}" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Data" Value="{StaticResource joinEndFrame}" />
+                                    <Setter TargetName="frameCover" Property="Margin" Value="-8,0,0,0" />
+                                    <Setter TargetName="frame" Property="Margin" Value="-2,7,0,0" />
+                                    <Setter TargetName="frame" Property="Width" Value="128" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Margin" Value="-2,6,0,0" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Width" Value="128" />
+                                    <Setter TargetName="Selected" Property="Margin" Value="-8,0,0,0" />
+                                    <Setter TargetName="Selected" Property="Source" Value="{StaticResource DefaultFrameEndSelected}" />
+                                    <Setter TargetName="turnTakenIndicator" Property="Margin" Value="0,0,20,3" />
+                                    <Setter TargetName="SelectionArrowIcon" Property="Margin" Value="-8,0,0,-25" />
+                                </MultiDataTrigger>
+
+                                <!-- Character is joined on both left and right-->
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding PreviousTeamMember, Converter={StaticResource NullToBoolTrueConverter}}" Value="False"/>
+                                        <Condition Binding="{Binding NextTeamMember, Converter={StaticResource NullToBoolTrueConverter}}" Value="False"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="frameCover" Property="Source" Value="{StaticResource DefaultFrameMiddle}" />
+                                    <Setter TargetName="frameCover" Property="Margin" Value="-8,0,-8,0" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Data" Value="{StaticResource joinMiddleFrame}" />
+                                    <Setter TargetName="frame" Property="Data" Value="{StaticResource joinMiddleFrame}" />
+                                    <Setter TargetName="frame" Property="Margin" Value="-2,7,-8,0" />
+                                    <Setter TargetName="frame" Property="Width" Value="136" />
+                                    <Setter TargetName="Selected" Property="Margin" Value="-8,0,-8,0" />
+                                    <Setter TargetName="Selected" Property="Source" Value="{StaticResource DefaultFrameMiddleSelected}" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Margin" Value="-2,6,-8,0" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Width" Value="136" />
+                                    <Setter TargetName="SelectionArrowIcon" Property="Margin" Value="-10,0,0,-25" />
+                                    <Setter TargetName="turnTakenIndicator" Property="Margin" Value="0,0,16,3" />
+                                </MultiDataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding ElementName=frameCover, Path=Tag}" Value="True"/>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="SelectionArrowIcon" Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+
+                                <DataTrigger Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="True">
+                                    <Setter TargetName="SelectionArrowIcon" Property="Source" Value="{StaticResource UpArrowInactive}"/>
+                                </DataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="True"/>
+                                        <Condition Binding="{Binding CurrentCombatant.IsSelectedCharacter}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.Setters>
+                                        <Setter TargetName="Selected" Property="Visibility" Value="Visible"/>
+                                        <Setter TargetName="SelectionArrowIcon" Property="Source" Value="{StaticResource UpArrowActive}"/>
+                                    </MultiDataTrigger.Setters>
+                                </MultiDataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="True"/>
+                                        <Condition Binding="{Binding Path=Tag,ElementName=IconContainer}" Value="LoadedIntro"/>
+                                        <Condition Binding="{Binding DataContext.IsCombatantListOverflowed, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.EnterActions>
+                                        <BeginStoryboard Storyboard="{StaticResource AddOverflowedStoryboard}"/>
+                                    </MultiDataTrigger.EnterActions>
+                                </MultiDataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="False"/>
+                                        <Condition Binding="{Binding Path=Tag,ElementName=IconContainer}" Value="LoadedIntro"/>
+                                        <Condition Binding="{Binding DataContext.IsCombatantListOverflowed, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="True"/>
+                                        <Condition Binding="{Binding ElementName=frame, Path=Tag}" Value="OverflowedIconAdded"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.EnterActions>
+                                        <BeginStoryboard Storyboard="{StaticResource RemoveOverflowedStoryboard}"/>
+                                    </MultiDataTrigger.EnterActions>
+                                </MultiDataTrigger>
+
+                                <DataTrigger Binding="{Binding DataContext.Data.UIInputMethod, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Controller" >
+                                    <Setter TargetName="StatusHolder" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+
+                                <!-- Hover States -->
+                                <DataTrigger Binding="{Binding Path=Tag, ElementName=Selected}" Value="True">
+                                    <Setter TargetName="FrameBGDisabled" Property="Visibility" Value="Visible" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Fill" Value="{StaticResource LS_tint100}" />
+                                    <Setter TargetName="FrameBGDisabled" Property="Opacity" Value="1" />
+                                </DataTrigger>
+
+                                <!-- Environment State -->
+                                <DataTrigger Binding="{Binding IsEnvironment}" Value="True">
+                                    <Setter TargetName="ConcentrationGrid" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="IconContainer" Property="Fill" Value="{StaticResource EnvironmentIcon}"/>
+                                    <Setter TargetName="frame" Property="Fill" Value="{StaticResource frameTint.Default}" />
+                                    <Setter TargetName="frame" Property="Stroke" Value="{StaticResource frameTint.Default}" />
+                                    <Setter TargetName="ElementContainer" Property="Margin" Value="0,2,-2,0" />
+                                </DataTrigger>
+
+                                <MultiDataTrigger >
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsEnvironment}" Value="True"/>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="ElementContainer" Property="Margin" Value="0,-2,-2,0" />
+                                </MultiDataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsEnvironment}" Value="True"/>
+                                        <Condition Binding="{Binding DataContext.Data.UIInputMethod, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Controller" />
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="ElementContainer" Property="Margin" Value="0,4,-2,0" />
+                                </MultiDataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsEnvironment}" Value="True"/>
+                                        <Condition Binding="{Binding DataContext.Data.UIInputMethod, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Controller" />
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="ElementContainer" Property="Margin" Value="0,-4,-2,0" />
+                                </MultiDataTrigger>
+
+                                <!-- Changing the size of the active portrait-->
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="True"/>
+                                        <Condition Binding="{Binding Path=Tag,ElementName=IconContainer}" Value="LoadedIntro"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.Setters>
+                                        <Setter TargetName="CharacterContainer" Property="Tag" Value="Selected"/>
+                                        <Setter TargetName="StatusHolder" Property="Visibility" Value="Collapsed" />
+                                    </MultiDataTrigger.Setters>
+                                    <MultiDataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="CurrentTurnBS" Storyboard="{StaticResource TurnBasedPortraitActive}" />
+                                    </MultiDataTrigger.EnterActions>
+                                </MultiDataTrigger>
+
+                                <!-- Changing the size of the inactive portrait -->
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding ElementName=IconContainer, Path=Tag}" Value="LoadedIntro"/>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="False"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="ExitCurrentTurnBS" Storyboard="{StaticResource TurnBasedPortraitInActive}" />
+                                    </MultiDataTrigger.EnterActions>
+                                </MultiDataTrigger>
+
+                                <!--Additional Animations to force newly added characters to show at enlarged size when they don't get a turn-->
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding PreviousTeamMember.IsCurrentTurn}" Value="True"/>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="False"/>
+                                        <Condition Binding="{Binding Path=Tag,ElementName=IconContainer}" Value="Active"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="CurrentTurnBSNew1" Storyboard="{StaticResource TurnBasedPortraitActive2}" />
+                                    </MultiDataTrigger.EnterActions>
+                                    <MultiDataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="CurrentTurnBSNew1" />
+                                    </MultiDataTrigger.ExitActions>
+                                </MultiDataTrigger>
+
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding NextTeamMember.IsCurrentTurn}" Value="True"/>
+                                        <Condition Binding="{Binding CurrentCombatant.IsCurrentTurn}" Value="False"/>
+                                        <Condition Binding="{Binding Path=Tag,ElementName=IconContainer}" Value="Active"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <MultiDataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="CurrentTurnBSNew2" Storyboard="{StaticResource TurnBasedPortraitActive2}" />
+                                    </MultiDataTrigger.EnterActions>
+                                    <MultiDataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="CurrentTurnBSNew2" />
+                                    </MultiDataTrigger.ExitActions>
+                                </MultiDataTrigger>
+
+
+                                <EventTrigger RoutedEvent="FrameworkElement.Unloaded">
+                                    <StopStoryboard BeginStoryboardName="KBIntroBS1"/>
+                                    <StopStoryboard BeginStoryboardName="KBIntroBS2"/>
+                                    <StopStoryboard BeginStoryboardName="PADIntroBS1"/>
+                                    <StopStoryboard BeginStoryboardName="PADIntroBS2"/>
+                                    <StopStoryboard BeginStoryboardName="CurrentTurnBS"/>
+                                    <StopStoryboard BeginStoryboardName="ExitCurrentTurnBS"/>
+                                    <StopStoryboard BeginStoryboardName="CurrentTurnBSNew1"/>
+                                    <StopStoryboard BeginStoryboardName="CurrentTurnBSNew2"/>
+                                </EventTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding CurrentPlayer.SelectedCharacter.CharacterMode}" Value="InFTB"/>
+                        <Condition Binding="{Binding Layout}" Value="Common"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ParticipantsListContainer" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding CurrentPlayer.SelectedCharacter.CharacterMode}" Value="InFTB"/>
+                        <Condition Binding="{Binding Layout}" Value="Left"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ParticipantsListContainer" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <!-- Center and show player 2's turn order when only player 2 is in FTB-->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding CurrentPlayer.SelectedCharacter.CharacterMode}" Value="InFTB"/>
+                        <Condition Binding="{Binding Layout}" Value="Right"/>
+                        <Condition Binding="{Binding IsSharedFTB}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ParticipantsListContainer" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ParticipantsListContainer" Property="Margin" Value="0,20,0,0"/>
+                    <Setter TargetName="ParticipantsListContainer" Property="HorizontalAlignment" Value="Center"/>
+                </MultiDataTrigger>
+                
+                <!-- Place the turn order in the center of the split screen -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding CurrentPlayer.SelectedCharacter.CharacterMode}" Value="InFTB"/>
+                        <Condition Binding="{Binding Layout}" Value="Left"/>
+                        <Condition Binding="{Binding IsSharedFTB}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ParticipantsListContainer" Property="HorizontalAlignment" Value="Right"/>
+                    <Setter TargetName="ParticipantsListContainer" Property="Margin">
+                        <Setter.Value>
+                            <MultiBinding Converter="{StaticResource CreateRectConverter}">
+                                <Binding Source="0"/>
+                                <Binding Source="20"/>
+                                <Binding Path="ActualWidth" ElementName="ParticipantsListContainer" Converter="{StaticResource MultiplierConverter}" ConverterParameter="-0.5"/>
+                                <Binding Source="0"/>
+                            </MultiBinding>
+                        </Setter.Value>
+                    </Setter>
+                </MultiDataTrigger>
+                
+                <!-- Center player 1's turn order when only player 1 is in FTB-->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding CurrentPlayer.SelectedCharacter.CharacterMode}" Value="InFTB"/>
+                        <Condition Binding="{Binding Layout}" Value="Left"/>
+                        <Condition Binding="{Binding IsSharedFTB}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ParticipantsListContainer" Property="Margin" Value="0,20,0,0"/>
+                    <Setter TargetName="ParticipantsListContainer" Property="HorizontalAlignment" Value="Center"/>
+                </MultiDataTrigger>
+
+                <!-- Show the turn order for player 2 when player 1 goes into character panels in shared FTB-->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSharedFTB}" Value="True" />
+                        <Condition Binding="{Binding Layout}" Value="Right" />
+                        <Condition Binding="{Binding Data.LocalPlayers[0].UIData.InPlayerPanels}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ParticipantsListContainer" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+                <!-- Move the turn order centered on player 1's screen when player 2 goes into character panel in shared FTB-->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSharedFTB}" Value="True" />
+                        <Condition Binding="{Binding Layout}" Value="Left" />
+                        <Condition Binding="{Binding Data.LocalPlayers[1].UIData.InPlayerPanels}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ParticipantsListContainer" Property="Margin" Value="0,20,0,0"/>
+                    <Setter TargetName="ParticipantsListContainer" Property="HorizontalAlignment" Value="Center"/>
+                </MultiDataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+</ls:UIWidget>

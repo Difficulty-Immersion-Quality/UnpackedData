@@ -1,0 +1,76 @@
+game.states.LOW_HouseOfHope_Hope = State{function ()
+
+    -----------------------------------------
+    -- Params
+
+    -----------------------------------------
+    -- Local variables
+    local hopeRescued = Flag("LOW_HouseOfHope_Event_HopeRescued_119342c6-2a7b-8c90-e96e-3f3a5930e91a")
+    local hopeRestrainedAnim = Animation("CUST_Restraint_02_Loop_b5fb925d-3f1a-4c81-9de9-39d1db23c817")
+    local raphaelDefeatedFlag = Flag("LOW_HouseOfHope_State_RaphaelIsDead_655d7d21-99a2-4138-9a7a-af1850932e75")
+    local hopeIsFree = Flag("LOW_HouseOfHope_Event_HopeInspirationPoints_0994faa0-e857-be17-0028-20702daa7cec")
+    local reachedFeastHall = false
+    local feastHallPoint = Entity("S_LOW_HouseOfHope_FeastHallWander01_f618ff1c-7468-4c63-a42e-e8a24cea206f")
+    -----------------------------------------
+    -- State nodes
+
+    self.Valid = function()
+        return true
+    end
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Restrained = Action{
+        function()
+            PlayLoopingAnimation(nil, {hopeRestrainedAnim}, nil)
+            --PlayAnimation(hopeRestrainedAnim, false, true)
+        end,        
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        CanEnter = function()
+            return not GetFlag(hopeRescued)
+        end,
+    }
+
+    nodes.ReachFeastHall = Action{
+        function()
+            if MoveTo(feastHallPoint, MovementSpeed.Walk, true, true, 1.0, 2.0, false, PathClimbingMode.Disabled) then
+                reachedFeastHall = true
+            end
+        end,
+        CanEnter = function()
+            return GetFlag(hopeIsFree) and not reachedFeastHall
+        end,
+    }
+
+
+    nodes.Wander = Proxy {
+        game.states.GEN_Wander,
+        params = {
+            trigger = [[S_LOW_HouseOfHope_FeastHallWander01_f618ff1c-7468-4c63-a42e-e8a24cea206f]],
+            wanderMin = 2,
+            wanderMax = 6,
+            sleepMin = 7,
+            sleepMax = 15},
+        CanEnter = function()
+            return reachedFeastHall
+        end,
+    }
+
+    nodes.Idle = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+  
+
+    -----------------------------------------
+    -- Events
+
+
+
+end}

@@ -1,0 +1,655 @@
+game.states.DEN_AttackOnDen_VictoryParents = State { function ()
+
+    modules = { "shared.moveto" }
+
+    description = [[The kids are at the main gate, either listening to Rikka talk or are sitting on the ground together.]]
+
+    params.position = {type = EParamType.String, required=true, default = nil, help=[[]]}
+
+    local kid = Entity("S_DEN_SnakeKid_02257c1c-bbec-4ae3-9bcb-31c75a0a982f")
+    local position = Entity(params.position)
+
+    nodes.WithKid = Action{
+        function()
+            if mod.moveto.MoveToPoint(position,MovementSpeed.Stroll,me) then
+                SteerTo(kid)
+            end
+        end,
+        Valid = function()
+            return not kid.Character.IsDead
+        end
+    }
+
+    nodes.WithoutKid = Action{
+        function()
+            if mod.moveto.MoveToPoint(position,MovementSpeed.Stroll,me) then
+                LookFrom(position)
+            end
+        end,
+        Valid = function()
+            return kid.Character.IsDead
+        end
+    }
+end}
+
+game.states.DEN_AttackOnDen_VictoryRangerTrader = State { function ()
+
+    description = [[The tiefling is caring for the oxes before the road.]]
+
+    modules = {"shared.moveto", "gustav.Act1.GroveRefugee"}
+
+    local ox1 = Entity("S_DEN_Mule_001_06ed1274-9d16-4320-b5ad-162fca5fb85d")
+    local ox2 = Entity("S_DEN_Mule_002_ac37baa6-624a-418d-a6ca-52ed9a77f00c")
+
+    local standPoint1 = Entity("S_DEN_VictoryOxCarePos_001_7029c2b0-5be4-4ad6-993f-c52e2af259de")
+    local standPoint2 = Entity("S_DEN_VictoryOxCarePos_002_b6222224-145a-458d-b8c3-e087fbfc29f4")
+    local standPoint3 = Entity("S_DEN_VictoryOxCarePos_003_aa15f220-848a-419c-bbbe-456f645c286c")
+    local standPoint4 = Entity("S_DEN_VictoryOxCarePos_004_7a5ee0dc-6c25-4d5f-a5a5-1c806ef7025e")
+    local standPoint5 = Entity("S_DEN_VictoryOxCarePos_005_2c9289dc-1055-44a5-8bb9-1b32bff7f69d")
+
+    local petAnimation = Animation("CUST_PettingOx_01_504cd5df-a26e-4813-a4e2-f048734bfe30")
+    local checkCartAnimation = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local organizeAnimation = Animation("CUST_Organizing_01_0e82e372-b47d-4d62-933b-068725cdfd06")
+    
+    local crateItems = {
+        Entity("S_DEN_LeaveApparel003_20edb5dd-5f04-4d7c-930e-c5f1b2217669"),
+    }
+    local goodsPos = {}
+    local canAD = false
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        mod.GroveRefugee.SetGoodsPos(crateItems, goodsPos)  
+    end
+    
+    -----------------------------------------
+    -- state section
+
+    nodes.Default = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.PetOx1 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint1,MovementSpeed.Stroll,me) then
+                SteerTo(ox1)
+                PlayAnimation(petAnimation, true, false)
+                Sleep(math.random(4,8))
+            end
+        end,
+        Valid = function()
+            return not ox1.Character.IsDead
+        end
+    }
+
+    nodes.Default.PetOx2 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint2,MovementSpeed.Stroll,me) then
+                SteerTo(ox2)
+                PlayAnimation(petAnimation, true, false)
+                Sleep(math.random(4,8))
+            end
+        end,
+        Valid = function()
+            return not ox2.Character.IsDead
+        end
+    }
+
+    nodes.Default.CheckCart = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint3,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint3)
+                PlayAnimation(checkCartAnimation, true, false)
+                Sleep(math.random(12,18))
+            end
+        end
+    }
+
+    nodes.Default.CheckWares = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint4,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint4)
+                PlayAnimation(organizeAnimation, true, false)
+                Sleep(math.random(12,18))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+        end
+    }
+
+    nodes.Default.Rest = Action {
+        function()
+            if mod.moveto.MoveToPoint(standPoint5,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint5)
+            end
+            Sleep(math.random(4,8))
+        end
+    }
+
+end}
+
+
+game.states.DEN_AttackOnDen_VictoryPickpocketTrader = State { function ()
+
+    description = [[This tiefling kid is checking their loot before the road.]]
+    modules = {"shared.moveto", "gustav.Act1.GroveRefugee"}
+
+
+    local standPoint1 = Entity("S_DEN_VictoryUnderlingPos_003_991aeea5-99de-4119-80c7-7b135ade3de0")
+    local standPoint2 = Entity("S_DEN_VictoryUnderlingPos_006_2b83e19b-df8c-44fc-8395-e46a7fb1e8d0")
+    local standPoint3 = Entity("S_DEN_VictoryUnderlingPos_007_efa2614e-5142-433a-8b9f-e035270b08b6")
+
+    local hideoutLeader = Entity("S_DEN_ThiefHideoutLeader_c8ab1ca6-96bb-467e-91c9-af87bc4d3925")
+
+    local packingAnimation = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local armsCrossedAnimation = Animation("CUST_ArmsCrossed_01_e52783f3-520a-4f34-aaca-8f48e3c9336f")
+    
+    local crateItems = {
+        Entity("S_DEN_KidLeavingCrate_001_a6146f73-a990-4a98-91a6-e0354cb55c87"),
+        Entity("S_DEN_KidLeavingCrate_005_bbee5a70-64d0-4676-b5f3-039f53bdbfea")
+    }
+    local goodsPos = {}
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        mod.GroveRefugee.SetGoodsPos(crateItems, goodsPos)  
+    end
+    
+    -----------------------------------------
+    -- state section
+
+    nodes.Default = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.InspectCrate1 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint1,MovementSpeed.Walk,me) then
+                LookFrom(standPoint1)
+                PlayAnimation(packingAnimation, true, false)
+                Sleep(math.random(4,8))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+        end
+    }
+
+    nodes.Default.InspectCrate2 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint2,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint2)
+                PlayAnimation(packingAnimation, true, false)
+                Sleep(math.random(4,8))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+        end
+    }
+
+    nodes.Default.InspectCrate3 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint3,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint3)
+                PlayAnimation(packingAnimation, true, false)
+                Sleep(math.random(4,8))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])
+        end
+    }
+
+
+    nodes.Default.Rest = Action {
+        function()
+            if mod.moveto.MoveToPoint(standPoint1,MovementSpeed.Stroll,me) then
+                SteerTo(hideoutLeader)
+                PlayAnimation(armsCrossedAnimation, false, false)
+            end
+            Sleep(math.random(4,8))
+        end
+    }
+
+end}
+
+game.states.DEN_AttackOnDen_VictoryRobberKid = State { function ()
+
+    description = [[This tiefling kid is checking their loot before the road.]]
+    modules = {"shared.moveto", "gustav.Act1.GroveRefugee"}
+
+
+    local standPoint1 = Entity("S_DEN_VictoryUnderlingPos_001_4b5e2c18-93a0-4bb7-a199-89b617ee83d5")
+    local standPoint2 = Entity("S_DEN_VictoryUnderlingPos_004_1926dd33-4deb-4c02-930d-1bb262f566ac")
+    local standPoint3 = Entity("S_DEN_VictoryUnderlingPos_005_ee7a3c5e-b54b-4392-a30e-cc763c7beaf6")
+
+    local hideoutLeader = Entity("S_DEN_ThiefHideoutLeader_c8ab1ca6-96bb-467e-91c9-af87bc4d3925")
+
+    local packingAnimation = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local armsCrossedAnimation = Animation("CUST_ArmsCrossed_01_e52783f3-520a-4f34-aaca-8f48e3c9336f")
+
+    local crateItems = {
+        Entity("S_DEN_KidLeavingCrate_003_558c54eb-fcdd-48bd-abf7-0d5c9047ac99"),
+        Entity("S_DEN_KidLeavingCrate_004_b5f0705a-8d50-47a8-a35e-8af7ceca8870"),
+        Entity("S_DEN_KidLeavingCrate_002_2e72fc1f-de15-4765-9f68-a08eb1540c39")
+    }
+    local goodsPos = {}
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        mod.GroveRefugee.SetGoodsPos(crateItems, goodsPos)  
+    end
+    
+    -----------------------------------------
+    -- state section
+
+    nodes.Default = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.InspectCrate1 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint1,MovementSpeed.Walk,me) then
+                LookFrom(standPoint1)
+                PlayAnimation(packingAnimation, true, false)
+                Sleep(math.random(4,8))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+        end
+    }
+
+    nodes.Default.InspectCrate2 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint2,MovementSpeed.Walk,me) then
+                LookFrom(standPoint2)
+                PlayAnimation(packingAnimation, true, false)
+                Sleep(math.random(4,8))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])
+        end
+    }
+
+    nodes.Default.InspectCrate3 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint3,MovementSpeed.Walk,me) then
+                LookFrom(standPoint3)
+                PlayAnimation(packingAnimation, true, false)
+                Sleep(math.random(4,8))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[3],goodsPos[3])
+        end
+    }
+
+
+    nodes.Default.Rest = Action {
+        function()
+            if mod.moveto.MoveToPoint(standPoint1,MovementSpeed.Walk,me) then
+                SteerTo(hideoutLeader)
+                PlayAnimation(armsCrossedAnimation, false, false)
+            end
+            Sleep(math.random(4,8))
+        end
+    }
+
+end}
+
+game.states.DEN_AttackOnDen_VictoryChef = State { function ()
+
+    description = [[The tiefling is helping others pick out weapons before they leave the Grove.]]
+
+    modules = {"shared.moveto", "gustav.Act1.GroveRefugee", "shared.dialog"}
+
+    local standPoint1 = Entity("S_DEN_VictoryChefPos_001_87282903-1455-4e9e-871a-16d7e1e8efbe")
+    local standPoint2 = Entity("S_DEN_VictoryChefPos_002_83d3dcd6-e7aa-4908-a07f-75b3d641de18")
+    local standPoint3 = Entity("S_DEN_VictoryChefPos_003_d18869e6-2cac-4f71-bba9-ca82034c4863")
+
+    local son = Entity("S_DEN_Tiefling_008_03b6fae4-d250-4ce9-9a01-19cb427deb17")
+
+    local withSonAD = Dialog("DEN_AttackOnDen_AD_ChefAndSonPacking_504c6f0f-a3e8-baf0-11a2-b1a1c9f0112f")
+
+    local organizeAnimation = Animation("CUST_Organizing_01_0e82e372-b47d-4d62-933b-068725cdfd06")
+    local withSonAnimation = Animation("CUST_SizingUpHeavyObject_01_721d00d0-32a0-488e-b1ec-3400ac2dbf62")
+
+    local crateItems = {
+        Entity("S_DEN_LeaveApparel007_0b5b2c91-2e9b-46a8-b999-6fa9b9d4a054"),
+        Entity("S_DEN_LeaveApparel005_cf2dd37e-5ef0-485d-afd8-bd299df3e23a"),
+    }
+    local goodsPos = {}
+
+    local canAD = true
+    
+    helpers.ResetADDelay = function(ADDelay)
+        StopTimer(me, "DEN_AttackOnDen_WithSonADTimer")
+        StartTimer(me, "DEN_AttackOnDen_WithSonADTimer", ADDelay, 0)
+        canAD = false
+    end
+
+    -----------------------------------------
+    -- state section
+
+    self.OnInit = function()
+        mod.GroveRefugee.SetGoodsPos(crateItems, goodsPos)  
+    end
+
+    nodes.Default = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.WithSon = Action {
+        function()
+            Sleep(math.random(1,2))
+            if mod.moveto.MoveToPoint(standPoint1,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint1)
+                PlayAnimation(withSonAnimation, false, false)
+                if (canAD and mod.dialog.IsSpeakerAvailable(son)) then
+                    helpers.ResetADDelay(40)
+                    StartAutomatedDialog(withSonAD, true, me, son)
+                end
+                Sleep(math.random(12,18))
+            end
+        end
+    }
+
+    nodes.Default.OrganizeCrate1 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint2,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint2)
+                PlayAnimation(organizeAnimation, true, false)
+                Sleep(math.random(6,9))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+        end
+    }
+
+    nodes.Default.OrganizeCrate2 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint3,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint3)
+                PlayAnimation(organizeAnimation, true, false)
+                Sleep(math.random(6,9))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_AttackOnDen_WithSonADTimer") then 
+            canAD = true
+        end
+    end
+end}
+
+game.states.DEN_AttackOnDen_VictoryBoredTrainee = State { function ()
+
+    description = [[This tiefling kid is bored with the instructions for kids.]]
+    modules = {"shared.moveto"}
+
+
+    local standPoint1 = Entity("S_DEN_VictoryKidPos_007_cc27f1b4-0e97-4bd5-a2ac-78771fbf50b3")
+    local standPoint2 = Entity("S_DEN_VictoryKidPos_001_607a61dd-89f2-4ef1-8874-463437f56e9e")
+
+
+    local boredAnimation = Animation("CUST_Listen_Bored_01_020103b1-f053-46e8-92c0-6e0347bcda1d")
+
+    
+    -----------------------------------------
+    -- state section
+
+    nodes.Default = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.WanderingEntrance = Proxy {
+        game.states.DEN_GeneralGroveStates_Wander, 
+        params = {
+            anchor = [[S_DEN_AttackLoneTraineePos_d7ffe16b-5f75-45bd-b645-979d5519b4f1]]
+        }
+    }
+
+    nodes.Default.AtThiefKids = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint1,MovementSpeed.Walk,me) then
+                LookFrom(standPoint1)
+                PlayAnimation(boredAnimation, true, false)
+                Sleep(math.random(8,12))
+            end
+        end,
+    }
+
+    nodes.Default.AtInstructions = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint2,MovementSpeed.Walk,me) then
+                LookFrom(standPoint2)
+                PlayAnimation(boredAnimation, true, false)
+                Sleep(math.random(4,8))
+            end
+        end,
+    }
+end}
+
+game.states.DEN_AttackOnDen_VictoryTrainer = State { function ()
+
+    description = [[Trainer acts as leader if Zevlor is dead, patrols gate otherwise.]]
+
+    local tieflingLeader = Entity("S_DEN_TieflingLeader_475200ee-cc3c-4dbe-84b1-1820c02ea26a")
+    
+    -----------------------------------------
+    -- state section
+
+    nodes.Default = Proxy{
+        game.states.DEN_GeneralGroveStates_Patrol,
+        params = {
+            lookFromNode = true,
+            spline = [[S_DEN_TrainerVictorySpline_14ba7787-8381-4a6b-b27e-208c55c614a0]],
+            waitAtNode = true,
+            waitMax = 7,
+            waitMin = 5,
+        },
+        Valid = function()
+            return not tieflingLeader.Character.IsDead
+        end
+    }
+
+    nodes.Leader = Proxy{
+        game.states.DEN_TieflingLeader_BackupLeader,
+        Valid = function()
+            return tieflingLeader.Character.IsDead
+        end
+    }
+end}
+
+game.states.DEN_TieflingLeader_BackupLeader = State { function ()
+
+    description = [[Cerys/Asharak Victory state (after Goblin Hunt or Attack on Den)]]
+
+    local victoryPoint = Entity([[S_DEN_LeaderVictoryPos_04e4c483-3125-40bc-9bfe-e9bfa589b6d7]])
+    local victoryWaitPoint = Entity([[S_DEN_VictoryLeaderWaitPos_5e1be949-9a96-471c-b218-87f9fd67c064]])
+    local victoryLookAt = Entity([[S_DEN_DenIntroPoint_8ad7a3e5-9f17-4ec3-8693-03be2ca571a2]])
+    local goblinHuntVictoryFlag = Flag("DEN_Refugees_State_LeadersAreDead_1e6a42ed-8313-4f46-57e2-20dbdb2df923")
+    local metPlayerFlag = Flag("DEN_GoblinHunt_Event_LeaderMetPlayer_097d69b7-7e59-49ba-830a-b2b7f950aec7")
+
+    nodes.WaitingForPlayer = Action {
+        function()
+            if not IsInDangerousSurfaceFor(victoryWaitPoint, me.Character)
+                and (GetDistanceTo(me, victoryWaitPoint) > 2.0) then
+                    try
+                        MoveTo(victoryWaitPoint, MovementSpeed.Stroll, false, false, 0.5, 1.5)
+                        LookFrom(victoryWaitPoint)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        SteerTo(victoryWaitPoint)
+                        Sleep(6.0)
+                        return
+                    end
+            else
+                LookFrom(victoryWaitPoint)
+            end
+            Sleep(6.0)
+        end,
+        Valid = function()
+            return GetFlag(goblinHuntVictoryFlag) and not GetFlag(metPlayerFlag)
+        end
+    }
+
+    nodes.Victory = Action {
+        function()
+            if not IsInDangerousSurfaceFor(victoryPoint, me.Character)
+                and (GetDistanceTo(me, victoryPoint) > 2.0) then
+                    try
+                        MoveTo(victoryPoint, MovementSpeed.Stroll, false, false, 0.5, 1.5)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(6.0)
+                    end
+            else
+                Sleep(6.0)
+            end
+            SteerTo(victoryLookAt, false, 5)
+            Sleep(3)
+        end
+    }
+end}
+
+game.states.DEN_AttackOnDen_VictoryLover = State { function ()
+
+    description = [[Taking care of lover and packing.]]
+    modules = {"shared.moveto", "gustav.Act1.GroveRefugee", "shared.dialog"}
+
+    local lover = Entity("S_GLO_YoungLover_01_dd9178e7-1e3f-43bc-8a38-666dfcac7d0c")
+
+    local standPoint1 = Entity("S_DEN_VictoryLoverPos_857a8104-5090-494f-ba70-bb34b2a5dd4b")
+    local standPoint2 = Entity("S_DEN_VictoryLoverPos_000_ab16fb22-b4da-412f-b500-75f00df73185")
+    local standPoint3 = Entity("S_DEN_VictoryLoverPos_001_20a70213-24f7-49e3-894f-c5a92d028855")
+
+    local packingAnimation = Animation("CUST_Organizing_01_0e82e372-b47d-4d62-933b-068725cdfd06")
+    local tendingWorldDialog = Dialog("BHVR_WRLD_DEN_AttackOnDen_TendingToSittingCharacter_928ee024-7794-e755-39c3-cc65700039b4")
+    local tendingWorldBehaviourTrigger = Entity("BHVR_WRLD_DEN_AttackOnDen_TendingToSittingCharacter_SceneTrigger_2431c338-ba6f-42fa-a403-6fa61f155cab")
+
+    local crateItems = {
+        Entity("S_DEN_LeaveApparel002_d61f3212-199b-423b-9b22-f25ad9084f77"),
+        Entity("S_DEN_KidLeavingCrate_007_ab3d79cf-f002-41f8-beaa-23639ec35305"),
+    }
+    local goodsPos = {}
+
+    local canAD = true
+
+    local careDialog = Dialog("DEN_AttackOnDen_AD_LoversWithoutGuard_3b9e61b5-64c4-8bba-98b6-763202153c76")
+
+    helpers.ResetADDelay = function(ADDelay)
+        StopTimer(me, "DEN_AttackOnDen_LoversTimer")
+        StartTimer(me, "DEN_AttackOnDen_LoversTimer", ADDelay, 0)
+        canAD = false
+    end
+    -----------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        mod.GroveRefugee.SetGoodsPos(crateItems, goodsPos)  
+    end
+    
+    -----------------------------------------
+    -- state section
+
+    nodes.Default = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.CareForLover = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint1,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint1)
+                if(canAD and mod.dialog.IsSpeakerAvailable(lover)) then
+                    helpers.ADDelay(120)
+                    StartAutomatedDialog(careDialog, true, me, lover)
+                end
+                StartBehaviorDialog(tendingWorldDialog, tendingWorldBehaviourTrigger.Trigger, true, me, lover)
+            end            
+        end,
+        Valid = function()
+            return not lover.Character.IsDead
+        end
+    }
+
+    nodes.Default.InspectCrate1 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint2,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint2)
+                PlayAnimation(packingAnimation, true, false)
+                Sleep(math.random(1,4))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+        end
+    }
+
+    nodes.Default.InspectCrate2 = Action {
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(standPoint3,MovementSpeed.Stroll,me) then
+                LookFrom(standPoint3)
+                PlayAnimation(packingAnimation, true, false)
+                Sleep(math.random(1,4))
+            end
+        end,
+        Valid = function()
+            return mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])
+        end
+    }
+
+    nodes.Default.Rest = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_AttackOnDen_LoversTimer") then 
+            canAD = true
+        end
+    end
+end}

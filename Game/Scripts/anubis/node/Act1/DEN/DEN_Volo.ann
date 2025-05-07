@@ -1,0 +1,54 @@
+game.states.DEN_Volo = State {function ()
+    
+    modules = { "shared.dialog" }
+
+    description = [[Behaviour of Volothamp Geddarm]]
+    local Bear = Entity("S_DEN_VoloBear_893c5f40-a760-4b04-bd86-c8fb8f5dd08a")
+    local WriteAnim = Animation("CUST_Writing_01_98fe16cb-1bbe-4046-bede-5d2336962b63")
+    local DenFlag = Flag("GLO_Volo_State_AtDen_c1bb44ab-c358-46d1-a261-34356bf1d071")
+    local AD = Dialog("DEN_VoloTravel_AD_0d2f69a3-51e5-d63b-c48e-edd3f552826d")
+    local ePlayerToGreet = nil
+    
+
+    self.Valid = function()
+        return CheckCurrentGameLevel("WLD_Main_A") and GetFlag(DenFlag,nil)
+    end
+
+    nodes = ImmediateSelector {}
+    nodes.GreetPlayer = Action{
+        function()
+            SteerTo(ePlayerToGreet)
+            Sleep(6.0)
+            ePlayerToGreet = nil
+        end,
+        CanEnter = function()
+            return ePlayerToGreet ~= nil
+        end
+    }
+
+    nodes.DENidle = Action {
+        function()
+            if(not Bear.Character.IsDead and GetDistance2DTo(me,Bear) <= 15.0) then
+                LookAtEntity(Bear, 3.0)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 40.0
+                },
+                me,
+                Bear
+            )
+            end
+            PlayAnimation(WriteAnim,false)
+            Sleep(math.random(3,7))
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "DEN_GreetPlayer" then
+            ePlayerToGreet = e.Params[1]
+            Interrupt()
+        end
+    end
+end}

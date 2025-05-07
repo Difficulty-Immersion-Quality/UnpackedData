@@ -1,0 +1,152 @@
+game.states.PLA_DyingHyena_EatClosestBody = State { function ()
+    description = [[Behaviour tree for gnoll devouring dead body.]]
+
+    modules = { "shared.math", "shared.dialog", "shared.params", "gustav.Act1.ZhentShipment" }
+
+    -----------------------------------------
+    -- params section
+    params.maxDistance = { type = EParamType.Number, required = false, default = 10.0, help = [[
+        Max distance for dead body searching
+    ]]}
+
+    params.deadBodies =  { type = EParamType.String, arrayRange = "..", required = false, default = {}, help = [[
+        List of dead bodies nearby
+    ]]}
+
+    params.eatingAD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play
+    ]]}
+
+    params.eatingAnim = {type = EParamType.String, required = true, help=[[
+        Eating animation to play
+    ]]}
+
+    params.anryAnim = {type = EParamType.String, required = true, help=[[
+        Anry anim animation to play before starting to eat a corpse
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local eatingAnim = nil
+    local anryAnim = nil
+    local eatingAD = nil
+    local body = nil
+    local basePos = nil
+    local deadBodies = nil
+    local bodySearchingFinished = false
+    local atBasePos = false
+    local needReloadBody = false
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        if params.eatingAD ~= nil then
+            eatingAD = Dialog(params.eatingAD)
+        end
+        if params.eatingAnim ~= nil then
+            eatingAnim = Animation(params.eatingAnim)
+        end
+        if params.anryAnim ~= nil then
+            anryAnim = Animation(params.anryAnim)
+        end
+        basePos = me.Position
+        deadBodies = mod.params.ParamArrayToEntityList(params.deadBodies)
+    end
+
+    self.OnLeave = function()
+        body = nil
+        atBasePos = false
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.ReturnToBasePos = Action {
+        function()
+            if GetDistance2DTo(me, basePos) > 2 then
+                try
+                    MoveTo(basePos, MovementSpeed.Walk)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "MoveTo failed")
+                    Sleep(mod.math.random(1, 3))
+                end
+            end
+            atBasePos = true
+        end,
+        Valid = function()
+            return not atBasePos
+        end
+    }
+
+    nodes.FindBody = Action {
+        function()
+            if deadBodies ~= nil and #deadBodies > 0 then
+                local index = mod.ZhentShipment.FindRandomEntityTo(me, deadBodies, params.maxDistance, #deadBodies > 1 and body or nil)
+                if index > 0 then
+                    body = deadBodies[index]
+                else
+                    Sleep(2)
+                end
+            end
+            needReloadBody = true
+            bodySearchingFinished = true
+        end,
+        Valid = function()
+            return not bodySearchingFinished
+        end
+    }
+
+    nodes.EatBody = Action {
+        function()
+            if body ~= nil and body.OnStage then
+                if needReloadBody then
+                    needReloadBody = false
+                    Sleep(mod.math.random(0, 1))
+                    try
+                        MoveTo(body, MovementSpeed.Walk, true, false, 1, 2)
+                        SteerTo(body)
+                        Sleep(mod.math.random(0, 0.5))
+                        PlayAnimation(anryAnim, true, false)
+                    catch ex if ls.CheckType(ex, error.MovementFailed) then
+                        body = nil
+                        bodySearchingFinished = false
+                        Sleep(3)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "PlayAnimationFailed (anryAnim)")
+                        Sleep(3)
+                    end
+                else
+                    SteerTo(body)
+                    try
+                        PlayAnimation(eatingAnim, false, true)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "PlayAnimationFailed (eatingAnim)")
+                        Sleep(3)
+                    end
+                    Sleep(mod.math.random(1.5, 3.5))
+                    if math.random() > 0.8 then
+                        if mod.dialog.IsSpeakerAvailable(me) and eatingAD ~= nil then
+                            StartAutomatedDialog(eatingAD, false, me)
+                        end
+                    elseif math.random() > 0.9 then
+                        bodySearchingFinished = false
+                    end
+                end
+            else
+                try
+                    Wander(5, 3.0, MovementSpeed.Walk, basePos)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Wander failed")
+                end
+                Sleep(2)
+                body = nil
+                bodySearchingFinished = false
+            end
+        end,
+        Valid = function()
+            return bodySearchingFinished
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+end}

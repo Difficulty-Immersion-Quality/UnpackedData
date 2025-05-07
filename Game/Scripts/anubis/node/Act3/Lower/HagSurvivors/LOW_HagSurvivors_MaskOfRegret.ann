@@ -1,0 +1,130 @@
+game.states.LOW_HagSurvivors_MaskOfRegret = State{function()
+
+    modules = {"shared.dialog"}
+
+    params.patrolSpline = {type=EParamType.String, required = false, default=nil, help=[[Patrol spline]]}
+    params.patrolPauseSleepDuration = { type = EParamType.Number, default = 9.0, help = [[Adds additional sleep time when patrol is interrupted with Sleep call]]}
+    local patrolPauseSleepDuration = params.patrolPauseSleepDuration
+    
+    local postFirstSurvivorsMeeting = Flag("LOW_HagSurvivors_State_MetSurvivors_e60750e6-26bc-4b80-a782-32dcc7d1e397")
+    local hagSpyAggroedFlag = Flag("LOW_HagSurvivors_State_HagSpyAggroed_74eca7c7-e83b-4f07-ac32-beac7cd5eff7")
+    local hagTrulyDeadFlag = Flag("LOW_BlushingMermaid_State_HagIsTrulyDead_c7c3e64d-dcfc-431b-a224-535a0c4a8e9c")
+
+    local patrolStopStanding = false
+    local patrolStopSitting = false
+    local patrolSpline = Spline(params.patrolSpline)    
+    local bench = Entity("S_LOW_HagSurvivors_MaskOfRegret_BehaviorBench_4cc9462c-c688-47f9-98aa-08040699ed9f")
+
+    local tiredAD = Dialog("LOW_HagSurvivors_AD_MaskedVictim1_Tired_ea18df80-6cb3-d535-10ba-b76a1f2245fe")
+    local lookoutAD = Dialog("LOW_HagSurvivors_AD_MaskedVictim1_LookOut_0f3f76f7-f048-1d2f-6113-e473c55ded0a")
+    local hagSpyBetrayalAD = Dialog("LOW_HagSurvivors_AD_MaskedVictim1_HagSpyBetrayal_beebb51b-9b17-0efe-5df6-1e240c283d07")
+    local relievedAD = Dialog("LOW_HagSurvivors_AD_MaskedVictim1_Relieved_8462c82c-8093-388a-e433-abf9ac3f4f05")
+
+    nodes.DefaultPosition = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_HagSurvivors_HydrangeaSpot_8309f144-86d3-485a-be57-3dc4d623c78d"
+        },
+        Valid = function()
+            return not GetFlag(postFirstSurvivorsMeeting)
+        end
+    }
+
+    nodes.Patrol = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = params.patrolSpline,
+            patrolSpeed = "Walk"         
+        },
+
+        Valid = function()
+            return not patrolStopStanding and not patrolStopSitting
+        end
+    }
+
+    nodes.PatrolStopStanding = Action {
+        CanEnter = function()
+            return patrolStopStanding
+        end,
+        function()
+            patrolStopStanding = false
+            LookFrom(patrolSpline)
+            Sleep(math.random(1,5)+patrolPauseSleepDuration)
+        end
+    }
+
+    nodes.PatrolStopSitting = Proxy {
+        CanEnter = function()
+            return patrolStopSitting
+        end,
+
+        OnEnter = function()
+            StartTimer(me, "LOW_HagSurvivors_MaskOfRegret_PatrolStopSittingTimer", math.random(10, 15), 0)
+        end,
+
+        game.states.Sit,
+        params = {
+            seat = "S_LOW_HagSurvivors_MaskOfRegret_BehaviorBench_4cc9462c-c688-47f9-98aa-08040699ed9f",
+            useSeatPositionAsFallBack = false,
+            sitOnGroundAsFallback = false,
+            maxSeatDist = 10.0
+        },
+
+        Valid = function()
+            return patrolStopSitting
+        end,
+
+        OnLeave = function()
+            EndRepose(me)
+            if(patrolStopSitting) then
+                patrolStopSitting = false
+            end
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(5.0)
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if(math.random() > 0.5) then
+            local AD
+            if(not GetFlag(hagSpyAggroedFlag) and not GetFlag(hagTrulyDeadFlag)) then
+                if(e.Event == "Tired") then
+                    AD = tiredAD
+                elseif(e.Event == "LookOut") then
+                    AD = lookoutAD
+                end
+            elseif(GetFlag(hagSpyAggroedFlag) and not GetFlag(hagTrulyDeadFlag)) then
+                AD = hagSpyBetrayalAD
+            elseif(GetFlag(hagTrulyDeadFlag)) then
+                AD = relievedAD
+            end
+
+            if(AD ~= nil) then
+                mod.dialog.StartCheckedAutomatedDialogImmediate(
+                            AD,
+                            {
+                                waitForCompletion = false
+                            },
+                            me
+                )
+            end
+        end
+        
+        if(e.Event == "Tired" and bench.Item.IsDestroyed == false) then
+            patrolStopSitting = true
+        else
+            patrolStopStanding = true
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_HagSurvivors_MaskOfRegret_PatrolStopSittingTimer") then
+            ShortPatrolInterrupt()
+            patrolStopSitting = false
+        end
+    end
+end}

@@ -1,0 +1,128 @@
+game.states.GOB_ChickenChase_Commentator = State{function()
+    description = [[State for the goblin-commentator of Chicken Chase game]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local fl_ChickeChaseInProgress = Flag("GOB_ChickenChase_State_PlayingChase_34de58e6-ca4a-d171-c1ac-32821bb036ed")
+    local fl_ChickenOnField = Flag("GOB_ChickenChase_State_ChickenOnField_afefbe32-abfc-4bd0-b0f7-d11206a2c7cc")
+    local fl_WaitingAfterGame = Flag("GOB_ChickenChase_State_WaitingAfterGame_041b8b86-c92d-4b34-be67-a035257a1cec")
+    local fl_WaitingBeforeGameNoAD = Flag("GOB_ChickenChase_State_WaitingForBallToLand_3ecdcf8e-c5eb-4fe7-93fd-daf9a6da1c1d")
+
+    local dlg_IntroAD = Dialog("GOB_ChickenChase_AD_Intro_3f404c0d-2cb9-8e97-85aa-5cfcabca613c")
+    local dlg_WaitingBeforeGame = Dialog("GOB_ChickenChase_AD_ArrivedOnBench_c359f795-2699-f4f0-04ad-e3155fa5d7cc")
+    local dlg_WaitingAfterGame = Dialog("GOB_ChickenChase_AD_CommentatorIsWaitingAfterChase_7254e5a9-6751-8592-4ed8-45addbd56747")
+    local dlg_GameAD = Dialog("GOB_ChickenChase_AD_Comments_8ec0b010-5d5c-e31a-4c54-be6dd909c64f")
+
+    local tr_DefaultPos = nil
+    local tr_GamePos = nil
+
+    local ch_RunningGoblin = nil
+
+    local b_CanDoAD = true
+    local s_CanDoADTimer = "GOB_ChickenChase_Commentator.Intro.AD.CanDoAD"
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(12.0, 18.0), 0)
+    end
+
+    self.OnInit = function()
+        tr_DefaultPos = FindEntity("S_GOB_Festivities_TableTrigger_Commentator_e5775bee-7cce-47d5-a894-74fad0931867")
+        tr_GamePos = FindEntity("S_GOB_ChickenChase_CommentatorPoint_0408bdfe-5b6e-4cec-8bd0-661b8c68968e")
+        ch_RunningGoblin = FindEntity("S_GOB_Festivities_Goblin_000_Melee_01_031e9fb7-136a-46c7-91d7-77ce3e20236a")
+    end
+
+    nodes.Intro = Action{
+        function()
+            try
+                MoveTo(tr_DefaultPos)
+                if CanSee(me, ch_RunningGoblin) then
+                    LookAtEntity(ch_RunningGoblin, 3.0)
+                else
+                    LookFrom(tr_DefaultPos)
+                end
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_DefaultPos failed")
+            end
+            if b_CanDoAD then
+                StartAutomatedDialog(dlg_IntroAD, true, me)
+                helpers.CanDoADReset()
+            end
+            Sleep(1.0)
+        end,
+
+        Valid = function()
+            return not GetFlag(fl_ChickeChaseInProgress) and not GetFlag(fl_WaitingAfterGame)
+        end
+    }
+
+    nodes.WaitingForPlayerNoAD = Action{
+        function()
+            try
+                MoveTo(tr_GamePos)
+                LookFrom(tr_GamePos)
+                Sleep(3.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_GamePos failed")
+                Sleep(0.5)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(fl_ChickeChaseInProgress) and not GetFlag(fl_ChickenOnField) and GetFlag(fl_WaitingBeforeGameNoAD)
+        end
+    }
+
+    nodes.WaitingForPlayer = Action{
+        function()
+            try
+                MoveTo(tr_GamePos)
+                LookFrom(tr_GamePos)
+                StartAutomatedDialog(dlg_WaitingBeforeGame, true, me)
+                mod.util.SleepRandom(5.0, 8.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_GamePos failed")
+                Sleep(0.5)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(fl_ChickeChaseInProgress) and not GetFlag(fl_ChickenOnField)
+        end
+    }
+
+    nodes.GameGoing = Action{
+        function()
+            try
+                MoveTo(tr_GamePos)
+                LookFrom(tr_GamePos)
+                if not IsInDialog(me, false) then
+                    StartAutomatedDialog(dlg_GameAD, true, me)
+                end
+                mod.util.SleepRandom(5.0, 8.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_GamePos failed")
+                Sleep(0.5)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(fl_ChickeChaseInProgress) and GetFlag(fl_ChickenOnField)
+        end
+    }
+
+    nodes.AfterGame = Action{
+        function()
+            Sleep(12.0)
+            StartAutomatedDialog(dlg_WaitingAfterGame, true, me)
+        end,
+
+        Valid = function()
+            return not GetFlag(fl_ChickeChaseInProgress) and GetFlag(fl_WaitingAfterGame)
+        end
+    }
+end}

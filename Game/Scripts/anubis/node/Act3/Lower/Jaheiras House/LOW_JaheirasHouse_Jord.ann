@@ -1,0 +1,224 @@
+game.states.LOW_JaheirasHouse_Jord = State{
+    function()
+        modules = {"shared.util", "shared.dialog", "shared.math", "shared.moveto"}
+
+        params.convoPartnerRion = {type=EParamType.String, required = false, default=nil, help=[[Conversation partners in case of the idle AD involving 3 guards]]}
+        params.convoPartnerJhessem = {type=EParamType.String, required = false, default=nil, help=[[Conversation partners in case of the idle AD involving 3 guards]]}
+
+        local bWait = false
+        local convoPartnerRion = Entity(params.convoPartnerRion)
+        local convoPartnerJhessem = Entity(params.convoPartnerJhessem)
+        local kitchenTrigger = Entity("S_LOW_JaheiraEldestSonKitchenTrigger_3b6dff28-e081-4447-9ea9-3e874af50afa")
+        local repairTrigger = Entity("S_LOW_JaheiraEldestSonRepairTrigger_e7f012be-87f6-465e-bb1c-77af312d8212")
+
+        local SiblingAD = Dialog("LOW_JaheirasHouse_AD_JordAndRion_17c60a81-617b-e57e-f0a6-52f626a6e129")
+        local JhessemAD = Dialog("LOW_JaheirasHouse_AD_GossipAboutBooks_2d18ec9f-a170-7543-92d9-2c9a852da2f2")
+        local SoloAD = Dialog("LOW_JaheirasHouse_AD_EldestSonFlowers_26a15ea9-0491-3e82-2a9b-40a9564a60c7")
+        local TryingAD = ""
+
+        local patrolSpline = Spline("S_LOW_JaheirasHouse_JordPatrolSpline_6b849159-c68d-465c-8021-d31437cc011f")
+        local targetSplineIndex = -1
+        local splineEvent = ""
+
+        local TendingGround = Animation("CUST_TendingToFlowersGround_01_1b739520-113d-4724-880f-7df89f3cba0a")
+        local TendingInfront = Animation("CUST_TendingToFlowers_01_f50058cb-0b06-4bb7-b834-e16adc905395")
+        local restAnim = Animation("CUST_Thinking_02_43a70168-2f92-42e5-bfc2-845adf4013f6")
+        local kitchenAnim = Animation("CUST_InspectWork_01_c3ade1d7-2469-4f1f-b8c4-4848e40c9ffc")
+
+        local JaheiraReturned = Flag("LOW_JaheirasHouse_State_JaheiraSpokeToFamily_efad8157-79e3-46a0-ae9e-3bb6f6a191d0")
+        local FigAlerted = Flag("LOW_JaheirasHouse_State_GranddaughterReadyToStart_f7aa5ec3-2f09-4069-ab3c-d74546c69ebe")
+        local canWalkOnSpline = true
+        local searchKitchen = false
+
+        local repairAnim = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+        
+        nodes.WaitNoAlert = Action {
+            CanEnter = function()
+                return GetFlag(JaheiraReturned) == false  
+            end,
+            function()
+                if not searchKitchen then
+                    if mod.moveto.MoveToPoint(repairTrigger, MovementSpeed.Stroll, me) then
+                        LookFrom(repairTrigger)
+                        PlayAnimation(repairAnim, false, true)
+                        Sleep(mod.math.random(10.0, 11.0))
+                        searchKitchen = true
+                    end                    
+                else
+                    if mod.moveto.MoveToPoint(kitchenTrigger, MovementSpeed.Stroll, me) then
+                        LookFrom(kitchenTrigger)
+                        PlayAnimation(restAnim, false, true)
+                        Sleep(mod.math.random(10.0, 11.0))
+                        searchKitchen = false
+                end
+                StopAnimation(me)
+            end
+        end,
+            Valid = function()
+                return not GetFlag(FigAlerted)
+            end
+        }
+    
+        nodes.WaitAlert = Action {
+            function()
+                Sleep(1.0)
+            end,
+            Valid = function()
+            return not GetFlag(JaheiraReturned)
+        end
+        }
+
+    nodes.Patroling = Action {
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Stroll, targetSplineIndex, false)
+        end,
+        OnLeave = function()
+            if canWalkOnSpline then
+                ShortPatrolInterrupt()
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end
+    }
+
+    nodes.PatrolPointIdle = Selector{
+        function(nodes)
+            if splineEvent == "Jhessem" then
+                return nodes.Jhessem
+            elseif splineEvent == "GroundTend" then
+                return nodes.GroundTend
+            elseif splineEvent == "NormalTend" then
+                return nodes.NormalTend
+            elseif splineEvent == "GroundTendAD" then
+                return nodes.GroundTendAD
+            elseif splineEvent == "NormalTendAD" then
+                return nodes.NormalTendAD
+            elseif splineEvent == "Wait" then
+                return nodes.Waiting -- todo
+            else
+                return nodes.Waiting
+            end
+        end,
+        Valid = function()
+            return not canWalkOnSpline and splineEvent ~= ""
+        end,
+        OnLeave = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end,
+        OnInterrupt = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.Jhessem = Action {
+        function()
+            LookFrom(patrolSpline)
+            if(convoPartnerJhessem ~= nil and mod.dialog.IsSpeakerAvailable(convoPartnerJhessem)) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                JhessemAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 10
+
+                },
+                me,
+                convoPartnerJhessem
+                )
+            else
+                Sleep(mod.math.random(2.1, 4.4))
+                canWalkOnSpline = true
+            end
+            Sleep(mod.math.random(0.5, 1.2))
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.NormalTendAD = Action {
+        function()
+            LookFrom(patrolSpline)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                SoloAD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 10
+
+                },
+                me
+            )
+            PlayAnimation(TendingInfront, false, true)
+            Sleep(mod.math.random(10.0, 11.0))
+            StopAnimation(me)
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.GroundTendAD = Action {
+        function()
+            LookFrom(patrolSpline)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                SoloAD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 10
+
+                },
+                me
+            )
+            PlayAnimation(TendingGround, false, true)
+            Sleep(mod.math.random(10.0, 11.0))
+            StopAnimation(me)
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.GroundTend = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(1)
+            PlayAnimation(TendingGround)
+            Sleep(mod.math.random(0.5, 1.2))
+            StopAnimation(me)
+            canWalkOnSpline = true
+        end
+    }
+    nodes.PatrolPointIdle.NormalTend = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(1)
+            PlayAnimation(TendingInfront)
+            Sleep(mod.math.random(1.2, 2.5))
+            StopAnimation(me)
+            canWalkOnSpline = true
+        end,
+    }
+
+    nodes.PatrolPointIdle.Waiting = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(mod.math.random(3.1, 5.9))
+            PlayAnimation(restAnim)
+            Sleep(mod.math.random(1.2, 2.5))
+            canWalkOnSpline = true
+        end,
+    }
+
+
+
+
+
+
+----------------------EVENT--------------------
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        if e.Event ~= nil and e.Event ~= "" then
+            canWalkOnSpline = false
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+end
+    }

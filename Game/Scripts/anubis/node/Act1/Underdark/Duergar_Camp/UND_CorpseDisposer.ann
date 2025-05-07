@@ -1,0 +1,224 @@
+game.states.UND_CorpseDisposer_Leader = State{
+    function()
+        modules = {"shared.util", "shared.math", "shared.dialog"}
+
+        description = [[Corpse disposer's behaviour at the duergar camp.]]
+
+        --------------------------------------------------------
+        -- Local values
+        local slackingOffFlag = Flag("UND_DeadInTheWater_State_StartSlackingOff_5191a962-d516-479e-97f5-27eb743658dd")
+
+        local idlePos = Entity("S_UND_CorpseDisposer_Leader_IdlePos_9d94e883-420b-47bb-ad6e-e50d5adaa34a")
+
+        local shoveCorpseFlag = Flag("UND_DeadInTheWater_Event_CorpseToTheWater_65a804d5-7dd1-d847-060b-3f1821119a89")
+        local shovePosOffset = Vector3(1.5, 0.0, 0.0)
+        local corpsesTrigger = Entity("S_UND_DuergarCamp_CorpseArea_5b960ecb-01cd-4597-bb5a-b421a91d4a45")
+        local corpse = Entity("S_UND_DuergarCamp_DeadDeepGnome_TrinketOwner_142dadb4-96c1-474f-aa57-9acfecb5947c")
+
+
+        local complainingPos = Entity("S_UND_CorpseDisposer_LeaderComplainingPos_6d588b0f-308f-4f8b-bbae-a6d58e518891")
+        local complainingAD = Dialog("UND_DeadInTheWater_AD_DuergarsComplaining_ee87b720-d4d2-c8f4-c012-8a565a9fd975")
+        local AD = Dialog("UND_DeadInTheWater_AD_DuergarsSlackingOff_b2f0df06-ae0b-5636-84d8-9bde5d3fd198")
+        local companion = Entity("S_UND_CorpseDisposer_000_e63c75ba-8e0a-4292-a04a-a5d4c8a2816c")
+        --------------------------------------------------------
+
+        --------------------------------------------------------
+        -- Nodes
+        nodes = ImmediateSelector{}
+
+        nodes.Action_ShoveCorpse = Action{
+            function()
+                local shovePos = corpse.Position + shovePosOffset
+
+                -- Move to position from where to throw the corpse towards the river
+                if not IsInDangerousSurfaceFor(shovePos, me.Character) then
+                    local moveResult = MoveTo(shovePos, MovementSpeed.Walk, true, false, 0.0, 0.5, false)
+
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        SteerTo(corpse)
+                        Sleep(3.0)
+                    else
+                        -- Shove corpse
+                        UseSpell("Target_UND_DeadInTheWater_Shove", corpse, nil, nil, nil, true, true, true, true)
+                        Sleep(3.0)
+                    end
+                else
+                    SteerTo(corpse)
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return  GetFlag(shoveCorpseFlag) and
+                        corpse.OnStage           and
+                        IsInTrigger(corpse, corpsesTrigger.Trigger)
+            end
+        }
+
+        nodes.Action_SlackingOff = Action{
+            function()
+
+                if not IsInDangerousSurfaceFor(idlePos, me.Character) then
+                    local moveToResult = MoveTo(idlePos, MovementSpeed.Walk, true, false, 0.0, 1.0, false)
+                    if moveToResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveToFailed")
+                        Sleep(3.0)
+                    else
+                        LookAtEntity(companion, 3.0)
+                        Sleep(3.0)
+                    end
+                else
+                    Sleep(3.0)
+                end
+
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        minDelay = math.random(6.0, 12.0),
+                        cullingDistance = 20.0,
+                        waitForCompletion = false
+                    },
+                    me, companion)
+            end,
+            Valid = function()
+                return GetFlag(slackingOffFlag)
+            end
+        }
+
+        nodes.Action_Complaining = Action{
+            function()
+
+                if not IsInDangerousSurfaceFor(complainingPos, me.Character) then
+                    local moveResult = MoveTo(complainingPos, MovementSpeed.Walk, true, false, 0.0, 0.5, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        Sleep(3.0)
+                    else
+                        LookAtEntity(companion, 3.0)
+                        Sleep(3.0)
+                    end
+                else
+                    Sleep(3.0)
+                end
+
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    complainingAD,
+                    {
+                        minDelay = math.random(6.0, 9.0),
+                        cullingDistance = 20.0,
+                        waitForCompletion = false
+                    },
+                    me, companion)
+            end
+        }
+        --------------------------------------------------------
+    end
+}
+
+game.states.UND_CorpseDisposer_Companion = State{
+    function()
+        modules = {"shared.util"}
+
+        description = [[Corpse disposer's behaviour at the duergar camp.]]
+
+        --------------------------------------------------------
+        -- Local values
+        local slackingOffFlag = Flag("UND_DeadInTheWater_State_StartSlackingOff_5191a962-d516-479e-97f5-27eb743658dd")
+
+        local idlePos = Entity("S_UND_CorpseDisposer_000_IdlePos_8111e604-d028-43da-a78f-d48c5de0b33e")
+
+        local shoveCorpsesFlag = Flag("UND_DeadInTheWater_State_PartyNearDisposers_e7bd2df6-2cb4-4bab-bf10-ed603a3d1dee")
+        local shovePosOffset = Vector3(1.5, 0.0, 0.0)
+        local corpsesTrigger = Entity("S_UND_DuergarCamp_CorpseArea_5b960ecb-01cd-4597-bb5a-b421a91d4a45")
+        local corpses = { Entity("S_UND_DuergarCamp_DeadDeepGnome_ToTheRiver_000_ad8fa893-c3b2-4259-993c-d069815b3702"),
+                          Entity("S_UND_DuergarCamp_DeadDeepGnome_ToTheRiver_001_9a4f3e82-c6fb-4a16-a1a1-d62d4ba9c8ef"),
+                          Entity("S_UND_DuergarCamp_DeadDeepGnome_000_ba34f54d-c3b0-4a72-b936-c44984ef2b40"),
+                          Entity("S_UND_DuergarCamp_DeadDeepGnome_001_4d7453d5-46d8-4ebd-806b-c346b52e223d"),
+                          Entity("S_UND_DuergarCamp_DeadDeepGnome_002_2405be53-e275-42a8-ad7c-b61e692c882f"),
+                          Entity("S_UND_DuergarCamp_DeadDeepGnome_003_bd8002d9-dc85-4fe3-b07a-08c9892f5171")}
+        --------------------------------------------------------
+
+        helpers.IsCorpse = function(corpse)
+            local i = 1
+            while i <= #corpses do
+                if corpse == corpses[i] then
+                    return i
+                end
+                i = i + 1
+            end
+            return -1
+        end
+
+        --------------------------------------------------------
+        -- Nodes
+        nodes = ImmediateSelector{}
+
+        nodes.Action_StandAtTrigger = Action{
+            function()
+                if not IsInDangerousSurfaceFor(idlePos, me.Character) then
+                    local moveToResult = MoveTo(idlePos, MovementSpeed.Walk, true, false, 0.0, 1.0, false)
+                    if moveToResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveToFailed")
+                        SteerTo(idlePos)
+                        Sleep(3.0)
+                    else
+                        LookFrom(idlePos)
+                        WaitForInterrupt()
+                    end
+                end
+            end,
+            Valid = function()
+                return GetFlag(slackingOffFlag)
+            end
+        }
+
+        nodes.Action_ShoveCorpse = Action{
+            function()
+                -- Get corpse to shove and from where it should be done
+                local corpseToShove = corpses[1]
+                local shovePos = corpseToShove.Position + shovePosOffset
+
+                -- Move to position
+                if not IsInDangerousSurfaceFor(shovePos, me.Character) then
+                    local moveResult = MoveTo(shovePos, MovementSpeed.Walk, true, false, 0.0, 0.5, false)
+
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        SteerTo(corpseToShove)
+                        Sleep(3.0)
+                    else
+                        -- Shove corpse towards the river
+                        UseSpell("Target_UND_DeadInTheWater_Shove", corpseToShove, nil, nil, nil, true, true, true, true)
+                        mod.util.SleepRandom(9.0,16.0)
+                    end
+                else
+                    SteerTo(corpseToShove)
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(shoveCorpsesFlag) and #corpses > 0
+            end
+        }
+
+        nodes.Action_Fallback = Action{
+            function()
+                WaitForInterrupt()
+            end
+        }
+        --------------------------------------------------------
+
+        --------------------------------------------------------
+        -- Events
+        events.LeftTrigger = function(e)
+            -- Corpses need to be inside a specific area for this to work.
+            if e.Trigger == corpsesTrigger then
+                local corpseIndex = helpers.IsCorpse(e.Target)
+                if corpseIndex ~= -1 then
+                    table.remove(corpses, corpseIndex)
+                end
+            end
+        end
+        --------------------------------------------------------
+    end
+}

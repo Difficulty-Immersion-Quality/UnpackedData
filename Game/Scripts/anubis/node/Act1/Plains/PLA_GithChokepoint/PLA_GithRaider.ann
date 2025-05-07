@@ -1,0 +1,47 @@
+game.states.PLA_GithRaider = State { function ()
+    description = [[Generic gith raiders responding to orders and not doing much]]
+
+    params.defaultIdle = {
+        type = EParamType.State, required = false,
+        default = StateRef{game.states.PLA_GithCorpseSearch},
+        help = [[Use the default point or pass a state here.]]
+    }
+
+    -----------------------------------------
+    -- Local variables
+    local anim = Animation([[CUST_CombatReadyImpatient_01_Loop_5d1167c5-e6db-41f7-9851-5ff7407d5ba5]])
+    local startAnimation = true
+    local dragonEventFlag = Flag("GLO_GithChokepoint_DragonEventEnd_ded1de27-9668-418f-93f6-4b5a789b5640")
+
+    -----------------------------------------
+    -- State nodes
+    nodes.PostDragon = Proxy {
+        CanEnter = function()
+            return GetFlag(dragonEventFlag)
+        end,
+        params.defaultIdle
+    }
+
+    nodes.Wait = Action {
+        OnEnter = function()
+            SetDoNotFace(me, true)
+        end,
+        function()
+            Sleep(3)
+            if startAnimation then
+                PlayAnimation(anim, false, true)
+                startAnimation = false
+            end
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+            startAnimation = true
+            SetDoNotFace(me, false)
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+            startAnimation = true
+            SetDoNotFace(me, false)
+        end
+    }
+end}

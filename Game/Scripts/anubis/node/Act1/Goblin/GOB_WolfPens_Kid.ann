@@ -1,0 +1,241 @@
+game.states.GOB_WolfPens_Kid = State{function()
+
+    modules = { "shared.util" }
+
+    params.commentAD = { type = EParamType.String, required = true,
+        help = [[Comment AD.]]
+    }
+    params.defaultPosition = { type = EParamType.String, required = true, help = [[default position]]}
+    params.pause = {type = EParamType.Number, default = 8.0, help = "Pause between actions"}
+
+    local tr_WolfPensArea = Entity("S_GOB_WolfPens_SUB_a9a4a7c2-87c6-4031-9859-7eddb0528ff6")
+    local commentAD = Dialog(params.commentAD)
+    local throwAnimation = Animation("CUST_Throw_01_9a575c6e-4775-4f4c-80dd-067f9c6f96db")    
+    local flagPrisonerDied = Flag("GOB_WolfPens_State_PrisonerDied_a1bd5b3f-c4fe-4fac-b3b6-52367e97b545")
+    local flagBearEnraged = Flag("GOB_WolfPens_State_BearEnraged_9b6a106b-6431-42b9-8ac1-48ba2a79e46b")
+    local fl_MainDialogEnded = Flag("GOB_WolfPens_State_MainDialogEnded_5dd5553d-8a15-583c-40e8-911d960a18d0")
+    local parent = Entity("S_GOB_WolfPens_Parent_6e4dd891-7bfe-4656-a9a0-ecf0916fd8f0")
+    local prisoner = Entity("S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323")
+    local pause = 8.0
+    local canTalk = true
+    local ADDelayTime = 18.0
+    local defaultPosition = Entity(params.defaultPosition)
+    local cage = Entity("S_GOB_WolfPens_Cage_002_59104718-66ff-418a-b7ac-46696a1e2fc3")
+    local anim_PointAtDeadBody = Animation("CUST_DeadBodyPoint_01_e0896993-d787-4211-94b3-1916c4543ddb")
+
+    -- Do nothing if leader is transformed
+    nodes.Action_DoNothing = Action{
+        function()
+            DebugText(me, "Action_DoNothing")
+            Sleep(pause)
+        end,
+        CanEnter = function()
+            return (GetFlag(fl_MainDialogEnded)
+            or not IsInTrigger(me, tr_WolfPensArea.Trigger))
+            and not GetFlag(flagPrisonerDied)
+        end
+    }
+
+    nodes.Action_ComeCloserToPrisonerInCage = Action{
+        function()
+            MoveTo(defaultPosition, MovementSpeed.Walk)
+            LookFrom(defaultPosition)
+        end,
+        CanEnter = function()
+            return GetFlag(flagPrisonerDied) and IsInTrigger(prisoner, cage.Trigger) and GetDistance2DTo(me, defaultPosition) > 2.0
+        end
+    }
+
+    nodes.Action_ComeCloserToPrisonerOutsideCage = Action{
+        function()
+            try
+                MoveTo(prisoner,MovementSpeed.Walk)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                SteerTo(prisoner)
+            end
+
+        end,
+        CanEnter = function()
+            return GetFlag(flagPrisonerDied) and not IsInTrigger(prisoner, cage.Trigger) and GetDistance2DTo(me, prisoner) > 6.0
+        end
+    }
+
+    -- Selector for when the leader is dead
+    nodes.Selector_LeaderDied = Selector{
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        CanEnter = function()
+            return GetFlag(flagPrisonerDied)
+                and IsInTrigger(prisoner, tr_WolfPensArea.Trigger)
+        end
+    }
+
+    nodes.Selector_LeaderDied.Action_Point = Action{
+        function()
+            SteerTo(prisoner)
+            PlayAnimation(anim_PointAtDeadBody, true)
+            mod.util.SleepRandom(3.0, 6.0)
+        end
+    }
+
+    nodes.Selector_LeaderDied.Action_DoNothing = Action{
+        function()
+            DebugText(me, "Selector_LeaderDied.Action_DoNothing")
+            SteerTo(prisoner)
+            Sleep(2.0)
+        end
+    }
+
+    nodes.Selector_LeaderDied.Action_Talk = Action{
+        function()
+            DebugText(me, "Selector_LeaderDied.Action_Talk")
+            SteerTo(prisoner)
+            if not IsInDialog(me, false) then
+                StartAutomatedDialog(commentAD, true, me)
+                canTalk = false
+                StartTimer(me, "PreventADFromPlaying", ADDelayTime, 0)
+                SetEntityEvent(parent, "GOB_WolfPens_Event_KidSaidSomething", me)
+            end
+            Sleep(pause)
+        end,
+        CanEnter = function()
+            return canTalk
+        end
+    }
+
+    nodes.Selector_LeaderDied.Action_ThrowRocks = Action{
+        function()
+            DebugText(me, "Selector_LeaderDied.Action_ThrowRock")
+            SteerTo(prisoner)
+            PlayAnimation(throwAnimation)
+            Sleep(2.0)
+        end
+    }
+
+    -- Default selector
+    nodes.Selector_Default = Selector{
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Selector_Default.Action_DoNothing = Action{
+        function()
+            DebugText(me, "Selector_Default.Action_DoNothing")
+            Sleep(pause)
+        end
+    }
+
+    nodes.Selector_Default.Action_Talk = Action{
+        function()
+            DebugText(me, "Selector_Default.Action_Talk")
+            if not IsInDialog(me, false) then
+                StartAutomatedDialog(commentAD, true, me)
+                canTalk = false
+                StartTimer(me, "PreventADFromPlaying", ADDelayTime, 0)
+                SetEntityEvent(parent, "GOB_WolfPens_Event_KidSaidSomething", me)
+            else
+                DebugText(me, "Can't talk for some reason!")
+            end
+            Sleep(pause)
+        end,
+        CanEnter = function()
+            return canTalk
+        end
+    }
+
+    nodes.Selector_Default.Action_ThrowRock = Action{
+        function()
+            DebugText(me, "Selector_Default.Action_ThrowRock")
+            PlayAnimation(throwAnimation)
+            SetEntityEvent(parent, "GOB_WolfPens_Event_KidThrewARock", me)
+            Sleep(pause)
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            Sleep(pause)
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "PreventADFromPlaying" then
+            canTalk = true
+        end
+    end
+
+end
+}
+
+game.states.GOB_WolfPens_Kid_Combat = State{function()
+
+    -- Combat behaviour
+    --[[
+        During the combat the kids want to run away and call for help
+        The kid without the dialog will attack if goes first, only runs away after hearing the kid with the dialog
+        The kid with the dialog starts the dialog and runs away immediately
+    ]]--
+
+    params.RunningAwayDialog = { type = EParamType.String, required = false, help = [[AD that the kid shouts when running away]]
+    }
+
+    local tr_WolfPensArea = Entity("S_GOB_WolfPens_SUB_a9a4a7c2-87c6-4031-9859-7eddb0528ff6")
+    local tr_EscapePosition = Entity("S_GOB_WolfPens_ExitTrigger_4b4793d0-c2c3-4f7d-8fe7-b5fd0092ff11")
+    local dlg_RunningAway = Dialog(params.RunningAwayDialog)
+    local fl_KidShouted = Flag("GOB_WolfPens_State_KidShouted_878c6fda-e875-45b9-8543-a5607813894e")
+
+    self.Valid = function()
+        return me.IsInCombat
+            and me.CanActInCombatTeamTurn
+            and IsInTrigger(me, tr_WolfPensArea.Trigger)
+    end
+
+    nodes.State_InWolfPens = Action{
+        function()
+
+            DebugText(me, "State_InWolfPens")
+            if not GetFlag(fl_KidShouted) then
+                StartAutomatedDialogImmediate(dlg_RunningAway, me)
+                Sleep(2.0)
+            else
+                Sleep(1.0)
+            end
+            if not HasActiveStatus(me, "DISENGAGE") then
+                UseSpell("Shout_GOB_WolfPens_Disengage_GoblinKid", me, nil, nil, nil, true, true, true)
+            end
+            Sleep(1.0)
+            if not HasActiveStatus(me, "DASH") then
+                UseSpell("Shout_GOB_WolfPens_Dash_GoblinKid", me, nil, nil, nil, true, true, true)
+            end
+
+            if me.Character.CanMove then
+                local moveResult = MoveTo(tr_EscapePosition, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+                if moveResult == error.MovementError.None then
+                    DebugText(me, "MOVEMENT FINISHED")
+                    EndTurn(me)
+                else
+                    DebugText(me, "Movement to the exit failed!")
+                    Sleep(1.0)
+                    EndTurn(me)
+                end
+            else
+                EndTurn(me)
+            end
+
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, tr_EscapePosition) > 3.0
+        end
+    }
+
+    nodes.State_Fallback = Action{
+        function()
+            DebugText(me, "State_Fallback")
+            WaitForInterrupt()
+        end
+    }
+
+end
+}

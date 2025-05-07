@@ -1,0 +1,162 @@
+game.states.TWN_ArabellaPowers_Arabella = State {
+    function()
+
+        modules = {"shared.dialog", "shared.moveto", "shared.math"}
+
+        local anchor = Entity("S_TWN_ArabellaPowers_ArabellaSpot_27a59458-175f-48b1-b611-205755d1645b")
+        local lookAnim = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7")
+        local waveAnim = Animation("CUST_Waving_01_8d682545-f220-4db9-b170-71b1c22c6f2f")
+        local AD = Dialog("TWN_ArabellasPowers_AD_Arabella_bd3d6563-93d9-e966-a641-70304328d475")
+        local waveFlag = Flag("(FLAG)TWN_ArabellaPowers_Event_SpottedPlayers_24f93cfe-7e12-4809-aa1c-2ce2a5c61a41")
+
+        nodes.MoveToAnchor = Action {
+            function()
+                DebugText(me, "TWN_ArabellaPowers_Arabella - moving to anchor")
+                mod.moveto.MoveToPoint(anchor, MovementSpeed.Walk,me)
+                --MoveTo(anchor, MovementSpeed.Walk)
+                DebugText(me, "TWN_ArabellaPowers_Arabella - finished moving to anchor")
+            end,
+            CanEnter = function()
+                return GetDistance2DTo(me,anchor) >= 5 and not GetFlag(waveFlag, me)
+            end
+        }
+
+        nodes.WanderAD = Action {
+            function()
+                DebugText(me, "TWN_ArabellaPowers_Arabella - wandering")
+                Wander(4.0, 3.0, MovementSpeed.Walk, anchor)
+                DebugText(me, "TWN_ArabellaPowers_Arabella - starting dialog")
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 15.0,
+                    },
+                    me)
+                DebugText(me, "TWN_ArabellaPowers_Arabella - sleeping")
+                Sleep(mod.math.random(2, 4))
+                PlayAnimation(lookAnim, true, false)
+            end,
+            CanEnter = function()
+                return GetDistance2DTo(me,anchor) < 5 and not GetFlag(waveFlag, me)
+            end
+        }
+
+        nodes.SpottedPlayer = Action {
+            function()
+                PlayAnimation(waveAnim, true, false)
+                Sleep(mod.math.random(8, 11))
+                ClearFlag(waveFlag, me)
+            end,
+            CanEnter = function()
+                return GetFlag(waveFlag, me)
+            end
+        }
+
+    end
+}
+
+game.states.CAMP_Arabella_Act2 = State {
+    function()
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    -- local anchor = Entity("S_CAMP_ArabellaPoint_fc6970fe-cc1a-407f-894f-a1cd5382e309")
+    local AD = Dialog("CAMP_ArabellaPowers_AD_ArabellaJergal_f2d765d3-a77f-5699-20de-42c809db93c5")
+    local withers = Entity("S_GLO_JergalAvatar_0133f2ad-e121-4590-b5f0-a79413919805")
+    local sceneDone = Flag("TWN_ArabellasPowers_State_HasTaughtSpell_197eac6a-55b4-448b-aa6e-da7598333776")
+    local campNight = Flag("GLO_CAMP_State_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+    local upsetFlag = Flag("TWN_ArabellasPowers_State_ToldParentsDead_cc1a3765-9334-cb88-602f-49ca052de39c")
+    local upsetAnimStart = Animation("CUST_AngryCrossedArms_01_Start_ebe25dce-800f-4662-ac29-ba2adc5b36b6")
+    local upsetAnimLoop = Animation("CUST_AngryCrossedArms_01_Loop_4b288089-9bad-477b-909b-10aa79e5a370")
+    local upsetAnimEnd = Animation("CUST_AngryCrossedArms_01_End_ee31d4d8-00bd-4ff7-8c21-c1698022c4e2")
+
+
+    nodes.MoveToAnchor = Action {
+        function()
+            DebugText(me, "CAMP_Arabella_Act2 - moving to anchor")
+            mod.moveto.MoveToPoint(withers,MovementSpeed.Walk,me)
+            --MoveTo(anchor, MovementSpeed.Walk)
+            DebugText(me, "CAMP_Arabella_Act2 - steering to Jergal")
+            SteerTo(withers)
+        end,
+        CanEnter = function()
+            return GetDistance2DTo(me,withers) >= 3 
+        end
+    }
+
+    nodes.IdleAD = Action {
+        function()
+            DebugText(me, "CAMP_Arabella_Act2 - starting dialog")
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 25.0,
+                },
+                me,
+                withers)
+            DebugText(me, "CAMP_Arabella_Act2 - sleeping")
+            Sleep(6)
+        end,
+        CanEnter = function()
+
+            return GetDistance2DTo(me,withers) < 3 and not GetFlag(campNight) and not GetFlag(upsetFlag) and not GetFlag(sceneDone)
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end,
+    }
+
+    nodes.Upset = Action {
+        function()
+            PlayLoopingAnimation(upsetAnimStart, {upsetAnimLoop}, upsetAnimEnd, true)
+        end,
+
+        CanEnter = function()
+            return GetDistance2DTo(me,withers) < 3 and GetFlag(upsetFlag) and not getFlag(sceneDone)
+        end
+    }
+        
+
+     -- Clear current behaviour on day<->night transition
+    events.FlagSet = function(e)
+        if e.Flag == campNight.Guid then
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == campNight.Guid then
+            Interrupt()
+        end
+    end
+
+    end
+}
+
+game.states.GLO_Arabella_Act2 = State {
+    function()
+
+        local incamp = Flag("TWN_ArabellaPowers_State_MovedToCamp_b5f880bc-272e-e8a3-8ca1-b3dca3bce191")
+
+        nodes.BeforeCamp = Proxy { 
+            game.states.TWN_ArabellaPowers_Arabella,
+            CanEnter = function()
+                return not GetFlag(incamp)
+            end
+        }
+
+        nodes.InCamp = Proxy { 
+            game.states.CAMP_Arabella_Act2,
+            CanEnter = function()
+                return GetFlag(incamp)
+            end
+        }
+
+    end
+}
+

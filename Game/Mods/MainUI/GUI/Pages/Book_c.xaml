@@ -1,0 +1,370 @@
+﻿<ls:UIWidget
+    x:Name="Book_c"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:ls="clr-namespace:ls;assembly=Code"
+    xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+    xmlns:System="clr-namespace:System;assembly=mscorlib"
+    mc:Ignorable="d"
+    ls:UIWidget.UseCustomDC="True"
+    ls:UIWidget.ContextName="Book">
+    <ls:UIWidget.Resources>
+        <ResourceDictionary Source="/Core;component/Library/BookTemplates.xaml"/>
+    </ls:UIWidget.Resources>
+
+    <ls:UIWidget.Template>
+        <ControlTemplate>
+            <ControlTemplate.Resources>
+                <ControlTemplate x:Key="ZeroEditionBookTemplate" TargetType="Control">
+                    <Grid>
+                        <Viewbox x:Name="BookViewBox" Stretch="Uniform">
+                            <Grid x:Name="Book" HorizontalAlignment="Center" Tag="" VerticalAlignment="Center" Margin="50,0,0,140">
+
+                                <b:Interaction.Triggers>
+                                    <b:EventTrigger EventName="Loaded">
+                                        <b:ChangePropertyAction TargetName="Book" PropertyName="Tag" Value="{Binding Data.IsCameraSplit}" />
+                                    </b:EventTrigger>
+                                </b:Interaction.Triggers>
+
+                                <Grid x:Name="BookImageContainer" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,0" Height="2160">
+                                    <Image x:Name="BookBackground" VerticalAlignment="Center" Margin="0,0,0,0" Source="{StaticResource DefaultBookBackground}" Stretch="None" RenderTransformOrigin="0.5,0.5">
+                                        <Image.RenderTransform>
+                                            <ScaleTransform ScaleX="1" ScaleY="1" />
+                                        </Image.RenderTransform>
+                                        <Image.Effect>
+                                            <DropShadowEffect BlurRadius="90" ShadowDepth="10" Color="Black" />
+                                        </Image.Effect>
+                                    </Image>
+                                
+                                <ls:LSBook x:Name="BookMain" Text="{Binding BookFullText}" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,0,0,0"
+                                       Template="{StaticResource DefaultBookTemplate}"/>
+</Grid>
+                                <Image x:Name="TabBackground" Source="{StaticResource PageTabBackground}" Stretch="None" Margin="400,0,0,240" VerticalAlignment="Bottom"
+                                   HorizontalAlignment="Center" Visibility="Collapsed">
+                                    <Image.RenderTransform>
+                                        <ScaleTransform ScaleX="1.1" ScaleY="1.1" />
+                                    </Image.RenderTransform>
+                                </Image>
+                            </Grid>
+                        </Viewbox>
+
+                        <StackPanel x:Name="ControllerHints" Style="{StaticResource  ButtonHint.Container.Center}">
+                            <ContentControl x:Name="TurnPage" Template="{StaticResource ButtonHint}" Tag="LeftStickX">
+                                <TextBlock DockPanel.Dock="Left" Text="{Binding Source='hecc6388dgad05g47edg82e1gdaaf3dd759b9',Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource BtnHint.TextStyle}"/>
+                            </ContentControl>
+                            <ContentControl x:Name="ScrollNavigateHint" Template="{StaticResource ButtonHint}" Tag="RightStickY">
+                                <TextBlock DockPanel.Dock="Left" Text="{Binding Source='h5c405124g4622g4197g9239gb635f371bf0e',Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource BtnHint.TextStyle}"/>
+                            </ContentControl>
+                            <ls:LSButton x:Name="PickupBtn" BoundEvent="UIAccept" 
+                                 Command="{Binding PickUpCommand}" 
+                                 ContentTemplate="{StaticResource ControllerButtonHint}" 
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIAccept, Converter={StaticResource FindInputEventConverter}}"
+                                 Tag="{Binding Source='h6e6da963gfbc2g4748g992bg703411291b7b', Converter={StaticResource TranslatedStringConverter}}"/>
+
+                            <ls:LSButton x:Name="ControllerCloseBtn" Style="{StaticResource ControllerButton}" DataContext="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICancel'}" Content="{Binding Source='h6fefa28bg2149g4cacga071gd95b236b2d0b',Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.CustomEvent, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="CloseWidget" SoundID="UI_Shared_Cancel" Margin="20,0"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding SourceItem, Converter={StaticResource NullToBoolTrueConverter}}" Value="True">
+                            <Setter TargetName="PickupBtn" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SourceItem.HasCanPickUpFlag}" Value="False">
+                            <Setter TargetName="PickupBtn" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SourceItemOwner.IsPlayableCharacter}" Value="True">
+                            <Setter TargetName="PickupBtn" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding HasPrevPage, ElementName=BookMain}" Value="False"/>
+                                <Condition Binding="{Binding HasNextPage, ElementName=BookMain}" Value="False"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+                        </MultiDataTrigger>
+
+                        <DataTrigger Binding="{Binding BookType}" Value="None">
+                            <Setter TargetName="TabBackground" Property="Visibility" Value="{Binding ElementName=BookMain,Path=HasNextPage,Converter={StaticResource BoolToVisibleConverter}}"/>
+                        </DataTrigger>
+
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding BookType}" Value="None"/>
+                                <Condition Binding="{Binding Layout}" Value="Common"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="ScrollNavigateHint" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="BookBackground" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="1.1" ScaleY="1.1"/>
+                                </Setter.Value>
+                            </Setter>
+                        </MultiDataTrigger>
+
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Layout}" Value="Left" />
+                                <Condition Binding="{Binding CurrentPlayer.UIData.InPlayerPanels}" Value="False" />
+                                <Condition Binding="{Binding Path=Tag, ElementName=Book}" Value="False"/>
+                            </MultiDataTrigger.Conditions>
+
+                            <Setter TargetName="BookBackground" Property="Source" Value="{StaticResource DefaultBookBackground}"/>
+                            <Setter TargetName="BookMain" Property="Template" Value="{StaticResource ScrollBookTemplate}"/>
+                            <Setter TargetName="BookImageContainer" Property="HorizontalAlignment" Value="Left"/>
+                            <Setter TargetName="BookImageContainer" Property="Margin" Value="-170,0,0,0"/>
+                            <Setter TargetName="BookImageContainer" Property="Width" Value="1600"/>
+                            <Setter TargetName="Book" Property="Width" Value="1800"/>
+                            <Setter TargetName="Book" Property="Margin" Value="0,0,0,140"/>
+                            <Setter TargetName="Book" Property="HorizontalAlignment" Value="Left"/>
+                            <Setter TargetName="BookViewBox" Property="HorizontalAlignment" Value="Left"/>
+                            <Setter TargetName="BookViewBox" Property="Stretch" Value="None"/>
+                            <Setter TargetName="BookMain" Property="Margin" Value="-160,0,0,0"/>
+                            <Setter TargetName="BookBackground" Property="Margin" Value="-160,0,0,0"/>
+                            <Setter TargetName="BookBackground" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="0.85" ScaleY="0.85"/>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter TargetName="TabBackground" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="ControllerHints" Property="Style" Value="{StaticResource ButtonHint.Container.Left}"/>
+                        </MultiDataTrigger>
+
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Layout}" Value="Right" />
+                                <Condition Binding="{Binding CurrentPlayer.UIData.InPlayerPanels}" Value="False" />
+                                <Condition Binding="{Binding Path=Tag, ElementName=Book}" Value="False"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="BookBackground" Property="Source" Value="{StaticResource DefaultBookBackground}"/>
+                            <Setter TargetName="BookMain" Property="Template" Value="{StaticResource ScrollBookTemplate}"/>
+                            <Setter TargetName="BookImageContainer" Property="HorizontalAlignment" Value="Right"/>
+                            <Setter TargetName="BookImageContainer" Property="Margin" Value="0,0,-170,0"/>
+                            <Setter TargetName="BookImageContainer" Property="Width" Value="1600"/>
+                            <Setter TargetName="Book" Property="Width" Value="1800"/>
+                            <Setter TargetName="Book" Property="Margin" Value="0,0,0,140"/>
+                            <Setter TargetName="Book" Property="HorizontalAlignment" Value="Right"/>
+                            <Setter TargetName="BookViewBox" Property="HorizontalAlignment" Value="Right"/>
+                            <Setter TargetName="BookViewBox" Property="Stretch" Value="None"/>
+                            <Setter TargetName="BookBackground" Property="Margin" Value="0,0,-160,0"/>
+                            <Setter TargetName="BookMain" Property="Margin" Value="0,0,-160,0"/>
+                            <Setter TargetName="BookBackground" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="-0.85" ScaleY="0.85"/>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter TargetName="TabBackground" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="ControllerHints" Property="Style" Value="{StaticResource ButtonHint.Container.Right}"/>
+                        </MultiDataTrigger>
+
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding BookType}" Value="None"/>
+                                <Condition Binding="{Binding Layout}" Value="Right"/>
+                                <Condition Binding="{Binding Path=Tag, ElementName=Book}" Value="False"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="BookBackground" Property="Margin" Value="0,70,-1060,0"/>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="BookBackground" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="-0.92" ScaleY="0.92"/>
+                                </Setter.Value>
+                            </Setter>
+                        </MultiDataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding BookType}" Value="None"/>
+                                <Condition Binding="{Binding Layout}" Value="Left"/>
+                                <Condition Binding="{Binding Path=Tag, ElementName=Book}" Value="False"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="BookBackground" Property="Margin" Value="-1110,70,0,0"/>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="BookBackground" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="0.92" ScaleY="0.92"/>
+                                </Setter.Value>
+                            </Setter>
+                        </MultiDataTrigger>
+
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding BookType}" Value="None"/>
+                                <Condition Binding="{Binding Layout}" Value="Left"/>
+                                <Condition Binding="{Binding Path=Tag, ElementName=Book}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="ScrollNavigateHint" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="BookBackground" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="1.1" ScaleY="1.1"/>
+                                </Setter.Value>
+                            </Setter>
+                        </MultiDataTrigger>
+
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding BookType}" Value="None"/>
+                                <Condition Binding="{Binding Layout}" Value="Right"/>
+                                <Condition Binding="{Binding Path=Tag, ElementName=Book}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="ScrollNavigateHint" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="BookBackground" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="1.1" ScaleY="1.1"/>
+                                </Setter.Value>
+                            </Setter>
+                        </MultiDataTrigger>
+
+                        <!--PaperSheet -->
+                        <DataTrigger Binding="{Binding BookType}" Value="PaperSheet">
+                            <Setter TargetName="BookBackground" Property="Source" Value="{StaticResource PaperSheetBackground}"/>
+                            <Setter TargetName="BookMain" Property="Template" Value="{StaticResource PaperSheetBookTemplate}"/>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                        <!--PaperStack -->
+                        <DataTrigger Binding="{Binding BookType}" Value="PaperStack">
+                            <Setter TargetName="BookBackground" Property="Source" Value="{StaticResource PaperStackBackground}"/>
+                            <Setter TargetName="BookMain" Property="Template" Value="{StaticResource PaperSheetBookTemplate}"/>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding BookType}" Value="ScrollA">
+                            <Setter TargetName="BookBackground" Property="Source" Value="{StaticResource ScrollABackground}"/>
+                            <Setter TargetName="BookMain" Property="Template" Value="{StaticResource ScrollBookTemplate}"/>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding BookType}" Value="ScrollB">
+                            <Setter TargetName="BookBackground" Property="Source" Value="{StaticResource ScrollBBackground}"/>
+                            <Setter TargetName="BookMain" Property="Template" Value="{StaticResource ScrollBookTemplate}"/>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding BookType}" Value="TabletA">
+                            <Setter TargetName="BookBackground" Property="Source" Value="{StaticResource TabletABackground}"/>
+                            <Setter TargetName="BookMain" Property="Template" Value="{StaticResource TabletBookTemplate}"/>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+
+                        <DataTrigger Binding="{Binding BookType}" Value="TabletB">
+                            <Setter TargetName="BookBackground" Property="Source" Value="{StaticResource TabletBBackground}"/>
+                            <Setter TargetName="BookMain" Property="Template" Value="{StaticResource TabletBookTemplate}"/>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding BookType}" Value="TabletC">
+                            <Setter TargetName="BookBackground" Property="Source" Value="{StaticResource TabletCBackground}"/>
+                            <Setter TargetName="BookMain" Property="Template" Value="{StaticResource TabletBookTemplate}"/>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                        <!--GithDisc-->
+                        <DataTrigger Binding="{Binding BookType}" Value="GithDisc">
+                            <Setter TargetName="BookBackground" Property="Source" Value="{StaticResource GithDiscBackground}"/>
+                            <Setter TargetName="BookBackground" Property="Effect" Value="{x:Null}" />
+                            <Setter TargetName="BookMain" Property="Margin" Value="0,0,110,200"/>
+                            <Setter TargetName="BookMain" Property="Template" Value="{StaticResource GithDiscBookTemplate}"/>
+                            <Setter TargetName="TurnPage" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </ControlTemplate.Resources>
+            
+            <Grid x:Name="Root" Background="{DynamicResource LS_PanelBackground}">
+
+                <ContentControl x:Name="ScreenBGSideGradient" Template="{StaticResource BackgroundSideGradientLeft}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Visibility="Collapsed" />
+
+                <Grid>
+                    <Image x:Name="Vignette" Source="{StaticResource MainPaneVignette}" Stretch="Fill" Opacity="0.6"/>
+                    <Control x:Name="Content" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+                        <Control.Template>
+                            <ControlTemplate TargetType="Control">
+                                <ControlTemplate.Resources>
+                                    <Style x:Key="BaseTextStyle" TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource LS_tint20}"/>
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="FontWeight" Value="Bold"/>
+                                        <Setter Property="FontFamily" Value="{StaticResource DefaultFont}"/>
+                                    </Style>
+
+                                    <Style x:Key="ArticleStyle" TargetType="TextBlock" BasedOn="{StaticResource BaseTextStyle}">
+                                        <Setter Property="FontSize" Value="{StaticResource IntermediateFontSize}"/>
+                                        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+                                        <Setter Property="LineHeight" Value="{StaticResource IntermediateFontSizeLineHeight}"/>
+                                        <Setter Property="Margin" Value="10"/>
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="ls:TextBlockFormatter.SourceText" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ControlTemplate.Resources>
+
+                                <Grid>
+                                    <Viewbox Stretch="Uniform" Height="1900">
+                                        <Control Template="{StaticResource GazetteTemplate}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-50,0,50" />
+                                    </Viewbox>
+                                    <StackPanel x:Name="ControllerHints" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,30,30">
+                                        <ls:LSButton x:Name="PickupBtn" BoundEvent="UIAccept" 
+                                            Command="{Binding PickUpCommand}" 
+                                            ContentTemplate="{StaticResource ControllerButtonHint}" 
+                                            Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIAccept, Converter={StaticResource FindInputEventConverter}}"
+                                            Tag="{Binding Source='h6e6da963gfbc2g4748g992bg703411291b7b', Converter={StaticResource TranslatedStringConverter}}"/>
+
+                                        <ls:LSButton x:Name="ControllerCloseBtn" Style="{StaticResource ControllerButton}" DataContext="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICancel'}" Content="{Binding Source='h6fefa28bg2149g4cacga071gd95b236b2d0b',Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.CustomEvent, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="CloseWidget" SoundID="UI_Shared_Cancel"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <ControlTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding SourceItem, Converter={StaticResource NullToBoolTrueConverter}}" Value="True">
+                                        <Setter TargetName="PickupBtn" Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SourceItem.HasPickUpFlag}" Value="False">
+                                        <Setter TargetName="PickupBtn" Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SourceItemOwner.IsPlayableCharacter}" Value="True">
+                                        <Setter TargetName="PickupBtn" Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Control.Template>
+                    </Control>
+                </Grid>
+            </Grid>
+
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding Edition}" Value="0">
+                    <Setter TargetName="Content" Property="Template" Value="{StaticResource ZeroEditionBookTemplate}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Layout}" Value="Left">
+                    <Setter TargetName="Root" Property="Background" Value="Transparent"/>
+                    <Setter TargetName="Vignette" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding Layout}" Value="Right">
+                    <Setter TargetName="Root" Property="Background" Value="Transparent"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="Vignette" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Template" Value="{StaticResource BackgroundSideGradientRight}"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding CurrentPlayer.UIData.InPlayerPanels}" Value="True">
+                    <Setter TargetName="Root" Property="Background" Value="{DynamicResource LS_PanelBackground}"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+
+    <b:Interaction.Triggers>
+        <b:EventTrigger EventName="Loaded">
+            <ls:LSPlaySound Sound="UI_Gameplay_Book_Open"/>
+        </b:EventTrigger>
+        <b:EventTrigger EventName="Unloaded">
+            <ls:LSPlaySound Sound="UI_Gameplay_Book_Close"/>
+        </b:EventTrigger>
+    </b:Interaction.Triggers>
+</ls:UIWidget>

@@ -1,0 +1,313 @@
+game.states.DEN_States = State {function ()
+
+    modules = {"shared.moveto"}
+
+    description = [[Collection of various states for this character in the Grove.]]
+    params.denPeaceState = {type=EParamType.State, required=false, default=nil, help=[[State this character uses when the Den is at peace.]]}
+
+    params.druidAttackState = {type=EParamType.State, required=false, default=StateRef{game.states.Dummy}, help=[[State this character uses for the Druid Attack once one of the two flags that launch the event behavior is applied.]]}
+
+    params.postDruidAttackState = {type=EParamType.State, required=false, default=StateRef{game.states.Dummy}, help=[[State this character uses once the druid attack on the tieflings is over.]]}
+    params.postDruidAttackPoint = {type=EParamType.String, required=false, default=nil, help=[[Position this character will move to once the Druid Attack has ended.]]}
+    params.postDruidAttackLongMove = {type = EParamType.Bool, required = false, default = false, help=[[Whether this character does a long move after druid attack.]]}
+
+    params.attackOnDenState = {type=EParamType.State, required=false, default=StateRef{game.states.Dummy}, help=[[State this character will take before entering combat in Attack on Den.]]}
+    params.attackPoint = {type=EParamType.String, required=false, default=nil, help=[[Position this character will teleport to during Attack on Den setup.]]}
+
+    params.ritualStoppedState = {type=EParamType.State, required=false, default=nil, help=[[State this character will take when the Druid Ritual gets stopped.]]}
+
+    params.attackVictoryState = {type=EParamType.State, required=false, default=StateRef{game.states.Dummy}, help=[[State this character will take when raiders are defeated in Attack on Den.]]}
+    params.leadershipDeadState = {type=EParamType.State, required=false, default=StateRef{game.states.Dummy}, help=[[State this character will take when Goblin Leadership is dead. Often identical to attackVictoryState.]]}
+
+
+    params.victoryPoint = {type=EParamType.String, required=false, default=nil, help=[[Position this character will teleport to when raiders are defeated in Attack on Den. Often reused by Goblin Hunt Victory logic.]]}
+
+    params.celebrationState = {type=EParamType.State, required=false, default=StateRef{game.states.Dummy}, help=[[State this character will take during the party at camp.]]}
+
+    params.tieflingsGoneState = {type=EParamType.State, required=false, default=nil, help=[[State this character will take in the grove once tieflings have left the Grove.]]}  
+    
+    ------------------------------
+    ------------------------------
+
+    local atCelebration = false
+    local atAttackOnDen = false
+    local atAttackOnDenVictory = false
+    local atGoblinHuntVictory = false
+    local druidsAreAttacking = false
+    local druidAttackIsOver = false
+    local stopAttackOnDenBehaviour = false
+    local denStatesAreDisabled = false
+    local ritualStoppedFlag = Flag("DEN_SacredPond_Event_StopRitual_c9f24eda-2847-4620-9fa2-974b004ac147")
+    local tieflingsGoneFlag = Flag("DEN_TieflingRefugees_State_LeftDen_003b304b-f058-4f8a-b9fa-a097e1b6b395")
+    local waitAtGateFlag = Flag("DEN_Gate_State_Leaving_2428f301-b27b-4f75-99b9-45a71f3dba23")
+    local noTieflingsFlag = Flag("DEN_General_State_RitualStoppedNoTieflings_f4712c06-ae76-4ba3-87e8-a3f71d9b621c")
+    local celebrationWaitFlag = Flag("DEN_AttackOnDen_State_WaitingForCelebration_97e3e4e8-eab2-4d32-1ae7-f0ba20a75c42")
+    local denVictoryFlag = Flag("DEN_AttackOnDen_State_DenVictory_71c7f23e-3ff1-c9b8-3ef5-d75fa1b42c8d")
+    local druidsPrepareFlag = Flag("DEN_DruidAttack_Event_DruidsPrepare_4faee0c9-018a-47e2-a754-d331c746a67f")
+    local tieflingsPrepareFlag = Flag("DEN_DruidAttack_Event_TieflingsPrepare_6a8c217f-adf6-46d2-8cfd-d2e9a437c3d4")
+    local underAttackFlag = Flag("DEN_AttackOnDen_State_UnderAttack_4ebba932-b9cf-41c5-b897-e77a63b93511")
+    local afterDruidsDeathFlag = Flag("DEN_DruidAttack_State_PrepAfterDeathOfDruids_b4754af7-07ec-433c-87d2-e78ef4c79e6e")
+    local afterTieflingsDeathFlag = Flag("DEN_DruidAttack_State_PrepAfterDeathOfTieflings_79826e3c-1dd7-4a8b-a5ca-cf4dfde51d12")
+    local defeatedTag = Tag("DEFEATED_f0020818-86f1-4ee9-a5a9-9ace9ecc9010")
+    local permaDefeatedTag = Tag("PERMA_DEFEATED_867f3a1e-1e4b-48c2-869e-343415231727")
+    local waitingAtGates = false
+    local Leader = false
+    local attackPoint = nil
+    local victoryPoint = nil
+    local postDruidAttackPoint = nil
+
+    ------------------------------
+    ------------------------------
+
+    helpers.StopAllCurrentBehaviour = function()
+        mod.moveto.CancelMoveTo()
+        if(me.ForceUpdate == true) then
+            SetForceUpdate(me, false)
+        end
+        ClearPatrol()
+        StopAnimation(me)
+    end
+
+    ------------------------------
+    ------------------------------
+
+    events.EntityEvent = function(e)
+        if(e.Event == "DEN_States_Disable") then
+            denStatesAreDisabled = true
+        elseif(e.Event == "DEN_States_Enable") then
+            denStatesAreDisabled = false
+        elseif(e.TargetEntity == me and not IsTagged(me, permaDefeatedTag) and not denStatesAreDisabled) then
+            if(e.Event == "DEN_AttackOnDen_UpdatePosition") then
+                attackPoint = e.Params[1]
+            elseif(e.Event == "DEN_AttackOnDen_UpdateVictoryPosition") then
+                victoryPoint = e.Params[1]
+            elseif(e.Event == "DEN_AttackOnDen_TeleportToPosition") then
+                if(params.attackPoint ~= nil and attackPoint == nil) then
+                    attackPoint = FindEntity(params.attackPoint)
+                end
+                if(attackPoint ~= nil and not IsTagged(me, defeatedTag)) then
+                    TeleportTo(me, attackPoint)
+                end
+            elseif(e.Event == "DEN_AttackOnDen_SetLeader") then
+                Leader = true
+            elseif(e.Event == "DEN_AttackOnDen_TeleportToVictoryPos") then
+                atAttackOnDenVictory = true
+                helpers.StopAllCurrentBehaviour()
+                Interrupt()
+                if(victoryPoint ~= nil and not IsTagged(me, defeatedTag)) then
+                    TeleportTo(me, victoryPoint)
+                end
+            elseif(e.Event == "DEN_AttackOnDen_VictoryMoveComplete") then
+                atAttackOnDenVictory = true
+                if(Leader) then
+                    SetFlag(celebrationWaitFlag, me)
+                end
+            elseif(e.Event == "DEN_Victory_TeleportToPosition") then
+                helpers.StopAllCurrentBehaviour()
+                Interrupt()
+                atGoblinHuntVictory = true
+                if(params.victoryPoint ~= nil and victoryPoint == nil) then
+                    victoryPoint = FindEntity(params.victoryPoint)
+                end
+                if(victoryPoint ~= nil and not IsTagged(me, defeatedTag)) then
+                    TeleportTo(me, victoryPoint)
+                end
+            elseif(e.Event == "DEN_AttackOnDen_ForceStopBehaviour") then
+                helpers.StopAllCurrentBehaviour()
+                Interrupt()
+                stopAttackOnDenBehaviour = true
+            elseif(e.Event == "CAMP_GoblinHuntCelebration_Teleported") then
+                helpers.StopAllCurrentBehaviour()
+                Interrupt()
+                atCelebration = true
+            elseif(e.Event == "DEN_AttackOnDen_WaitAtGates") then
+                helpers.StopAllCurrentBehaviour()
+                waitingAtGates = true
+                Interrupt()
+            end
+            
+        end
+    end
+
+    events.FlagSet = function(e)
+        if (not IsTagged(me, permaDefeatedTag) and not denStatesAreDisabled) then
+            if e.Flag == denVictoryFlag.Guid then
+                SetUnicastEntityEvent(me, "ClearPeaceReturn")
+                if(params.victoryPoint ~= nil and victoryPoint == nil) then
+                    victoryPoint = FindEntity(params.victoryPoint)
+                end
+                if(atAttackOnDen) then
+                    if(victoryPoint ~= nil) then
+                        mod.moveto.MoveTo(victoryPoint, 1, 4.0, "Walk", "DEN_AttackOnDen_VictoryMoveComplete")
+                    end
+                    atAttackOnDenVictory = true
+                end
+            elseif e.Flag == druidsPrepareFlag.Guid or e.Flag == tieflingsPrepareFlag.Guid then
+                if e.Entity ~= nil and e.Entity == me then
+                    druidsAreAttacking = true
+                    helpers.StopAllCurrentBehaviour()
+                    if(me.ForceUpdate == false) then
+                        SetForceUpdate(me, true)
+                    end
+                    Interrupt()
+                end
+            elseif e.Flag == afterDruidsDeathFlag.Guid or e.Flag == afterTieflingsDeathFlag.Guid then
+                SetUnicastEntityEvent(me, "ClearPeaceReturn")
+                SetWeaponUnsheathed(me,false,false)
+                helpers.StopAllCurrentBehaviour()
+                Interrupt()
+                if(params.postDruidAttackPoint ~= nil) then
+                    postDruidAttackPoint = FindEntity(params.postDruidAttackPoint)
+                    mod.moveto.MoveTo(postDruidAttackPoint,true,1.5,"Walk","DEN_DruidAttack_PostAttackSetupComplete",2.5,params.postDruidAttackLongMove,true)
+                end
+                druidAttackIsOver = true
+            elseif e.Flag == underAttackFlag.Guid then
+                helpers.StopAllCurrentBehaviour()
+                Interrupt()
+                atAttackOnDen = true
+            elseif ((e.Flag == ritualStoppedFlag.Guid and params.ritualStoppedState ~= nil) or e.Flag == tieflingsGoneFlag.Guid or e.Flag == noTieflingsFlag.Guid) then
+                helpers.StopAllCurrentBehaviour()
+                Interrupt()
+            end
+        end
+    end
+
+    ------------------------------
+    ------------------------------
+
+    nodes.Leaving_WaitingAtGates = Action {
+        CanEnter = function()
+            return GetFlag(waitAtGateFlag,me)
+        end,
+        function()
+            Sleep(1)
+        end
+    }
+
+    ------------------------------
+    ------------------------------
+
+    nodes.TieflingsGone = Proxy{
+        CanEnter = function()
+            return GetFlag(tieflingsGoneFlag)
+        end,
+        params.tieflingsGoneState,
+    }
+
+    ------------------------------
+    ------------------------------
+
+    nodes.Celebration = Proxy{
+        CanEnter = function()
+            return atCelebration
+        end,
+        params.celebrationState,
+    }
+
+    ------------------------------
+    ------------------------------
+
+    nodes.AttackOnDen_Victory = Proxy{
+        CanEnter = function()
+            return atAttackOnDen and atAttackOnDenVictory
+        end,
+        params.attackVictoryState,
+    }
+
+    nodes.AttackOnDen_Raid_StopBehaviour = Action{
+        CanEnter = function()
+            return atAttackOnDen and stopAttackOnDenBehaviour
+        end,
+        function()
+            WaitForInterrupt()
+        end,
+    }
+
+    nodes.AttackOnDen_Raid_AtGatesWaiting = Action{
+        function()
+            Sleep(math.random(2,4))
+            if mod.moveto.MoveToPoint(attackPoint,MovementSpeed.Run,me) then
+                LookFrom(attackPoint)
+                WaitForInterrupt()
+            end
+            
+        end,
+        CanEnter = function()
+            return atAttackOnDen and waitingAtGates
+        end,
+    }
+
+    nodes.AttackOnDen_Raid = Proxy{
+        CanEnter = function()
+            return atAttackOnDen
+        end,
+        params.attackOnDenState,
+    }
+
+
+    ------------------------------
+    ------------------------------
+
+    nodes.GoblinLeadershipDead = Proxy{
+        CanEnter = function()
+            return atGoblinHuntVictory
+        end,
+        params.leadershipDeadState
+    }
+
+    ------------------------------
+    ------------------------------
+
+    nodes.RitualStoppedNoTieflings = Proxy{
+        CanEnter = function()
+            return GetFlag(noTieflingsFlag)
+        end,
+        params.tieflingsGoneState,
+    }
+
+    ------------------------------
+    ------------------------------
+
+    nodes.RitualStopped = Proxy{
+        CanEnter = function()
+            return GetFlag(ritualStoppedFlag)
+        end,
+        params.ritualStoppedState
+    }
+
+    ------------------------------
+    ------------------------------
+
+    nodes.PostDruidAttack = Proxy{
+        CanEnter = function()
+            return druidAttackIsOver
+        end,
+        params.postDruidAttackState
+    }
+
+    ------------------------------
+    ------------------------------
+
+    nodes.DruidAttack = Proxy{
+        CanEnter = function()
+            return druidsAreAttacking and not druidAttackIsOver
+        end,
+        params.druidAttackState
+    }
+
+    ------------------------------
+    ------------------------------
+
+    nodes.DenPeace = Proxy{
+        params.denPeaceState,
+    }
+
+    nodes.Default = Action{
+        function()
+            WaitForInterrupt()
+        end,
+    }
+    ------------------------------
+    ------------------------------
+
+end}

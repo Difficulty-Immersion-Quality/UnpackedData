@@ -1,0 +1,685 @@
+game.states.GOB_PainPriest = State { function ()
+
+    description = [[The Pain Priest performs a penance scene with the player.]]
+
+    modules = { "shared.dialog", "shared.math", "shared.items" }
+    -----------------------------------------
+    -- Params
+
+    -----------------------------------------
+    -- Local variables
+
+    --[[    Generic   ]]
+    local painPenanceSub = Entity("S_GOB_PainPenance_SUB_3189cec7-0f63-468c-a147-6a5fe426f518")
+    local penancePoint = Entity("S_GOB_PenanceRotation_910b416d-5600-4f57-8026-05112f19a8db")
+    local tablePoint = Entity("S_GOB_PainTablePoint_d9a41644-715c-4702-9963-7b76d93f22eb")
+    local bible = Entity("S_GOB_PainBible_cde9e487-07e4-43a8-a07c-a29890a1abd2")
+    local bibleSphere = Entity("S_GOB_BibleSphere_bbdad347-3e0a-41aa-96c7-d44c28d1537b")
+    local bibleAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local canAD = true
+    local blockImmobileAD = false
+    local postPenanceFlag = Flag("GOB_PainPriest_State_PostPlayerPenance_103d9832-d8e2-415d-bde0-6e2d1599c636")
+    local postPenanceADAllowed = false
+
+    --[[    Penance scene specific   ]]
+    ---- Event control
+    local isInPenance = false
+    local hasPenitentFlag = Flag("GOB_PainPriest_State_HasPenitent_dc689f8e-9728-569e-32fa-8698d254dd6d")
+
+    ---- Player related:
+    local penitent = nil
+    local penitentRotation = 0.0
+    local lowHealthFlag = Flag("GOB_PainPriest_State_LowHealth_bf01a677-b13c-4992-8d02-4121ecd2adf5")
+    --//rotation
+    local penanceAngleLow
+    local penanceAngleHigh
+
+    ---- Triggers
+    local penanceBox = Entity("S_GOB_PenanceBox_c7f47012-d006-4cb7-9af3-5d4d0f2b9ca7")
+    local penanceWeaponPoint = Entity("S_GOB_PenanceWaitPoint_b3421eae-6b5e-45e4-8b87-c4cf155ff630")
+    local penanceBehindPoint = Entity("S_GOB_PenanceBehindPoint_cda0d5e0-fe54-4c63-a819-879cda2141c4")
+    local behindWeaponPoint = Entity("S_GOB_BehindWeaponPoint_cfb57635-fe78-4f4c-8502-9ddcbeb02c90")
+    local inPositionBox = Entity("S_GOB_PainInPositionBox_af40cd65-2c05-4aca-9e4d-90e93babfcce")
+    local nearWeaponsBox = Entity("S_GOB_PainNearWeaponsBox_b04dcd04-d5ea-47df-b080-9f06633e96a8")
+    local activeWaitPoint = nil
+    local activePenancePoint = nil
+
+    ---- Weapon
+    local scourge = Entity("S_GOB_PenanceScourge_ecd4e32e-0cd1-4d9a-b4ab-8b42917d666f")
+    local penanceWeapon = nil
+    local penanceWeapons
+    local selectedWeaponFlag = nil
+    local weaponIsReady = false
+    --//flags to customize weaponPickUpAD
+    local choiceWeaponFlag = Flag("GOB_PainPriest_Event_IsChoice_4aa5010c-320f-60bc-822f-935c6e38b5cc")
+    local fallbackWeaponFlag = Flag("GOB_PainPriest_Event_NotChoiceWeapon_88a10956-e2ff-4f0c-9c3d-f07cf23163ed")
+    local spellWeaponFlag = Flag("GOB_PainPriest_Event_SpellWeapon_12c7d2c4-a68a-2d03-94f4-f49dedadd9fc")
+
+    ---- ADs
+    local weaponPickUpAD = Dialog("GOB_PainPriest_AD_WeaponPickUp_66546c38-8de3-5d8e-d5da-964a15e9ae21")
+    local orderMoveToWallAD = Dialog("GOB_PainPriest_AD_WaitPenance_c15e330f-9669-c87d-de97-a5d03fbf429c")
+    local orderFaceWallAD = Dialog("GOB_PainPriest_AD_OrderFaceWall_2cda927f-7b22-863b-a59c-ab2ae9c84228")
+    local orderImmobileAD = Dialog("GOB_PainPriest_AD_BeginPenance_05e4bb50-3632-a999-2d32-160a3ae5adfc")
+    local postPenanceAD = Dialog("GOB_PainPriest_AD_PostPenance_78d1b608-0dc7-5a09-3eea-5958c276337a")
+    local readBibleAD = Dialog("GOB_PainPriest_AD_ReadingBook_aa851754-30d3-a798-a030-81ff16210104")
+
+    --[[    Penance scene // Goblin version   ]]
+    local spike = Entity("S_GOB_Torturers_Spike_3f1fa953-6a0d-4589-adfd-23c69603da2f")
+    local goblet = Entity("S_GOB_Torturers_Goblet_0f18201e-2836-4642-8a26-d0a6e1a8a8cc")
+    local gobletPenanceAD = Dialog("GOB_PainPriest_AD_PenanceWithGoblet_bb4fa8e3-54b0-46f8-1ef1-01c38d01814a")
+    local discussTortureAD = Dialog("GOB_PainPriest_AD_WithGoblins_b24e548e-871a-1ead-cc9b-773445a3fda6")
+    local lowHealthGoblinAD = Dialog("GOB_PainPriest_AD_GobletLowHP_6c60bad8-39f5-5cff-9f54-71914cdb971c")
+    local waitWithGoblinsPoint = Entity("S_GOB_PainWaitWithGobPoint_d6a5119d-2726-49a6-9e5f-09bcfcc510b1")
+
+    local battlestationFlag = Flag("GOB_BattleStations_Event_ToStation_03a8bd66-c23f-4989-9a7b-775cf475104b")
+
+    -----------------------------------------
+    -- Local functions
+    helpers.ResetPenanceScene = function()
+        isInPenance = false
+
+        penitent = nil
+
+        activeWaitPoint = penanceWeaponPoint
+        activePenancePoint = penanceBehindPoint
+
+        --All flag clearing is done in Osiris!
+        --Resetting the Weapon is done slightly later, after the priest put it down
+    end
+
+    helpers.ResetWeaponPicking = function()
+        penanceWeapon = nil
+        selectedWeaponFlag = nil
+        weaponIsReady = false
+    end
+
+    helpers.ResetCanAD = function()
+        StopTimer(me, "GOB_PainPriest_ADTimer")
+        canAD = true
+    end
+
+    helpers.GetADDelayTime = function(guid)
+        if (guid == Guid("GOB_PainPriest_AD_PostPenance_78d1b608-0dc7-5a09-3eea-5958c276337a")) or
+            (guid == Guid("GOB_PainPriest_AD_ReadingBook_aa851754-30d3-a798-a030-81ff16210104")) or
+            (guid == Guid("GOB_PainPriest_AD_WithGoblins_b24e548e-871a-1ead-cc9b-773445a3fda6")) or
+            (guid == Guid("GOB_PainPriest_AD_GobletLowHP_6c60bad8-39f5-5cff-9f54-71914cdb971c")) then
+            return 60.0
+        elseif (guid == Guid("GOB_PainPriest_AD_WaitPenance_c15e330f-9669-c87d-de97-a5d03fbf429c")) or
+            (guid == Guid("GOB_PainPriest_AD_OrderFaceWall_2cda927f-7b22-863b-a59c-ab2ae9c84228")) then
+            return 10.0
+        end
+        return -1.0
+        --[[ Used in this behaviour but deliberately not triggering a timer:
+            Guid("GOB_PainPriest_AD_WeaponPickUp_66546c38-8de3-5d8e-d5da-964a15e9ae21")
+            Guid("GOB_PainPriest_AD_BeginPenance_05e4bb50-3632-a999-2d32-160a3ae5adfc")
+            Guid("GOB_PainPriest_AD_PenanceWithGoblet_bb4fa8e3-54b0-46f8-1ef1-01c38d01814a") ]]
+    end
+
+    helpers.ItemIsAvailable = function (item)
+        --[[the priest puts the weapon down after the penance,
+            so I'm not handling having it already into the priest's inventory.
+            That would only be caused by failure of putting the weapon down or by reverse pickpocketing;
+            the fallbacks are sufficient (picking another weapon / summoning a weapon)]]
+        if (item ~= nil and not mod.items.SafeIsDestroyed(item)) then
+            if item.IsItem and not item.Item.IsDestroyed then
+                if item == scourge then
+                    -- the scourge is in the priest inventory at the start
+                    if IsInTrigger(item, painPenanceSub.Trigger) or IsInInventoryOf(item, me) then
+                        return true
+                    end
+                elseif not item.Item.IsInInventory and IsInTrigger(item, painPenanceSub.Trigger) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    helpers.ProgressPenancePoints = function()
+        --[[The reason for this is:
+            - activePenancePoint == where the priest stands behind the player
+            - activeWaitPoint == where the priest waits while the player is not in position
+                (before taking the weapons it's near the weapon)
+            ]]
+        if not penanceWeapon then
+            --using spell weapon, be behind the weapon
+            activePenancePoint = behindWeaponPoint
+        end
+        activeWaitPoint = activePenancePoint
+    end
+
+    helpers.SelectWeapon = function()
+        if #penanceWeapons > 0 then
+            local availableWeapons = {}
+
+            --returns at the selected weapon // stores the available weapons to randomly choose if failing to return
+            for _, value in pairs(penanceWeapons) do
+                if helpers.ItemIsAvailable(value.weapon) then
+                    DebugText(me, "Weapon is available ".. tostring(value))
+                    if (selectedWeaponFlag and (value.flag.Guid == selectedWeaponFlag)) or (GetFlag(value.flag)) then
+                        SetFlag(choiceWeaponFlag, me) --priest will comment the choice
+                        return value.weapon
+                    else
+                        table.insert(availableWeapons, value.weapon)
+                    end
+                end
+            end
+            if selectedWeaponFlag then
+                SetFlag(fallbackWeaponFlag, me) --priest will comment that the chosen weapon wasn't available
+            end
+            if #availableWeapons == 1 then
+                return availableWeapons[1]
+            elseif #availableWeapons > 1 then
+                return availableWeapons[math.random(#availableWeapons)]
+            end
+        end
+        -- priest will use a spell instead
+        SetFlag(spellWeaponFlag, me)
+        return nil
+    end
+
+    helpers.GetWeaponOriginPos = function(weapon)
+        for _, value in pairs(penanceWeapons) do
+            if value.weapon == weapon then
+                return value.weaponPos
+            end
+        end
+    end
+
+    helpers.PenitentIsFacingWall = function()
+        if penitent == nil then
+            return false
+        end
+        penitentRotation = penitent.Rotation.Y
+        if penitentRotation > 0.0 then
+            penitentRotation = 0.0 - (360.0 - penitentRotation)
+        end
+        return
+            (penitentRotation > penanceAngleLow) and
+            (penitentRotation < penanceAngleHigh)
+    end
+
+    helpers.PenitentIsLowHP = function()
+        -- this is here so the value needs to be changed in only one spot
+        -- note that this value is also used in OSIRIS, so would need to be kept in sync there too
+        if penitent == nil then
+            return false
+        end
+        return not penitent.Character.IsDead and penitent.HitpointsPercentage < 40.0
+    end
+
+    helpers.BookIsThere = function()
+        return not bible.Item.IsDestroyed and
+                not bible.Item.IsInInventory and
+                IsInTrigger(bible, bibleSphere.Trigger)
+    end
+
+    helpers.ShouldMoveToPoint = function(trig)
+        if GetDistance2DTo(me, trig) > 0.5 then
+            if trig == activePenancePoint then
+                return not IsInTrigger(me, inPositionBox.Trigger)
+            else
+                return not IsInTrigger(me, nearWeaponsBox.Trigger)
+            end
+        end
+        return false
+    end
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        penanceAngleLow = penancePoint.Rotation.Y - 50.0
+        penanceAngleHigh = penancePoint.Rotation.Y + 50.0
+
+        penanceWeapons = {}
+        table.insert(penanceWeapons, {
+            weapon = Entity("S_GOB_PenancePiercing_da629f99-adbc-4c77-ae5f-a06b997b3a8a"),
+            flag = Flag("GOB_PainPriest_Event_PickPiercing_d5f9b552-6faa-a25d-616f-d8caccc0fee0"),
+            weaponPos = Entity("S_GOB_PiercingPoint_5a1452c4-bd3c-4a68-94bd-71b44b48759f").Position,
+        })
+        table.insert(penanceWeapons, {
+            weapon = Entity("S_GOB_PenanceSlashing_fa96689e-264c-4e98-ba30-33be0a3b5371"),
+            flag = Flag("GOB_PainPriest_Event_PickSlashing_0a0d12a5-0f90-0df6-6157-a48f91181c59"),
+            weaponPos = Entity("S_GOB_ScourgePoint_1d3eac06-fa1f-4eaf-9e7c-60a1e6be4880").Position,
+        })
+        table.insert(penanceWeapons, {
+            weapon = scourge,
+            flag = Flag("GOB_PainPriest_Event_PickScourge_70c1192c-8144-c979-15aa-6d5e463cc000"),
+            weaponPos = Entity("S_GOB_SlashingPoint_dbf34bf7-3d46-42f2-9e1b-045592c027e7").Position,
+        })
+
+        activeWaitPoint = penanceWeaponPoint
+        activePenancePoint = penanceBehindPoint --switched to behindWeaponPoint if using the Spiritual Weapon
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes = ImmediateSelector {}
+
+    --[[    Battlestation   ]]
+    nodes.Battlestation = Proxy {
+        --Note: the battlestation state overrides the scene. (it doesn't call the resetting functions)
+        --reason is that I want the "State_Penitent" flag to remain set on the player, so the Priest reacts accordingly
+        game.states.GOB_PainPriest_Battlestation,
+        Valid = function()
+            return GetFlag(battlestationFlag)
+        end
+    }
+
+    --[[    Penance scene   ]]
+    nodes.Scene = Selector {
+        Valid = function()
+            return (penitent ~= nil) and GetFlag(hasPenitentFlag)
+        end
+    }
+
+    nodes.PutWeaponDown = Action {
+        --only once after penance
+        CanEnter = function()
+            return weaponIsReady
+        end,
+        function()
+            Sleep(1)
+            if (penanceWeapon ~= scourge) and IsInInventoryOf(penanceWeapon, me) then
+                try
+                    MoveTo(penanceWeaponPoint)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(0.5)
+                end
+                local weaponPos = helpers.GetWeaponOriginPos(penanceWeapon)
+                DebugText(me, "TODO: putting down the weapon at its original position: [1].", tostring(weaponPos))
+                SetWeaponUnsheathed(me, false, false)
+                Unequip(me.Character, penanceWeapon.Item)
+                DropItem(penanceWeapon)
+                Sleep(1)
+            end
+            weaponIsReady = false
+        end,
+        OnLeave = function()
+            -- now the penance session is completely finished or cancelled, the weapon was put down.
+            helpers.ResetWeaponPicking()
+            SetEntityEvent(me, "GOB_PainPriest_Event_PutDownWeapon") -- for osiris
+        end
+    }
+
+    --[[    Actions out of the penance scene   ]]
+    nodes.Idle = Selector {
+        function(nodes)
+            return GetFirstCanEnter(nodes)
+        end,
+        OnLeave = function()
+            helpers.ResetCanAD()
+        end,
+    }
+
+    nodes.Idle.SelfFlagellation = Proxy {
+        --only before penance
+        game.states.GOB_PainPriest_SelfFlagellation,
+        Valid = function()
+            return not GetFlag(postPenanceFlag) and (not mod.items.SafeIsDestroyed(scourge)) and IsInInventoryOf(scourge, me)
+        end,
+    }
+
+    nodes.Idle.GoToTable = Action {
+        CanEnter = function()
+            return GetDistance2DTo(me, tablePoint) > 1.5
+        end,
+        function()
+            Sleep(1.5)
+            try
+                MoveTo(tablePoint)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(8)
+            end
+        end
+    }
+
+    nodes.Idle.AtTable = Action {
+        function()
+            Sleep(1.5)
+            LookFrom(tablePoint)
+            if helpers.BookIsThere() and (GetDistance2DTo(me, tablePoint) <= 1.5) then
+                PlayAnimation(bibleAnim, false, false)
+                Sleep(1)
+            end
+            if postPenanceADAllowed and canAD and not IsInDialog(me, false) then
+                canAD = false
+                if helpers.BookIsThere() then
+                    StartAutomatedDialog(readBibleAD, true, me)
+                else
+                    StartAutomatedDialog(postPenanceAD, false, me)
+                end
+            end
+            Sleep(math.random(16,22))
+        end
+    }
+
+
+    --[[    Penance scene   ]]
+
+    --Step 1) Priest and Penitent get in place
+    nodes.Scene.Preparation = ImmediateSelector {
+        Valid = function()
+            return
+                not helpers.PenitentIsLowHP() and
+                (penitent.Character.IsDead or
+                IsInDialog(penitent, true) or
+                not IsInTrigger(penitent, painPenanceSub.Trigger) or
+                not IsInTrigger(penitent, penanceBox.Trigger) or
+                not helpers.PenitentIsFacingWall())
+        end,
+        OnLeave = function()
+            helpers.ResetCanAD()
+        end
+    }
+
+    nodes.Scene.Preparation.MoveToPoint = Action {
+        CanEnter = function()
+            return helpers.ShouldMoveToPoint(activeWaitPoint)
+        end,
+        function()
+            try
+                MoveTo(activeWaitPoint, MovementSpeed.Stroll)
+                LookFrom(activeWaitPoint)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                SteerTo(activeWaitPoint)
+                Sleep(3)
+            end
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, activeWaitPoint) > 0.5
+        end
+    }
+
+    nodes.Scene.Preparation.Wait = Action {
+        -- Penitent is busy or missing
+        function()
+            if not IsInDialog(penitent, true) then
+                Wander(3.0, 1.0, MovementSpeed.Stroll, activeWaitPoint)
+            end
+            Sleep(math.random(4,6))
+        end,
+        Valid = function ()
+            return
+                penitent.Character.IsDead or
+                IsInDialog(penitent, true) or
+                not IsInTrigger(penitent, painPenanceSub.Trigger)
+        end
+    }
+
+    nodes.Scene.Preparation.OrderMoveToWall = Action {
+        CanEnter = function()
+            return not IsInTrigger(penitent, penanceBox.Trigger)
+        end,
+        function()
+            Sleep(1)
+            if canAD and not IsInDialog(me, false) and not IsInDialog(penitent, false) then
+                LookFrom(activeWaitPoint)
+                canAD = false
+                StartAutomatedDialog(orderMoveToWallAD, false, me, penitent)
+            end
+        end,
+        OnLeave = function()
+            helpers.ResetCanAD()
+        end
+    }
+
+    nodes.Scene.Preparation.OrderFaceWall = Action {
+        function()
+            Sleep(1)
+            if canAD and not IsInDialog(me, false) and not IsInDialog(penitent, false)  then
+                canAD = false
+                StartAutomatedDialog(orderFaceWallAD, false, me, penitent)
+            end
+        end,
+        OnLeave = function()
+            helpers.ResetCanAD()
+        end
+    }
+
+    --Step 2) Scene
+    nodes.Scene.PickUpWeapon = Action {
+        CanEnter = function()
+            return not weaponIsReady
+        end,
+        OnEnter = function()
+            if not penanceWeapon then
+                penanceWeapon = helpers.SelectWeapon()
+                helpers.ProgressPenancePoints()
+            end
+        end,
+        function()
+            Sleep(1)
+            if not IsInDialog(me, false) then
+                StartAutomatedDialog(weaponPickUpAD, false, me)
+            end
+            if penanceWeapon then
+                weaponIsReady = true
+                if not IsInInventoryOf(penanceWeapon, me) then
+                    LookAtEntity(penanceWeapon, 3.0)
+                    Sleep(0.5)
+                    PickUpItem(penanceWeapon)
+                else
+                    Sleep(1.5)
+                end
+                Equip(me.Character, penanceWeapon.Item)
+                SetWeaponUnsheathed(me, true, false)
+                Sleep(1)
+            else
+                weaponIsReady = true
+                Sleep(2)
+            end
+            Sleep(1)
+        end
+    }
+
+    nodes.Scene.Penance = Selector {
+        Valid = function()
+            return
+                not helpers.PenitentIsLowHP() and
+                IsInTrigger(penitent, penanceBox.Trigger) and
+                helpers.PenitentIsFacingWall()
+        end
+        --goes to the LowHealth action below if invalid
+    }
+
+    nodes.Scene.LowHealth = Selector {
+        --Fallback End of scene -- normally Osiris ends the scene after 3 hits, but we don't want to kill the player
+        OnEnter = function()
+            SetFlag(lowHealthFlag, penitent)
+        end,
+        function(nodes)
+            if penitent.Character.IsPlayer then
+                return nodes["Player"]
+            else
+                return nodes["Goblin"]
+            end
+        end
+    }
+
+    nodes.Scene.LowHealth.Player = Action {
+        function()
+            -- Osiris takes over and ends the scene
+            Sleep(0.5)
+            SetEntityEvent(me, "GOB_PainPriest_Event_PenitentIsTooLowHP", penitent)
+            Sleep(20)
+        end
+    }
+
+    nodes.Scene.LowHealth.Goblin = Selector {
+        function(nodes)
+            if GetDistance2DTo(me, waitWithGoblinsPoint) > 1.5 then
+                return nodes["Waiting"]
+            else
+                return nodes["Talking"]
+            end
+        end,
+        Valid = function()
+            return helpers.PenitentIsLowHP()
+        end
+    }
+
+    nodes.Scene.LowHealth.Goblin.Waiting = Action {
+        function()
+            Sleep(4)
+            try
+                MoveTo(waitWithGoblinsPoint, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                SteerTo(waitWithGoblinsPoint)
+                Sleep(3)
+            end
+        end
+    }
+
+    nodes.Scene.LowHealth.Goblin.Talking = Action {
+        function()
+            LookFrom(waitWithGoblinsPoint)
+            if canAD and not IsInDialog(me, false) then
+                if mod.dialog.IsSpeakerAvailableAndNear(goblet, me, 10.0, true) then
+                    if mod.math.CoinToss() and mod.dialog.IsSpeakerAvailableAndNear(spike, me, 10.0, true) then
+                        canAD = false
+                        StartAutomatedDialog(discussTortureAD, false, me, spike, goblet)
+                    else
+                        canAD = false
+                        StartAutomatedDialog(lowHealthGoblinAD, false, me, goblet)
+                    end
+                end
+            end
+            Sleep(6)
+        end
+    }
+
+    nodes.Scene.Penance.GetInPosition = Action {
+        CanEnter = function()
+            return helpers.ShouldMoveToPoint(activePenancePoint)
+        end,
+        function()
+            if not blockImmobileAD and not IsInDialog(me, false) then
+                StartAutomatedDialog(orderImmobileAD, false, me)
+            end
+            try
+                MoveTo(activePenancePoint, MovementSpeed.Stroll)
+                LookFrom(activePenancePoint)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                SteerTo(activePenancePoint)
+                Sleep(3)
+            end
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, activePenancePoint) > 0.5
+        end
+    }
+
+    nodes.Scene.Penance.Flagellate = Action {
+        OnEnter = function()
+            SetDoNotFace(me, true)
+        end,
+        function()
+            if penanceWeapon then
+                SetWeaponUnsheathed(me, true, false)
+                Sleep(2.5) --[[hard to time... the player should be able to click on the priest
+                                or move out of position between two hits,
+                                but it shouldn't feel like the priest is stuck/lagging in his action]]
+                try
+                    UseSpell("Target_GOB_PainPriest_WeaponAttack", penitent, nil, nil, nil, true, true, true)
+                catch e if ls.CheckType(e, error.UseSpellFailed) then
+                    SetEntityEvent(me, "GOB_PainPriest_Event_ResetPenance")
+                end
+            else
+                Sleep(2.5)
+                try
+                    UseSpell("Target_GOB_PainPriest_ChillTouch", penitent, nil, nil, nil, true, true, true)
+                catch e if ls.CheckType(e, error.UseSpellFailed) then
+                    SetEntityEvent(me, "GOB_PainPriest_Event_ResetPenance")
+                end
+            end
+            Sleep(0.5)
+            if penitent.Character.IsPlayer then
+                 -- Osiris starts an interactive dialog from the events thrown by UseSpell
+                Sleep(4) --frame delays, action will restart because osiris will interrupt it
+            else
+                Sleep(1)
+                if not IsInDialog(me, false) and mod.dialog.IsSpeakerAvailableAndNear(penitent, me, 10.0, true) then
+                    StartAutomatedDialog(gobletPenanceAD, true, me, penitent) --Lookout Grush
+                end
+            end
+            Sleep(1)
+        end,
+        OnLeave = function()
+            SetDoNotFace(me, false)
+        end,
+    }
+
+
+    --[[    Safety sleep   ]]
+    nodes.FallbackSleep = Action {
+        -- if flags are not set and cleared in an ideal order, it'll sleep a bit
+        function()
+            Sleep(1)
+        end
+    }
+
+
+    -----------------------------------------
+    -- Events
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == orderImmobileAD.Guid then
+            blockImmobileAD = true
+            StartTimer(me, "GOB_PainPriest_ImmobileADTimer", 15, 0)
+        else
+            local time = helpers.GetADDelayTime(e.Instance.DialogUUID)
+            if time ~= -1.0  then
+                StartTimer(me, "GOB_PainPriest_ADTimer", time, 0)
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "GOB_PainPriest_ADTimer" then
+            canAD = true
+        elseif e.TimerName == "GOB_PainPriest_ImmobileADTimer" then
+            blockImmobileAD = false
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == Guid("GOB_PainPriest_Event_PickPiercing_d5f9b552-6faa-a25d-616f-d8caccc0fee0") or
+            e.Flag == Guid("GOB_PainPriest_Event_PickSlashing_0a0d12a5-0f90-0df6-6157-a48f91181c59") or
+            e.Flag == Guid("GOB_PainPriest_Event_PickScourge_70c1192c-8144-c979-15aa-6d5e463cc000") then
+                selectedWeaponFlag = e.Flag
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "GOB_PainPriest_Event_ResetPenance" then
+                --[[ Event received from Osiris when:
+                    - Penitent wanted to start the penance but has too low HP
+                            (its actually the only reason the event exists;
+                            because at that point most of the flags we need are not set yet,
+                            so we can't react to them being cleared)
+                    - Penitent dies
+                    - Penitent player chose to cancel the scene in dialog during the penance ]]
+                helpers.ResetPenanceScene()
+            elseif e.Event == "GOB_PainPriest_CheckPenitentHP" then
+                if not helpers.PenitentIsLowHP() then
+                    ClearFlag(lowHealthFlag, e.Params[1])
+                end
+            elseif e.Event == "GOB_PainPriest_AllowPostPenanceAD" then
+                --AD is allowed after the player (potentially) reacted to the penance with a VB, to avoid overlapping the two
+                canAD = false
+                postPenanceADAllowed = true
+                StopTimer(me, "GOB_PainPriest_ADTimer")
+                StartTimer(me, "GOB_PainPriest_ADTimer", 5.0, 0)
+            elseif e.Event == "GOB_PainPriest_PenitentSet" then
+                -- init penance
+                if penitent == nil then --honestly this should never not pass
+                    penitent = e.Params[1]
+                    isInPenance = true
+                end
+            end
+        end
+    end
+
+end}

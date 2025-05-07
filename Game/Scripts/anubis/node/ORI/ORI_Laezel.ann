@@ -1,0 +1,626 @@
+-- Collection of states for Lae'zel
+
+game.states.CRE_Laezel = State {function ()
+    description = [[Lae'zel's NPC behaviour in Act1b - Creche, after players reach the Creche region without recruiting Laezel.]]
+    modules = {"shared.util", "shared.math"}
+
+    -- default flow
+    local initFlag = Flag("ORI_Laezel_State_RecruitmentInCrecheActive_674e1fbb-7174-4c62-9581-08c67aeeaaa4")
+    local doneFlag = Flag("ORI_Laezel_State_DeadInSCL_8b0de2ba-cfdc-497b-be7e-9d059fbd8f72")
+  --  local dialogFlag = Flag("ORI_Laezel_Resurrection_HasMet_84fc0271-6af4-d318-d600-ca4d9a0091d8")
+    local position = nil
+    --gith chokepoint edge-case
+    local foundCrecheFlag = Flag("ORI_Laezel_Knows_FoundCreche_1ea76d79-24c5-4d63-a9cd-178266f1673d")
+    local stayedBehindFlag = Flag("ORI_Laezel_State_StayedBehindInCreche_9705545c-fb54-4ff4-b16b-3326cce76dd8")
+    local enemiesAtSCLExitDeadFlag = Flag("CRE_Exterior_State_EnemiesNearSCLPermaDefeated_0ca5d13e-6eae-407f-bce2-827ae1393303")
+    local staysAtInitialPosFlag = Flag("ORI_Laezel_State_RecruitmentInCrecheStaysAtInitialPos_0e1a2ea6-1fb4-4374-9dea-cfe8e27c9f7f")
+
+    local inspectingObjectOnGroundPos = {
+        Entity("S_CRE_LaezelWaitsAtCreche_MountainWaypoint_65a24332-73e3-4358-8d41-a629ebac434a"),
+        Entity("S_CRE_LaezelWaitsAtCreche_NearMine_c94cf356-a08d-4130-9d60-130256af094e"),
+        Entity("S_CRE_LaezelWaitsAtCreche_NearStatue_b0ee8489-22b8-41dc-9c71-1c2acbf69a25")
+    }
+
+    local inspectingObjectOnGroundExpandedPos = {
+        Entity("S_CRE_LaezelWaitsAtCreche_MountainWaypoint_65a24332-73e3-4358-8d41-a629ebac434a"),
+        Entity("S_CRE_LaezelWaitsAtCreche_NearMine_c94cf356-a08d-4130-9d60-130256af094e"),
+        Entity("S_CRE_LaezelWaitsAtCreche_NearStatue_b0ee8489-22b8-41dc-9c71-1c2acbf69a25"),
+        Entity("S_CRE_LaezelWaitsAtCreche_NearSCLPos1_684e246f-2b26-40d8-a409-9bf3efc71bae"),
+        Entity("S_CRE_LaezelWaitsAtCreche_NearSCLPos2_bf43090b-7d6c-4414-85d9-f89fdcbf9842")
+    }
+    -- Available after the enemies near the SCL exit are killed
+    local lookingAtDistantObjectPos = {
+        Entity("S_CRE_LaezelWaitsAtCreche_NearFerry_3a471994-b96e-4f57-bafb-3b709344ff63"),
+        Entity("S_CRE_LaezelWaitsAtCreche_NearVista_a467894e-8bab-4b0f-b9d2-7015dff81740")
+    }
+
+    local waitsAtWaypointPosition = Entity("S_CRE_LaezelWaitsAtCreche_MountainWaypoint_65a24332-73e3-4358-8d41-a629ebac434a")
+    local insideCrechePosition = Entity("S_CRE_LaezelWaitsAtCreche_CrecheWaypoint_1984c58f-6c32-476e-84ed-183dfa368d72")
+
+    local inspectObjectStartAnim = Animation("CUST_Kneel_Inspect_01_Start_a48d6c35-db6c-4a7d-8721-e0f64c688dd8")
+    local inspectObjectLoopAnim = {Animation("CUST_Kneel_Inspect_01_Loop_af166e62-ef0f-416c-a85c-7e7de014a04e")}
+    local inspectObjectEndAnim = Animation("CUST_Kneel_Inspect_01_End_b318fd10-a380-4402-b21f-058e154b08bd")
+
+    local lookAtDistanceAnim = Animation("CUST_LookingFar_01_5643e3dc-9631-4dba-b303-128fc29abfa7")
+
+    self.Valid = function()
+        return not GetFlag(doneFlag) and GetFlag(initFlag)
+    end
+
+    -- If she left you at Act2 and you have already found the Creche, she waits at the Creche interior waypoint
+    nodes.WaitsInsideCreche = Action {
+        CanEnter = function()
+            return GetFlag(foundCrecheFlag) and GetFlag(stayedBehindFlag)
+        end,
+
+        function ()
+            mod.util.SleepRandom (1.0,2.0)
+
+            if IsInDangerousSurfaceFor(insideCrechePosition, me.Character) then
+                SteerTo(insideCrechePosition)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(insideCrechePosition, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(insideCrechePosition)
+                Sleep(2.0)
+                return false
+            end
+
+            LookFrom(insideCrechePosition)
+            Sleep(5.0)
+        end
+    }
+
+    -- Initially she waits at the waypoint until you talk to her or move further in
+    nodes.WaitsAtWaypoint = Action {
+        Valid = function()
+            return GetFlag(staysAtInitialPosFlag) and not GetFlag(stayedBehindFlag)
+        end,
+
+        function ()
+            mod.util.SleepRandom (1.0,2.0)
+
+            if IsInDangerousSurfaceFor(waitsAtWaypointPosition, me.Character) then
+                SteerTo(waitsAtWaypointPosition)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(waitsAtWaypointPosition, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(waitsAtWaypointPosition)
+                Sleep(2.0)
+                return false
+            end
+
+            LookFrom(waitsAtWaypointPosition)
+            Sleep(5.0)
+        end
+    }
+
+    nodes.LooksForCreche = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return not GetFlag(foundCrecheFlag)
+        end
+    }
+
+    -- If you haven't found the Creche, she searches for clues in the mountains
+    nodes.LooksForCreche.InspectsObject = Action {
+        Valid = function()
+            return not GetFlag(foundCrecheFlag)
+        end,
+
+        function ()
+            mod.util.SleepRandom (1.0,2.0)
+            local currentPos = nil
+
+            if GetFlag(enemiesAtSCLExitDeadFlag) then
+                local currentPosIndex = math.random(#inspectingObjectOnGroundExpandedPos)
+                currentPos = inspectingObjectOnGroundExpandedPos[currentPosIndex]
+            else 
+                local currentPosIndex = math.random(#inspectingObjectOnGroundPos)
+                currentPos = inspectingObjectOnGroundPos[currentPosIndex]
+            end 
+
+            if IsInDangerousSurfaceFor(currentPos, me.Character) then
+                SteerTo(currentPos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(currentPos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(currentPos)
+                Sleep(2.0)
+                return false
+            end
+
+            LookFrom(currentPos)
+            PlayLoopingAnimation(inspectObjectStartAnim, inspectObjectLoopAnim, inspectObjectEndAnim, false)
+            mod.util.SleepRandom (8.0,12.0)
+            StopAnimation(me, false)
+            Sleep(3.0)
+        end
+    }
+
+
+    -- If you haven't found the Creche, she searches for clues in the mountains
+    nodes.LooksForCreche.LookingAtDistance = Action {
+        Valid = function()
+            return not GetFlag(foundCrecheFlag)
+        end,
+
+        function ()
+            mod.util.SleepRandom (1.0,2.0)
+            local currentPos = nil
+            local currentPosIndex = math.random(#lookingAtDistantObjectPos)
+            currentPos = lookingAtDistantObjectPos[currentPosIndex]
+
+            if IsInDangerousSurfaceFor(currentPos, me.Character) then
+                SteerTo(currentPos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(currentPos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(currentPos)
+                Sleep(2.0)
+                return false
+            end
+
+            LookFrom(currentPos)
+            Sleep(2.0)
+            PlayAnimation(lookAtDistanceAnim, true, false)
+        end
+    }
+
+    nodes.Resurrected = Action {
+        CanEnter = function()
+            return position ~= nil
+        end,
+        function()
+            try
+                Sleep(5)
+                try
+                    Wander(4.0, math.random(2,4), MovementSpeed.Stroll, position, true, PathClimbingMode.Disabled)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(3)
+                end
+                Sleep(math.random(4, 11))
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(6)
+            end
+        end
+    }
+
+    nodes.Wait = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    events.Resurrected = function(e)
+        if (e.Target == me) and not GetFlag(doneFlag) then
+            position = me.Position
+        end
+    end
+end}
+
+
+
+game.states.CHA_Laezel = State {function ()
+    description = [[Lae'zel's NPC behaviour in Act1, in CHA (cage).]]
+
+    local inCageAD = Dialog("CHA_LaezelRecruitment_AD_OpenCageLaezel_9f9b08de-e5d9-9276-6b86-e294cf7ec9d7")
+    local attackedAD = Dialog("CHA_LaezelRecruitment_AD_LaezelReactsToAttack_c5b753ca-dbe4-19ba-41b8-55f9810cf5b5")
+    local inPoint = Entity("S_CHA_LaezelStartPoint_26e040b6-4bab-45b3-b34a-cfc49417a95d")
+    local outPoint = Entity("S_CHA_LaezelOutPoint_ec8e8914-775c-42c7-a372-46d118ddcec7")
+    local canAD = false
+    local canDoAttackedAD = false
+    local canCheckCorpses = true
+    local tieflingsLeave = Flag("CHA_LaezelRecruitment_Event_TieflingsLeaveAlone_9cfe5720-e50c-8cae-cd23-f61aaf75499f")
+    local tieflingsDead = Flag("CHA_LaezelRecruitment_State_CagersAreDead_80d4178f-e95f-41dd-a17c-5f757481331f")
+    local freedFlag = Flag("CHA_LaezelRecruitment_State_Freed_0fe8e284-83a6-c1ad-9f18-20ed58985cf0")
+    local sceneOverFlag = Flag("CHA_LaezelTieflings_State_SceneOver_b6fcc020-c718-45d3-964d-2099f95a70c1")
+    local hidingFlag = Flag("GLO_State_Hiding_ad57af70-2300-4c49-b713-ba0bd8e77ea3")
+
+    helpers.CanReactToBeingAttacked = function()
+        return not GetFlag(sceneOverFlag) and not GetFlag(freedFlag) and (GetFlag(tieflingsLeave) or GetFlag(tieflingsDead))
+    end
+
+    -- state nodes
+    self.Valid = function()
+        return not GetFlag(sceneOverFlag)
+    end
+
+    -- nodes
+    nodes.InCage = Selector {
+        OnEnter = function()
+            canDoAttackedAD = true
+        end,
+        Valid = function()
+            return not GetFlag(freedFlag)
+        end
+    }
+
+    nodes.InCage.AD = Action {
+        CanEnter = function()
+            return canAD
+        end,
+        function()
+            --[[ Intent:
+                - AD only when player is close.
+                - If no player nearby, start shorter timer to increase chances of AD when player comes back ]]
+            if not IsInDialog(me, false) then
+                local actives = GetActiveCharacters(me, 14.0)
+                for _, entity in ipairs(actives) do
+                    if entity.Character.IsPlayer and
+                        not GetFlag(hidingFlag, entity) and
+                        not entity.IsInCombat then
+                            StartTimer(me, "CHA_Laezel_ADTimer", 50.0, 0)
+                            canAD = false
+                            SteerTo(entity)
+                            StartAutomatedDialog(inCageAD, false, me)
+                            break
+                    end
+                end
+                if canAD then
+                    StartTimer(me, "CHA_Laezel_ADTimer", 6.0, 0)
+                    canAD = false
+                end
+            end
+            Sleep(2)
+        end,
+        OnInterrupt = function()
+            if canAD then
+                StartTimer(me, "CHA_Laezel_ADTimer", 30.0, 0)
+                canAD = false
+            end
+        end,
+    }
+
+    nodes.InCage.Wait = Action {
+        function()
+            LookFrom(inPoint)
+            Sleep(2.0)
+        end,
+    }
+
+    nodes.OutOfCage = Selector {
+        OnEnter = function()
+            StopTimer(me, "CHA_Laezel_AttackedADTimer")
+            canDoAttackedAD = false
+        end,
+    }
+
+    nodes.OutOfCage.InspectCorpses = Proxy {
+        CanEnter = function()
+            return canCheckCorpses and GetFlag(tieflingsDead)
+        end,
+        game.states.CHA_LaezelInspectsCorpses,
+    }
+
+    nodes.OutOfCage.StandAtPoint = Action{
+        CanEnter = function()
+            return GetFlag(tieflingsLeave) or GetFlag(tieflingsDead)
+        end,
+        function()
+            Sleep(3)
+            if not IsInDangerousSurfaceFor(outPoint, me.Character) then
+                if GetDistanceTo(me, outPoint) > 2.0 then
+                    try
+                        MoveTo(outPoint, MovementSpeed.Stroll)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(3)
+                    end
+                end
+            end
+        end
+    }
+
+    nodes.OutOfCage.TransitionWait = Action {
+        function()
+            Sleep(1)
+        end,
+    }
+
+    nodes.FallbackWait = Action {
+        function()
+            Sleep(1)
+        end,
+    }
+
+    -- events
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == attackedAD.Guid) then
+            StartTimer(me, "CHA_Laezel_AttackedADTimer", 10.0, 0)
+        end
+    end
+    events.TimerFinished = function(e)
+        if e.TimerName == "CHA_Laezel_ADTimer" then
+            canAD = true
+        elseif e.TimerName == "CHA_Laezel_AttackedADTimer" and helpers.CanReactToBeingAttacked() then
+            canDoAttackedAD = true
+        end
+    end
+    events.EntityEvent = function(e)
+        if e.Event == "CHA_LaezelRecruit_AllowAD" then
+            StartTimer(me, "CHA_Laezel_ADTimer", 5.0, 0)
+        elseif e.Event == "CHA_LaezelRecruit_StopInspectingCorpse" then
+            canCheckCorpses = false
+        end
+    end
+    events.FlagSet = function(e)
+        if e.Flag == Guid("CHA_LaezelRecruitment_Event_TieflingsLeaveAlone_9cfe5720-e50c-8cae-cd23-f61aaf75499f") then
+            canCheckCorpses = false
+        end
+    end
+    events.Damaged = function(e)
+        if canDoAttackedAD and
+           e.Source ~= nil and
+           e.Source.IsCharacter and
+           e.Source.Character.IsPlayer and
+           not e.Source.IsInCombat and
+           helpers.CanReactToBeingAttacked() and
+           not IsInDialog(me, false) then
+            canDoAttackedAD = false
+            StartAutomatedDialogImmediate(attackedAD, me, e.Source)
+        end
+    end
+end}
+
+
+game.states.CRA_Laezel = State {function ()
+    description = [[Lae'zel's NPC behaviour in Act1, after dying in TUT and being resurrected. Most likely in CRA, but since corpses can be moved, can happen anywhere.]]
+
+    -- default flow
+    local initFlag = Flag("ORI_LaezelRecruitment_State_CrashVersionInitiated_a80f2bd8-ffa1-4065-a92a-d01d59907637")
+    local doneFlag = Flag("ORI_LaezelRecruitment_Event_CrashVersionDone_df73c46d-ed94-47de-be8b-36df1dbd973f")
+    local dialogFlag = Flag("ORI_Laezel_Resurrection_HasMet_84fc0271-6af4-d318-d600-ca4d9a0091d8")
+    local position = nil
+    local tryPotion = true
+    --gith chokepoint edge-case
+    local knightAppearedFlag = Flag([[GLO_GithChokepoint_DragonEventEnd_ded1de27-9668-418f-93f6-4b5a789b5640]])
+    local sceneOverFlag = Flag([[PLA_GithChokepoint_State_SceneDone_2fa4006f-12e5-4666-931b-e31dee737f2f]])
+    local githChokepointArea = Entity([[S_PLA_ChokepointControlSphere_ca3e6cb3-bd1e-456f-8e12-4b75be7f3fdb]])
+
+
+    self.Valid = function()
+        return not GetFlag(doneFlag) and GetFlag(initFlag)
+    end
+
+    nodes.PLA_Override = Action {
+        CanEnter = function()
+            return IsInTrigger(me, githChokepointArea.Trigger) and GetFlag(knightAppearedFlag) and not GetFlag(sceneOverFlag)
+        end,
+        OnEnter = function()
+            SetFlag(Flag([[ORI_LaezelRecruitment_State_PlainsVersionInitiated_59bda4f5-708b-4f23-aaba-d5f387ae95c2]]), nil)
+            SetFlag(Flag([[ORI_LaezelRecruitment_Event_CrashVersionDone_df73c46d-ed94-47de-be8b-36df1dbd973f]]), nil)
+        end,
+        function()
+            Sleep(5)
+        end
+    }
+
+    nodes.DrinkPotion = Action {
+        CanEnter = function()
+            return tryPotion and GetFlag(dialogFlag)
+        end,
+        OnEnter = function()
+            tryPotion = false
+        end,
+        function()
+            Sleep(2)
+            if me.HitpointsPercentage < 60.0 then
+                local potion = GetFirstItemByTemplateInInventory(me, FindTemplate([[CONS_Potion_Healing_A_d47006e9-8a51-453d-b200-9e0d42e9bbab]]))
+                if potion then
+                    UseItem(potion.Item)
+                end
+            end
+        end
+    }
+
+    nodes.Resurrected = Action {
+        CanEnter = function()
+            return position ~= nil
+        end,
+        function()
+            try
+                Sleep(5)
+                try
+                    Wander(4.0, math.random(2,4), MovementSpeed.Stroll, position, true, PathClimbingMode.Disabled)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(3)
+                end
+                Sleep(math.random(4, 11))
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(6)
+            end
+        end
+    }
+
+    nodes.Wait = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    events.Resurrected = function(e)
+        if (e.Target == me) and not GetFlag(doneFlag) then
+            position = me.Position
+        end
+    end
+end}
+
+
+
+game.states.PLA_Laezel = State {function ()
+    description = [[Lae'zel's NPC behaviour in Act1, in PLA (gith chokepoint), when she was not recruited.]]
+
+    local postGithAD = Dialog("PLA_GithChokepoint_AD_LaezelPostConfrontation_d48b01a4-30b8-fb22-84e2-5eee99e864df")
+    local postGithFlag = Flag("PLA_GithChokepoint_State_SceneDone_2fa4006f-12e5-4666-931b-e31dee737f2f")
+    local githSideFlag = Flag("ORI_Laezel_State_HostileAtGithChokepoint_fc58ccc7-55ec-49b8-b8c0-d8d2c581c0be")
+    local validBehaviourFlag = Flag("ORI_LaezelRecruitment_State_PlainsVersionInitiated_59bda4f5-708b-4f23-aaba-d5f387ae95c2")
+    --local invalidBehaviourFlag = Flag("") --TODO
+    local talkToGithFlag = Flag("PLA_GithChokepoint_Event_LaezelRunsToKnight_5f5d15e8-ecbb-4b3f-8ac8-da29ef763d92")
+    local recruitPos = Entity("S_PLA_LaezelRecruitPoint_9f9daa3c-b446-4d03-a2a1-0a9383adccbe")
+    local knight = Entity("S_GLO_GithKnight_2adce2df-0799-49dc-b867-ba7ca21e9aea")
+    
+    local githChokepointArea = Entity([[S_PLA_ChokepointControlSphere_ca3e6cb3-bd1e-456f-8e12-4b75be7f3fdb]])
+    local craInitFlag = Flag("ORI_LaezelRecruitment_State_CrashVersionInitiated_a80f2bd8-ffa1-4065-a92a-d01d59907637")
+    local craDoneFlag = Flag("ORI_LaezelRecruitment_Event_CrashVersionDone_df73c46d-ed94-47de-be8b-36df1dbd973f")
+    local defaultFlowFlag = Flag("PLA_LaezelRecruitment_Event_NormalFlow_4c50a81b-38ac-4365-914e-64c19d3880b8")
+
+    self.Valid = function()
+        return CheckCurrentGameLevel("WLD_Main_A") and GetFlag(validBehaviourFlag) --and not GetFlag(invalidBehaviourFlag)
+    end
+
+    --[[
+        AD with the Knight:
+        - it is handled by the knight in PLA_GithKnight.ann
+        - it is valid also when Lae'zel was in the party and left to join the knight
+    ]]
+
+    nodes.Hostile = Action {
+        CanEnter = function()
+            return GetFlag(githSideFlag)
+        end,
+        function()
+            try
+                Sleep(3.0)
+                MoveTo(recruitPos, MovementSpeed.Stroll)
+                Sleep(35)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(3.0)
+            end
+        end
+    }
+
+    nodes.PostFight = Action {
+        CanEnter = function()
+            return GetFlag(postGithFlag)
+        end,
+        function()
+            Sleep(5)
+             if not IsInDialog(me, false) then
+                StartAutomatedDialog(postGithAD, true, me)
+            end
+            Sleep(35)
+        end
+    }
+
+    nodes.MoveToKnight = Action {
+        -- Lae'zel is normally made to move to the knight in Osiris, but -extreme edge-case- if her corpse is dragged from CRA to PLA, this will also make her move.
+        CanEnter = function()
+            return not GetFlag(defaultFlowFlag) and not GetFlag(talkToGithFlag) and (GetDistance2DTo(me, recruitPos) > 3.0)
+        end,
+        function()
+            try
+                Sleep(3.0)
+                MoveTo(recruitPos, MovementSpeed.Run)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(3.0)
+            end
+        end,
+        OnLeave = function()
+            if GetDistance2DTo(me, recruitPos) <= 3.0 then
+                SetEntityEvent(me, "GLO_GithChokepoint_LaezelRanUpToKnight")
+                SetFlag(talkToGithFlag)
+            end
+        end
+    }
+
+    nodes.TalkToGithKnight = Action{
+        CanEnter = function()
+            return GetFlag(talkToGithFlag)
+        end,
+        function()
+            if GetDistance2DTo(me, recruitPos) > 3.0 then
+                try
+                    MoveTo(recruitPos, MovementSpeed.Run)
+                    Sleep(1.0)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(3.0)
+                end
+            end
+            SteerTo(knight)
+            Sleep(5.0)
+        end,
+    }
+
+    nodes.Wait = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+end}
+
+
+game.states.CHA_LaezelInspectsCorpses = State {function ()
+    description = [[Githyanki inspecting the corpses of defeated foes.]]
+
+    local damays = Entity("S_CHA_CagerLaezel2_863d6788-5887-45c8-bafa-87128631904e")
+    local nymessa = Entity("S_CHA_CagerLaezel1_2c8537fb-bf73-43a2-a8ff-48e41453adea")
+    local corpse = nil
+    local animation = Animation([[CUST_InspectingCorpse_01_88e057b6-22df-45a5-9074-1f5eb6e85892]])
+    local lootAD = Dialog("CHA_LaezelRecruitment_AD_LaezelInspectsCorpses_a8539ecc-5bb7-4036-713d-f205c649c732")
+    local doCorpseIntro = true
+
+    helpers.SetCorpse = function()
+        if corpse == nil then
+            corpse = nymessa
+            if GetDistance2DTo(me, damays) < GetDistance2DTo(me, nymessa) then
+                corpse = damays
+            end
+        elseif corpse == damays then
+            corpse = nymessa
+        else
+            corpse = damays
+        end
+    end
+
+    nodes.CheckCorpseIntro = Action {
+        CanEnter = function()
+            return doCorpseIntro == true
+        end,
+        function()
+            Sleep(3.6)
+            helpers.SetCorpse()
+            SteerTo(corpse)
+            doCorpseIntro = false
+            if not IsInDialog(me, false) then
+                StartAutomatedDialog(lootAD, false, me)
+            end
+        end
+    }
+
+    nodes.CheckCorpse = Action {
+        function()
+            try
+                local moveTarget = FindValidPosition(corpse, 2.0, me)
+                try
+                    MoveTo(moveTarget,MovementSpeed.Stroll)
+                    SteerTo(corpse)
+                    Sleep(1)
+                    PlayAnimation(animation, true)
+                    Sleep(3)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(6)
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                SteerTo(corpse)
+                Sleep(8)
+            end
+            helpers.SetCorpse()
+        end
+    }
+
+end}

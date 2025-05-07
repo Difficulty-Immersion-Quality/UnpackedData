@@ -1,0 +1,76 @@
+game.states.SCL_BlightMonster = State{
+    function()
+        description = [[Small wander behaviour for blights while they are not ambushing.]]
+
+        modules = {"shared.util"}
+
+        params.blightVFX =  { type = EParamType.String, required = false, default = "", help = [[Blight VFX.]]}
+        params.usesAmbushStatus =  { type = EParamType.Bool, required = false, default = true, help = [[Use ambush statuses.]]}
+
+        params.ambushPos =  { type = EParamType.String, required = false, default = "", help = [[Ambush trigger for the blight.]]}
+        params.wanderArea =  { type = EParamType.String, required = true, help = [[Wander trigger for the blight.]]}
+
+        local wanderArea = Entity(params.wanderArea)
+        local ambushPos = Entity(params.ambushPos)
+
+        local ambushing = Flag("SCL_BlightCreature_State_Ambushing_f7cf8aa4-0029-43ca-8862-e5512cb4c467")
+
+        local timesWandered = 0
+        local maxTimeWandering = 3
+
+        -- Todo: once we can hide characters from the minimap without making them invisible would be nice to revisit, and hide them only when they are not moving.
+        nodes.Action_Ambush = Action{
+            function()
+                if not IsInDangerousSurfaceFor(ambushPos, me.Character) then
+                    try
+                        MoveTo(ambushPos)
+                        LookFrom(ambushPos)
+
+                        if params.usesAmbushStatus then
+                            RemoveStatus(me, params.blightVFX, me)
+                        end
+
+                        WaitForInterrupt()
+
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        SteerTo(ambushPos)
+                    end
+                else
+                    SteerTo(ambushPos)
+                end
+                Sleep(3.0)
+            end,
+            CanEnter = function()
+                return GetFlag(ambushing, me)
+            end,
+            OnLeave = function()
+                if params.usesAmbushStatus then
+                    ApplyStatus(me, params.blightVFX, true, -1.0, me)
+                end
+            end
+        }
+
+        nodes.Action_Wander = Action{
+            function()
+                mod.util.SleepRandom(5.0, 10.0)
+
+                try
+                    Wander(wanderArea, 3.0, MovementSpeed.Walk)
+                    timesWandered = timesWandered + 1
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Error: Wander MovementFailed")
+                    Sleep(3.0)
+                end
+
+                mod.util.SleepRandom(5.0, 10.0)
+
+                -- Return to ambush pos
+                if timesWandered >= maxTimeWandering then
+                    timesWandered = 0
+                    SetFlag(ambushing, me)
+                end
+            end
+        }
+
+    end
+}

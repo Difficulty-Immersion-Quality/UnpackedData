@@ -1,0 +1,100 @@
+game.states.LOW_TheLodge_Havkelaag = State{function()
+    
+    modules = {"shared.dialog"}
+
+    local triggerString = "S_LOW_TheLodge_HavkelaagPos_03daa1b7-a24f-46fe-9349-ab009407e949"
+    local trigger
+    local githEgg = Entity("S_CRE_GithyankiEgg_999b6dd7-2901-4604-8280-1931a5217a94")
+
+    local sawGithEggAD = Dialog("LOW_TheLodge_AD_Havkelaag_SeesGithEgg_2a0545f5-fe05-f97c-1862-7c662476e11b")
+
+    local sawGithEggFlag = Flag("LOW_TheLodge_State_HavkelaagSawEggInGameplay_3d141f24-3dc8-4803-8d9e-3413ef8f8935")
+
+    self.OnInit = function()
+        trigger = Entity(triggerString)
+    end
+
+    nodes.GithEggReaction = Action{
+        OnEnter = function()
+            if(not GetFlag(sawGithEggFlag)) then
+                SetFlag(sawGithEggFlag)
+            end
+        end,
+
+        function()
+            SteerTo(githEgg)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                sawGithEggAD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 5
+                },
+                me
+            )
+        end,
+
+        Valid = function()
+            return CanSee(me,githEgg) and not githEgg.Item.IsDestroyed
+        end
+    }
+
+    nodes.Idle = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Idle.ThinkAtTrigger = Proxy{  
+        game.states.GLO_StateInTrigger,
+        params = {
+            Trigger = triggerString,
+            InTriggerState = StateRef {game.states.LOW_TheLodge_Havkelaag_Thinking}
+        }
+    }
+
+    nodes.Idle.IdleAtTrigger = Proxy{
+        game.states.GLO_StateInTrigger,
+        params = {
+            Trigger = triggerString,
+            InTriggerState = StateRef {game.states.LOW_TheLodge_Havkelaag_Idling}
+        }
+    }
+end}
+
+game.states.LOW_TheLodge_Havkelaag_Thinking = State{function()
+    
+    modules = {"shared.dialog", "shared.math"}
+
+    local idleAnimation = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+    local idleAD = Dialog("LOW_TheLodge_AD_Havkelaag_Idle_e5175f14-fa7f-70fc-37d0-988cfc1d0292")
+
+    nodes.Thinking = Action{        
+        function()
+            PlayAnimation(idleAnimation,false,false)
+            Sleep(3.0)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                idleAD,
+                {
+                    waitForCompletion = false,
+                    minDelay = 60
+                },
+                me
+            )
+            Sleep(math.random(10,12))
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+end}
+
+game.states.LOW_TheLodge_Havkelaag_Idling = State{function() 
+
+    modules = {"shared.math"}
+
+    nodes.Idling = Action{
+        function()
+            Sleep(math.random(10,15))
+        end
+    }
+end}

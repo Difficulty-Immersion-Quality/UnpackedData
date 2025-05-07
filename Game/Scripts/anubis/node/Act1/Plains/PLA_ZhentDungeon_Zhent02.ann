@@ -1,0 +1,82 @@
+game.states.PLA_ZhentDungeon_Zhent02 = State{function ()
+
+    modules = { "shared.moveto"}
+
+    local PLA_ZhentDungeon_State_FallBack = Flag("PLA_ZhentDungeon_State_FallBack_7a94f079-2bc8-495e-99f2-5b04b03a7d1d")
+    local PLA_ZhentDungeon_EscapeTrigger2_1 = Entity("S_PLA_ZhentDungeon_EscapeTrigger2_1_aa1874ba-cfa5-4662-80b7-8e3349ab4516")
+    local PLA_ZhentDungeon_EscapeTrigger2_3 = Entity("S_PLA_ZhentDungeon_EscapeTrigger2_3_7a7c849f-2dd8-4c92-8c41-ada555bf58f2")
+
+    local PLA_ZhentDungeon_Zhent02_State_GetToLadder = Flag("PLA_ZhentDungeon_Zhent02_State_GetToLadder_c281ffaa-413e-40c5-ba02-7fe3f4ae92cd")
+    local passedLadder = false
+
+    events.EntityEvent = function(e)
+        if  e.TargetEntity == me and e.Event == "PLA_ZhentMovedPastLadder" then
+            passedLadder = true
+        end
+    end
+
+    nodes.Selector_Packing = Selector{
+        function(nodes)
+            return
+                GetWeightedCanEnter(nodes, {
+                    [nodes.Action_Idle] = 3,
+                    [nodes.Action_AD]= 2
+            })
+        end,
+        Valid = function()
+            return not GetFlag(PLA_ZhentDungeon_State_FallBack, nil)
+        end
+    }
+
+    nodes.Selector_Packing.Action_AD = Proxy{
+        game.states.GLO_ADManager,
+        params={
+            AD = "PLA_ZhentDungeon_Zhent02_AD_Idle_6a10711b-d27d-50a2-44bc-682f8b0c81cb",
+            regionBlockFlag = "PLA_ZhentDungeon_State_BlockAD_f2d6834a-a9ef-4328-9ed1-a1cb84226d8c",
+            dialogBlockFlag = "PLA_ZhentDungeon_State_BlockAD_Zhent02_9579d2d4-819d-4449-9931-3c15ca3d498c"},
+    }
+
+    nodes.Action_FallBack = Action{
+        function()
+            mod.moveto.MoveTo(PLA_ZhentDungeon_EscapeTrigger2_3, false, 1.0, "Sprint", "PLA_ZhentMovedPastLadder")
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return GetFlag(PLA_ZhentDungeon_Zhent02_State_GetToLadder) and
+                   not passedLadder
+        end
+    }
+
+    nodes.Selector_Packing.Action_Idle = Action{function()
+        if GetDistanceTo(PLA_ZhentDungeon_EscapeTrigger2_1, me) > 1.5 then
+            if not IsInDangerousSurfaceFor(PLA_ZhentDungeon_EscapeTrigger2_1, me.Character) then
+                try
+                    MoveTo(PLA_ZhentDungeon_EscapeTrigger2_1)
+                    LookFrom(PLA_ZhentDungeon_EscapeTrigger2_1)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(1.0)
+                    return
+                end
+            else
+                LookAtEntity(PLA_ZhentDungeon_EscapeTrigger2_1, 3.0)
+            end
+        end
+        Sleep(math.random()*4.0+3.0)
+    end
+    }
+
+    nodes.Action_Alert1 = Proxy{game.states.PLA_ZhentDungeon_ZhentsFallBack,
+        params = {backPosition = "S_PLA_ZhentDungeon_EscapeTrigger2_2_ab7147cb-0bf3-448c-83b2-f213a0821817"}
+    ,
+    Valid = function()
+        return not passedLadder
+    end
+    }
+
+    nodes.Action_Alert2 = Proxy{
+        game.states.PLA_ZhentDungeon_ZhentsFallBack,
+        params = {backPosition = "S_PLA_ZhentDungeon_EscapeTrigger2_4_9e3007bd-4284-47e3-a939-427a82dea438"}
+    }
+
+end
+}

@@ -1,0 +1,205 @@
+game.states.DEN_Prodigy = State {function ()
+
+    modules = { "shared.dialog" }
+
+    description = [[Behaviour of the Prodigy in the druids' grove]]
+
+    local StayFlag = Flag("DEN_Prodigy_State_Staying_479db0b1-cc1b-78bf-3e7b-9840747fbd4f")
+    local AD = Dialog("DEN_Prodigy_AD_0e3b4f43-4360-84cb-573d-f8563083487a")
+    local prodigySister = Entity([[S_GLO_ProdigySister_44d09b0b-0568-456c-b18d-559a0a3f981d]])
+    local prodigyBrother = Entity([[S_GLO_ProdigyBrother_d0187724-c0e2-4019-a01d-a03ee8153f1b]])
+    local canAD = true
+
+    nodes.AD = Action {
+        CanEnter = function()
+            return canAD
+        end,
+
+        OnEnter = function()
+            canAD = false
+        end,
+
+        function()
+            Sleep(4)
+            SetDoNotFace(me, true)
+            SetDoNotFace(prodigyBrother, true)
+            SetDoNotFace(prodigySister, true)
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = false
+                },
+                me,
+                prodigyBrother,                
+                prodigySister
+            )
+        end,
+
+        OnLeave = function()
+            StartTimer(me, "DEN_Prodigies_ADTimer", math.random(40, 60), 0)
+        end
+    }
+    nodes.Idle = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_DEN_ProdigyPos_83b1845a-873f-45b7-87b6-955b71138d95"
+        },
+        Valid = function()
+            return not GetFlag(StayFlag,nil)
+        end
+    }
+    nodes.Staying = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_DEN_ProdigyStayPos_222bd92f-340f-4a27-b88d-9b523c451ffc"
+        }
+    }  
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_Prodigies_ADTimer") then
+            canAD = true
+        end
+    end
+end}
+
+game.states.DEN_AttackOnDen_Prodigy = State {function ()
+    
+    modules = { "shared.dialog" }
+    
+    description = [[Prodigy having a dispute with his brother and sister about how to approach the goblin attack.]]
+    local AD = Dialog([[DEN_AttackOnDen_AD_Prodigies_9ef90a09-22cd-361a-ca50-9976f43af6e8]])
+    local prodigySister = Entity([[S_GLO_ProdigySister_44d09b0b-0568-456c-b18d-559a0a3f981d]])
+    local prodigyBrother = Entity([[S_GLO_ProdigyBrother_d0187724-c0e2-4019-a01d-a03ee8153f1b]])
+    local canAD = true
+
+    nodes.AD = Action{
+        CanEnter = function()
+            return canAD
+        end,
+
+        OnEnter = function()
+            canAD = false
+        end,
+
+        function()
+            Sleep(4)
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true,
+                },
+                me,
+                prodigySister,
+                prodigyBrother
+            )
+        end,
+
+        OnLeave = function()
+            StartTimer(me, "DEN_AttackOnDen_Prodigy_ADTimer", math.random(50, 70), 0)
+        end
+    }
+
+    nodes.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_AttackProdigyPos_60115c6f-92df-4bc8-864c-7ed2588b0df5]]
+        }
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName =="DEN_AttackOnDen_Prodigy_ADTimer") then
+            canAD = true
+        end
+    end
+    
+end}
+
+game.states.CAMP_GoblinHuntCelebration_Prodigy = State {function ()
+    description = [[Prodigy is producing a small light show and chatting with his siblings.]]
+
+    modules = {"shared.math", "shared.util", "shared.dialog"}
+
+    params.position = {type=EParamType.String, required=false, default=nil, help=[[Position at camp.]]}
+
+    local position = Entity(params.position)
+    local magicTrickAnim = Animation("CUST_Drinking_01_Drink_Wine_Glass_A_3f6ab5b5-6c83-456d-932e-23a260378b6b") 
+    local AD = Dialog([[CAMP_GoblinHuntCelebration_AD_Prodigies_b725e0f9-18a6-c287-6f16-4bb6a7d75750]])
+    local prodigySister = Entity([[S_GLO_ProdigySister_44d09b0b-0568-456c-b18d-559a0a3f981d]])
+    local prodigyBrother = Entity([[S_GLO_ProdigyBrother_d0187724-c0e2-4019-a01d-a03ee8153f1b]])
+    local canAD = true
+    local tieflingPetsDogFlag = Flag("CAMP_GoblinHuntCelebration_State_PettingDog_cc8b4a4d-99ca-41a1-b38a-57686feb7070")
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me and ev.Event == "StartPetTheDog" and GetFlag(tieflingPetsDogFlag, me) then
+            EndRepose(me)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    end
+
+    nodes.WaitingForDog = Action {
+        function() 
+            Sleep(1.0)
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, false)
+        end,
+        Valid = function()
+            return GetFlag(tieflingPetsDogFlag, me)
+        end
+    }
+    
+    nodes.AD = Action{
+        CanEnter = function()
+            return canAD
+        end,
+
+        OnEnter = function()
+            SetDoNotFace(me, true)
+            canAD = false
+        end,
+
+        function()
+            Sleep(4)
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true
+                },
+                me,
+                prodigySister,
+                prodigyBrother
+            )
+        end,
+        
+        OnLeave = function()
+            SetDoNotFace(me, false)
+            StartTimer(me, "CAMP_GoblinHuntCelebration_Prodigy_ADTimer", math.random(50, 70), 0)
+        end
+    }
+
+    nodes.MagicTrick  = Action {
+        function()
+            if not IsInDangerousSurfaceFor(position, me.Character)
+                and (GetDistanceTo(me, position) > 2.0) then
+                    try
+                        MoveTo(position, MovementSpeed.Stroll, false, false, 0.5, 1.5)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(6.0)
+                    end
+            else
+                Sleep(6.0)
+            end
+            LookFrom(position)
+            mod.util.SleepRandom(3.0, 10.0)
+            PlayAnimation(magicTrickAnim, true)
+            mod.util.SleepRandom(1.0, 5.0)
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "CAMP_GoblinHuntCelebration_Prodigy_ADTimer") then
+            canAD = true
+        end
+    end
+
+end}

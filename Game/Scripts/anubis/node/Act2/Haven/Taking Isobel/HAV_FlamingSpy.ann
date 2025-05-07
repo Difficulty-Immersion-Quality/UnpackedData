@@ -1,0 +1,162 @@
+game.states.HAV_FlamingSpy = State { function()
+
+    description = [[General script for the Tadpole Flaming Fist (the True Soul spy tasked with kidnapping Isobel).]]
+
+    modules = { "shared.items" }
+
+    local watchingPlayerFlag = Flag([[HAV_TakingIsobel_State_FlamingSpyIsWatching_5479f9ca-f04c-4f32-af8c-e0c2a01bda9d]])
+    local availableFlag = Flag([[HAV_TakingIsobel_State_SpyIsAvailable_96dd328c-15f7-45ab-bc41-a13aa38ac2a3]])
+    local checkpointFlag = Flag([[HAV_EnteringHaven_GainedAccess_07c776da-353a-9050-e9be-c42d51a99412]])
+    local explainedMission = Flag("HAV_TakingIsobel_Knows_SpyExplainedHisMission_db491c69-6de0-5958-1f0d-98a6073e94d7")
+    local idlePoint1 = Entity([[S_HAV_SpyIdlePoint_7334a125-3c13-4c97-af0f-4789489df374]]) --changes when checkpointFlag is set
+    local idlePoint2 = Entity([[S_HAV_SpyInPoint_546e38ea-db44-4b12-bbb7-d486dca08124]]) --TODO
+    local idlePoint3 = Entity("S_HAV_SpyInPoint2_62a04762-0f65-46e5-8080-dc4e5d34e237")
+    local idlePoint4 = Entity("S_SCL_TakingIsobel_MarcusBalconyPoint_2c2bf15b-8db4-47bb-b2d8-06250715cea6")
+
+    local lookAt = Entity([[S_HAV_SpyLookAt_973a028c-0936-4bcf-b6bd-a4be807dab87]])
+    local armsCrossedAnimLoop = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+    local armsCrossedAnimStart = Animation("CUST_ArmsCrossed_01_Start_dafd0bbc-012a-403c-aabe-4963aca9cf25")
+    local armsCrossedAnimEnd = Animation("CUST_ArmsCrossed_01_End_ae43ea68-fc1b-456a-88ce-0e1d504e1d40")
+    local isAnimating = false
+    local room = Entity([[S_HAV_IsobelRoom_SUB_4310edec-0ce2-4ac0-adbd-c02d60b92c3d]])
+
+    local flamingSpyRevealed = Flag("HAV_EnteringHaven_State_FlamingSpyRevealed_89e1eb87-a718-8dc2-026d-f4db8321b686")
+    local vouched = Flag("HAV_EnteringHaven_State_FlamingSpyVouch_f3850740-f19b-44c0-a018-00fa00e87b31")
+    local flamingSpyFlyAway = Flag("HAV_EnteringHaven_Event_FlamingSpyFlyAway_ca13e310-a7dc-4faa-b409-5e23a9ca54ac")
+    local left = Flag("HAV_TakingIsobel_Event_MarcusToBalcony_8a9169b8-3a23-b89e-4565-5fcbfc00a3c4")
+
+
+    -----------------------------------------
+    -- Local functions
+    helpers.stopAnim = function()
+        if isAnimating then
+            StopAnimation(me)
+            isAnimating = false
+        end
+    end
+
+    -----------------------------------------
+    -- Nodes
+--[[    nodes.WaitingForSpyCapture = Action {
+        CanEnter = function()
+            return GetFlag(availableFlag)
+        end,
+        function()
+            WaitForInterrupt()
+        end,
+    }]]
+
+    nodes.Disappear = Proxy{
+        game.states.HAV_FlamingSpy_DisappearingAct,
+    }
+
+    nodes.EnteringHaven_Checkpoint = Action {
+        CanEnter = function()
+            return not GetFlag(checkpointFlag)
+        end,
+        function()
+            Sleep(1.0)
+            if not isAnimating then
+                PlayLoopingAnimation(armsCrossedAnimStart, {armsCrossedAnimLoop}, armsCrossedAnimEnd, false)
+            end
+            Sleep(1.0)
+        end,
+        OnLeave = function()
+            helpers.stopAnim()
+            if GetFag(watchingPlayerFlag) then
+                ClearFlag(watchingPlayerFlag)
+            end
+        end,
+        OnInterrupt = function()
+            helpers.stopAnim()
+            if GetFag(watchingPlayerFlag) then
+                ClearFlag(watchingPlayerFlag)
+            end
+        end,
+    }
+
+    nodes.Haven_DefaultBehaviour = Action {
+        function()
+            local currentIdlePoint = nil
+            if GetFlag(left) then
+                currentIdlePoint = idlePoint4
+            elseif GetFlag(explainedMission) then
+                currentIdlePoint = idlePoint3
+            elseif GetFlag(checkpointFlag) then
+                currentIdlePoint = idlePoint2
+            else
+                currentIdlePoint = idlePoint1
+            end
+            Sleep(1)
+            if (GetDistanceTo(me, currentIdlePoint) > 2.0) and
+                (not IsInDangerousSurfaceFor(currentIdlePoint, me.Character)) then
+                helpers.stopAnim()
+                try
+                    MoveTo(currentIdlePoint, MovementSpeed.Stroll, true, true)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "movement failed")
+                    Sleep(2.0)
+                end
+            elseif isAnimating then
+                SteerTo(lookAt)
+                Sleep(2.0)
+            else
+                Sleep(1.0)
+                SteerTo(lookAt)
+                Sleep(1.0)
+                PlayLoopingAnimation(armsCrossedAnimStart, {armsCrossedAnimLoop}, armsCrossedAnimEnd, false)
+                isAnimating = true
+                Sleep(1.0)
+            end
+        end,
+        OnLeave = function()
+            helpers.stopAnim()
+        end,
+        OnInterrupt = function()
+            helpers.stopAnim()
+        end,
+        Valid = function()
+            return GetFlag(checkpointFlag) and
+                   not GetFlag(flamingSpyRevealed) and
+                   GetFlag(vouched)
+        end
+    }
+
+    nodes.BroodInvisibly = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(checkpointFlag) and
+                   (GetFlag(flamingSpyRevealed) or
+                    not GetFlag(vouched))
+        end
+    }
+
+
+end
+}
+
+game.states.HAV_FlamingSpy_DisappearingAct = State{
+   function ()
+
+        local flamingSpyRevealed = Flag("HAV_EnteringHaven_State_FlamingSpyRevealed_89e1eb87-a718-8dc2-026d-f4db8321b686")
+        local flamingSpyFlyAway = Flag("HAV_EnteringHaven_Event_FlamingSpyFlyAway_ca13e310-a7dc-4faa-b409-5e23a9ca54ac")
+
+        nodes.Disappear = Action{
+            function()
+                Sleep(1.5)
+                UseSpell("Shout_HAV_FlamingSpy_SummonHands", me, nil, nil, nil, true, true, true)
+                Sleep(1.5)
+                SetFlag(flamingSpyFlyAway)
+           end
+        }
+
+        self.Valid = function()
+           return GetFlag(flamingSpyRevealed, nil) and
+                   not GetFlag(flamingSpyFlyAway, nil) and
+                   (not me.IsInCombat or me.CanActInCombatTeamTurn)
+        end
+
+    end
+}

@@ -1,0 +1,59 @@
+game.states.LOW_Guildhall_Bursar_Guard_001 = State{function ()
+    local trigger = [[S_LOW_Guildhall_BursarGuard_001_a9e2cb75-0a3c-47cd-aee1-d038da9c4bda]]
+    local banterAD = [[LOW_Guildhall_AD_Bursar_Guards_Banter_235c9794-39f6-f983-427b-0683ff41fd78]]
+    local banterPartner = [[S_LOW_Guildhall_Bursar_Guard_002_2d55fd30-032e-43a8-87ad-40c89070f28e]]
+
+    local sharpenSwordTrigger = [[S_LOW_Guildhall_TimelineScene_BursarGuard_SharpenBlade_dcac6bb5-2088-4120-b950-d29794b53b70]]
+    local sharpenSwordBehavior = [[BHVR_WRLD_LOW_Guildhall_BursarGuard_SharpenBlade_c8847123-a04d-4749-19ba-2ed1759a024f]]
+
+    modules = {"shared.moveto"}
+
+    --------------------------------Nodes--------------------------------
+    
+    nodes.Idling = Selector {
+        function(nodes)
+            local node = FindDifferentRandomSelectable(nodes)
+            if node ~= nil then
+                return node
+            else
+                return nodes.DoNothing
+            end
+        end
+    }
+    
+    nodes.Idling.Banter = Proxy {
+        game.states.GLO_StateInTrigger,
+        params = {
+            InTriggerState = StateRef{game.states.GLO_PlayAD,
+                AD = banterAD,
+                partners = { banterPartner },
+            },
+            Trigger = trigger,
+        }
+    }
+
+    nodes.Idling.SharpenSword = Proxy {
+        game.states.GLO_WorldBehaviourAtTrigger,
+        params = {
+            Behaviour = sharpenSwordBehavior,
+            SceneTrigger = sharpenSwordTrigger,
+        },
+        CanEnter = function()
+            local equippedWeapon = GetEquippedWeapon(me.Character, WeaponHandType.MainHand)
+            return equippedWeapon ~= nil and IsEquipmentWithProficiency(equippedWeapon, ProficiencyGroup.Scimitars)
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, true, true)
+        end,
+        OnLeave = function()
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    nodes.Idling.DoNothing = Action {
+        function()
+            Sleep(math.random(3,8))
+        end
+    }
+end
+}

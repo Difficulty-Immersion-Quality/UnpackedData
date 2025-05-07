@@ -1,0 +1,73 @@
+game.states.LOW_HouseOfHope_FireDebtor03 = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Flags and variables--------------------------------
+
+    local points = {
+        -- key = value
+        Entity("S_LOW_HouseOfHope_FireDebtor03_Point1_b0af7b2c-3a8d-4beb-b5a5-034e7b04dbb0"),
+        Entity("S_LOW_HouseOfHope_FireDebtor03_Point2_6af415be-0426-456b-8428-50f2f18421fc"),
+        Entity("S_LOW_HouseOfHope_FireDebtor03_Point3_eb1b1d65-18dd-4057-8eba-ebf5f17fe7a9"),
+        Entity("S_LOW_HouseOfHope_FireDebtor03_Point4_6df76732-306f-4e76-93bf-66e70e446e3b"),
+    }
+    
+    local scrub = Animation("CUST_ScrubFloor_01_358b434f-3c05-4e7a-9635-51aaf726aa44")
+
+    local ad = Dialog("LOW_HouseOfHope_AD_FireDebtor03_Idle_317b375f-469d-5e4f-dce5-ff3e1d2ff732")
+    
+
+    local alarmFlag = Flag("LOW_HouseOfHope_State_RaphaelAlerted_f83c3d6b-d6cf-41a1-a03d-c31df5ea44fe")
+
+    local currentIndex = 0
+
+    -------------------------------Helpers-------------------------------
+
+    --------------------------------Nodes--------------------------------
+    
+    nodes.Act = Action {
+        function()
+            local index = currentIndex
+            while currentIndex == index do
+                index = math.random(1,#points)
+            end
+            currentIndex = index
+            if IsInDangerousSurfaceFor(points[index], me.Character) then
+                StartAutomatedDialog(ad, true, me)
+                Sleep(math.random(10,15))
+                return
+            end
+            local moveResult = MoveTo(points[index], MovementSpeed.Stroll)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(points[index])
+            end
+            StartAutomatedDialog(ad, false, me)
+            PlayAnimation(scrub, true, false)
+        end,
+        CanEnter = function()
+            return not GetFlag(alarmFlag) 
+        end
+    }
+
+
+    nodes.StayingInAmbush = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return not GetFlag(alarmFlag) 
+        end
+    }   
+
+
+    nodes.IdleFallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+        --------------------------------Events--------------------------------
+   
+end}

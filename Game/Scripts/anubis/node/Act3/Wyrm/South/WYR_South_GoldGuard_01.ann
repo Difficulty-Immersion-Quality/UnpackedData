@@ -1,0 +1,85 @@
+game.states.WYR_South_GoldGuard_01 = State{function()
+    description = [[Patrolling guard near gold chest at WYR South checkpoint]]
+
+    local spline = Spline("S_WYR_South_GoldPatrol_01_0679009c-a457-4522-96a8-ce8141bc0144")
+    local destPoint = 1
+    local doPatrol = true
+    local otherGuard = Entity("S_WYR_South_GoldGuard_00_cb395bd9-d894-4187-8593-629a6f3e081c")
+    local alone = false
+    local dontWaitCommands = false
+
+    nodes.PatrolForward = Action{
+        CanEnter = function()
+            return doPatrol and destPoint == 1
+        end,
+        function()
+            DoPatrol(spline, false, MovementSpeed.Stroll, 0, false)
+        end
+    }
+
+    nodes.PatrolBackward = Action{
+        CanEnter = function()
+            return doPatrol and destPoint == 0
+        end,
+        function()
+            DoPatrol(spline, true, MovementSpeed.Stroll, 0, false)
+        end
+    }
+
+    nodes.StandBegin = Action{
+        CanEnter = function()
+            return destPoint == 0
+        end,
+        function()
+            Sleep(1.0)
+            if alone or dontWaitCommands then
+                doPatrol = true
+            end
+        end
+    }
+
+    nodes.StandEnd = Action{
+        CanEnter = function()
+            return destPoint == 1
+        end,
+        function()
+            Sleep(1.0)
+            if alone or dontWaitCommands then
+                doPatrol = true
+            end
+        end
+    }
+
+    nodes.Default = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.Died = function(ev)
+        if ev.Target == otherGuard then
+            alone = true
+        end
+    end
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me then
+            if ev.Event == "WYR_South_Gold_ContinuePatrol" then
+                doPatrol = true
+                destPoint = ev.Params[1]
+            elseif ev.Event == "WYR_South_Gold_ImSitting" then
+                dontWaitCommands = true
+                doPatrol = true
+            elseif ev.Event == "WYR_South_Gold_ImNotSitting" then
+                dontWaitCommands = false
+            end
+        end
+    end
+
+    events.SplineControlPointReached = function(ev)
+        if ev.EndReached then
+            destPoint = 1 - destPoint
+            doPatrol = false
+        end
+    end
+end}

@@ -1,0 +1,76 @@
+game.states.LOW_HouseOfHope_MerregonDebtor03 = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Flags and variables--------------------------------
+
+    local points = {
+        -- key = value
+        Entity("S_LOW_HouseOfHope_MerregonDebtor03_Point1_c6477afc-1404-41fc-ad49-dab1fb592866"),
+        Entity("S_LOW_HouseOfHope_MerregonDebtor03_Point2_7e659b36-d30a-4cbb-b14a-bd6e1af68284"),
+        Entity("S_LOW_HouseOfHope_MerregonDebtor03_Point3_05eea311-47a4-4e88-bd66-62167a9c830d"),
+        Entity("S_LOW_HouseOfHope_MerregonDebtor03_Point4_7dfc0a9d-4f3e-4b9f-9686-d6dd5ec8b415"),
+    }
+    
+    local scratch = Animation("CUST_DogDebtor_Scratch_01_9e5f5294-c453-4730-946d-eb8d12d21d36")
+    local ad = Dialog("LOW_HouseOfHope_AD_MerregonDebtor03_Idle_629e9906-8d45-253b-1eac-d5adeb89f1cd")
+    
+
+    local alarmFlag = Flag("LOW_HouseOfHope_State_RaphaelAlerted_f83c3d6b-d6cf-41a1-a03d-c31df5ea44fe")
+
+    local currentIndex = 0
+    local action = 0
+    --------------------------------Nodes--------------------------------
+    
+    nodes.Act = Action {
+        function()
+            local index = currentIndex
+            while currentIndex == index do
+                index = math.random(1,#points)
+            end
+            currentIndex = index
+            if IsInDangerousSurfaceFor(points[index], me.Character) then
+                StartAutomatedDialog(ad, true, me)
+                Sleep(math.random(10,15))
+                return
+            end
+            local moveResult = MoveTo(points[index], MovementSpeed.Run)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(points[index])
+            end
+            if action == 0 then
+                StartAutomatedDialog(ad, true, me)
+                action = 1
+            else
+                PlayAnimation(scratch, true, false)
+                action = 0
+            end
+            Sleep(math.random(10,15))
+        end,
+        CanEnter = function()
+            return not GetFlag(alarmFlag) 
+        end
+    }
+
+
+    nodes.StayingInAmbush = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return not GetFlag(alarmFlag) 
+        end
+    }   
+
+
+    nodes.IdleFallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+        --------------------------------Events--------------------------------
+   
+end}

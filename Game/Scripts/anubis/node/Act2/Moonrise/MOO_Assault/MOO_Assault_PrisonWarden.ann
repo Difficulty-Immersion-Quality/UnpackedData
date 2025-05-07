@@ -1,0 +1,54 @@
+game.states.MOO_Assault_PrisonWarden = State{function ()
+    description = [[The Prison Warden waits in the throne room while Z'rell engages with the player]]
+
+    modules = { "shared.dialog", "shared.moveto" }
+
+    local waitingAD = Dialog("MOO_Assault_AD_WardenWaiting_77db4066-7197-f12f-56cd-9006c0310c28")
+    local combatReadyAnim = Animation("CUST_Idle_Still_Combat_01_590ea7e8-ae43-4307-916b-b1133ef47dfa")
+
+    local activeIdlePoint
+    local idlePoints = {
+        "S_MOO_AssaultWardenPoint_a8e6d30c-bf49-4ad3-807e-102d875da42b",
+        "S_MOO_AssaultJoinBazaarPoint_001_f11f39e7-59b6-4b68-8f89-467a6b14e50a"
+    }
+
+    nodes.WaitingInThronroom = Action {
+        function()
+            SetWeaponUnsheathed(me, true)
+            PlayAnimation(combatReadyAnim, false, true)
+            if activeIdlePoint ~= nil then
+                if mod.moveto.MoveToPoint(activeIdlePoint,  MovementSpeed.Walk, me) then
+                    local delayTime = 8.0 + 12.0 * math.random()
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        waitingAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = delayTime,
+                        },
+                        me
+                    )
+                else
+                    SteerTo(activeIdlePoint)
+                end
+            end
+            Sleep(1.0)
+        end,
+
+        OnLeave = function()
+            SetWeaponUnsheathed(me, false, false)
+            StopAnimation(me)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            for _, point in ipairs(idlePoints) do
+                if e.Event == point then
+                    activeIdlePoint = Entity(point)
+                end
+            end
+        end
+    end
+
+end
+}

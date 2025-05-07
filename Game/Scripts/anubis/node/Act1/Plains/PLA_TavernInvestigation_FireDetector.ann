@@ -1,0 +1,83 @@
+game.states.PLA_TavernInvestigation_FireDetector = State{
+    function()
+        ---------------------------------------------------------------------
+        -- Local params
+        local trTavern = Entity("S_PLA_StuckHalfElf_TavernBox_fc69dced-9f44-4760-9378-8598b4a9e859")
+
+        -- We can use a status to override the idle animation of players
+        local stSmoke = "PLA_SUFFOCATING"
+
+        local chPlayersInTrigger = {}
+        ---------------------------------------------------------------------
+
+        ---------------------------------------------------------------------
+        -- Helpers
+        helpers.IsInTrigger = function(character)
+            for i, v in ipairs(chPlayersInTrigger) do
+                if character == v then
+                    return true, i
+                end
+            end
+            return false, -1
+        end
+        ---------------------------------------------------------------------
+
+        ---------------------------------------------------------------------
+        -- Nodes
+        nodes.Action_DetectFire = Action{
+            function()
+                -- We could call GetActiveCharacters() and IsInTrigger(), but we can save this calls each 0.5 seconds
+                -- if we save the players as they go in and out of the tavern and do it more performance-friendly.
+                for _, chPlayer in ipairs(chPlayersInTrigger) do
+                    local bFireNearPlayer = FindSurface(chPlayer, 0.0, 3.0, SurfaceType.FIRE, 30)
+                    if bFireNearPlayer and not HasActiveStatus(chPlayer, stSmoke) then
+                        ApplyStatus(chPlayer, stSmoke, true, -1)
+                    elseif not bFireNearPlayer and HasActiveStatus(chPlayer, stSmoke) then
+                        RemoveStatus(chPlayer, stSmoke)
+                    end
+
+                end
+
+                Sleep(0.5)
+            end,
+            Valid = function()
+                return #chPlayersInTrigger >= 1
+            end
+        }
+
+        -- No players inside the trigger, do nothing
+        nodes.Action_Idle = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return #chPlayersInTrigger < 1
+            end
+        }
+        ---------------------------------------------------------------------
+
+        ---------------------------------------------------------------------
+        -- Events
+        events.EnteredTrigger = function(e)
+            if e.Trigger == trTavern and e.Target.Character.IsPartyMember then
+                local bIsInTrigger, _ = helpers.IsInTrigger(e.Target)
+                if not bIsInTrigger then
+                    table.insert(chPlayersInTrigger, e.Target)
+                end
+            end
+        end
+
+        events.LeftTrigger = function(e)
+            if e.Trigger == trTavern and e.Target.Character.IsPartyMember then
+                local bIsInTrigger, index = helpers.IsInTrigger(e.Target)
+                if bIsInTrigger then
+                    if HasActiveStatus(e.Target, stSmoke) then
+                        RemoveStatus(e.Target, stSmoke)
+                    end
+                    table.remove(chPlayersInTrigger, index)
+                end
+            end
+        end
+        ---------------------------------------------------------------------
+    end
+}

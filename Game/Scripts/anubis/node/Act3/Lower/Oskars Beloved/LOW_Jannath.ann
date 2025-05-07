@@ -1,0 +1,111 @@
+game.states.LOW_JannathIdle = State {function ()
+
+    modules = {"shared.moveto"}
+
+    params.WanderPos = {type = EParamType.String, required=false, default=nil, help=[[
+        The position of the trigger to wander.
+    ]]}
+
+    local wanderPos = Entity(params.WanderPos)
+    local stateFlag = Flag("LOW_OskarsBeloved_State_ArtistLeftHideout_76dca7be-5c6a-4444-afa4-3ae4b13d6315")
+    local oskarDeadAnimation = Animation("CUST_KneelingCrying_01_Loop_9ea4a039-0c6c-4b5a-8d56-6a1bb64aa602")
+    local oskarEntity = Entity("S_GLO_DoubtingArtist_3ae152be-8ff6-420c-81a0-68d6a55cd5bd")
+    local bedroomtrigger = Entity("S_LOW_JannathBedroomTrigger_2ccc213b-e3b8-4a39-bdf1-c7756a61a0f6")
+    local cryFlag = Flag("LOW_Jannath_Event_GoCryNearOskar_a85ab57c-8800-45ed-bf6a-f6c5ac2a1ce8")
+    local hauntingFlag = Flag("LOW_OskarsBeloved_State_HauntingHappening_a93014c2-fca7-4ab1-b2f3-ee674737fc7d")
+
+    nodes.Haunt_Idle = Action{
+
+        function()
+            SteerTo(oskarEntity)
+            Sleep(15 + 3 * math.random())
+            if not GetFlag(hauntingFlag) then
+                Wander(6.0, 4.0, MovementSpeed.Walk, bedroomtrigger)
+            end
+        end,
+        Valid = function()
+            return GetFlag(stateFlag) and not GetFlag(cryFlag)
+        
+        end
+    }
+
+    nodes.Haunt_InPossession = Action{
+
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(stateFlag) and HasAppliedStatus(me, "ANIM_COWER") and not GetFlag(cryFlag)
+        
+        end
+    }
+
+    nodes.Haunt_OskarDead = Action{
+
+        function()
+            if CanSee(me, oskarEntity) then
+                if mod.moveto.MoveToPoint(oskarEntity,MovementSpeed.Run, me) then
+                    SteerTo(oskarEntity)
+                else
+                    SteerTo(oskarEntity)
+                end
+            end
+            PlayAnimation(oskarDeadAnimation,false,true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return GetFlag(stateFlag) and GetFlag(cryFlag)
+        end
+    }
+
+    nodes.Action_IdleNotHaunt = Action{
+
+        function()
+            Wander(10.0,5.0,MovementSpeed.Walk,wanderPos)
+            Sleep(math.random(5.0, 10.0))
+        end,
+        Valid = function()
+            return not GetFlag(stateFlag)
+        end
+    }
+
+end}
+
+
+
+
+game.states.LOW_JannathCombat = State{function() 
+
+    modules = {"shared.dialog"}
+
+    local hauntingFlag = Flag("LOW_OskarsBeloved_State_HauntingHappening_a93014c2-fca7-4ab1-b2f3-ee674737fc7d")
+    local AD = Dialog("LOW_OskarsBeloved_PossessionAD_7fc3c512-b463-e099-6a4c-bf527b6275fd")
+    local OskarEntity = Entity("S_GLO_DoubtingArtist_3ae152be-8ff6-420c-81a0-68d6a55cd5bd")
+    local TimesSaidAD = 0
+
+    self.Valid = function()
+        return me.IsInCombat
+    end
+
+
+    nodes.DefaultCombat = Proxy{
+        game.states.DefaultCombat
+    }
+
+    events.TurnStarted = function()
+
+        if  GetFlag(hauntingFlag) and TimesSaidAD < 2 and not OskarEntity.Character.IsDead then
+            StartAutomatedDialogImmediate(AD,me,OskarEntity)
+            TimesSaidAD = TimesSaidAD + 1
+        end
+        Sleep(1.5)
+        EndTurn(me)
+
+    end
+
+end
+}
+

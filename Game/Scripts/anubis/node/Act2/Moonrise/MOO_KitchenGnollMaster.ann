@@ -1,0 +1,119 @@
+game.states.MOO_KitchenGnollMaster = State {function ()
+    --------------------------------MODULE--------------------------------
+    modules = {"shared.util", "shared.dialog", "shared.moveto"}
+    --------------------------------PARAMS--------------------------------
+    --------------------------------LOCAL---------------------------------
+    local barnabus = Entity("S_MOO_KitchenGnoll_001_21db721c-616c-4385-970c-f18bb7477034")
+    local restingGnolls = {}
+    local workingGnolls = {
+        Entity("S_MOO_KitchenGnoll_002_44b05e1f-1e1f-4b81-bfab-ee120bc2f38c"),
+        Entity("S_MOO_KitchenGnoll_001_21db721c-616c-4385-970c-f18bb7477034"),
+        Entity("S_MOO_KitchenGnoll_000_2da0be81-dff2-41a6-a15e-ce340c968ea2")
+    }
+    local idlePoint = Entity("S_MOO_Kitchen_GnollMasterSpot_2f37b1ed-ffe6-463e-8263-94dd40480a22")
+    local workAd = Dialog("MOO_KitchenFight_AD_BackToWork_ff499fb4-944f-bb11-30d5-e5764f2fa443")
+    local Anims = {
+        Animation("CUST_Overseeing_01_49da54db-7131-49fc-9447-aacaea1b702b"),
+        Animation("CUST_Overseeing_02_34661cb9-f6ac-47be-9056-e06d417f0999"),
+        Animation("CUST_Overseeing_03_10110aba-70b1-4a62-9303-7244a64a3788")
+    }
+    local kitchenRoomTrigger = Entity("S_MOO_Kitchen_SUB_b50b8553-0064-41d0-8595-266f69e35c33")
+    local hasToShout = false
+    local seenPowerFlag = Flag("MOO_KitchenFight_State_SeenPower_3b191e8a-0e5f-44d9-3c13-330ebfaef5d9") --Situation concluded
+    --------------------------------NODES---------------------------------
+    nodes = ImmediateSelector{}
+
+    helpers.SelectRandomWorkingGnoll = function()
+        if #workingGnolls > 0 then
+            local gnoll = workingGnolls[math.random(1, #workingGnolls)]
+            if  gnoll ~= nil and not gnoll.Character.IsDead and IsInTrigger(gnoll, kitchenRoomTrigger.Trigger) then
+                return gnoll
+            else
+                return nil
+            end
+        else
+            return nil
+        end
+    end
+
+    nodes.TalkingWithBarnabus = Action {
+        CanEnter = function()
+            return not GetFlag(seenPowerFlag)
+        end,
+
+        function()
+            local chosenAnim = Anims[math.random(1, #Anims)]
+
+            if mod.moveto.MoveToPoint(idlePoint,  MovementSpeed.Walk, me) then
+                SteerTo(barnabus)
+                PlayAnimation(chosenAnim)
+            else
+                SteerTo(barnabus)
+            end
+            Sleep(3)
+        end
+    }
+
+    nodes.ShoutOrder = Action{function()
+        local gnoll = restingGnolls[math.random(1, #restingGnolls)]
+
+        try
+            MoveTo(gnoll, MovementSpeed.Walk)
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            DebugText("Movement Failed")
+        end
+
+        if mod.dialog.IsSpeakerAvailable(me) then
+            StartAutomatedDialog(workAd, false, me)
+        end
+
+        for i = 1, #restingGnolls do
+            SetEntityEvent(restingGnolls[i], "MOO_KitchenFight_GetBackToWork")
+        end
+        restingGnolls = {}
+        hasToShout = false
+    end,
+    Valid = function()
+        return hasToShout
+    end}
+
+    nodes.InspectGnoll = Action{ function()
+        local chosenAnim = Anims[math.random(1, #Anims)]
+        local gnoll = helpers.SelectRandomWorkingGnoll()
+        if gnoll ~= nil then
+            try
+                MoveTo(gnoll, MovementSpeed.Walk)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText("Movement Failed")
+            end
+
+            try
+                SteerTo(gnoll)
+                PlayAnimation(chosenAnim)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "animation failed")
+            end
+        else
+            if mod.moveto.MoveToPoint(idlePoint,  MovementSpeed.Walk, me) then
+                LookFrom(idlePoint)
+            else
+                SteerTo(idlePoint)
+            end
+        end
+        mod.util.SleepRandom(10,20)
+    end
+    }
+    --------------------------------EVENTS--------------------------------
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+			if e.Event == "MOO_KitchenFight_GnollOnBreak" then
+				local eventGnoll = e.Params[1]
+				table.insert(restingGnolls, eventGnoll)
+				if #restingGnolls > 1 and not hasToShout then
+					hasToShout = true
+				end
+			end
+        end
+    end
+end
+}

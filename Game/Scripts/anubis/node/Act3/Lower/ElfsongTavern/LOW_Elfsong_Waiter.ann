@@ -1,0 +1,196 @@
+game.states.LOW_Elfsong_Waiter = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+
+    params.patrolSpline = { type = EParamType.String, help = "[[Patrol spline to clean tables]]", required = true }
+    params.CleanAnimation = {type = EParamType.String, help = "[[Timeline animation for cleaning tables]]", required = false }
+    params.CharacterAD = {type = EParamType.String, help = "[[AD to be played when the caracter is cleaning a table]]", required = false }
+    params.flagForKitchen = {type = EParamType.String, help = "[[If the character is following the Kitchen Path, add the flag here]]", required = false }
+
+
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Flags and variables--------------------------------
+    local localSpline = Spline(params.patrolSpline)
+    local localBehaviourDialog = Dialog(params.CleanAnimation)
+    local localAD = Dialog(params.CharacterAD)
+    local kitchenFlag = Flag(params.flagForKitchen)
+
+
+
+    local tableOfTriggers = {
+        -- key = value
+        One = Entity("S_LOW_Elfsong_BHVR_WLRD_CleaningTable_001_e17e598b-a3cc-41b6-812d-e1897551d9fc"),
+        Two = Entity("S_LOW_Elfsong_BHVR_WLRD_CleaningTable_002_0a9786b1-d820-4041-a762-c2a65a96c118"),
+        Three = Entity("S_LOW_Elfsong_BHVR_WLRD_CleaningTable_006_cbca4d5b-a267-4d07-a037-a6d03f5c7bcc"),
+        Four = Entity("S_LOW_Elfsong_BHVR_WLRD_CleaningTable_004_15d8ae64-99c8-405c-85ac-fde8a2afb38e"),
+        Five = Entity("S_LOW_Elfsong_BHVR_WLRD_CleaningTable_005_500f76a2-4f23-4904-972f-f12b97963e84")
+        --Alan = Trigger("S_LOW_Elfsong_BHVR_WLRD_CleaningTable_000_eed7bd96-f29e-4a48-b595-d3f114777b42")
+        -- I will fix the kitchen thing when I have time Kitchen = Entity("S_LOW_Elfsong_TableInvisibleHelpers_006_c5f4ac9f-67d5-486f-8702-d0a54175da0e")
+    }
+
+    local sceneTrigger = nil
+    local pause = false
+    local tempTrigger = nil
+
+    --------------------------------Nodes--------------------------------
+
+    self.OnInit = function()
+            if (kitchenFlag ~= nil) then
+                SetFlag(kitchenFlag, me)
+            end
+    end
+
+
+    nodes.CleanAndTalk = Action {
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+        function()
+            -- SteerTo(pointToSteer)
+            if (localAD ~= nil) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                    localAD,
+                    {
+                        waitForCompletion = false
+                    },
+                    me
+                )
+            end
+            if (localBehaviourDialog ~= nil) then
+                    try
+                        StartBehaviorDialog(localBehaviourDialog, sceneTrigger.Trigger, true, me)
+                        Sleep(10)
+                    catch e if ls.CheckType(e, error.MissingCompenent) then
+                        DebugText(me, " failed to find trigger " .. tostring(tempTrigger))
+                        Sleep(3.0)
+                        pause = false
+                    catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                        DebugText(me, " failed to start dialog ")
+                        Sleep(3.0)
+                        pause = false
+                    end
+            else
+                Sleep(15 + 15 * math.random())
+            end
+            Sleep(3.0)
+            pause = false
+        end,
+
+        Valid = function()
+            return pause
+        end,
+
+        OnInterrupt = function()
+            BehaviorDialogRequestGracefulStop(me, true)
+            pause = false
+            Sleep(3 + 5 * math.random())
+
+        end
+    }
+
+    nodes.Patrol = Action {
+        function()
+            DoPatrol(localSpline, false, MovementSpeed.Walk, 0)
+        end,
+        CanEnter = function()
+            return localSpline ~= nil
+        end,
+        Valid = function()
+            return not pause
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+        --------------------------------Events--------------------------------
+    events.SplineControlPointReached = function(ev)
+        for iteration,element in pairs(tableOfTriggers) do
+            if ev.Event == iteration then
+                sceneTrigger = element
+                pause = true
+                DebugText(me, "Reached point")
+            end
+        end
+    end
+end}
+
+game.states.LOW_Elfsong_LakrissaOnRooftop = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Flags and variables--------------------------------
+
+    -- local fallbackTeleportEffect = PrepareEffect("VFX_Script_Stub_Poof_01_f0cf792a-0f74-d17e-ad0d-6052a6131416")
+    local FlagStateRooftop = Flag("LOW_Elfsong_State_LakrissaWithAlfira_3de59238-18ec-4d57-9edb-c11fae84fc74")
+    local FlagEventRooftop = Flag("LOW_Elfsong_Event_LakrissaGoingUpstairs_13b8ec89-1a9d-c766-31df-3fcd3fde81b9")
+    local RecursiveADRooftop = Dialog("LOW_Elfsong_AD_Lakrissa_Alfira_cfe1a23f-8491-6419-6e92-0b29bd3cf3a3")
+    local AlfiraEntity = Entity("S_DEN_Bard_4a405fba-3000-4c63-97e5-a8001ebb883c")
+    local LakrissaDestinationRooftop = Entity("S_LOW_Elfsong_Rooftop_LakrissaDestination_26e068ce-e16a-4e28-989c-acf763e1011f")
+    local backupWanderPoint = Entity("S_LOW_Elfsong_Resto_Ownership_4bb7878f-6d3d-4d4b-a17c-7b761ed0e509")
+
+    --------------------------------Nodes--------------------------------
+
+    nodes.RepeatedAD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                RecursiveADRooftop,
+                {
+                    waitForCompletion = true,
+                    minDelay = 30.0,
+                },
+                me,
+                AlfiraEntity
+            )
+            Sleep(20 + 30 * math.random())
+
+        end,
+        CanEnter = function()
+            return GetFlag(FlagStateRooftop)
+        end,
+    }
+
+    nodes.LakrissaGoingToSit = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                Dialog("LOW_Elfsong_AD_Lakrissa_149e32bf-c47c-bc4f-595d-f5b1c12c77fd"),--This will be used only once
+                {
+                    waitForCompletion = true
+                },
+                me
+            )
+            if mod.moveto.MoveToPoint(LakrissaDestinationRooftop, MovementSpeed.Walk, me) then
+                ClearFlag(FlagEventRooftop)
+                SetFlag(FlagStateRooftop)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    RecursiveADRooftop,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0,
+                    },
+                    me,
+                    AlfiraEntity
+                )
+                Sleep(20)
+            else --Fallback in case Anubis is failing to move the character there
+                --Adding a wander to make her move outside the place she's stuck
+                Wander(3.5, 3, MovementSpeed.Walk, backupWanderPoint)
+                Sleep(5) -- Waiting to repeat the attempt to move to upstairs.
+            end
+        end,
+
+        CanEnter = function()
+            return GetFlag(FlagEventRooftop)
+        end
+    }
+
+end
+}

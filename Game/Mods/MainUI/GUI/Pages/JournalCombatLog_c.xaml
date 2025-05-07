@@ -1,0 +1,269 @@
+<ls:UIWidget x:Name="JournalCombatLog_c"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             mc:Ignorable="d"
+             d:DesignHeight="2160" d:DesignWidth="3840"
+             d:DataContext="{d:DesignInstance {x:Type ls:Widget}, IsDesignTimeCreatable=True}"
+             FocusDown="UIDown" FocusUp="UIUp" ls:MoveFocus.FocusMovementMode="Closest" CanCacheFocusSurroundingElements="False">
+
+    <ls:UIWidget.Template>
+        <ControlTemplate>
+            <ControlTemplate.Resources>
+                <ResourceDictionary Source="/Core;component/Library/JournalTemplates_c.xaml"/>
+            </ControlTemplate.Resources>
+
+            <Grid ls:TooltipExtender.Owner="{Binding CurrentPlayer.SelectedCharacter}" Background="{StaticResource LS_PanelBackground}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="ColumnDef0" Width="1*"/>
+                    <ColumnDefinition x:Name="ColumnDef1" Width="7*"/>
+                    <ColumnDefinition x:Name="ColumnDef2" Width="31*"/>
+                    <ColumnDefinition x:Name="ColumnDef3" Width="1*"/>
+                    <ColumnDefinition x:Name="ColumnDef4" Width="0"/>
+                    <ColumnDefinition x:Name="ColumnDef5" Width="0"/>
+                    <ColumnDefinition x:Name="ColumnDef6" Width="0"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="4*"/>
+                    <RowDefinition Height="6*"/>
+                    <RowDefinition Height="35*"/>
+                    <RowDefinition Height="5*"/>
+                </Grid.RowDefinitions>
+
+                <Grid x:Name="MainPanel" Grid.Column="2" Grid.Row="1" Grid.RowSpan="2" >
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="3*"/>
+                        <RowDefinition Height="17*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="CategoryTitle" Grid.Row="0" Text="{Binding Source='hf8bb283fg341bg41d6g8b83gd5e3f7a0a2a1', Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource Journal.TitleStyle}" Margin="{StaticResource Journal.CategoryTitleMargin}"/>
+
+                    <ListBox x:Name="Log" Grid.Row="1" ItemsSource="{Binding Data.CombatLog.EntryGroupsReversed}" ls:MoveFocus.Focusable="True" SelectedIndex="0">
+                        <ListBox.Template>
+                            <ControlTemplate>
+                                <ScrollViewer Template="{StaticResource StretchingScrollViewerTemplate}" VerticalScrollBarVisibility="Visible">
+                                    <ScrollViewer.Resources>
+                                        <Style TargetType="ScrollBar" BasedOn="{StaticResource MinimalGoldScrollbar}"/>
+                                        <GridLength x:Key="Left">0</GridLength>
+                                        <GridLength x:Key="Right">0</GridLength>
+                                    </ScrollViewer.Resources>
+                                    <ItemsPresenter Margin="{StaticResource Journal.ScrollViewerMargin}"/>
+                                </ScrollViewer>
+                            </ControlTemplate>
+                        </ListBox.Template>
+
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                <Setter Property="Width" Value="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type ItemsPresenter}}}"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel VerticalAlignment="Top" VirtualizationMode="Recycling"/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type ls:CombatLogGroupedEntries}">
+                                <ContentControl x:Name="Container" Template="{StaticResource Journal.ListItemTemplate}" ToolTipService.Placement="Bottom" ToolTipService.IsEnabled="False" Margin="{StaticResource Journal.ListItemMargin}" ls:MoveFocus.IsFocused="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}">
+                                    <ContentControl.ToolTip>
+                                        <ls:LSTooltip x:Name="ListTooltip" Content="{Binding Path=DataContext.ParamTooltips[0], ElementName=Container}" ls:TooltipExtender.Owner="{Binding Path=(ls:TooltipExtender.Owner), ElementName=Container}" HorizontalOffset="20"/>
+                                    </ContentControl.ToolTip>
+                                    <b:Interaction.Triggers>
+                                        <!-- Focus is always on ListBox and SelectedItem is not a FrameworkElement, so we have to do this inside the ListBoxItem itself -->
+                                        <b:DataTrigger Binding="{Binding (ls:MoveFocus.IsFocused), ElementName=Container}" Value="True">
+                                            <b:Interaction.Behaviors>
+                                                <b:ConditionBehavior>
+                                                    <b:ConditionalExpression>
+                                                        <b:ComparisonCondition LeftOperand="{Binding Path=DataContext.Layout, ElementName=JournalCombatLog_c}" Operator="NotEqual" RightOperand="Common"/>
+                                                    </b:ConditionalExpression>
+                                                </b:ConditionBehavior>
+                                            </b:Interaction.Behaviors>
+                                            <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=JournalCombatLog_c}" CommandParameter="{Binding ElementName=Container}"/>
+                                        </b:DataTrigger>
+
+                                        <b:EventTrigger EventName="Loaded">
+                                            <b:Interaction.Behaviors>
+                                                <b:ConditionBehavior>
+                                                    <b:ConditionalExpression>
+                                                        <b:ComparisonCondition LeftOperand="{Binding (ls:MoveFocus.IsFocused), ElementName=Container}" Operator="Equal" RightOperand="True"/>
+                                                        <b:ComparisonCondition LeftOperand="{Binding Path=DataContext.Layout, ElementName=JournalCombatLog_c}" Operator="NotEqual" RightOperand="Common"/>
+                                                    </b:ConditionalExpression>
+                                                </b:ConditionBehavior>
+                                            </b:Interaction.Behaviors>
+
+                                            <b:InvokeCommandAction Command="{Binding EnableTooltipOnUIElementCommand, ElementName=JournalCombatLog_c}" CommandParameter="{Binding ElementName=Container}"/>
+                                        </b:EventTrigger>
+
+                                        <b:DataTrigger Binding="{Binding HasInputEnabled, ElementName=JournalCombatLog_c}" Value="True">
+                                            <b:Interaction.Behaviors>
+                                                <b:ConditionBehavior>
+                                                    <b:ConditionalExpression>
+                                                        <b:ComparisonCondition LeftOperand="{Binding (ls:MoveFocus.IsFocused), ElementName=Container}" Operator="Equal" RightOperand="True"/>
+                                                        <b:ComparisonCondition LeftOperand="{Binding Path=DataContext.Layout, ElementName=JournalCombatLog_c}" Operator="NotEqual" RightOperand="Common"/>
+                                                    </b:ConditionalExpression>
+                                                </b:ConditionBehavior>
+                                            </b:Interaction.Behaviors>
+                                            <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=JournalCombatLog_c}" CommandParameter="{Binding ElementName=Container}"/>
+                                        </b:DataTrigger>
+                                    </b:Interaction.Triggers>
+
+                                    <Grid>
+                                        <ContentPresenter x:Name="EntryPresenter" Content="{Binding Entries[0]}" Margin="80,8,8,8">
+                                            <ContentPresenter.Style>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Style.Resources>
+                                                        <Style x:Key="TextStyle" TargetType="TextBlock" BasedOn="{StaticResource Journal.HighlightedBaseTextStyle}"/>
+                                                    </Style.Resources>
+                                                </Style>
+                                            </ContentPresenter.Style>
+                                        </ContentPresenter>
+
+                                        <ls:LSInputBinding x:Name="SplitScreenDetailsBtn" Command="ls:UIWidget.ToggleTooltipOnUIElementCommand" CommandParameter="{Binding ElementName=Container}" BoundEvent="UIShowInfo" IsEnabled="{Binding (ls:MoveFocus.IsFocused), ElementName=Container}"/>
+                                    </Grid>
+
+
+                                </ContentControl>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding ChildDepth}" Value="0">
+                                        <Setter TargetName="EntryPresenter" Property="Margin" Value="20,8,8,8"/>
+                                    </DataTrigger>
+
+                                    <DataTrigger Binding="{Binding ParamTooltips.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True">
+                                        <Setter TargetName="Container" Property="ToolTipService.IsEnabled" Value="True"/>
+                                    </DataTrigger>
+
+                                    <DataTrigger Binding="{Binding TooltipEntries.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True">
+                                        <Setter TargetName="Container" Property="ToolTipService.IsEnabled" Value="True"/>
+                                        <Setter TargetName="ListTooltip" Property="ContentTemplate" Value="{StaticResource CombatLog.Tooltip}"/>
+                                        <Setter TargetName="ListTooltip" Property="Content" Value="{Binding DataContext, ElementName=Container}"/>
+                                    </DataTrigger>
+
+                                    <Trigger SourceName="Container" Property="ls:MoveFocus.IsFocused" Value="False">
+                                        <Setter TargetName="Container" Property="ToolTipService.IsEnabled" Value="False"/>
+                                        <Setter TargetName="EntryPresenter" Property="Style">
+                                            <Setter.Value>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Style.Resources>
+                                                        <Style x:Key="TextStyle" TargetType="TextBlock" BasedOn="{StaticResource Journal.BaseTextStyle}"/>
+                                                    </Style.Resources>
+                                                </Style>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+
+                                    <DataTrigger Binding="{Binding Path=Layout, ElementName=JournalCombatLog_c}" Value="Common">
+                                        <Setter TargetName="Container" Property="ToolTipService.IsEnabled" Value="False"/>
+                                        <Setter TargetName="SplitScreenDetailsBtn" Property="IsEnabled" Value="False"/>
+                                    </DataTrigger>
+
+                                    <DataTrigger Binding="{Binding CtxTransText, Converter={StaticResource NullToBoolFalseConverter}, ConverterParameter='EmptyString' }" Value="True">
+                                        <Setter TargetName="EntryPresenter" Property="Content" Value="{Binding .}"/>
+                                        <Setter TargetName="EntryPresenter" Property="ContentTemplate" Value="{StaticResource CombatLogGenericTemplate}"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+
+                        <b:Interaction.Behaviors>
+                            <ls:FocusToSelectionBehavior SelectPrevious="UIUp" SelectNext="UIDown" SelectionChangedSoundId="UI_Shared_Hover" />
+                            <ls:AutoScrollBehavior BringSelectionIntoView="True"/>
+                        </b:Interaction.Behaviors>
+                    </ListBox>
+                </Grid>
+
+                <Rectangle x:Name="TooltipAnchor" Grid.Column="4" Grid.Row="2" VerticalAlignment="Top" ToolTipService.Placement="Bottom" ToolTipService.IsEnabled="False" Visibility="Collapsed">
+                    <Rectangle.ToolTip>
+                        <ls:LSTooltip x:Name="FullScreenTooltip" Content="{Binding Path=SelectedItem.ParamTooltips[0], ElementName=Log}" ls:TooltipExtender.Owner="{Binding Path=(ls:TooltipExtender.Owner), ElementName=MainPanel}" VerticalOffset="-6"/>
+                    </Rectangle.ToolTip>
+                </Rectangle>
+
+                <StackPanel x:Name="ButtonHints" Grid.Column="1" Grid.ColumnSpan="2" Grid.Row="3" Style="{StaticResource ButtonHint.Container.Center}">
+                    <ls:LSButton x:Name="DetailsBtn"
+                                 ls:LSButton.BoundEvent="UIShowInfo"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIShowInfo, Converter={StaticResource FindInputEventConverter}}"
+                                 Tag="{Binding Source='hf8dd4c2fg97e0g4ccdgac1ag3cd1fe5060ef', Converter={StaticResource TranslatedStringConverter}}"
+                                 EatInput="False"/>
+
+                    <ls:LSButton x:Name="CancelButton" BoundEvent="UICancel"
+                                 Command="{Binding CustomEvent}" CommandParameter="CloseWidget"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UICancel, Converter={StaticResource FindInputEventConverter}}"
+                                 Tag="{Binding Source='h411fb88eg5261g437aga291g2fb260e633c6', Converter={StaticResource TranslatedStringConverter}}"/>
+                </StackPanel>
+
+                <b:Interaction.Triggers>
+                    <b:EventTrigger EventName="Loaded">
+                        <ls:SetMoveFocusAction TargetName="JournalCombatLog_c"/>
+                    </b:EventTrigger>
+
+                    <b:EventTrigger EventName="Loaded">
+                        <b:Interaction.Behaviors>
+                            <b:ConditionBehavior>
+                                <b:ConditionalExpression>
+                                    <b:ComparisonCondition LeftOperand="{Binding Path=DataContext.Layout, ElementName=JournalCombatLog_c}" Operator="Equal" RightOperand="Common"/>
+                                </b:ConditionalExpression>
+                            </b:ConditionBehavior>
+                        </b:Interaction.Behaviors>
+                        <b:InvokeCommandAction Command="{Binding EnableTooltipOnUIElementCommand, ElementName=JournalCombatLog_c}" CommandParameter="{Binding ElementName=TooltipAnchor}"/>
+                    </b:EventTrigger>
+
+                    <b:PropertyChangedTrigger Binding="{Binding Path=SelectedItem, ElementName=Log}">
+                        <b:Interaction.Behaviors>
+                            <b:ConditionBehavior>
+                                <b:ConditionalExpression>
+                                    <b:ComparisonCondition LeftOperand="{Binding Path=DataContext.Layout, ElementName=JournalCombatLog_c}" Operator="Equal" RightOperand="Common"/>
+                                </b:ConditionalExpression>
+                            </b:ConditionBehavior>
+                        </b:Interaction.Behaviors>
+                        <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=JournalCombatLog_c}" CommandParameter="{Binding ElementName=TooltipAnchor}"/>
+                    </b:PropertyChangedTrigger>
+
+                    <b:DataTrigger Binding="{Binding HasInputEnabled, ElementName=JournalCombatLog_c}" Value="True">
+                        <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=JournalCombatLog_c}" CommandParameter="{Binding ElementName=TooltipAnchor}"/>
+                    </b:DataTrigger>
+                </b:Interaction.Triggers>
+            </Grid>
+
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding ShowUIElementTooltip, ElementName=JournalCombatLog_c}" Value="True">
+                    <Setter TargetName="DetailsBtn" Property="Tag" Value="{Binding Source='hb33ec471gd611g4ee3gbbffg699af8f79167', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding Layout}" Value="Common">
+                    <Setter TargetName="ColumnDef0" Property="Width" Value="1*"/>
+                    <Setter TargetName="ColumnDef1" Property="Width" Value="4*"/>
+                    <Setter TargetName="ColumnDef2" Property="Width" Value="18*"/>
+                    <Setter TargetName="ColumnDef3" Property="Width" Value="1*"/>
+                    <Setter TargetName="ColumnDef4" Property="Width" Value="13*"/>
+                    <Setter TargetName="ColumnDef5" Property="Width" Value="2*"/>
+                    <Setter TargetName="ColumnDef6" Property="Width" Value="1*"/>
+
+                    <Setter TargetName="MainPanel" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="MainPanel" Property="Grid.Column" Value="2"/>
+                    <Setter TargetName="ButtonHints" Property="Grid.ColumnSpan" Value="5"/>
+                    <Setter TargetName="DetailsBtn" Property="Command" Value="ls:UIWidget.ToggleTooltipOnUIElementCommand"/>
+                    <Setter TargetName="DetailsBtn" Property="CommandParameter" Value="{Binding ElementName=TooltipAnchor}"/>
+                    <Setter TargetName="DetailsBtn" Property="EatInput" Value="True"/>
+
+                    <Setter TargetName="TooltipAnchor" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding Path=SelectedItem.ParamTooltips.Count, ElementName=Log, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True">
+                    <Setter TargetName="TooltipAnchor" Property="ToolTipService.IsEnabled" Value="True"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding Path=SelectedItem.TooltipEntries.Count, ElementName=Log, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True">
+                    <Setter TargetName="TooltipAnchor" Property="ToolTipService.IsEnabled" Value="True"/>
+                    <Setter TargetName="FullScreenTooltip" Property="Content" Value="{Binding Path=SelectedItem, ElementName=Log}"/>
+                    <Setter TargetName="FullScreenTooltip" Property="ContentTemplate" Value="{StaticResource CombatLog.Tooltip}"/>
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+</ls:UIWidget>

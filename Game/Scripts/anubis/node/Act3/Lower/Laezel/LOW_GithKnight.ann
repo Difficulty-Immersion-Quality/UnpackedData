@@ -1,0 +1,70 @@
+game.states.LOW_GithKnight = State { function()
+
+    description = [[ 
+        Behaviour for Voss when he is in the sewers in Lower City
+    ]]
+
+    modules = {"shared.dialog", "shared.util"}
+
+    local gatherAlliesPos = Entity("S_LOW_VossGatheredAlliesInSewers_52fb37d6-1897-4734-a3f2-d02d9cf256a8")
+
+    local gotHammerFromHoH = Flag("ORI_Laezel_State_GotHammerFromHoH_8a8dd999-aa9e-42b2-9c84-e63b5eb6bc5e")
+    local madeDeal = Flag("GLO_Monitor_State_MadeDeal_86f40f63-0bfa-4ab6-b3b0-d01475c3cbdc")
+    local showedHammerToVoss = Flag("ORI_Laezel_State_ShowedVossTheHammer_5588f6a2-bb8c-4f91-a152-168492b9c09f")
+
+    local repeatedAD = Dialog("LOW_Laezel_AD_VossChatterWithDragonborn_a76c47f8-dd43-8408-24f6-13f5472f085c")
+    local secondNPC = Entity("S_LOW_VossDragonborn_7952187b-7636-418f-884c-adfdd33fda8b")
+
+    -- Nodes
+
+    
+    nodes.LeavingForEndgame = Action{
+        function()            
+            -- Voss and the Dragonborn will Poof away, perhaps with a Dimension Door effect
+            WaitForInterrupt()
+            Sleep(2.0)
+        end,
+        Valid = function()
+            return GetFlag(showedHammerToVoss)
+        end,
+    }
+
+    nodes.LoopAD_TalkToDragonborn = Action{
+        function()
+            LookFrom(gatherAlliesPos)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+            repeatedAD,
+            {
+                waitForCompletion = true,
+                minDelay = 12.0,
+            },
+            me,
+            secondNPC
+        )
+        end,
+
+        Valid = function()
+            return not GetFlag(showedHammerToVoss) and (GetFlag(gotHammerFromHoH) or GetFlag(madeDeal)) and GetDistanceTo(me, gatherAlliesPos) <= 1.0
+        end
+    }
+    
+    nodes.GatheredAlliesInSewers = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_VossGatheredAlliesInSewers_52fb37d6-1897-4734-a3f2-d02d9cf256a8"
+        },    
+        Valid = function()
+            return not GetFlag(showedHammerToVoss) and (GetFlag(gotHammerFromHoH) or GetFlag(madeDeal)) and GetDistanceTo(me, gatherAlliesPos) > 1.0
+        end
+    }
+
+    nodes.WaitInSewers = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_VossSewersPos_fdc43cdd-7442-4f89-bea9-6a1c8b820670"
+        },    
+        Valid = function()
+            return not GetFlag(gotHammerFromHoH)
+        end
+    }
+end}

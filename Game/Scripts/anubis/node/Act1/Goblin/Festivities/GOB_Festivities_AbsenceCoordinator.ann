@@ -1,0 +1,282 @@
+game.states.GOB_Festivities_AbsenceCoordinator = State{function ()
+    description = [[An invisible helper item that coordinates goblins GOB_Festivities_Absence states]]
+
+    modules = { "shared.math", "shared.params", "shared.util" }
+
+    local ch_Refillers = {}
+    local ch_DwarfEaters = {}
+    local ch_Pissers = {}
+    local ch_Graffitists = {}
+
+    local s_TimerCheckDwarf = "GOB_Festivities_AC_CheckDwarf.Timer"
+    local s_TimerRefill = "GOB_Festivities_AC_Refill.Timer"
+    local s_TimerPiss = "GOB_Festivities_AC_Piss.Timer"
+    local s_TimerGraffiti = "GOB_Festivities_AC_Graffiti.Timer"
+
+    local s_ConfirmCheckDwarf = "GOB_Festivities_AC_CheckDwarf.Confirm"
+    local s_ConfirmRefill = "GOB_Festivities_AC_Refill.Confirm"
+    local s_ConfirmPiss = "GOB_Festivities_AC_Piss.Confirm"
+    local s_ConfirmGraffiti = "GOB_Festivities_AC_Graffiti.Confirm"
+
+    local fl_Absent = Flag("GOB_Festivities_Behaviour_Absent_ed2fbbf4-42b3-4845-865d-39827dedb503")
+    local fl_AbsenceFlags = {
+        Flag("GOB_Festivities_Behaviour_CheckRoastedDwarf_ad79f5ab-8de3-43e3-b51c-7f52426932d5"),
+        Flag("GOB_Festivities_Behaviour_Refill_b24b9209-3020-4992-9616-a3bfb405f960"),
+        Flag("GOB_Festivities_Behaviour_Piss_302cb878-cc90-4a90-8ae2-04e17aef25c5"),
+        Flag("GOB_Festivities_Behaviour_Graffiti_24b1e6d5-5540-43e4-8440-acf9b297fa72")
+    }
+    local fl_RefilledPoison = Flag("GOB_GoblinToast_RefilledWithPoison_edc32909-4505-4b60-bf85-edf264901ee9")
+    local fl_StoryBusy = Flag("GOB_Festivities_Behaviour_StoryBusy_0cd6cbb4-303f-4da1-b75d-cc46beeda854")
+
+    local fl_PauseFlags = {
+        Flag("GOB_ChickenChase_State_PlayingChase_34de58e6-ca4a-d171-c1ac-32821bb036ed"),
+        Flag("GOB_GoblinToast_State_CrowdGathered_0b99e023-2c0f-4a9d-8e37-5677f50ccd00"),
+        Flag("GOB_GoblinToast_State_ToastIsOn_99a0dc3a-289e-48b3-9710-60388f0d72ed"),
+        Flag("GOB_GoblinToast_Event_ToastSuccess_8567a81c-abe6-cbea-0090-7b9af53aee39"),
+        Flag("GOB_GoblinToast_State_RealizedPoison_0e867c08-b2b9-4f43-8260-168026663e2c")
+    }
+    local b_Paused = false
+    local fl_NoMoreRefills = Flag("GOB_GoblinToast_Event_NoMoreRefills_5929d40e-8867-2fc6-a0d9-6ab1a7a49696")
+
+    local TimerToPeriod = {
+        [s_TimerCheckDwarf] = 20.0,
+        [s_TimerRefill] = 15.0,
+        [s_TimerPiss] = 45.0,
+        [s_TimerGraffiti] = 60.0
+    }
+    local TimerToFlag = nil
+
+    local fl_PlayedChickenChaseOnce = Flag("GOB_ChickenChase_State_PlayedOnce_ccfb238d-915d-422d-b63a-b627b0417fcd")
+    local fl_DrunkGoblinStories = Flag("GOB_DrunkGoblin_State_TellingStories_f4ebead3-02c8-5681-79b7-b31b80fc9d6a")
+    local fl_DrunkGoblinFriendMourn = Flag("GOB_DrunkGoblin_Mourning_07bffc4e-cdb6-4bf6-ac5f-55ae1688d419")
+
+    local fl_PriestsOfConqueringGodAtGobCamp = Flag("FOR_PriestConqueringGod_InGoblinCamp_27c25c69-600e-4665-8def-cd1c54be08f5")
+    local ch_PriestOfConqueringGod_01 = Entity("S_FOR_PriestConqueringGod_001_2c9b967d-fbaa-43c0-9461-3e1598b5fbe1")
+    local ch_PriestOfConqueringGod_02 = Entity("S_FOR_PriestConqueringGod_002_d4a3b125-2b03-4fe8-bab2-7e485390bd49")
+
+    self.OnInit = function()
+        ch_Refillers = mod.params.ParamArrayToEntityList({
+            "S_GOB_Festivities_Goblin_001_774c78ed-1227-48f9-812e-aac0021c71bf",
+            "S_GOB_Festivities_Goblin_002_bb9c82a2-7ed9-45ed-99b6-58f84520fb8c",
+            "S_GOB_Festivities_Goblin_003_0296a9f6-b2bc-46a0-8632-ba72679a36d3",
+            "S_GOB_Festivities_Goblin_005_a955aea9-9040-4d4c-9264-e46e385dea94",
+            "S_GOB_Festivities_Goblin_006_f3f416d1-b946-4019-95ba-7053f63dd776",
+            "S_GOB_Festivities_Goblin_007_10a00987-1dbe-4540-aa34-e96976c7bac0",
+            "S_GOB_RoastingDwarfOperator_001_3837d519-dc92-459c-ab2d-1eac0b208fc7" })
+        ch_DwarfEaters = { table.unpack(ch_Refillers) }
+        ch_Pissers = { table.unpack(ch_Refillers) }
+        ch_Graffitists = { FindEntity("S_GOB_Festivities_Goblin_007_10a00987-1dbe-4540-aa34-e96976c7bac0") }
+
+        -- call here so after anubisReload they're included in festivities
+        -- helpers are guarded by flags, so it's safe
+        helpers.AddDrunkGoblinFriends()
+        helpers.AddPriestsOfConqueringGod()
+        helpers.RemoveFemalePissers()
+
+        TimerToFlag = {
+            [s_TimerCheckDwarf] = fl_AbsenceFlags[1],
+            [s_TimerRefill] = fl_AbsenceFlags[2],
+            [s_TimerPiss] = fl_AbsenceFlags[3],
+            [s_TimerGraffiti] = fl_AbsenceFlags[4]
+        }
+        b_Paused = false
+        for timer, _ in pairs(TimerToFlag) do
+            helpers.StartTimer(timer, mod.math.random(3.0, 15.0))
+        end
+    end
+
+    helpers.RemoveFemalePissers = function()
+        for key, ch_Gob in ipairs(ch_Pissers) do
+            if IsTagged(ch_Gob, Tag("FEMALE_3806477c-65a7-4100-9f92-be4c12c4fa4f")) then
+                table.remove(ch_Pissers, key)
+            end
+        end
+    end
+
+    helpers.AddDrunkGoblinFriends = function()
+        if not GetFlag(fl_DrunkGoblinStories) then
+            local ch_DrunkGoblinFriends = { FindEntity("S_GOB_PartyingGoblin_000_69ab2a7d-9035-4e4e-97e5-2d005c9662ee"),
+                FindEntity("S_GOB_PartyingGoblin_002_bedb5fe5-2fa7-42f4-82c0-dda23883ff7c"),
+                FindEntity("S_GOB_PartyingGoblin_001_4aa22ae0-1f97-42e3-8fd7-474f2f3b7269") }
+
+            for _, ch_Gob in ipairs(ch_DrunkGoblinFriends) do
+                if not GetFlag(fl_DrunkGoblinFriendMourn, ch_Gob) then
+                    table.insert(ch_Refillers, ch_Gob)
+                    table.insert(ch_DwarfEaters, ch_Gob)
+                    if not IsTagged(ch_Gob, Tag("FEMALE_3806477c-65a7-4100-9f92-be4c12c4fa4f")) then
+                        table.insert(ch_Pissers, ch_Gob)
+                    end
+                end
+            end
+        end
+    end
+
+    helpers.AddPriestsOfConqueringGod = function()
+        if GetFlag(fl_PriestsOfConqueringGodAtGobCamp, ch_PriestOfConqueringGod_01) then
+            table.insert(ch_Refillers, ch_PriestOfConqueringGod_01)
+        end
+        if GetFlag(fl_PriestsOfConqueringGodAtGobCamp, ch_PriestOfConqueringGod_02) then
+            table.insert(ch_Refillers, ch_PriestOfConqueringGod_02)
+        end
+    end
+
+    helpers.SelectAndRemoveRandomGoblin = function(ch_Goblins)
+        -- hashtable is filtered, that's why we need this dancing with the keys array
+        local keys = {}
+        for key, gob in pairs(ch_Goblins) do
+            if not GetFlag(fl_Absent, gob) and not GetFlag(fl_RefilledPoison, gob)
+              and not GetFlag(fl_StoryBusy, gob) and not IsInDialog(gob) and not gob.IsInCombat then
+                table.insert(keys, key)
+            end
+        end
+
+        if #keys == 0 then
+            return nil
+        end
+
+        local key = keys[math.random(1, #keys)]
+        local ch_Chosen = ch_Goblins[key]
+        return ch_Chosen
+    end
+
+    helpers.TimerFinished_SendGoblinTo = function(s_TimerName, fl_AbsenceFlag)
+        local ch_Goblin = nil
+
+        if s_TimerName == s_TimerRefill then
+            ch_Goblin = helpers.SelectAndRemoveRandomGoblin(ch_Refillers)
+        elseif s_TimerName == s_TimerCheckDwarf then
+            ch_Goblin = helpers.SelectAndRemoveRandomGoblin(ch_DwarfEaters)
+        elseif s_TimerName == s_TimerPiss then
+            ch_Goblin = helpers.SelectAndRemoveRandomGoblin(ch_Pissers)
+        elseif s_TimerName == s_TimerGraffiti then
+            ch_Goblin = helpers.SelectAndRemoveRandomGoblin(ch_Graffitists)
+        end
+
+        if ch_Goblin ~= nil then
+            --DebugText(me, "[1] ==> [2]", ch_Goblin.Name, fl_AbsenceFlag.Name)
+            SetFlag(fl_AbsenceFlag, ch_Goblin)
+            -- fallback if goblin can't switch to the Absence State
+            helpers.StartTimer(s_TimerName, 1.0)
+        else
+            DebugText(me, "Restart [1]", s_TimerName)
+            helpers.StartTimer(s_TimerName)
+        end
+    end
+
+    helpers.AnyPauseFlagSet = function()
+        for _, flag in ipairs(fl_PauseFlags) do
+            if GetFlag(flag) then
+                return true
+            end
+        end
+        return false
+    end
+
+    helpers.StartTimer = function(timerName, period)
+        if b_Paused then
+            return
+        end
+
+        if timerName ~= s_TimerRefill or not GetFlag(fl_NoMoreRefills) then
+            if period ~= nil then
+                DebugText(me, "Start [1] for [2]", timerName, period)
+                StartTimer(me, timerName, period, 0)
+            else
+                DebugText(me, "Start [1] for [2]", timerName, TimerToPeriod[timerName])
+                StartTimer(me, timerName, TimerToPeriod[timerName], 0)
+            end
+        end
+    end
+
+    helpers.PauseTimers = function()
+        if TimerToFlag == nil then
+            return
+        end
+
+        DebugText(me, "PAUSE")
+        b_Paused = true
+
+        for timer, _ in pairs(TimerToFlag) do
+            DebugText(me, "STOP [1]", timer)
+            StopTimer(me, timer)
+        end
+    end
+
+    helpers.ResumeTimers = function()
+        if helpers.AnyPauseFlagSet() then
+            return
+        end
+        if TimerToFlag == nil then
+            return
+        end
+
+        DebugText(me, "RESUME")
+        b_Paused = false
+
+        for timer, _ in pairs(TimerToFlag) do
+            helpers.StartTimer(timer)
+        end
+    end
+
+    events.FlagSet = function(ev)
+        if ev.Flag == fl_NoMoreRefills.Guid then
+            StopTimer(me, s_TimerRefill)
+        elseif mod.util.ContainsValue(fl_PauseFlags, Flag(ev.Flag)) then
+            helpers.PauseTimers()
+        elseif ev.Flag == fl_PlayedChickenChaseOnce.Guid then
+            table.insert(ch_Refillers, FindEntity("S_GOB_Festivities_Goblin_000_031e9fb7-136a-46c7-91d7-77ce3e20236a"))
+        end
+    end
+
+    events.FlagCleared = function(ev)
+        if mod.util.ContainsValue(fl_PauseFlags, Flag(ev.Flag)) then
+            if not helpers.AnyPauseFlagSet() then
+                helpers.ResumeTimers()
+            end
+        elseif ev.Flag == fl_DrunkGoblinStories.Guid then
+            helpers.AddDrunkGoblinFriends()
+        end
+    end
+
+    events.TimerFinished = function(ev)
+        DebugText(me, "Finished [1]", ev.TimerName)
+        if TimerToFlag ~= nil and TimerToFlag[ev.TimerName] ~= nil then
+            DebugText(me, "Finished [1]", ev.TimerName)
+            helpers.TimerFinished_SendGoblinTo(ev.TimerName, TimerToFlag[ev.TimerName])
+        end
+    end
+
+    events.EntityEvent = function(ev)
+        if ev.Event == "GOB_Festivities_AbsenceCoordinator.Start" then
+            helpers.ResumeTimers()
+        elseif ev.Event == s_ConfirmCheckDwarf then
+            DebugText(me, "Stop [1]", s_TimerCheckDwarf)
+            StopTimer(me, s_TimerCheckDwarf)
+        elseif ev.Event == s_ConfirmRefill then
+            DebugText(me, "Stop [1]", s_TimerRefill)
+            StopTimer(me, s_TimerRefill)
+        elseif ev.Event == s_ConfirmPiss then
+            DebugText(me, "Stop [1]", s_TimerPiss)
+            StopTimer(me, s_TimerPiss)
+        elseif ev.Event == s_ConfirmGraffiti then
+            DebugText(me, "Stop [1]", s_TimerGraffiti)
+            StopTimer(me, s_TimerGraffiti)
+        elseif ev.Event == "WLD_PriestsConqueringGod_AtGoblinCamp" then
+            helpers.AddPriestsOfConqueringGod()
+        elseif ev.Event == "GOB_Coordinator_BehaviourFlagCleared" then
+            if TimerToFlag ~= nil then
+                for timer, flag in pairs(TimerToFlag) do
+                    if flag.Guid == ev.Params[1] then
+                        helpers.StartTimer(timer)
+                    end
+                end
+            end
+        end
+    end
+
+    nodes.Default = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

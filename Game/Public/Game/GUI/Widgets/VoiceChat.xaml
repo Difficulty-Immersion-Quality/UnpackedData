@@ -1,0 +1,165 @@
+<ls:UIWidget x:Name="VoiceChat"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             mc:Ignorable="d"
+             d:DesignHeight="2160" d:DesignWidth="3840"
+             d:DataContext="{d:DesignInstance {x:Type ls:Widget}, IsDesignTimeCreatable=True}">
+
+    <ls:UIWidget.Resources>
+        <System:Int16 x:Key="SinglePlayerPartySize">1</System:Int16>
+        <ItemsPanelTemplate x:Key="VoiceChatLayoutVertical">
+            <StackPanel Orientation="Vertical"/>
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="VoiceChatLayoutHorizontal">
+            <StackPanel Orientation="Horizontal"/>
+        </ItemsPanelTemplate>
+    </ls:UIWidget.Resources>
+    <ls:UIWidget.Template>
+        <ControlTemplate>
+            <Grid IsHitTestVisible="False">
+                <!-- Voice chat -->
+                <Border x:Name="VoiceChatBorder" Visibility="Collapsed">
+                    <!--Default position of the panel is its split screen one-->
+                    <ItemsControl x:Name="VoiceChatItems" ItemsSource="{Binding Data.Players}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="26,10"
+                        Visibility="{Binding Data.Players.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter={StaticResource SinglePlayerPartySize}}" ItemsPanel="{StaticResource VoiceChatLayoutHorizontal}">
+                        <ItemsControl.Resources>
+                            <ImageSource x:Key="VolumeMuted">pack://application:,,,/Core;component/Assets/VoiceChat/ico_mic_disabled.png</ImageSource>
+                            <ImageSource x:Key="VolumeUnmuted">pack://application:,,,/Core;component/Assets/VoiceChat/ico_mic_d.png</ImageSource>
+                            <ImageSource x:Key="VolumeActive">pack://application:,,,/Core;component/Assets/VoiceChat/ico_mic_h.png</ImageSource>
+                            <ImageSource x:Key="VoiceChatIconFrame">pack://application:,,,/Core;component/Assets/VoiceChat/micWidget_frame.png</ImageSource>
+                        </ItemsControl.Resources>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel x:Name="VoiceChatElements" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,40,0">
+                                    <Image x:Name="state" Source="{StaticResource VolumeUnmuted}" Stretch="None" VerticalAlignment="Center" IsHitTestVisible="False"/>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Rectangle Grid.Column="1" Height="80" VerticalAlignment="Center" Fill="#80000000" Margin="-20,0,0,0" />
+                                        <Rectangle Grid.Column="2" Width="32" Height="80" VerticalAlignment="Center">
+                                            <Rectangle.Fill>
+                                                <LinearGradientBrush Opacity="1.0" StartPoint="0,0" EndPoint="1,0">
+                                                    <GradientStop Offset="0" Color="#80000000"/>
+                                                    <GradientStop Offset="1" Color="{StaticResource transparentBlack}"/>
+                                                </LinearGradientBrush>
+                                            </Rectangle.Fill>
+                                        </Rectangle>
+                                        <Border x:Name="commIcon" Grid.Column="0" Background="{Binding CommunityIcon, Mode=OneWay}" Width="80" Height="80">
+                                            <Border.Clip>
+                                                <RectangleGeometry Rect="0,0,80,80"/>
+                                            </Border.Clip>
+                                        </Border>
+                                        <Image x:Name="iconFrame" Grid.Column="0" Stretch="None" Source="{StaticResource VoiceChatIconFrame}" Margin="5,0"/>
+                                        <TextBlock x:Name="nameTextBlock" Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="12,0,20,0" Foreground="{StaticResource LS_accent100TxtColor}"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="730"/>
+                                    </Grid>
+
+                                </StackPanel>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding VoiceChatTalking, Mode=OneWay}" Value="True">
+                                        <Setter TargetName="VoiceChatElements" Property="Visibility" Value="Visible"/>
+                                        <Setter TargetName="state" Property="Source" Value="{StaticResource VolumeActive}"/>
+                                        <Setter TargetName="nameTextBlock" Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
+                                    </DataTrigger>
+
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding VoiceChatMuted, Mode=OneWay}" Value="True"/>
+                                            <Condition Binding="{Binding IsLocalPlayer}" Value="True"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter TargetName="VoiceChatElements" Property="Visibility" Value="Visible"/>
+                                        <Setter TargetName="state" Property="Source" Value="{StaticResource VolumeMuted}"/>
+                                    </MultiDataTrigger>
+
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding CurrentPlayer.VoiceChatMuted}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsVoiceChatEnabled}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="VoiceChatBorder" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Data.IsAnyPlayerTalking}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsVoiceChatEnabled}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="VoiceChatBorder" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <!--Move the voicechat to the top left corner and stack it vertically when:
+                in combat or turn-based mode-->
+                <DataTrigger Binding="{Binding CurrentPlayer.SelectedCharacter.CharacterMode}" Value="InCombat">
+                    <Setter TargetName="VoiceChatItems" Property="Margin" Value="26,28"/>
+                    <Setter TargetName="VoiceChatItems" Property="ItemsPanel" Value="{StaticResource VoiceChatLayoutVertical}"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding CurrentPlayer.SelectedCharacter.InTurnBasedMode}" Value="True">
+                    <Setter TargetName="VoiceChatItems" Property="Margin" Value="26,28"/>
+                    <Setter TargetName="VoiceChatItems" Property="ItemsPanel" Value="{StaticResource VoiceChatLayoutVertical}"/>
+                </DataTrigger>
+
+                <!--split screen is merged during cutscenes-->
+                <DataTrigger Binding="{Binding Data.IsCameraSplit}" Value="False">
+                    <Setter TargetName="VoiceChatItems" Property="Margin" Value="26,28"/>
+                    <Setter TargetName="VoiceChatItems" Property="ItemsPanel" Value="{StaticResource VoiceChatLayoutVertical}"/>
+                </DataTrigger>
+
+                <!--plyer panels are open-->
+                <DataTrigger Binding="{Binding CurrentPlayer.UIData.InPlayerPanels}" Value="True">
+                    <Setter TargetName="VoiceChatItems" Property="Margin" Value="26,28"/>
+                    <Setter TargetName="VoiceChatItems" Property="ItemsPanel" Value="{StaticResource VoiceChatLayoutVertical}"/>
+                </DataTrigger>
+
+                <!--on a loading screen-->
+                <DataTrigger Binding="{Binding CurrentPlayer.UIData.ActiveState}" Value="Loading">
+                    <Setter TargetName="VoiceChatItems" Property="Margin" Value="26,28"/>
+                    <Setter TargetName="VoiceChatItems" Property="ItemsPanel" Value="{StaticResource VoiceChatLayoutVertical}"/>
+                </DataTrigger>
+
+                <!--shortcut menu is open-->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Data.LocalPlayers.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=1}" Value="True"/>
+                        <Condition Binding="{Binding CurrentPlayer.UIData.ActiveState}" Value="ShortcutMenu"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="VoiceChatItems" Property="Margin" Value="26,300"/>
+                    <Setter TargetName="VoiceChatItems" Property="ItemsPanel" Value="{StaticResource VoiceChatLayoutVertical}"/>
+                </MultiDataTrigger>
+
+                <!--in CC-->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Data.LocalPlayers.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=1}" Value="True"/>
+                        <Condition Binding="{Binding CurrentPlayer.UIData.CharacterCreationMode}" Value="Creation"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="VoiceChatItems" Property="ItemsPanel" Value="{StaticResource VoiceChatLayoutVertical}"/>
+                    <Setter TargetName="VoiceChatItems" Property="Margin" Value="26,130"/>
+                </MultiDataTrigger>
+
+                <!--Move the voicechat to the top left corner and stack it vertically when not in split screen-->
+                <DataTrigger Binding="{Binding Data.LocalPlayers.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=1}" Value="False">
+                    <Setter TargetName="VoiceChatItems" Property="Margin" Value="26,28"/>
+                    <Setter TargetName="VoiceChatItems" Property="ItemsPanel" Value="{StaticResource VoiceChatLayoutVertical}"/>
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+</ls:UIWidget>

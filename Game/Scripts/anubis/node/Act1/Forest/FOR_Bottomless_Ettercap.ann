@@ -1,0 +1,71 @@
+game.states.FOR_Bottomless_Ettercap = State { function()
+    description = [[Idle behaviours for the ettercaps while they are unalerted in their nest]]
+
+    -----------------------------------------
+    -- Params
+    params.deadBody = { type = EParamType.String, required = true, help = [[
+        Dead body to eat
+    ]]}
+
+    params.eggs = { type = EParamType.String, required = true, help = [[
+        Eggs to watch over
+    ]]}
+
+    params.basePositionTrigger = { type = EParamType.String, required = true, help = [[
+        Base position trigger to hang around in
+    ]]}
+
+    params.waitMin = {type = EParamType.Int, required = true, help = [[
+        The minimum amount of time spent at a point
+    ]]}
+
+    params.waitMax = {type = EParamType.Int, required = true, help = [[
+        The maximum amount of time spent at a point
+    ]]}
+
+    -----------------------------------------
+    -- Behaviour variables
+    -- Anims
+    local eatingAnim = Animation("CUST_Eating_01_e1bc92e7-6f50-463d-85a5-c66352c001b6")
+    local inspectEggAnim = Animation("CUST_WatchingOverEggs_01_44146ba6-ee8f-4a7f-a64d-4967587ea7c3")
+
+    -- Entities
+    local deadBody = Entity(params.deadBody)
+    local eggs = Entity(params.eggs)
+    local basePositionTrigger = Entity(params.basePositionTrigger)
+
+    -----------------------------------------
+    -- Helpers
+    helpers.action.MoveToItem = function(item, anim)
+        if item.OnStage and IsInTrigger(item, basePositionTrigger.Trigger) then
+            if GetDistance2DTo(me, item) > 2 then
+                local moveResult = MoveTo(item, MovementSpeed.Walk, false, false, 0.5, 0.6, false)
+                
+                if moveResult ~= error.MovementError.None then
+                    SteerTo(item)
+                    DebugText(me, "MOVEMENT FAILED")
+                    Sleep(2.0)
+                    return
+                end
+            end
+            
+            SteerTo(item)
+            PlayAnimation(anim, true, false)
+            Sleep(math.random(params.waitMin, params.waitMax))
+
+        else
+            Wander(basePositionTrigger, 2.0, MovementSpeed.Walk)
+            DebugText(me, "FIND ITEM FAILED")
+            Sleep(math.random(params.waitMin, params.waitMax))
+        end
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes.Patrol = Action {
+        function()
+            helpers.MoveToItem(deadBody, eatingAnim)
+            helpers.MoveToItem(eggs, inspectEggAnim)
+        end
+    }
+end}

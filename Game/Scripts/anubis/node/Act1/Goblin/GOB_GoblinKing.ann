@@ -1,0 +1,66 @@
+game.states.GOB_GoblinKing = State{function()
+    description = [[State for the king of the Goblin camp]]
+
+    local dlg_BeforeScryingAD = Dialog("GOB_GoblinKing_AD_KingBeforeScrying_1b11703d-b7a4-3476-3e5c-b3e52234c125")
+    local dlg_AfterScryingAD = Dialog("GOB_GoblinKing_AD_KingAfterScrying_c2c9c428-e90b-65d5-f58c-bd70b04a0de9")
+    local anim_Scroll = Animation("CUST_PrepareScroll_01_30a0bfbf-3f86-4ba3-8ffa-00e3b9bdea75")
+    local anim_Ritual = Animation("CUST_Performing_Ritual_01_23d0ff29-b422-406a-b06e-eb1c79a01b24")
+    local ScryingEndedFlag = Flag("GOB_GoblinKing_Event_ScryingEnded_d4740537-1b80-21d2-f2dc-cc875502139a")
+    local it_Throne = nil
+    local BeforeScryingPoint
+
+    self.OnInit = function()
+        it_Throne = FindEntity("S_GOB_GoblinThrone_585deaa8-fb1f-428d-90c7-7b4e0c3912cb")
+        BeforeScryingPoint = FindEntity("S_GoblinCamp_BattleMode_Throne_Boss_01_d3614b4d-282a-4dae-a438-3f5a5e4a469a")
+    end
+
+    nodes.Action_BeforeScrying = Action{
+        function()
+            try
+                if(GetDistance2DTo(me,BeforeScryingPoint) > 0.2 and not IsInDangerousSurfaceFor(BeforeScryingPoint,me.Character,0.2)) then
+                    MoveTo(BeforeScryingPoint)
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "MoveTo BeforeScryingPoint failed")
+            end
+            LookFrom(BeforeScryingPoint)
+            try
+                PlayAnimation(anim_Scroll)
+            catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                DebugText(me, "Failed PlayAnimation CUST_PrepareScroll_01_30a0bfbf-3f86-4ba3-8ffa-00e3b9bdea75")
+            end
+            StartAutomatedDialog(dlg_BeforeScryingAD, true, me)
+            try
+                PlayAnimation(anim_Ritual)
+            catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                DebugText(me, "Failed PlayAnimation CUST_Performing_Ritual_01_23d0ff29-b422-406a-b06e-eb1c79a01b24")
+            end
+            Sleep(10.0)
+        end,
+        Valid = function()
+            return not GetFlag(ScryingEndedFlag,nil)
+        end
+    }
+
+    nodes.Action_AfterScrying = Action{
+        function()
+            if(not me.IsReposed) then
+                try
+                    UseItem(it_Throne.Item)
+                catch e if ls.CheckType(e, error.UseItemFailed) then
+                    DebugText(me, "UseItem it_Throne failed")
+                end
+            end
+            if math.random(100) < 50 then
+                StartAutomatedDialog(dlg_AfterScryingAD, true, me)
+            end
+            Sleep(10.0)
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

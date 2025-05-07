@@ -1,0 +1,83 @@
+game.states.LOW_GuildhallEntrance_Guard000_GuardADs = State{
+    function()
+        modules = {"shared.dialog"}
+        params.convoPartner1 = {type=EParamType.String, required = false, default=nil, help=[[Conversation partners in case of the idle AD involving 3 guards]]}
+        params.convoPartner2 = {type=EParamType.String, required = false, default=nil, help=[[Conversation partners in case of the idle AD involving 3 guards]]}
+
+        local bWait = false
+        local convoPartner1 = Entity(params.convoPartner1)
+        local convoPartner2 = Entity(params.convoPartner2)
+        local GossipAD = Dialog("LOW_UndercellarEntrance_AD_GuardGossip_4e6d0979-d110-ce92-6082-6e1df2cbb72e")
+        local SoloAD = Dialog("LOW_UndercellarEntrance_AD_Idle_Guard000_ba70a270-e4d0-d134-fe26-7c37a8f06a3b")
+        local TryingAD = ""
+        local patrolSpline = Spline("S_LOW_GuildhallEntrance_Guard000_PatrolSpline_4c5ce35c-d720-4b9e-a267-305d88faa32c")
+
+        local Bored1Anim = Animation("CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef")
+        local Bored2Anim = Animation("CUST_Bored_02_7892cb3b-2935-4aa3-b65c-64d9664cbe75")
+        
+        self.Valid = function()
+            return bWait
+        end
+
+        nodes.AD = Action {
+            CanEnter = function()
+                return bWait == true   
+            end,
+            function()
+                if TryingAD == "Group" then
+                    if(convoPartner1 ~= nil and mod.dialog.IsSpeakerAvailable(convoPartner1) and convoPartner2 ~= nil and mod.dialog.IsSpeakerAvailable(convoPartner2)) then
+                        LookFrom(patrolSpline)
+                        mod.dialog.StartCheckedAutomatedDialogRateLimited(    
+                            GossipAD,
+                            {maxDistance = 10.0,
+                             waitForCompletion = true,
+                             checkSight = false,
+                             minDelay = 10
+                            },
+                            me,
+                            convoPartner1,
+                            convoPartner2
+                        )
+                    else
+                        Sleep(mod.math.random(2.1, 4.4))
+                    end           
+                elseif TryingAD == "Solo" then
+                    LookFrom(patrolSpline)
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        SoloAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 10
+                        },
+                        me
+                    )
+                    PlayAnimation(Bored1Anim)
+                    Sleep(10.0)
+                elseif TryingAD == "Wait" then
+                    LookFrom(patrolSpline)
+                    PlayAnimation(Bored2Anim)             
+                end
+                bWait = false
+                TryingAD = nil
+            end,
+            OnInterrupt = function()
+                bWait = false
+                TryingAD = nil
+            end     
+        }
+        ----------------------EVENT--------------------
+        events.SplineControlPointReached = function(e)
+            if e.Event == "Group" then
+                TryingAD = "Group"
+                LookFrom(patrolSpline)
+                bWait = true
+            elseif e.Event == "Solo" then
+                TryingAD = "Solo"
+                bWait = true
+            elseif e.Event == "Wait" then
+                TryingAD = "Wait"
+                bWait = true
+            end
+        end
+    end
+}

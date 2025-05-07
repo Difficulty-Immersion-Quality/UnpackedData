@@ -1,0 +1,202 @@
+game.states.WYR_RefugeeCamp_FlamingFist_005 = State { function ()
+
+    description = [[ 
+        Simple patroling behaviour for the lazy flaming fist inside the big barn.
+    ]]
+    
+    modules = { "shared.math", "shared.items", "shared.moveto" }
+
+    -----------------------------------------
+    -- local state section
+    local patrolSpline = Spline("S_WYR_RefugeeCamp_FlamingFist_005_PatrolSpline_594fa0f1-9422-4e91-bfb0-d76fd3631491")
+    local benchItem = Entity("FUR_GEN_Tavern_Bench_Wood_Old_A_052_cc21d42f-445e-42b9-8850-8b79a4909778")
+    local cratesCheckingAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+
+    local agreedInvestigateFlag = Flag("WYR_RefugeeCamp_State_ManipAgreedInvestigate_ae6869c2-8b25-6b6e-ed00-87ce770cf5fd")
+    local manipAndFistAD = Dialog("WYR_RefugeeCamp_AD_ManipAndFist005_3f9f54e0-2c35-15f3-62bf-77b772171e4a")
+    local withManipPos = Entity("S_WYR_RefugeeCamp_FlamingFist_005_WithManipPos_7825dd04-b263-4936-88fd-345bcdd1a8b1")
+    local foundToysFlag = Flag("WYR_RefugeeCamp_State_FoundTrappedToys_c132806f-00ab-955d-9338-348663af1712")
+
+    local targetSplineIndex = -1
+    local canWalkOnSpline = true
+    local splineEvent = ""
+    local needAskManip = false
+
+    -----------------------------------------
+    -- node section
+    nodes.WithManip= Action {
+        function()
+            if mod.moveto.MoveToPoint(withManipPos, MovementSpeed.Stroll, me) then
+                LookFrom(withManipPos)                
+            end
+        end,
+        Valid = function()
+            return needAskManip and not GetFlag(foundToysFlag)
+        end
+    }
+
+    nodes.Patroling = Action {
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Stroll, targetSplineIndex, false)
+        end,
+        OnLeave = function()
+            if canWalkOnSpline then
+                ShortPatrolInterrupt()
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline and not needAskManip
+        end
+    }
+
+    nodes.PatrolPointIdle = Selector{
+        function(nodes)
+            if splineEvent == "WYR_BigBarn_SplineEvent_CheckCrates" then
+                return nodes.CheckCrates
+            elseif splineEvent == "WYR_BigBarn_SplineEvent_Sit" then
+                return nodes.SitOnBench
+            else
+                return nodes.Waiting
+            end
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnLeave = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end,
+        OnInterrupt = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.CheckCrates = Action {
+        function()
+            LookFrom(patrolSpline)
+            PlayAnimation(cratesCheckingAnim)
+            if math.random() > 0.5 then
+                LookFrom(patrolSpline)
+                PlayAnimation(cratesCheckingAnim)
+            end
+            Sleep(mod.math.random(0.5, 1.2))
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.SitOnBench = Action {
+        function()
+            if not mod.items.SafeIsDestroyed(benchItem) and 
+                GetDistance2DTo(me, benchItem) < 5.0 and 
+                CanReposeOn(me, benchItem) 
+            then
+                UseItem(benchItem.Item)
+                Sleep(mod.math.random(6, 12))           
+            end
+            canWalkOnSpline = true
+        end,
+        OnLeave = function()
+            EndRepose(me)
+        end
+    }
+
+    nodes.PatrolPointIdle.Waiting = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(mod.math.random(4, 7))
+            canWalkOnSpline = true
+        end
+    }
+
+   -----------------------------------------
+    -- event section
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        if e.Event ~= nil and e.Event ~= "" then
+            canWalkOnSpline = false
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+    events.FlagSet =  function(e)
+        if e.Flag == agreedInvestigateFlag.Guid then
+            needAskManip = true
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == manipAndFistAD.Guid then
+            needAskManip = false
+        end        
+    end
+end}
+
+game.states.WYR_RefugeeCamp_FlamingFist_005_PostAlert = State { function()
+
+    description = [[ 
+        Post-alert simple behaviour
+    ]]
+    
+    modules = { "shared.moveto" }
+
+    local trigger = Entity"S_WYR_RefugeeCamp_FlamingFist_005_PostInvestigatePos_c883969e-ccc0-47f0-a4b2-647cd37e8157"
+    local cratesCheckingAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+
+    nodes.CheckToys = Action {
+        function()
+            if mod.moveto.MoveToPoint(trigger, MovementSpeed.Walk, me) then
+                LookFrom(trigger)   
+                PlayAnimation(cratesCheckingAnim)
+            end
+        end
+    }
+end}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

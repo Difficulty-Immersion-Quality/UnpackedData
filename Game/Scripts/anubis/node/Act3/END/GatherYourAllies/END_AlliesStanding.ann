@@ -1,0 +1,80 @@
+game.states.END_AlliesStanding = State {function()
+
+    params.readyingForCombatLoop = {type = EParamType.String, required = false, default = nil, help=[[]]}
+
+    params.cheeringPostSpeech01 = {type = EParamType.String, required = false, default = nil, help = [[]]}
+
+    params.cheeringPostSpeech02 = {type = EParamType.String, required = false, default = nil, help = [[]]}
+
+    params.cheeringPostSpeech03 = {type = EParamType.String, required = false, default = nil, help = [[]]}
+
+    params.allyWaitTrigger = {type = EParamType.String, required = true, default = nil}
+
+    local allyHouseTrigger = Entity("S_END_GuardHouse_SUB_465cc4f7-f6ae-4383-a96f-409b18453419")
+--[[
+    local alliesExitTrigger = Entity("S_END_AlliesExitArea_d70ddde8-3aa6-4167-b9d7-eeea5d7f0fc8")
+
+    local gatheredAllies = Dialog("END_GatherYourAllies_GatheredAllies_52f087e3-36b0-8372-d473-837bb6a78079")
+
+    local cheeringPostSpeech = {}
+
+    local readyingForCombatLoop = Animation(params.readyingForCombatLoop)
+
+    local cheeringComplete = false
+]]
+
+    local alliesFaction = nil
+
+    self.OnLoaded = function()
+--[[        table.insert(cheeringPostSpeech, Animation(params.cheeringPostSpeech01))
+        table.insert(cheeringPostSpeech, Animation(params.cheeringPostSpeech02))
+        table.insert(cheeringPostSpeech, Animation(params.cheeringPostSpeech03))
+]]
+        alliesFaction = FindFaction("ACT3_END_GatheredAllies_4bc4ab0d-e405-4559-9ab6-f58feab2160f")
+    end
+
+    nodes.State_WaitingForAvatar = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.allyWaitTrigger
+        },
+        Valid = function()
+            return
+              (me.Faction == alliesFaction) and
+              IsInTrigger(me, allyHouseTrigger.Trigger)
+        end
+    }
+
+--[[
+    nodes.State_PostGatheredAllies = Action{
+        function()
+            if not me.IsInDialog then
+                local selectedCheer = cheeringPostSpeech[math.random(1, 3)]
+                cheeringComplete = true
+                try
+                    PlayAnimation(selectedCheer, true, false)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    cheeringComplete = false
+                    Sleep(2.0 + math.random(1.0))
+                end
+            end
+            if cheeringComplete then
+                try
+                    PlayAnimation(readyingForCombatLoop, false, true)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    Sleep(2.0 + math.random(1.0))
+                end
+                WaitForInterrupt()
+            end
+        end,
+    }
+]]
+
+    nodes.State_Fallback = Action{
+        function()
+            WaitForInterrupt()
+            Sleep(40.0)
+        end
+    }
+end
+}

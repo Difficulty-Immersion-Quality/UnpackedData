@@ -1,0 +1,109 @@
+game.states.LOW_UmberleeFollower02 = State{function()
+    description = [[UmberleeFollower02 behavior]]
+    modules = {"shared.dialog","shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local repeatedAD = Dialog("LOW_WaterqueensHouse_AD_UmberleeFollower02_363dd0c0-babb-d5ee-f577-e7774e78e9f0")
+    local startPrayingAnim = Animation("CUST_Praying_01_Start_e5488b36-2aa0-40be-b6e3-2165a9d38f02")
+    local prayingAnim = { Animation("CUST_Praying_01_Loop_b45ab827-aebd-49ed-9ac7-07a1489a5490") }
+    local stopPrayingAnim = Animation("CUST_Praying_01_End_a1c0b0da-ea50-48a0-aba8-d2986c8b2737")
+
+    local prayingSpot = Entity("S_LOW_UmberleeFollower02_PrayingSpot_4ddc257d-64dd-46b1-8892-cfead8786b22")
+
+    local waitForOfferings = Flag("LOW_VaultWaveservant_State_WaitingForOfferings_2ab70a62-99ae-4f13-8c88-b582d9d0f214")    
+    local offeringsChest = Entity("S_LOW_WaterQueensHouse_OfferingsChest_9f1a218c-c8ba-42da-8370-51e723052dbc")
+
+    local startRoutine = Flag("LOW_WaterQueensHouse_Event_TalkedToUmberleeFollower02_519a828a-752e-4e94-2492-17d7c2a960c1")
+
+    local finishOfferings = false
+
+    local offeringsGone = Flag("LOW_WaterQueensHouse_State_OfferingsAreGone_7b4a853d-fff5-4faa-82b6-2e3829eb2851")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Unless killed, this follower will keep praying with a rate limited AD
+    nodes.Pray = Action{
+        function()
+            if mod.moveto.MoveToPoint(prayingSpot, MovementSpeed.Walk, me) then
+                LookFrom(prayingSpot)
+                PlayLoopingAnimation(startPrayingAnim, prayingAnim, stopPrayingAnim)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        repeatedAD,
+                        {
+                            minDelay = 12.0,
+                        },
+                        me
+                    )
+                Sleep(5)
+            end
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+        OnLeave = function()
+            StopAnimation(me, false)
+        end,
+        Valid = function()
+            return not GetFlag(startRoutine) or finishOfferings
+        end
+    }
+
+    nodes.OfferingsRoutine = Action{
+        function()         
+            if not offeringsChest.Item.IsOpened and not offeringsChest.Item.IsLocked then          
+                UseItem(offeringsChest.Item)                
+                MoveAllItemsTo(me, offeringsChest, 0, 0, true)  
+                Sleep(1)            
+                if offeringsChest.Item.IsOpened then        
+                    UseItem(offeringsChest.Item)
+                end
+                finishOfferings = true
+                ApplyStatus(me, "BLESS", true, -1, offeringsChest)            
+            else
+                Sleep(5)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(startRoutine) and not finishOfferings and not IsInDialog(me, true) and not offeringsChest.Item.IsDestroyed and not offeringsChest.Item.IsLocked and not GetFlag(offeringsGone)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            finishOfferings = true
+        end,
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+
+    events.FlagSet = function(e)
+        if e.Flag == waitForOfferings.Guid then
+            SetFlag(startRoutine)
+        end
+    end
+
+
+    ------------------------------------------------
+
+end
+}

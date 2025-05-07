@@ -1,0 +1,63 @@
+game.states.LOW_TheLodge_GithKid = State{function()
+    
+    modules = {"shared.dialog"}
+
+    local patrolSpline = "S_LOW_GithKid_PatrolSpline_d3afabaf-5ed9-44a7-9f9b-99f8055b77e2"
+    local patrolPause = 20
+    local idleAnimation = Animation("CUST_LimberUp_01_bd13cb25-1dfb-4ea5-8218-9e96d11e3117")
+    local pacifidedAnimation = Animation("CUST_Worried_01_a4616816-be6d-4fa1-a65a-2da057196af4")
+    local AD = Dialog("LOW_TheLodge_AD_PtarisBeforeFight_fd72d6e2-be85-1237-4de8-a1df7cbd9704")
+    local minADDelay = 15
+    local patrolsPauseActive = false
+    local pacifiedFlag = Flag("LOW_TheLodge_State_GithKid_TalkedDown_6b6b8cee-5793-110f-163a-84509ad690bf")
+
+    nodes.Pacified = Action{
+        function()
+            PlayAnimation(pacifidedAnimation,false,true)
+            Sleep(2.0)
+        end,
+
+        Valid = function()
+            return GetFlag(pacifiedFlag)
+        end
+    }
+
+    nodes.Idle = Action{
+
+        function()
+            LookFrom(Spline(patrolSpline))
+            PlayAnimation(idleAnimation,false,true)            
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                {
+                    waitForCompletion = false,
+                    minDelay = minADDelay
+                },
+                me
+            )            
+            Sleep(math.random(patrolPause,patrolPause+10))
+            patrolsPauseActive = false
+        end,
+
+        Valid = function()
+            return (patrolsPauseActive)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Patrol = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = patrolSpline,
+            patrolSpeed = "Walk"
+        }
+    }
+
+    events.SplineControlPointReached = function(e)
+        patrolsPauseActive = true
+    end
+
+end}

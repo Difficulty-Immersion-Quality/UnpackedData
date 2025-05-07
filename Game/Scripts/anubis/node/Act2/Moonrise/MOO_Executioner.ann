@@ -1,0 +1,112 @@
+game.states.MOO_Executioner = State{ function ()
+    description = [[Shared state used to select states before and after execution]]
+
+    modules = { "shared.moveto", "shared.dialog"}
+
+--------------------------------LOCAL--------------------------------
+
+    local atChapelFlag = Flag("MOO_ZrellBriefing_State_AtChapel_34eef078-f459-4d18-a66d-bbd79eba50b6")
+    local nightsongReturnedFlag = Flag("MOO_Necromancer_State_AtMoonrise_f64507bf-aa53-6de9-0b59-c19d649bb0a5")
+    local accessGrantedFlag = Flag("MOO_Audience_State_GrantedPermission_ef5c0ad1-8aae-48b8-a438-5989b1778f9a")
+    local executionOverFlag = Flag("MOO_GroundFloor_State_ExecutionOver_1560c0ae-5fec-4e7c-a6e7-35e9c33bbbeb")
+    local executionTrigger = Entity("S_MOO_ExecutionerHome_930225b2-2494-4a56-837d-0d9f8f9d011b")
+
+    local accessCultistAD = Dialog("MOO_ZrellBriefing_AD_WithCultist_a3e5ead1-664c-f6c5-3324-161fe64fbb78")
+    local guard01AD = Dialog("MOO_ZrellBriefing_AD_WithGuard000_1805ba3c-db02-07ec-c3d7-5150b2ec224c")
+    local guard02AD = Dialog("MOO_ZrellBriefing_AD_WithGuard001_e31b5591-3023-62b6-8833-db29d84832b1")
+    local flamingSpyAD = Dialog("MOO_ZrellBriefing_AD_WithSpy_9829bb1b-0e75-d187-8f62-37f3d7dfe1d2")
+
+    local chapelTrigger = Entity("S_MOO_ExecutionerChapelPos_dc0c54d2-3064-4f07-bc9a-dd554760bc13")
+    local executionerRoomTrigger = Entity("S_MOO_ExecutionerRoomPoly_a272395b-d87c-40d1-a36d-f4f1c279b97b")
+    local executionerExecutionRoomTrigger = Entity("S_MOO_UpperExecutionerPoint_e59505cd-2e80-4390-b340-10d6049481e3")
+    local executionerLookAtTrigger = Entity("S_MOO_UpperEyePosition_005B_4ca96063-73b4-4df1-8dbe-fc9033c06bd2")
+    
+    local accessCultist = Entity("S_MOO_AccessCultist_7f0f8d11-9d1e-4210-bbcb-41aa05666d58")
+    local upstairsGuard01 = Entity("S_MOO_UpperGuard_000_556cec90-5ea1-4054-9874-abd8ee042703")
+    local upstairsGuard02 = Entity("S_MOO_UpperGuard_001_3b5ad058-c872-4b1c-933b-2d8767b28aed")
+    local flamingSpy = Entity("S_HAV_FlamingSpy_acb1dd9e-952b-4281-8e30-ec6f671493a6")
+
+--------------------------------NODES--------------------------------
+    nodes.DuringExecution = Action{
+        function()
+            if mod.moveto.MoveToPoint(executionTrigger,  MovementSpeed.Walk, me) then
+                LookFrom(executionTrigger)
+            else
+                SteerTo(executionTrigger)
+            end
+            Sleep(4)
+        end,
+
+        Valid = function()
+            return not GetFlag(executionOverFlag)
+        end
+    }
+
+    nodes.NightsongReturned = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params={trigger = "S_MOO_ExecutionerChapelPos_dc0c54d2-3064-4f07-bc9a-dd554760bc13"},
+        Valid = function()
+            return GetFlag(nightsongReturnedFlag) and not GetFlag(accessGrantedFlag)
+        end
+    }
+
+    --TODO: Adjust behaviour depending on status of Access Cultist. Z'rell should still be at the chapel, but the behaviour should be very different.
+    nodes.AtChapel = Action{
+        function()
+            if not accessCultist.IsDead then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(accessCultistAD, {waitForCompletion = true, minDelay = 10.0}, me, accessCultist)
+            end
+        end,
+        Valid = function()
+            return GetFlag(atChapelFlag)
+        end
+    }
+
+    nodes.AtExecutionerRoom = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return not GetFlag(atChapelFlag)
+        end
+    }
+    
+    nodes.AtExecutionerRoom.ADWithGuard01 = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(guard01AD, {waitForCompletion = true}, me, upstairsGuard01)
+        end,
+        Valid = function()
+            return not upstairsGuard01.IsDead and CanSee(me, upstairsGuard01)
+        end
+    }
+
+    nodes.AtExecutionerRoom.ADWithGuard02 = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(guard02AD, {waitForCompletion = true}, me, upstairsGuard02)
+        end,
+        Valid = function()
+            return not upstairsGuard02.IsDead and CanSee(me, upstairsGuard02)
+        end
+    }
+
+    nodes.AtExecutionerRoom.ADWithFlamingSpy = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(flamingSpyAD, {waitForCompletion = true}, me, flamingSpy)
+        end,
+        Valid = function()
+            return not flamingSpy.IsDead and IsInTrigger(flamingSpy, executionerRoomTrigger.Trigger)
+        end
+    }
+
+    nodes.AtExecutionerRoom.Default = Action{
+        function()
+            if GetDistanceTo(me, executionerExecutionRoomTrigger) > 0.1 then
+                mod.moveto.MoveToPoint(executionerExecutionRoomTrigger,  MovementSpeed.Walk, me)
+                SteerTo(executionerLookAtTrigger, false, 1)
+            end
+            Sleep(30.0)
+        end
+    }
+
+end
+}

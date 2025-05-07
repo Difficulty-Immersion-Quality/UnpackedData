@@ -1,0 +1,85 @@
+game.states.PLA_ZhentDungeon_Zhent04 = State{function ()
+
+    local PLA_ZhentDungeon_WelcomeTrigger
+    local PLA_ZhentDungeon_Door1
+    local PLA_ZhentDungeon_Door1Key
+    local PLA_ZhentDungeon_State_FallBack
+    local PLA_ZhentDungeon_State_CancelWelcome
+    local PLA_ZhentDungeon_State_SaidPassword
+    local PLA_ZhentDungeon_TrapLever
+    local PLA_ZhentDungeon_State_TriggerTraps
+    local PLA_ZhentDungeon_State_StopTriggerTraps
+    local PLA_ZhentDungeon_CorridorTrap_State_Active
+
+
+
+
+    self.OnInit = function()
+        PLA_ZhentDungeon_WelcomeTrigger = FindEntity("S_PLA_ZhentDungeon_WelcomeTrigger_fadb42a8-ae41-4185-bb9b-2d09bfc44701")
+        PLA_ZhentDungeon_Door1 = FindEntity("S_PLA_ZhentDungeon_Door1_b7d96e68-cd39-4048-9e98-86967f6f5d88")
+        PLA_ZhentDungeon_Door1Key = FindEntity("S_PLA_ZhentDungeon_Door1Key_f79fe1b2-25e0-402e-8b79-7701e56375fb")
+        PLA_ZhentDungeon_TrapLever = FindEntity("S_PLA_ZhentDungeon_TrapLever_4e0d91a8-48f4-4e3a-963c-52c0f89b88a0")
+
+        PLA_ZhentDungeon_State_FallBack = Flag("PLA_ZhentDungeon_State_FallBack_7a94f079-2bc8-495e-99f2-5b04b03a7d1d")
+        PLA_ZhentDungeon_State_CancelWelcome = Flag("PLA_ZhentDungeon_State_CancelWelcome_74ec27a7-86a6-4f28-99d8-663207cebdac")
+        PLA_ZhentDungeon_State_SaidPassword = Flag("PLA_ZhentDungeon_State_SaidPassword_8ac97f58-902c-a3b1-d360-e6b5aaa9b54d")
+        PLA_ZhentDungeon_State_StopTriggerTraps = Flag("PLA_ZhentDungeon_State_StopTriggerTraps_d35a34e2-9850-46c8-85bf-04efc6b9e8cb")
+        PLA_ZhentDungeon_State_TriggerTraps = Flag("PLA_ZhentDungeon_State_TriggerTraps_2a4446e4-4775-4ba0-9c86-e720c08b93d3")
+        PLA_ZhentDungeon_CorridorTrap_State_Active = Flag("PLA_ZhentDungeon_CorridorTrap_State_Active_5f9e8d89-463f-4d86-9d17-b05cc89e6cb3")
+    end
+
+    nodes.Action_ActiveTraps = Action{function()
+        Sleep(0.5)
+        MoveTo(PLA_ZhentDungeon_TrapLever, MovementSpeed.Run)
+        UseItem(PLA_ZhentDungeon_TrapLever.Item)
+        Sleep(3.0)
+    end,
+    Valid = function()
+        return not GetFlag(PLA_ZhentDungeon_State_StopTriggerTraps, nil) and
+               GetFlag(PLA_ZhentDungeon_State_TriggerTraps, nil) and
+               not GetFlag(PLA_ZhentDungeon_CorridorTrap_State_Active)
+    end
+    }
+
+    nodes.Action_OpenDoor = Action{function()
+        MoveTo(PLA_ZhentDungeon_WelcomeTrigger, MovementSpeed.Walk)
+        LookFrom(PLA_ZhentDungeon_WelcomeTrigger)
+        Sleep(3.0)
+        if not PLA_ZhentDungeon_Door1.Item.IsOpened and
+           not PLA_ZhentDungeon_Door1.Item.IsOpening and
+           not PLA_ZhentDungeon_Door1.Item.IsClosing then
+            UseItem(PLA_ZhentDungeon_Door1.Item)
+        end
+        LookFrom(PLA_ZhentDungeon_WelcomeTrigger)
+        Sleep(2.0)
+    end,
+    Valid = function()
+        return IsInInventoryOf(PLA_ZhentDungeon_Door1Key, me) and
+               not GetFlag(PLA_ZhentDungeon_State_FallBack, nil) and
+               not GetFlag(PLA_ZhentDungeon_State_CancelWelcome, nil) and
+               GetFlag(PLA_ZhentDungeon_State_SaidPassword, nil)
+    end
+    }
+
+    nodes.Action_Idle = Proxy{
+        game.states.PLA_ZhentDungeon_Zhents,
+        params={backPosition = "S_PLA_ZhentDungeon_EscapeTrigger4_2_9e8c1ff8-ca4e-4a8b-a95a-00c133b9d9e4",
+                packingBehaviour = StateRef{game.states.PLA_ZhentDungeon_ZhentsPacking,
+                    AD = "PLA_ZhentDungeon_Zhent04_AD_Idle_6f02166c-5fbd-e1f3-4193-e532c9f135b6",
+                    dialogBlockFlag = "PLA_ZhentDungeon_State_BlockAD_Zhent04_c3f602b4-1542-4427-a020-a0147c3ce8c5",
+                    regionBlockFlag = "PLA_ZhentDungeon_State_BlockAD_f2d6834a-a9ef-4328-9ed1-a1cb84226d8c",
+                    home = "S_PLA_ZhentDungeon_EscapeTrigger4_1_d9c8edd5-3699-49a8-991f-2b3f529fb9d4",
+                    homeB = "S_PLA_ZhentDungeon_EscapeTrigger4_1b_90a6795c-1fbf-4b92-a6bc-bf5bc5da6182",
+                    trapNegotiationBehaviour = StateRef{game.states.GLO_StandAtTrigger,
+                        trigger = "S_PLA_ZhentDungeon_EscapeTrigger4_WatchTrap_1f914754-4f37-4bca-a451-6cdad7eb7a0d"}}
+                },
+        Valid = function()
+            return not IsInInventoryOf(PLA_ZhentDungeon_Door1Key, me) or
+                   GetFlag(PLA_ZhentDungeon_State_FallBack, nil) or
+                   GetFlag(PLA_ZhentDungeon_State_CancelWelcome, nil) or
+                   not GetFlag(PLA_ZhentDungeon_State_SaidPassword, nil)
+        end
+    }
+
+end
+}

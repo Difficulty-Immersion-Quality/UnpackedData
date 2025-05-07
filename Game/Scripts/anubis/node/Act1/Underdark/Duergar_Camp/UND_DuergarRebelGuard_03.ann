@@ -1,0 +1,89 @@
+game.states.UND_DuergarRebelGuard_03 = State{function ()
+    params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled.
+    ]]}
+
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is destroyed.
+    ]]}
+
+    local flag_CaveInCleared = Flag("UND_DuergarCamp_State_CaveInCleared_e0d8a48b-e0cf-4cc8-96bc-b637b79ce9bd")
+	local flag_PostMutiny = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+
+    local char_MyColleague, tr_homePoint, tr_ColleaguePoint
+    local anim_Hammering = Animation("CUST_HammeringWalls_01_160ab4ca-6d30-4d09-a51f-4f5537a799ee")
+
+    local behaviourDialog = Dialog("BHVR_WRLD_GLO_HammeringWalls_DWF_F_64f2303b-abb9-3398-d617-a8087f2e8577")
+    local timelineTrigger = Entity("BHVR_WRLD_GLO_HammeringWalls_002_1b335d86-6763-40d9-b731-e83170696f93")
+
+
+	self.OnInit = function()
+        char_MyColleague = FindEntity("S_UND_DuergarGuardFocused_ccf9ef29-3d8e-4751-a7ae-203bec7352c3")
+
+        tr_homePoint = FindEntity("S_UND_DuergarGuardFrantic_HomeTrigger_dc6a6a6c-6fd9-4801-ab83-89ef4acbf7d4")
+        tr_ColleaguePoint = FindEntity("S_UND_DuergarGuardFocused_HomeTrigger_2425976c-89af-4c73-92fb-b6a7edcc1529")
+    end
+
+
+    nodes.State_PostMutiny = Proxy {
+        game.states.UND_DuergarCamp_PostMutiny,
+        params = {PostMutinyPosition = params.PostMutinyPosition},
+        Valid = function()
+            return GetFlag(flag_PostMutiny)
+        end
+    }
+
+    nodes.State_CaveInCleared = Proxy {
+        game.states.UND_DuergarCamp_CaveInCleared,
+        params = {CaveInPosition = params.CaveInPosition},
+        Valid = function()
+            return GetFlag(flag_CaveInCleared)
+        end
+    }
+
+    nodes.State_Probing = Selector {
+		function(nodes)
+			return GetWeightedCanEnter(nodes,{[nodes.Action_PlayAnim] = 10,
+												[nodes.Action_GoTocolleague] = 6})
+		end
+	}
+
+    nodes.State_Probing.Action_PlayAnim = Action{
+    function()
+        if GetDistanceTo(me, tr_homePoint) > 1.0 then
+            try
+                MoveTo(tr_homePoint)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Failed to move")
+            end
+        end
+        LookFrom(tr_homePoint)
+        if GetDistanceTo(me, tr_homePoint) < 1.5 then
+            try
+                StartBehaviorDialog(behaviourDialog, timelineTrigger.Trigger, true, me)
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me, "Failed to start world behaviour")
+            end
+        end
+        Sleep(5.0)
+    end}
+
+    nodes.State_Probing.Action_GoTocolleague = Action{
+    function()
+        if GetDistanceTo(me, tr_ColleaguePoint) > 3.0 then
+            local pos_ValidColleaguePoint = FindValidPosition(tr_ColleaguePoint,3.0,me,true)
+            try
+                MoveInRange(pos_ValidColleaguePoint,1.5,3.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Failed to move")
+            end
+        end
+        LookAtEntity(char_MyColleague, 3.0)
+        Sleep(5.0)
+    end}
+
+    nodes.Fallback = Action{
+    function()
+        Sleep(5.0)
+    end}
+end}

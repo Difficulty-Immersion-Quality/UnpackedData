@@ -1,0 +1,346 @@
+game.states.GOB_DrowCommander_AtWarMap = State { function()
+
+    description = [[State for when the Drow is at the goblin camp.]]
+
+    modules = {"shared.dialog"}
+
+    local warmap
+    local warchief
+    local grumpyAD = Dialog("GOB_DrowCommander_AD_WithPatrol_c4c7fd2e-07bb-980a-f951-8159b4c49e80")
+    local warmapAD = Dialog("GOB_DrowCommander_AD_WithChief_24bc6a87-719e-c711-b9ac-69a500ef4e70")
+    local canAD = false
+    local GOB_DrowCommander_Home = Entity("S_GOB_DrowCommander_Home_1796923c-23e5-44d1-893d-d690f80e3b8a")
+    local CUST_Angry_02_Loop = Animation("CUST_Angry_02_Loop_ecfb527c-591d-4501-9d81-0ef25a59ae10")
+    local CUST_InspectClose_01 = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+
+    helpers.ResetADDelay = function(delay)
+        StopTimer(me, "GOB_DrowCommander_ADTimer")
+        StartTimer(me, "GOB_DrowCommander_ADTimer", delay, 0)
+        canAD = false
+    end
+
+    self.OnInit = function()
+        warmap = FindEntity("S_GOB_WarMap_78c48e45-30f6-47ea-8a53-a3dd960521ac")
+        warchief = FindEntity("S_GOB_WarchiefBrave_6601b8f7-1a92-46bb-b409-6fcef7406a39")
+        helpers.ResetADDelay(10)
+    end
+
+    nodes.ADwithWarchief = Action{
+        function()
+            Sleep(2)
+            StartAutomatedDialog(warmapAD, true, me, warchief)
+            helpers.ResetADDelay(15)
+        end,
+        Valid = function()
+            return canAD
+        end
+    }
+
+    nodes.ExamineMap = Action{
+        function()
+            if GetDistanceTo(me, GOB_DrowCommander_Home) < 3.0 then
+                SteerTo(warmap)
+                if math.random() < 4.0 then
+                    PlayAnimation(CUST_Angry_02_Loop, false, true)
+                    Sleep(3.0)
+                else
+                    PlayAnimation(CUST_InspectClose_01, true, false)
+                end
+            else
+                if not IsInDangerousSurfaceFor(GOB_DrowCommander_Home, me.Character) then
+                    local movementSuccess = MoveTo(GOB_DrowCommander_Home,MovementSpeed.Stroll, true, false, 1.0, 2.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        SteerTo(warmap)
+                        Sleep(3.0) --Don't keep attempting the move
+                    end
+                else
+                    SteerTo(warmap)
+                    Sleep(3.0) --Don't keep attempting the move
+                end
+            end
+        end,
+        Valid = function()
+            return not canAD
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me and e.Event == "GOB_WarchiefGrumpy_StopAD") then
+            DialogRequestStop(me, warmapAD)
+            StopTimer(me, "GOB_DrowCommander_ADTimer")
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == grumpyAD.Guid) then
+            helpers.ResetADDelay(5)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "GOB_DrowCommander_ADTimer") then
+            if GetDistanceTo(me, GOB_DrowCommander_Home) < 3.0 and
+               mod.dialog.IsSpeakerAvailableAndNear(warchief, me, 10, true)
+            then
+                canAD = true
+            else
+                helpers.ResetADDelay(15)
+            end
+        end
+    end
+end}
+
+game.states.GOB_DrowCommander_LeavingForRaid = State { function()
+
+    description = [[State for when the Drow is waiting on raiders to leave the goblin camp.]]
+
+    local canAD = true
+    local atDeparturePos = false
+    local drowLeaveSpeech = false
+    local standbyAD = Dialog("GOB_DrowCommander_AD_DrowLeavingReady_2fb7b49e-042e-4808-107c-706dfb6a8085")
+    local departureAD = Dialog("GOB_DrowCommander_AD_DrowLeaves_748686c8-fe84-f253-47f3-ab33a0367e24")
+    local lookAt
+
+    helpers.ResetADDelay = function(delay)
+        StopTimer(me, "GOB_DrowCommander_ADTimer")
+        StartTimer(me, "GOB_DrowCommander_ADTimer", delay, 0)
+        canAD = false
+    end
+
+    self.OnInit = function()
+        lookAt = FindEntity("S_GOB_LeavePos_003_db687775-ac6f-42b3-a087-1185a0f1c8a0")
+    end
+
+    nodes.Moving = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not atDeparturePos
+        end
+    }
+
+    nodes.StandbyAD = Action{
+        function()
+            SteerTo(lookAt)
+            Sleep(1)
+            if(canAD) then
+                StartAutomatedDialog(standbyAD, true, me)
+                helpers.ResetADDelay(30)
+            end
+        end,
+        Valid = function()
+            return atDeparturePos and not drowLeaveSpeech
+        end
+    }
+
+    nodes.DepartureAD = Action{
+        function()
+            SteerTo(lookAt)
+            StartAutomatedDialog(departureAD, true, me)
+        end,
+        Valid = function()
+            return atDeparturePos and drowLeaveSpeech
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "GOB_DrowCommander_ADTimer") then
+            canAD = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "GOB_DrowCommander_DrowLeaves" then
+            drowLeaveSpeech = true
+        elseif e.TargetEntity == me and e.Event == "GOB_DrowCommander_Drow3" then
+            atDeparturePos = true
+        end
+    end
+end}
+
+game.states.GOB_DrowCommander_AfterRaid = State{ function()
+    modules = {"shared.util", "shared.items"}
+
+    --------------------------------------------------------------------------------------
+    -- Local variables
+    -- At the Den
+    local map = Entity("S_DEN_TieflingLeaderMap_1ba813e9-28cc-4be2-96de-c7f50d2ee445")
+    local mapPoint = Entity("S_DEN_DrowPos_41dc4e47-8a7e-42f6-af43-03dcca94e2a4")
+    local denAD = Dialog("DEN_AttackOnDen_AD_DrowCommander_af054aa4-d35a-501d-cb3e-6a88bd55dbef")
+    local writingAnim = Animation("CUST_Writing_01_98fe16cb-1bbe-4046-bede-5d2336962b63")
+
+    ------Action_LookAtTieflings Variables------
+    local deadCharacterTable = {}
+    local kneelingAD = Dialog("DEN_AttackOnDen_AD_DrowCommanderKneelingOverTiefling_e619fd78-b5f7-d8a9-eace-bb60465dae26")
+    local anim_KneelingBesideCorpse_Start = Animation("CUST_KneelingBesideCorpse_01_Start_86c1e910-b6a7-40e4-bc17-e91152786fc1")
+    local anim_KneelingBesideCorpse_Loop_01 = Animation("CUST_KneelingBesideCorpse_01_Loop_312687d1-eb1b-4c66-a8fe-433b980c1f4f")
+    local anim_KneelingBesideCorpse_Loop_02 = Animation("CUST_KneelingBesideCorpse_02_Loop_0185a85b-1fb5-41b4-b41b-e4d19ec1ab63")
+    local anim_KneelingBesideCorpse_Loop_03 = Animation("CUST_KneelingBesideCorpse_03_Loop_bf4ddff9-5e50-4edc-8238-5486d17a6ae9")
+    local anim_KneelingBesideCorpse_End = Animation("CUST_KneelingBesideCorpse_01_End_978e3922-2e06-4b5f-8b9b-8cce3ba772d9")
+    local currentADCount = 0
+    local targetADCount = 1
+
+    ------Action_StudyBooks Variables------
+    local studyAnim = Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+    local readingPoint1 = Entity("S_DEN_DrowReadPos_001_9091803c-edfb-4d7a-a247-1219b800c97d")
+    local readingPoint2 = Entity("S_DEN_DrowReadPos_002_4a7cd0a7-319e-4363-b622-6105c44251ee")
+    local goToReadPoint1 = true
+
+    local fallbackPoint = Entity("S_DEN_DrowPosFallback_47736590-4f8e-476e-9ed5-8a2ce90b182b")
+
+    -- At the camp
+    local atCampFlag = Flag("GOB_DrowCommander_State_AtCamp_9e6ea403-bcb6-4cb0-9ecc-ec4e45ba51c3")
+    local partyIdlePoint = Entity("S_CAMP_DrowPos_85702311-8b19-4104-85c0-6cbbde8aa0e7")
+    --------------------------------------------------------------------------------------
+    
+    ------------------HELPERS-------------------
+    helpers.action.AttemptToMove = function(moveToPoint, moveSpeed, isForcedArrive, allowLongPath, minDist, maxDist, fallBack)
+        if not IsInDangerousSurfaceFor(moveToPoint, me.Character) then
+            local moveResult = MoveTo(moveToPoint, moveSpeed, isForcedArrive, allowLongPath, minDist, maxDist, false)
+            if moveResult ~= error.MovementError.None then
+                DebugText(me, "Movement to target position failed")
+                SteerTo(moveToPoint)
+                Sleep(6.0)
+                return false
+            else
+                return true
+            end
+        else
+            DebugText(me, "Move To target has dangerous surface")
+            SteerTo(fallBack)
+            mod.util.SleepRandom(6.0, 12.0)
+            return false
+        end
+    end
+    
+    -------------------------------NODES----------------------------------------
+    nodes = ImmediateSelector{}
+    
+    self.OnEnter = function()
+        deadCharacterTable = GetActiveCharacters(map, 10) --Can be expensive, so just run at the start
+    end
+ 
+    -- At Den behaviour
+    nodes.AtDen = Selector{
+        function(nodes)
+            local nextNode = FindWeightedRandomSelectable(nodes, {
+                [nodes.Action_LookingAtMap] = 3,
+                [nodes.Action_LookAtTieflings] = 2,
+                [nodes.Action_StudyBooks] = 1
+            })
+            if nextNode ~= nil then
+                return nextNode
+            else
+                return nodes.Action_Fallback
+            end
+        end,
+
+        Valid = function()
+            return not GetFlag(atCampFlag, me)
+        end
+    }
+
+    nodes.AtDen.Action_StudyBooks = Action{
+        function()
+            if goToReadPoint1 then
+                if helpers.AttemptToMove(readingPoint1, MovementSpeed.Walk, true, false, 0.2, 1.0, map) then
+                    LookFrom(readingPoint1)
+                end
+            else
+                if helpers.AttemptToMove(readingPoint2, MovementSpeed.Walk, true, false, 0.2, 1.0, map) then
+                    LookFrom(readingPoint2)
+                end
+            end
+            goToReadPoint1 = not goToReadPoint1
+            PlayAnimation(studyAnim, true, false)
+        end
+    }
+
+    nodes.AtDen.Action_LookAtTieflings = Action{
+        function()
+            if #deadCharacterTable > 0 then
+                for i = #deadCharacterTable, 1, -1 do
+                    if GetRelation(me.Faction, deadCharacterTable[i].Faction) == FactionRelation.Ally or deadCharacterTable[i].Character.IsDead ~= true then
+                        table.remove(deadCharacterTable, i)
+                        DebugText(me, "Removed entity from table as they were an ally or alive")
+                    end
+                end
+                local targetTiefling = math.random(1, #deadCharacterTable)
+                if  deadCharacterTable[targetTiefling] ~= nil then
+                    if helpers.AttemptToMove(deadCharacterTable[targetTiefling], MovementSpeed.Walk, false, false, 1.0, 2.0, map) then
+                        SteerTo(deadCharacterTable[targetTiefling])
+                        PlayLoopingAnimation(anim_KneelingBesideCorpse_Start, {anim_KneelingBesideCorpse_Loop_01, anim_KneelingBesideCorpse_Loop_02, anim_KneelingBesideCorpse_Loop_03}, anim_KneelingBesideCorpse_End)
+                        Sleep(3)
+                        currentADCount = currentADCount + 1
+                        if currentADCount >= targetADCount then
+                            currentADCount = 0
+                            targetADCount = math.random(2, 4)
+                            StartAutomatedDialog(kneelingAD, true, me)
+                        end
+                        Sleep(8)
+                        StopAnimation(me)
+                        mod.util.SleepRandom(3.0, 6.0)
+                    end
+                else
+                    Wander(2.0, 1.0, MovementSpeed.Walk, mapPoint)
+                    mod.util.SleepRandom(8.0, 12.0)
+                end
+            end
+        end
+    }
+
+    nodes.AtDen.Action_LookingAtMap = Action{
+        function()
+            if helpers.AttemptToMove(mapPoint, MovementSpeed.Walk, true, false, 0.2, 1.0, map) then
+                LookFrom(mapPoint)
+                DebugText(me, "Play Looking at Map Animation")
+                Sleep(8)
+                --PlayAnimation(writingAnim, false, false)
+                StartAutomatedDialog(denAD, true, me)
+                mod.util.SleepRandom(8.0, 16.0)
+            end
+        end,
+
+        Valid = function()
+            return not mod.items.SafeIsDestroyed(map) and CanSee(me, map)
+        end
+    }
+
+
+    nodes.AtDen.Action_Fallback = Action{
+        function()
+            if helpers.AttemptToMove(fallbackPoint, MovementSpeed.Walk, true, false, 0.2, 1.0, fallbackPoint) then
+                LookFrom(fallbackPoint)
+                WaitForInterrupt()
+            else
+                Sleep(6)
+            end
+        end
+    }
+
+
+    -- At camp behaviour
+    nodes.Action_PartyAtCampPos = Action{
+        function()
+            if not IsInDangerousSurfaceFor(partyIdlePoint, me.Character) then
+                local moveResult = MoveTo(partyIdlePoint, MovementSpeed.Walk, true, false, 0.2, 1.0, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: movement failed")
+                    SteerTo(partyIdlePoint)
+                    Sleep(3.0)
+                else
+                    LookFrom(partyIdlePoint)
+                    WaitForInterrupt()
+                end
+            else
+                SteerTo(partyIdlePoint)
+                Sleep(3.0)
+            end
+        end,
+        Valid = function()
+            return GetFlag(atCampFlag, me)
+        end
+    }
+
+end}

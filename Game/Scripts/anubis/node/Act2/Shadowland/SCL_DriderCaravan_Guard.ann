@@ -1,0 +1,326 @@
+game.states.SCL_DriderCaravan_Member = State{
+    function()
+        modules = {"shared.moveto", "shared.items"}
+        description = [[Behaviour for every caravan member who needs to follow the drider into the Shadowlands.]]
+
+        --------------------------------------------------------
+        -- Params
+        -- We need multiple jump triggers or there won't be enough room for everyone to jump down and characters will end up stuck
+        params.jumpFrom = {type = EParamType.String, required = true, help = [[Jump from rooftop trigger.]]}
+        params.jumpTo = {type = EParamType.String, required = true, help = [[Jump to rooftop trigger.]]}
+        --------------------------------------------------------
+
+        --------------------------------------------------------
+        -- Local params
+        local chDrider = Entity("S_SCL_Drider_aa59ce01-3d2e-42e8-a539-c07e0ea292ab")
+
+        local flFollowingDrider = Flag("SCL_Drider_State_CaravanFollowingDrider_bb2e75b6-2efd-4b84-899a-4bd8e5682357")
+
+        local flWaitingForCaravanDialog = Flag("SCL_Drider_State_WaitingForCaravanDialog_b06edb97-964e-44e9-b1e9-ecd3a089723b")
+
+        local flDisappear = Flag("SCL_Drider_Event_RunsAwayFromCaravan_817288ba-ed53-4cf6-ae94-2ea833bad4e3")
+        local flGenDisappearOutOfSight = Flag("GEN_DisappearOutOfSight_5dc33889-cbfb-c3d2-9e4e-8d826bf8566f")
+
+        local bridgeBeforeTWN = Entity("S_SCL_Drider_WaitAtBridge_820a0cb4-990d-445f-9d36-91d4e9ef429a")
+        local driderMovingBackToBridge = Flag("SCL_Drider_State_MovingBackToTWNBridge_e245945e-469f-4083-998e-43bf2cba02b8")
+
+        -- House rooftop
+        local houseLadder0 = Entity("S_SCL_Drider_HouseLadder_000_3decfd6b-15b0-4202-abf2-b7736b11f652")
+        local houseLadder1 = Entity("S_SCL_Drider_HouseLadder_001_5e70ccd8-bdca-4690-b8cd-a2280502d7c6")
+        local rooftop = Entity("S_SCL_Drider_HouseRooftop_147b6fdd-1387-4291-9268-b959ff4ed855")
+        local jumpFrom = Entity(params.jumpFrom)
+        local jumpTo = Entity(params.jumpTo)
+
+        --------------------------------------------------------
+
+        --------------------------------------------------------
+        -- Nodes
+        self.Valid = function()
+            return GetFlag(flFollowingDrider)
+        end
+
+        nodes = ImmediateSelector{}
+
+        nodes.Action_WaitingForAmbushDialog = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return GetFlag(flWaitingForCaravanDialog)
+            end
+        }
+
+        -- If for any reason the NPC has to run away keep doing it
+        nodes.Action_DisappearOutOfSight = Action{
+            function()
+                SetFlag(flGenDisappearOutOfSight, me)
+                Sleep(3.0)
+            end,
+            Valid = function()
+                return GetFlag(flDisappear, me)
+            end
+        }
+
+        nodes.Action_RunToBridge = Action{
+            function()
+                if mod.moveto.MoveToPoint(bridgeBeforeTWN, MovementSpeed.Run, me, 5.0) then
+                    SteerTo(bridgeBeforeTWN)
+                    Sleep(3.0)
+                else
+                    DebugText(me, "Error: moveto failed")
+                    SteerTo(bridgeBeforeTWN)
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return  GetFlag(driderMovingBackToBridge)
+            end
+        }
+
+        -- Edge case if caravan member ends combat encounter at the roof of the ambush and ladder was destroyed.
+        nodes.Action_JumpFromRooftop = Action {
+            function()
+                if mod.moveto.MoveToPoint(jumpFrom, MovementSpeed.Walk, me, 1.0) then
+                    local validPosition = FindValidPosition(jumpTo, 4.0, me, true)
+                    if validPosition ~= nil then
+                        UseSpell("Projectile_Jump", validPosition, nil, nil, nil, true, true)
+                    else
+                        DebugText(me, "Error: failed to find a valid position")
+                        Sleep(3.0)
+                    end
+                else
+                    SteerTo(jumpFrom)
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return  mod.items.SafeIsDestroyed(houseLadder0) and
+                        mod.items.SafeIsDestroyed(houseLadder1) and
+                        IsInTrigger(me, rooftop.Trigger)
+            end
+        }
+
+        nodes.Action_FollowDrider = Action{
+            function()
+                DoEscortFollow()
+            end,
+            Valid = function()
+                return me.Character.IsEscortFollower
+            end
+        }
+
+        nodes.Action_Fallback = Action{
+            function()
+                DebugText(me, "Can't follow drider")
+                Sleep(3.0)
+            end
+        }
+        --------------------------------------------------------
+    end
+}
+
+game.states.SCL_DriderCaravan_Guard = State{
+    function()
+        modules = { "shared.util", "shared.dialog"}
+        description = [[Caravan guard behaviour before and after the escort.]]
+
+        --------------------------------------------------------
+        -- Params
+        params.trStandAtCaravanStart = {type = EParamType.String, required = true, help = [[Trigger where character will stand while waiting for Drider]]}
+
+        params.checkpointAD = {type = EParamType.String, required = false, default = "", help = [[Checkpoint AD.]]}
+        params.checkpointADSoloFallback = {type = EParamType.String, required = false, default = "", help = [[Checkpoint AD solo fallback.]]}
+        params.checkpointSpeakers = {type = EParamType.String, arrayRange = "..", required = false, default = {}, help = [[Checkpoint AD speakers.]]}
+
+        params.patrol = {type = EParamType.Bool, required = false, default = false, help = [[Has a patrol.]]}
+        params.patrolSpline = {type = EParamType.String, required = false, default = "", help = [[Patrol spline.]]}
+
+        params.repeatedAD = {type = EParamType.String, required = false, default = "", help = [[Optional AD after arriving to the tower.]]}
+        params.ADSpeakers = {type = EParamType.String, arrayRange = "..", required = false, default = {}, help = [[AD speakers.]]}
+
+        params.followDriderState = {type = EParamType.State, required = false, default = StateRef{game.states.SCL_DriderCaravan_Member}, help = [[State entered when Drider caravan escort stats]]}
+        params.atTowerState = {type = EParamType.State, required = false, default = StateRef{game.states.MOO_StateProxies}, help = [[State entered after arriving at the tower]]}
+        --------------------------------------------------------
+
+        --------------------------------------------------------
+        -- Local params
+        local flWaitingForDrider = Flag("SCL_Drider_State_CaravanWaitingDrider_bd3f124b-f817-48d4-96ec-ea9101b15be4")
+        local flArrivedToTower = Flag("SCL_Drider_Event_ArrivedToTower_e8d310c2-0b05-4e42-912b-e7199759de2a")
+
+        local trCheckpointPos = Entity(params.trStandAtCaravanStart)
+        local dCheckpointAD = nil
+        local dCheckpointADSoloFallback = nil
+        local chCheckpointADSpeakers = {}
+
+        local spPatrol = Spline(params.patrolSpline)
+        local patrolSplineIndex = 0
+        local bPauseForAD = false
+
+        local dTowerAD = nil
+        local chADSpeakers = {}
+        --------------------------------------------------------
+
+        --------------------------------------------------------
+        -- Helpers
+        helpers.action.StandAtTriggerAndTalk = function(standOnTrigger, AD, speakers)
+            -- MoveTo trigger
+            if not IsInDangerousSurfaceFor(standOnTrigger, me.Character) then
+                local moveToResult = MoveTo(standOnTrigger, MovementSpeed.Walk, false, false, 0.5, 1.0, false)
+                if moveToResult == error.MovementError.None then
+                    LookFrom(standOnTrigger)
+                else
+                    DebugText(me, "Error: MovementFailed")
+                    Sleep(3.0)
+                end
+            else
+                DebugText(me, "Trigger on dangerous surface")
+                SteerTo(standOnTrigger)
+                Sleep(3.0)
+            end
+
+            mod.util.SleepRandom(12, 20.0)
+
+            -- Try start AD
+            if AD ~= nil then
+                local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(AD,
+                    { maxDistance = 10.0,
+                    checkSight = true,
+                    ignoreCower = false,
+                    waitForCompletion = false,
+                    fallbackSoloDialog = dCheckpointADSoloFallback,
+                    minDelay = math.random(15.0, 20.0),
+                    cullingDistance = 20.0 },
+                me, table.unpack(speakers))
+                if result == error.AutomatedDialogRateLimitedStartFailed then
+                    DebugText(me, "Error: StartCheckedAutomatedDialogRateLimited failed")
+                end
+            end
+
+        end
+        --------------------------------------------------------
+
+        --------------------------------------------------------
+        -- State
+        self.OnInit = function()
+            -- AD at the checkpoint
+            if params.checkpointAD ~= "" then
+                dCheckpointAD = Dialog(params.checkpointAD)
+            end
+
+            if params.checkpointADSoloFallback ~= "" then
+                dCheckpointADSoloFallback = Dialog(params.checkpointADSoloFallback)
+            end
+
+            if #params.checkpointSpeakers > 0 then
+                for _, speaker in pairs(params.checkpointSpeakers) do
+                    table.insert(chCheckpointADSpeakers, Entity(speaker))
+                end
+            end
+
+            -- AD once they arrive to the tower
+            if params.repeatedAD ~= "" then
+                dTowerAD = Dialog(params.repeatedAD)
+            end
+
+            if #params.ADSpeakers > 0 then
+                for _, speaker in pairs(params.ADSpeakers) do
+                    table.insert(chADSpeakers, Entity(speaker))
+                end
+            end
+        end
+        --------------------------------------------------------
+
+        --------------------------------------------------------
+        -- Nodes
+        nodes = ImmediateSelector{}
+
+        nodes.Proxy_ArrivedAtTower = Proxy{
+            params.atTowerState,
+            CanEnter = function()
+                return GetFlag(flArrivedToTower)
+            end,
+            OnEnter = function()
+                SetEntityEvent(me, "MOO_DriderCaravan_Event_Arrived")
+            end
+        }
+
+        nodes.Proxy_FollowingDrider = Proxy{
+            params.followDriderState
+        }
+
+        nodes.Action_PatrolADAtCheckpoint = Action{
+            OnEnter = function()
+                ShortPatrolInterrupt()
+            end,
+            function()
+                LookFrom(spPatrol)
+
+                if dCheckpointAD ~= nil then
+                    local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(dCheckpointAD,
+                        { maxDistance = 10.0,
+                        checkSight = true,
+                        ignoreCower = false,
+                        waitForCompletion = false,
+                        fallbackSoloDialog = dCheckpointADSoloFallback,
+                        minDelay = math.random(20.0, 25.0),
+                        cullingDistance = 20.0 },
+                    me, table.unpack(chCheckpointADSpeakers))
+                    if result == error.AutomatedDialogRateLimitedStartFailed then
+                        DebugText(me, "Error: StartCheckedAutomatedDialogRateLimited failed")
+                    end
+                end
+
+                mod.util.SleepRandom(6.0, 12.0)
+                bPauseForAD = false
+            end,
+            Valid = function()
+                return GetFlag(flWaitingForDrider) and params.patrol and bPauseForAD
+            end
+        }
+
+        nodes.Action_CheckpointPatrol = Action{
+            function()
+                try
+                    DoPatrol(spPatrol, false, MovementSpeed.Walk, patrolSplineIndex)
+                catch e if ls.CheckType(e, error.MissingComponent) then
+                    DebugText(me, "Error: MissingComponent")
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(flWaitingForDrider) and params.patrol
+            end
+        }
+
+        nodes.Action_WaitAtCaravanStart = Action{
+            function()
+                helpers.StandAtTriggerAndTalk(trCheckpointPos, dCheckpointAD, chCheckpointADSpeakers)
+            end,
+            Valid = function()
+                return GetFlag(flWaitingForDrider) and not params.patrol
+            end
+        }
+
+        nodes.Action_Idle = Action{
+            function()
+                WaitForInterrupt()
+            end,
+        }
+        --------------------------------------------------------
+
+        --------------------------------------------------------
+        -- Events
+        events.FlagSet = function(e)
+            if e.Flag == flArrivedToTower.Guid then
+                Interrupt()
+            end
+        end
+
+        events.SplineControlPointReached = function(e)
+            patrolSplineIndex = e.NewIndex
+
+            bPauseForAD = true
+        end
+        --------------------------------------------------------
+    end
+}

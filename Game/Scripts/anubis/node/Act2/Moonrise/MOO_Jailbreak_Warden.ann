@@ -1,0 +1,336 @@
+game.states.MOO_PrisonWarden = State { function()
+
+    modules = {"shared.moveto", "shared.dialog", "shared.util"}
+
+    params.officeTrigger = {type = EParamType.String, help=[[
+        Trigger in Warden's Office.
+    ]]}
+
+    local patrolling = false
+    local inspecting = false
+    local inspectionSpline = Spline("S_MOO_InspectionSpline_b0884054-ae07-42fc-b9c2-493253fcb977")
+
+    local officePos = Entity(params.officeTrigger)
+    local readPos1 = Entity("S_MOO_WardenOfficePos_002_0131edef-f66e-4253-a571-9110af8da688")
+    local readPos2 = Entity("S_MOO_WardenOfficePos_004_4dfd9ecd-c52a-4deb-a1c8-9f34b57fb064")
+    local ledgerPos = Entity("S_MOO_WardenOfficePos_003_3caaee4f-1356-418c-9243-9c49363eaa3a")
+    local tunnelPos = Entity("S_MOO_WardenTunnelPos_60774415-0fee-4726-87e6-eaad0750a32e")
+
+    local canPatrolFlag = Flag("MOO_Jailbreak_State_WardenCanPatrol_592bb57e-c77a-4743-99df-684210ecb7b8")
+    local prisonerInspectionFlag = Flag("MOO_Jailbreak_State_WardenInspecting_527ffee4-ed89-52a4-8339-bf660c908fb8")
+    local prisonerInspectionPoint = Entity("S_MOO_WardenCheckPos_b277bb31-060c-46b6-8b05-7358ee7f5fb9")
+    local prisonerInspectionAD = Dialog("MOO_Jailbreak_AD_WardenInspection_aeed608c-bc4f-cd99-378d-e610da28d4f8")
+    local playerInPrisonFlag = Flag("MOO_Prison_State_PlayerInPrisonCell_eb83fd97-3ae9-4bc0-a832-802c9a4e5a73")
+    local surveyTunnelsFlag = Flag("MOO_Jailbreak_State_GuardsToTunnels_f58a2f57-252c-407c-ad51-e117961b3cbe")
+    local prisoner = nil
+    local wulbren = Entity("S_GLO_Wulbren_2d70edbf-1a70-4047-8099-48f3e75d93bf")
+    local tiefling = nil
+
+    local armsCrossedAnimLoop = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+    local armsCrossedAnimStart = Animation("CUST_ArmsCrossed_01_Start_dafd0bbc-012a-403c-aabe-4963aca9cf25")
+    local armsCrossedAnimEnd = Animation("CUST_ArmsCrossed_01_End_ae43ea68-fc1b-456a-88ce-0e1d504e1d40")
+    local readAnim = Animation("CUST_Reading_Book_02_51295e0d-d253-4102-8634-f2c7d3443762")
+    local inspectAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+
+    nodes.InPrisonTunnels = ImmediateSelector{
+        Valid = function()
+            return GetFlag(surveyTunnelsFlag)
+        end
+    }
+
+    nodes.InPrisonTunnels.Survey = Action{
+        function()
+            if mod.moveto.MoveToPoint(tunnelPos,  MovementSpeed.Walk, me) then
+                LookFrom(tunnelPos)
+                PlayLoopingAnimation(armsCrossedAnimStart, {armsCrossedAnimLoop}, armsCrossedAnimEnd, false)
+            else
+                LookAt(tunnelPos)
+            end
+            Sleep(4)
+        end
+    }
+
+    nodes.CheckWulbren = Selector{
+        OnEnter = function()
+            inspecting = false
+        end,
+        Valid = function()
+            return GetFlag(prisonerInspectionFlag)
+        end
+    }
+
+    nodes.CheckWulbren.MoveToAndTalk = Action{
+        OnEnter = function()
+            prisonerInspectionAD = Dialog("MOO_Jailbreak_AD_WardenInspection_aeed608c-bc4f-cd99-378d-e610da28d4f8")
+        end,
+        function()
+            if mod.moveto.MoveToPoint(prisonerInspectionPoint, MovementSpeed.Walk, me) then
+                PlayLoopingAnimation(armsCrossedAnimStart, {armsCrossedAnimLoop}, armsCrossedAnimEnd, false)
+                LookFrom(prisonerInspectionPoint)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    prisonerInspectionAD,
+                    {
+                        waitForCompletion = true,
+                    },
+                    me,
+                    wulbren
+                )
+                Sleep(4)
+                ClearFlag(prisonerInspectionFlag)
+            end
+            Sleep(2)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Inspection = Selector{
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+        CanEnter = function()
+            return inspecting
+        end
+    }
+
+    nodes.Inspection.TauntPrisoner = Action{
+        Valid = function()
+            return not patrolling
+        end,
+        function()
+            LookFrom(inspectionSpline)
+            PlayLoopingAnimation(armsCrossedAnimStart, {armsCrossedAnimLoop}, armsCrossedAnimEnd, false)
+            if(prisoner ~= nil) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                    prisonerInspectionAD,
+                    {
+                        waitForCompletion = true,
+                    },
+                    me,
+                    prisoner
+                )
+            else
+                mod.dialog.StartCheckedAutomatedDialog(
+                    prisonerInspectionAD,
+                    {
+                        waitForCompletion = true,
+                    },
+                    me
+                )
+            end
+            Sleep(4)
+            patrolling = true
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+            prisoner = nil
+            patrolling = true
+        end
+    }
+
+    nodes.Inspection.Patrol = Action{
+        function()
+            DoPatrol(inspectionSpline, false, MovementSpeed.Walk)
+        end
+    }
+
+    nodes.Office = Selector{
+        function(nodes)
+            return FindWeightedRandomSelectable(nodes, {
+                [nodes.AtDesk] = 6,
+                [nodes.AtLedger] = 2,
+                [nodes.Read1] = 2,
+                [nodes.Read2] = 2,
+                [nodes.GoInspect] = 1
+            })
+        end
+    }
+
+    nodes.Office.AtDesk = Action{
+        function()
+            if mod.moveto.MoveToPoint(officePos,  MovementSpeed.Stroll, me) then
+                LookFrom(officePos)
+                PlayLoopingAnimation(armsCrossedAnimStart, {armsCrossedAnimLoop}, armsCrossedAnimEnd, false)
+            else
+                LookAt(officePos)
+            end
+            Sleep(15)
+        end
+    }
+
+    nodes.Office.Read1 = Action{
+        function()
+            if mod.moveto.MoveToPoint(readPos1,  MovementSpeed.Stroll, me) then
+                LookFrom(readPos1)
+                PlayAnimation(readAnim, true, false)
+            else
+                SteerTo(readPos1)
+            end
+            mod.util.SleepRandom(3.0, 6.0)
+        end
+    }
+
+    nodes.Office.Read2 = Action{
+        function()
+            if mod.moveto.MoveToPoint(readPos2,  MovementSpeed.Stroll, me) then
+                LookFrom(readPos2)
+                PlayAnimation(readAnim, true, false)
+            else
+                SteerTo(readPos2)
+            end
+            mod.util.SleepRandom(3.0, 6.0)
+        end
+    }
+
+    nodes.Office.AtLedger = Action{
+        function()
+            if mod.moveto.MoveToPoint(ledgerPos,  MovementSpeed.Stroll, me) then
+                LookFrom(ledgerPos)
+                PlayAnimation(inspectAnim, true, false)
+            else
+                SteerTo(ledgerPos)
+            end
+            mod.util.SleepRandom(3.0, 6.0)
+        end
+    }
+
+    nodes.Office.GoInspect = Action{
+        function()
+            if GetFlag(canPatrolFlag) then
+                patrolling = true
+                inspecting = true
+                Interrupt()
+            end
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if(e.Event == "MOO_Warden_GnomeInspection") then
+            prisoner = wulbren
+            prisonerInspectionAD = Dialog("MOO_Jailbreak_AD_WardenInspection_aeed608c-bc4f-cd99-378d-e610da28d4f8")
+            patrolling = false
+        elseif(e.Event == "MOO_Warden_TieflingInspection" and tiefling ~= nil) then
+            prisoner = tiefling
+            prisonerInspectionAD = Dialog("MOO_Jailbreak_AD_TieflingInspection_dcfd5fac-a8ab-cb64-8f26-dbd91137a6ff")
+            patrolling = false
+        elseif(e.Event == "MOO_Warden_PlayerInspection" and GetFlag(playerInPrisonFlag)) then
+            prisoner = nil
+            prisonerInspectionAD = Dialog("MOO_Jailbreak_AD_WardenInspection_aeed608c-bc4f-cd99-378d-e610da28d4f8")
+            patrolling = false
+        elseif(e.Event == "MOO_Warden_StopInspection") then
+            inspecting = false
+            patrolling = false
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.Event == "MOO_PrisonBreak_SetTieflingLeader" then
+            tiefling = e.Params[1]
+        end
+    end
+end
+}
+
+game.states.MOO_JailbreakGuard = State { function()
+
+    modules = {"shared.moveto", "shared.util"}
+
+    params.guardBehaviour = {type=EParamType.State, required=false, default=StateRef{game.states.Dummy}, help=[[State this character takes when not investigating missing prisoners.]]}
+
+    local emergencyTask = false
+    local activateEmergencyLever = false
+    local emergencyLever = Entity("S_MOO_EmergencyLever_976d70e4-edec-4a03-a004-a8e1a6ac86c1")
+    local boatPos = Entity("S_MOO_GetawayBoatRunPos_17986938-fdbf-44fa-86a4-48b07410eace")
+    local goToDocks = false
+    local cellPos = Entity("S_MOO_WardenCheckPos_b277bb31-060c-46b6-8b05-7358ee7f5fb9")
+    local goToCell = false
+
+    nodes.FindMissingPrisoners = ImmediateSelector{
+        CanEnter = function()
+            return emergencyTask
+        end
+    }
+
+    nodes.FindMissingPrisoners.GoToLever = Action{
+        CanEnter = function()
+            return activateEmergencyLever
+        end,
+        function()
+            if(mod.moveto.MoveToPoint(emergencyLever, MovementSpeed.Run, me, 0.5, true)) then
+                SetUnicastEntityEvent(me, "MOO_Jailbreak_GuardStartsEmergency")
+                activateEmergencyLever = false
+                goToCell = true
+            else
+                Sleep(1)
+            end
+        end,
+    }
+
+    nodes.FindMissingPrisoners.GoToCell = Action{
+        CanEnter = function()
+            return goToCell
+        end,
+        function()
+            if(mod.moveto.MoveToPoint(cellPos, MovementSpeed.Run, me, 0.5, true)) then
+                SetUnicastEntityEvent(me, "MOO_Jailbreak_AtCell")
+                goToCell = false
+            else
+                Wander(2.0, 3.0, MovementSpeed.Stroll)
+                Sleep(1.0)
+            end
+        end,
+    }
+
+    nodes.FindMissingPrisoners.GoToDocks = Action{
+        CanEnter = function()
+            return goToDocks
+        end,
+        function()
+            if(mod.moveto.MoveToPoint(boatPos, MovementSpeed.Run, me, 0.5, true)) then
+                SetUnicastEntityEvent(me, "MOO_Jailbreak_Investigate")
+                goToDocks = false
+            else
+                Wander(2.0, 3.0, MovementSpeed.Stroll)
+                Sleep(1.0)
+            end
+        end,
+    }
+
+    nodes.FindMissingPrisoners.AtDocks = Action{
+        function()
+            Wander(5.0, 4.0, MovementSpeed.Stroll)
+            Sleep(5 + math.random(1, 5))
+        end,
+    }
+
+    nodes.guardBehaviour = Proxy{
+        params.guardBehaviour,
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "MOO_Jailbreak_GoToEmergencyLever" then
+                activateEmergencyLever = true
+                emergencyTask = true
+            elseif e.Event == "MOO_Jailbreak_GoToCell" then
+                goToCell = true
+                emergencyTask = true
+                cellPos = e.Params[1]
+                Interrupt()
+            elseif e.Event == "MOO_Jailbreak_GoToDocks" then
+                goToDocks = true
+                emergencyTask = true
+            end
+        end
+    end
+
+    events.CaretSplineControlPointReached = function(e)
+        if e.Event == "MOO_Jailbreak_CheckGnomeCell" then
+            SetUnicastEntityEvent(me, "MOO_Jailbreak_CheckGnomeCell")
+        elseif e.Event == "MOO_Jailbreak_CheckTieflingCell" then
+            SetUnicastEntityEvent(me, "MOO_Jailbreak_CheckTieflingCell")
+        end
+    end
+end
+}

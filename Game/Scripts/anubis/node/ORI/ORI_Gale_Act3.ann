@@ -1,0 +1,58 @@
+-- Collection of states for Gale
+
+game.states.ORI_Gale_Act3 = State {
+    function ()
+        local Avatar = Tag("AVATAR_306b9b05-1057-4770-aa17-01af21acd650")
+        local inCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+        local atShrine = Entity("S_ORI_Gale_AtMystraShrine_cc282b58-9557-4558-8722-7685a4dd9b3d")
+        local toShrine = Flag("ORI_Gale_State_SentToMystraShrine_0dd4342b-02ab-e50e-0e63-d11bce159625")
+
+    
+        params.CAMP = { type = EParamType.State,
+            required = false, default = nil,
+            help = [[State to be active only in the campsite.]]
+        }
+
+        nodes.CAMP = Proxy {
+            params.CAMP,
+            Valid = function()
+                return not IsTagged(me, Avatar)
+                       and GetFlag(inCamp,me)
+            end
+        }
+
+        nodes.AtShrine = Action {
+            function()
+                if GetDistanceTo(me, atShrine) > 8.5 then
+                    local moveSuccess = MoveTo(atShrine,MovementSpeed.Stroll, false, true, 4.0, 6.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        Sleep(3.0)
+                    end
+                else
+                    LookFrom(atShrine)
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(toShrine, nil) and
+                       not IsTagged(me, Avatar) and
+                       not GetFlag(inCamp, me)
+            end
+
+        }
+
+
+        nodes.Fallback = Action {
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return IsTagged(me, Avatar) or
+                       (not GetFlag(toShrine, nil) and
+                        not GetFlag(inCamp, me))
+            end          
+
+        }
+
+    end
+}

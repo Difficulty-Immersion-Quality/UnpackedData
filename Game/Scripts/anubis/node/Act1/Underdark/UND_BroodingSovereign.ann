@@ -1,0 +1,219 @@
+game.states.UND_BroodingSovereign = State{
+    function()
+
+
+        modules = {"shared.moveto", "gustav.Act1.Underdark", "shared.util"}
+        -------------------------------------------------
+        --helpers
+
+        helpers.GetCorpse = function(table1,table2)
+            local temp = math.random(100)
+            local index = 0
+            local corpse = nil
+            DebugText(me,"Requesting corpse. Random number [1]", temp)
+
+            if temp<60 and #table2>0 then
+                index = math.random(#table2)
+                corpse = table2[index]
+                table.remove(table2, index) -- remove the corpse from the table since it'll be resurrected
+                DebugText(me,"Table2 [1]", tostring(table2[index]))
+                return corpse
+                --return table2[index]
+            end
+
+            if #table1>0 then
+                index = math.random(#table1)
+                corpse = table1[index]
+                table.remove(table1, index) -- remove the corpse from the table since it'll be resurrected
+                DebugText(me,"Table1 [1]", tostring(table1[index]))
+                return corpse
+                --return table1[index]
+            end
+
+            DebugText(me,"returning nil")
+            return nil
+        end
+
+
+
+        -------------------------------------------------
+        --local variables
+        local homePoint= Entity("S_UND_MyconidCircle_BroodingSovereign_Home_ad46b61d-35f3-40e7-a010-62a9d89b30e3") -- trigger
+        local resurrectArea = Entity("S_UND_MyconidCircle_SUB_4b5cc8fc-88f4-465e-bf82-4c20b055c019")
+        local injuredGnome = Entity("S_GLO_InjuredGnome_fcf53ac7-1805-4e57-b6ed-4f7b0f90cf96")
+        local partyFlag=Flag("UND_MyconidCircle_BroodingSovereign_State_InParty_a2571718-2bbd-48f7-8ea6-d3ef4c5b5210") -- global, indicates that sovereign is currently a follower
+        local killedSovereign = Flag("UND_MyconidCircle_BroodingSovereign_Done_f80e93f9-53b5-4537-96a7-583508ba1cb8")
+        local startDanceFlag = Flag("UND_BroodingSovereign_Event_MyconidsCelebrate_dc56b8e2-07e5-48a8-80ea-d71f1a8fbdb1")
+        local allCorpses = {}
+        local centralCorpses = {}
+        local currentCorpse = nil
+        local fallbackTeleportEffect
+        local validPos = nil
+        local waitingFlag = Flag("UND_MyconidCircle_BroodingSovereign_State_WaitingForParty_acaea6bf-9bf1-436f-ab41-c2f77ded4a41")
+        local needResurrectGnome = false
+        local nerePatched = false
+
+        local dancingLoopAnim_Start = Animation("CUST_Dancing_01_Start_0a4a0000-7b24-4d6d-9f45-81ed5ab5f245")
+        local dancingLoopAnim_Loop = { Animation("CUST_Dancing_01_Loop_dd1f4fbc-3d2d-4924-a3d4-a45d13038b95") }
+        local dancingLoopAnim_End = Animation("CUST_Dancing_01_End_f06e76ac-534c-44be-a743-13a150d367c7")
+        ----------------------------------------------------
+        -- init
+
+        self.OnInit = function()
+            fallbackTeleportEffect = PrepareEffect("VFX_Script_Stub_Poof_01_f0cf792a-0f74-d17e-ad0d-6052a6131416")
+        end
+
+        ---------------------------------------------------
+        --nodes
+        nodes.PlacingTrophy = Proxy {
+            game.states.UND_MyconidCircle_SovereignTrophy
+        }
+
+        nodes.OldSovereignKilled = Selector{
+            function(nodes)
+                return GetFirstCanEnter(nodes)
+            end,
+            OnEnter = function()
+                currentCorpse = helpers.GetCorpse(allCorpses,centralCorpses)
+            end,
+            CanEnter = function()
+                return GetFlag(killedSovereign)
+            end
+        }
+
+        nodes.OldSovereignKilled.ResurrectGnome = Action {
+            function()
+                Sleep(1.0)
+                mod.Underdark.SporesResurrection(me, injuredGnome, MovementSpeed.Stroll, resurrectArea, false)
+                Sleep(2.0)
+                currentCorpse = helpers.GetCorpse(allCorpses,centralCorpses)
+                needResurrectGnome = false
+            end,
+
+            Valid = function()
+                return needResurrectGnome
+            end
+        }
+
+        nodes.OldSovereignKilled.Resurrect = Action{
+            function()
+                mod.Underdark.SporesResurrection(me, currentCorpse, MovementSpeed.Walk, resurrectArea, false)
+                Sleep(9.6)
+                currentCorpse = helpers.GetCorpse(allCorpses,centralCorpses)
+            end,
+            CanEnter = function()
+                return currentCorpse ~= nil and not needResurrectGnome
+            end
+        }
+
+        nodes.OldSovereignKilled.Dancing = Action{
+            function()
+                if mod.moveto.MoveToPoint(homePoint, MovementSpeed.Walk, me) then
+                   LookFrom(homePoint)
+                end
+
+                Sleep(0.5+math.random())
+                PlayLoopingAnimation(dancingLoopAnim_Start, dancingLoopAnim_Loop, dancingLoopAnim_End)
+                Sleep(15.0+math.random()*5)
+
+                --Sleep(3) -- TODO: Add animation or pacifying spores casting on myconids dancing around
+            end,
+            CanEnter = function()
+                return GetFlag(startDanceFlag)
+            end
+        }
+
+        nodes.OldSovereignKilled.FallbackWander = Action{
+            function()
+                if GetDistanceTo(me, homePoint) > 2 then
+                    mod.moveto.MoveToPoint(homePoint, MovementSpeed.Walk, me)
+                end
+                Wander(10,12,MovementSpeed.Stroll)
+                currentCorpse = helpers.GetCorpse(allCorpses,centralCorpses)
+            end,
+            CanEnter = function()
+                return currentCorpse == nil
+            end
+        }
+
+        nodes.WaitingForParty = Action{
+            function()
+                Wander(6,12,MovementSpeed.Stroll)
+            end,
+            CanEnter = function()
+                return GetFlag(waitingFlag)
+            end
+        }
+
+
+        nodes.MoveHome = Action {
+            function()
+                if GetDistanceTo(me, homePoint) > 2 then
+                    if not mod.moveto.MoveToPoint(homePoint, MovementSpeed.Walk, me) then
+                        validPos = FindValidPosition(homePoint,5.0,me)
+                        if validPos ~= nil then
+                            PlayEffectAt(fallbackTeleportEffect,me)
+                            TeleportTo(me,homePoint)
+                            PlayEffectAt(fallbackTeleportEffect,me)
+                        end
+                    end
+                end
+            end,
+            CanEnter = function()
+                return homePoint ~= nil and (GetDistance2DTo(me,homePoint)>2)
+            end,
+        }
+
+
+        nodes.fallback = Action {
+            function()
+                WaitForInterrupt()
+            end
+        }
+        ------------------------------------------------
+        --events
+
+        events.EntityEvent = function(e)
+            if e.Event == "UND_BroodingSovereign_NewHome" then
+                homePoint = e.Params[1]
+            elseif e.Event == "UND_BroodingSovereign_MyconidCorpse" then
+                table.insert(allCorpses, e.Params[1])
+            elseif e.Event == "UND_BroodingSovereign_MyconidCorpse_OnMushroom" then
+                table.insert(centralCorpses, e.Params[1])
+            elseif e.Event == "UND_MyconidSovereign_ResurrectGnome" then
+                needResurrectGnome = true
+            end
+        end
+
+        events.Deactivated = function(e)
+            if not GetFlag(partyFlag) and GetDistanceTo(me, homePoint) > 2 and not GetFlag(waitingFlag) then
+                validPos = FindValidPosition(homePoint,5.0,me)
+                if validPos ~= nil then
+                    PlayEffectAt(fallbackTeleportEffect,me)
+                    TeleportTo(me,homePoint)
+                    PlayEffectAt(fallbackTeleportEffect,me)
+                end
+            end
+        end
+
+        -- patching
+        events.SavegameLoaded = function(e)
+            if nerePatched == nil or not nerePatched then
+                local drowNere = Entity("S_UND_TheDrowNere_06bf05c5-216b-4eaf-91f5-8f1dd3d57f30")
+                if #allCorpses > 0 then
+                    local i = mod.util.GetIndexOf(allCorpses, drowNere)
+                    if i >= 0 then
+                        table.remove(allCorpses, i)
+                    end
+                end
+                if #centralCorpses > 0 then
+                    local j = mod.util.GetIndexOf(centralCorpses, drowNere)
+                    if j >= 0 then
+                        table.remove(centralCorpses, j)
+                    end
+                end
+                nerePatched = true
+            end
+        end
+    end
+    }

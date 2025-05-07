@@ -1,0 +1,54 @@
+
+game.states.COL_KethericShowdown_MinionLookAround = State{function ()
+
+    -----------------------------------------
+    -- Params
+    params.turnIntervalMin = {type = EParamType.Number,required = false,default = 8.0,
+        help = [[Minimum interval after which this character will look around.]]}
+    params.turnIntervalMax = {type = EParamType.Number,required = false,default = 20.0,
+        help = [[Maximum interval after which this character will look around.]]}
+    params.steerSize = {type=EParamType.Number, required = false, default = 2.0,
+        help = [[The multiplier of the random offset to look at.]]}
+    params.standTrigger = {type=EParamType.String, required = true,
+        help = [[This character will walk here and look towards the direction it is oriented in.]]}
+
+    -----------------------------------------
+    -- Local variables
+    local turnIntervalMin = 8.0
+    local turnIntervalMax = 20.0
+    local standTrigger = Entity(params.standTrigger)
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        if params.turnIntervalMin ~= nil and params.turnIntervalMax ~= nil then
+            turnIntervalMin=params.turnIntervalMin
+            turnIntervalMax=params.turnIntervalMax
+        end
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Idle = Action{
+        function()
+            if standTrigger ~= nil then
+                local moveResult = MoveTo(standTrigger, MovementSpeed.Walk)
+                
+                if moveResult == error.MovementError.None then
+                    --Idle behaviour - will randomly turn every few seconds
+                    --Within a few degrees of the current rotation
+                    local duration = math.random()*(turnIntervalMax-turnIntervalMin)+turnIntervalMin
+                    --DebugText(me,"Steer sleep [1]",duration)
+                    Sleep(duration)
+                    local steerTarget = standTrigger.Position + (standTrigger.ForwardDirection * (params.steerSize+1.0)) --multiplied to avoid steering to own position
+                    local offset = Vector3(math.random()*2.0-1.0,0.0,math.random()*2.0-1.0) * params.steerSize -- > multiplier > relative turn angle
+                    steerTarget = steerTarget + offset
+                    --DebugText(me,"Steering to [1]",steerTarget)
+                    SteerTo(steerTarget)
+                end
+            end
+        end,
+    }
+
+end}

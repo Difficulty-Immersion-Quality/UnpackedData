@@ -1,0 +1,60 @@
+game.states.GLO_VignetteParticipant = State{
+    function()  
+        -- to keep  setup easy for designers and to keep messaging between entities to a minimum
+        -- we assume that we were placed in the editor with the correct orientation
+        local targetDirection
+        local sourcePos
+        local correctSteering = false 
+
+        self.OnLeave = function() 
+            correctSteering = true
+        end
+
+        self.OnLoaded = function()
+            sourcePos = me.Blackboard.GetFact("GLO_VignetteParticipant.sourcePos")
+            targetDirection = me.Blackboard.GetFact("GLO_VignetteParticipant.targetDirection")
+        end
+
+        nodes.CorrectSteering =  Action{
+            function()
+                local moveResult = error.MovementError.Unknown
+                if (GetDistance2DTo(me, sourcePos) >= 0.5) then
+                    if (not IsInDangerousSurfaceFor(sourcePos, me.Character, 2.0)) then
+                        moveResult = MoveTo(sourcePos, MovementSpeed.Stroll, false, false, 0.0, 0.0, false)
+                    end
+                else 
+                    moveResult = error.MovementError.None
+                end 
+                if moveResult == error.MovementError.None then
+                    local target = sourcePos + targetDirection
+                    SteerTo(target)
+                    correctSteering = false           
+                end
+            end,
+            CanEnter = function()
+                return correctSteering 
+            end 
+        }
+        
+        nodes.Idling =  Action{ 
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return not correctSteering 
+            end, 
+            OnPause = function()
+                correctSteering = true
+            end 
+        }
+
+        events.Activated = function(e)
+            if not sourcePos then 
+                targetDirection = me.ForwardDirection
+                sourcePos = me.Position
+                me.Blackboard.SetFact("GLO_VignetteParticipant.sourcePos", sourcePos)
+                me.Blackboard.SetFact("GLO_VignetteParticipant.targetDirection", targetDirection)
+            end 
+        end
+    end
+}

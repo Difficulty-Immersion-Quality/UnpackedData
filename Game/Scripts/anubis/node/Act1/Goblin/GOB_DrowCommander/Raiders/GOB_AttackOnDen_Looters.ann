@@ -1,0 +1,145 @@
+game.states.GOB_AttackOnDen_Victory_LootingWithAD_Companion = State { 
+function ()
+
+    description = [[State for goblin raiders that AD in pairs after the victory of the DEN. This one is for second speakers, so they don't AD themselves. 
+    Namely S_GOB_AttackOnDen_Ranged_001 and RaiderHardy]]
+
+    ---------------------------------------------------
+    -- Params
+    
+    params.lootingPosition = {type = EParamType.String, required=false, default="", help =[[Position this character will initially move to when victory has been achieved in the Den.]]}
+
+    ---------------------------------------------------
+    -- local vars
+    
+    local pos = Entity(params.lootingPosition)
+    local anim = Animation("UTIL_Loot_01_ab7b2bab-e9be-4462-9771-aa17f93a14ac")
+    ---------------------------------------------------
+    --state nodes
+
+    nodes.MoveTo = Action{
+        function()
+            MoveTo(pos,MovementSpeed.Walk)
+        end,
+        CanEnter = function()
+            return (pos~=nil and GetDistanceTo(me,pos) >3)
+        end
+    }
+
+    nodes.OnPosition = Selector{
+        CanEnter = function()
+            return pos~=nil
+        end
+    }
+
+    nodes.OnPosition.AD = Action{
+        function()
+            Sleep(12)
+        end,
+        CanEnter = function()                                                                                                                                                                                                      
+            return IsInDialog(me,false)
+        end
+    }
+
+    nodes.OnPosition.Wander = Action{
+        function()
+            Wander(3,12,MovementSpeed.Stroll,pos,false)
+            PlayAnimation(anim)
+            Sleep(6)
+        end,
+        CanEnter = function()
+            return true
+        end
+    }
+
+    nodes.FallbackSleep = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return true
+        end
+    }
+
+end
+}
+
+
+game.states.GOB_AttackOnDen_Victory_LootingWithAD_Main = State { 
+function ()
+    
+        description = [[State for goblin raiders that AD in pairs after the victory of the DEN. Namely S_GOB_AttackOnDen_Melee_001 and RaiderBold]]
+    
+        modules = {"shared.util", "shared.moveto"}
+        ---------------------------------------------------
+        -- Params
+        
+        params.lootingPosition = {type = EParamType.String, required=false, default="", help =[[Position this character will initially move to when victory has been achieved in the Den.]]}
+        params.companion = {type = EParamType.String, required=false, default="", help =[[Second Speaker for ADs.]]}
+        params.AD = {type = EParamType.String, required=false, default="", help =[[AD that raider plays after victory has been achieved in the Den.]]}
+        ---------------------------------------------------
+        -- local vars
+        
+        local pos = Entity(params.lootingPosition)
+        local companion = Entity(params.companion)
+        local AD = Dialog(params.AD)
+        local canAD = true
+        local anim = Animation("UTIL_Loot_01_ab7b2bab-e9be-4462-9771-aa17f93a14ac")
+        ---------------------------------------------------
+        --state nodes
+    
+        nodes.MoveTo = Action{
+            function()
+                MoveTo(pos,MovementSpeed.Walk)
+            end,
+            CanEnter = function()
+                return (pos~=nil and GetDistanceTo(me,pos)>3)
+            end
+        }
+    
+        nodes.OnPosition = Selector{
+            CanEnter = function()
+                return pos~=nil
+            end
+        }
+    
+        nodes.OnPosition.AD = Action{
+            function()
+                canAD = false
+                StartTimer(me,"GOB_AttackOnDen_Looters_ADTimer",45,0)
+                StartAutomatedDialog(AD,true,me,companion)
+            end,
+            CanEnter = function()
+                return canAD and not IsInDialog(companion,false)
+            end
+        }
+    
+        nodes.OnPosition.Wander = Action{
+            function()
+                Wander(3,12,MovementSpeed.Stroll,pos,false)
+                PlayAnimation(anim)
+                Sleep(6)
+                
+            end,
+            CanEnter = function()
+                return true
+            end
+        }
+    
+        nodes.FallbackSleep = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            CanEnter = function()
+                return true
+            end
+        }
+----------------------------------------
+-- events
+        events.TimerFinished = function(e)
+            if e.TimerName == "GOB_AttackOnDen_Looters_ADTimer" then
+                canAD = true
+            end
+        end
+end
+}

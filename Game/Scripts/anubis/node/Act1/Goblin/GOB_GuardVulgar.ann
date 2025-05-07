@@ -1,0 +1,81 @@
+game.states.GOB_GuardVulgar = State{
+    function()
+    
+        modules = {"shared.character"}
+
+        description = [[State S_GOB_GuardVulgar]]
+
+        local DEN_CapturedGoblin = Entity("S_DEN_CapturedGoblin_783d7572-a846-455f-b686-247a95263ebb")
+        local GOB_SpiderNest_State_ExecutionInProgress = Flag("GOB_SpiderNest_State_ExecutionInProgress_de1118ca-c0ed-4f2d-8257-68280aacaefc")
+        local GOB_SpiderNest_State_GoblinExecutionOver = Flag("GOB_SpiderNest_State_GoblinExecutionOver_7d89d850-e52f-47f6-891f-c85c7e7f0241")
+        local GOB_CapturedGoblin_State_Executed = Flag("GOB_CapturedGoblin_State_Executed_5505345c-482d-cfc5-3a2b-987611beb4e3")
+        local GOB_SpiderNest_State_GoblinEscortFailed = Flag("GOB_SpiderNest_State_GoblinEscortFailed_8a05de38-c4ea-4a32-b600-bd4603afeb22")
+        local GOB_SpiderNest_State_Freed = Flag("GOB_SpiderNest_State_Freed_c3a960f6-6488-4e5a-831e-66bde4715d5c")
+        local GOB_SpiderNest_State_Fallback_Push = Flag("GOB_SpiderNest_State_Fallback_Push_febf9a49-d604-4ad4-84de-c6cb45b02582")
+        local GOB_SpiderNest_Adventurer = Entity("S_GOB_SpiderNest_Adventurer_692ebd77-cfe7-4cac-8022-bd835e9e5a82")
+        local fallback_kill = false
+        local currentVictim = GOB_SpiderNest_Adventurer
+
+        nodes.FallbackPush = Action{
+            function()
+                MoveTo(currentVictim)
+                UseSpell("Target_GOB_SpiderNest_ShortShove",currentVictim,nil,nil,nil,true,true,true)
+                ClearFlag(GOB_SpiderNest_State_Fallback_Push)
+                StartTimer(me,"GOB_SpiderNest_GuardVulgar_FallbackKill",6,0)
+            end,
+            CanEnter = function()
+                return GetFlag(GOB_SpiderNest_State_Fallback_Push)
+            end
+        }
+
+        nodes.FallbackKill = Action{
+            function()
+                Attack(currentVictim,true,false)
+                Die(currentVictim,"DoT")
+                fallback_kill = false
+            end,
+            CanEnter = function()
+                return fallback_kill
+            end
+        }
+
+        nodes.EscortCapturedGoblin = Action{
+            function()
+                try 
+                    if GetDistanceTo(DEN_CapturedGoblin, me) > 6.0 then
+                        MoveTo(DEN_CapturedGoblin, MovementSpeed.Sprint, false, true, 1.0, 3.0)
+                    else
+                        MoveTo(DEN_CapturedGoblin, MovementSpeed.Walk, false, true)
+                    end
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    SetFlag(GOB_SpiderNest_State_GoblinEscortFailed)
+                end
+            end,
+            CanEnter = function()
+                return GetFlag(GOB_CapturedGoblin_State_Executed) and
+                       not GetFlag(GOB_SpiderNest_State_ExecutionInProgress) and
+                       not GetFlag(GOB_SpiderNest_State_GoblinExecutionOver) and
+                       not GetFlag(GOB_SpiderNest_State_GoblinEscortFailed) and
+                       not GetFlag(GOB_SpiderNest_State_Freed, DEN_CapturedGoblin) and
+                       not mod.character.IsDefeated(DEN_CapturedGoblin)
+            end
+        }
+
+        nodes.GuardBehaviour = Proxy{
+            game.states.GOB_BattleStations,
+            params= {guardSpline = "S_GOB_BattleSpline_Spider_Vulgar_93f8f679-bd38-4623-9eca-2c126521a329",
+                    GOBIdle = StateRef{game.states.GOB_SpidersGuards,
+                                       GuardPos = [[S_GOB_SpiderNest_VulgarGuard_IdleTrigger_23f98ae3-3b89-4162-868f-ee573432e255]],
+                                       GuardLookAt = [[S_GOB_SpiderNest_VulgarGuard_IdleLookAt_805d8af8-2466-430e-a0b8-dac6fbfde842]]}
+                    }
+        }
+
+        events.FlagSet = function(e)
+            if e.Flag == GOB_CapturedGoblin_State_Executed.Guid then
+                currentVictim = DEN_CapturedGoblin
+                Interrupt()
+            end
+        end
+
+    end
+}

@@ -1,0 +1,73 @@
+game.states.PLA_ZhentDungeon_Windmill = State{
+
+    function()
+
+        local intendedSpeed = 1
+        local currentSpeed = 0
+        local spinningAnimation = Animation("OBJ_Idle_01_f59bf4fc-5b69-4d13-8ca4-8e2bc813f21e")
+        local GLO_UnfortunateGnome_State_Still = Flag("GLO_UnfortunateGnome_State_Still_d58850bc-2eac-8105-99b1-fec5d247b746")
+        local WLD_FOR_UnfortunateGnome_State_Fast = Flag("WLD_FOR_UnfortunateGnome_State_Fast_ad363172-0964-4f0c-9f1d-4fea67834e60")
+        local brakeEffect
+        local brakeEffectID = nil
+        local spinningDown = false
+
+
+
+        self.OnInit = function()
+            brakeEffect = PrepareEffect("VFX_Script_Windmill_Brake_01_2c86f821-da03-958a-6697-73356c7c4d52")
+        end
+
+        --[[Note on animations:
+        The PlayAnimation call for this windmill does not actually use the 'Animation' parameter, it simply plays an animation
+        defined internally in its blueprint (which is the spinning one).]]
+
+        events.EntityEvent = function(ev)
+            if ev.Event == "FOR_UnfortunateGnome_Lever" then
+                if brakeEffectID ~= nil then
+                    StopEffect(brakeEffectID)
+                    brakeEffectID = nil
+                end
+                ClearFlag(GLO_UnfortunateGnome_State_Still)
+                intendedSpeed = math.min(currentSpeed+1, 2)
+                SetUnicastEntityEvent(me, "Setting Animation Event turn " .. tostring(intendedSpeed))
+                SetAnimationEvent(me, "FOR_UnfortunateGnome_WindmillTurn", intendedSpeed)
+            elseif ev.Event == "FOR_UnfortunateGnome_Lever2" then
+                if brakeEffectID == nil then
+                    if not brakeEffect then
+                        brakeEffect = PrepareEffect("VFX_Script_Windmill_Brake_01_2c86f821-da03-958a-6697-73356c7c4d52")
+                    end
+                        brakeEffectID = PlayEffectAt(brakeEffect, me)
+                end
+                intendedSpeed = 0
+                SetAnimationEvent(me, "FOR_UnfortunateGnome_WindmillTurn", intendedSpeed)
+            end
+        end
+
+        events.AnimationEvent = function(ev)
+            if ev.EventName == "FOR_UnfortunateGnome_WindmillTurnFinished" then
+                if brakeEffectID ~= nil then
+                    StopEffect(brakeEffectID)
+                    brakeEffectID = nil
+                end
+                if intendedSpeed == 2 then
+                    SetFlag(WLD_FOR_UnfortunateGnome_State_Fast)
+                else
+                    ClearFlag(WLD_FOR_UnfortunateGnome_State_Fast)
+                end
+                if intendedSpeed == 0 then
+                    SetFlag(GLO_UnfortunateGnome_State_Still)
+                else
+                    ClearFlag(GLO_UnfortunateGnome_State_Still)
+                end
+                currentSpeed = intendedSpeed
+            end
+        end
+
+        nodes.idle = Action{
+            function()
+                WaitForInterrupt()
+            end
+        }
+    end
+
+}

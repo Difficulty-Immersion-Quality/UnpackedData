@@ -1,0 +1,82 @@
+game.states.PLA_FlamingFist7 = State{
+    function()
+
+        local PLA_FlamingFist7_WanderTrigger
+        local nextTarget
+
+        self.OnInit = function()
+            PLA_FlamingFist7_WanderTrigger = FindEntity("S_PLA_FlamingFist7_WanderTrigger_78adc24c-5334-408e-90e4-b3f40ef0d3f6")
+        end
+
+        helpers.FindNextCorpse = function(PLA_FlamingFist7_WanderTrigger)
+            local activeChars = GetActiveCharacters(me, 15.0)
+            local j = 1
+            for i=1, #activeChars do
+                local char = activeChars[i]
+                if not char.Character.IsPartyMember and
+                   char.Character.IsDead and
+                   GetRelation(me.Faction, char.Faction) ~= FactionRelation.Ally and
+                   IsInTrigger(char, PLA_FlamingFist7_WanderTrigger.Trigger) and
+                   not IsInDangerousSurfaceFor(char, me.Character)
+                then
+                    if i ~= j then
+                        activeChars[j] = activeChars[i]
+                        activeChars[i] = nil
+                    end
+                    j = j + 1
+                else
+                    activeChars[i] = nil
+                end
+            end
+            if #activeChars ~= 0 then
+                return activeChars[math.random(#activeChars)]
+            else
+                return nil
+            end
+        end
+
+        nodes.Selector = Selector{
+            function(nodes)
+                return FindWeightedRandomSelectable(nodes, {[nodes.Action_Wander] = 3,
+                                                            [nodes.Action_DoAD] = 1,})
+            end
+
+        }
+
+        nodes.Selector.Action_Wander = Action{
+            function()
+                Sleep(0.5)
+                nextTarget = helpers.FindNextCorpse(PLA_FlamingFist7_WanderTrigger) --Find a corpse to look at.
+                if nextTarget then
+                    MoveTo(nextTarget)
+                    LookAtEntity(nextTarget, 3.0)
+                    DebugText(me, "Pensive animation")
+                    Sleep(5.0)
+                else
+                    Sleep(3.0)
+                end
+            end
+        }
+
+        nodes.Selector.Action_DoAD = Proxy{
+            game.states.GLO_ADManager,
+            params={AD = "PLA_FlamingFist7_AD_b0ac3d38-87e8-0682-0a39-5e1cfb84ec7a",
+                    regionBlockFlag = "PLA_FlamingFists_State_BlockAD_b40a237c-de00-4d22-9434-b6e8957dcbd8",
+                    dialogBlockFlag = "PLA_FlamingFists_State_BlockAD_FlamingFist7_f0ab6cbe-358c-4dba-9e75-f74c8f8a7909",
+                    },
+            CanEnter = function()
+                return nextTarget ~= nil and
+                       GetDistanceTo(me, nextTarget) < 3.0
+            end,
+            OnLeave = function()
+                nextTarget = nil
+                --[[If the AD gets interrupted, we're not sure if the facing/position
+                    still makes sense, so it's best to wait until a new target is selected;
+                    If the AD ends normally, you still need to do something while waiting
+                    between ADs anyway, so this will be inaccessible for some time.]]
+            end
+        }
+
+    end
+
+}

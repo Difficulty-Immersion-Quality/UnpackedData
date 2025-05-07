@@ -1,0 +1,185 @@
+
+game.states.CAMP_Ravengard = State {function()
+    description = [[Behaviour of Ravengard at the campsite]]
+    modules = {"shared.util"}
+
+    -- Flags
+    local campNight = Flag("GLO_CAMP_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+    local inCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+    local dejectedStoryReason = Flag("CAMP_Ravengard_State_Dejected_ca0cb55f-d5b7-4e13-a28a-27bbc6522229")
+    local inSlumsCamp = Flag("CAMP_CTY_SLUMS_State_InRegion_b618f473-0fb5-4bbc-bf2c-7d2b4ca753ea")
+
+    -- State logic
+    local selectedBehaviour = nil
+    local behaviourLoops = 0
+    local ignoreReselectionUponInterrupt = false
+
+    self.CanEnter = function()
+       return GetFlag(inCamp,me)
+    end
+
+    self.OnEnter = function()
+        selectedBehaviour = nil
+        ignoreReselectionUponInterrupt = false
+    end
+
+    nodes.CAMP_Follower = Selector {
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end,
+
+        function(nodes)
+            -- Check if the behaviour was interrupted and enter it again if still valid
+            if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                ignoreReselectionUponInterrupt = false
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+
+            -- Always clear this, in case it was interrupted but was not able to select a node
+            ignoreReselectionUponInterrupt = false
+
+            -- Reduce behaviour loops by 1
+            if behaviourLoops > 0 then
+                behaviourLoops = behaviourLoops - 1
+            end
+
+            if selectedBehaviour == nil or behaviourLoops == 0 or
+            (selectedBehaviour ~= nil and not nodes.TryGetChild(selectedBehaviour).IsSelectable()) then
+                behaviourLoops = 1
+                local selectedNode = FindWeightedRandomSelectable(nodes, {
+                    [nodes.Thinking] = 6,
+                    [nodes.Thinking2] = 6,
+                    [nodes.Dejected] = 2,
+                    [nodes.CrossedArms] = 6,
+                    [nodes.CrossedArms2] = 6,
+                    [nodes.LookOut_Slums] = 7,
+                    [nodes.Idle] = 5
+                })
+
+                selectedBehaviour = selectedNode.Name
+                --DebugText(me,"Selected camp behaviour [1]",selectedBehaviour)
+            end
+
+ 			return nodes.TryGetChild(selectedBehaviour)
+        end
+    }
+
+    -- Full Camp Behaviours
+    nodes.CAMP_Follower.Thinking = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Thinking_02_43a70168-2f92-42e5-bfc2-845adf4013f6",
+                    loopIdleAnim = false,
+                    sleepDurationMin = 5.0,
+                    sleepDurationMax = 25.0},
+        OnEnter = function()
+            behaviourLoops = math.random(1,3)
+        end
+    }
+
+    nodes.CAMP_Follower.Thinking2 = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Thinking_03_9407dc5c-7155-40a6-a2ef-43ec37b0eda0",
+                    loopIdleAnim = false,
+                    sleepDurationMin = 5.0,
+                    sleepDurationMax = 25.0},
+        OnEnter = function()
+            behaviourLoops = math.random(1,3)
+        end
+    }
+     
+    nodes.CAMP_Follower.Dejected = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_Dejected_01_Start_55dac046-b8d2-4681-906d-f263c263071c",
+                    idleAnim = "CUST_Dejected_01_Loop_487b6cb3-1ca3-4041-acba-bcac93cfcbe5",
+                    idleAnimEnd = "CUST_Dejected_01_End_c49344c6-72ce-460a-b55c-94708983e6be",
+                    loopIdleAnim = false,
+                    sleepDurationMin = 5.0,
+                    sleepDurationMax = 25.0},
+        CanEnter = function()
+            return GetFlag(dejectedStoryReason)
+        end
+    }
+     
+    nodes.CAMP_Follower.CrossedArms = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_AngryCrossedArms_01_Start_ebe25dce-800f-4662-ac29-ba2adc5b36b6",
+                    idleAnim = "CUST_AngryCrossedArms_01_Loop_4b288089-9bad-477b-909b-10aa79e5a370",
+                    idleAnimEnd = "CUST_AngryCrossedArms_01_End_ee31d4d8-00bd-4ff7-8c21-c1698022c4e2",
+                    loopIdleAnim = false,
+                    idleAnimLength = 45.0,
+                    idleAnimEndLength = 5.0,
+                    sleepDurationMin = 5.0,
+                    sleepDurationMax = 25.0}
+    }
+    
+    nodes.CAMP_Follower.CrossedArms2 = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_ArmsCrossed_01_Start_dafd0bbc-012a-403c-aabe-4963aca9cf25",
+                    idleAnim = "CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71",
+                    idleAnimEnd = "CUST_ArmsCrossed_01_End_ae43ea68-fc1b-456a-88ce-0e1d504e1d40",
+                    loopIdleAnim = false,
+                    idleAnimLength = 45.0,
+                    idleAnimEndLength = 8.0,
+                    sleepDurationMin = 5.0,
+                    sleepDurationMax = 25.0},
+        OnEnter = function()
+            behaviourLoops = math.random(1,3)
+        end
+    }
+    
+    nodes.CAMP_Follower.LookOut_Slums = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "S_CAMP_SLUMS_Ravengard_LookOut_Point_699e6196-0c28-4fe2-90c3-ef7671f892f2",
+                    idleAnim = "CUST_LookingFar_01_5643e3dc-9631-4dba-b303-128fc29abfa7",
+                    loopIdleAnim = false,
+                    sleepDurationMin = 5.0,
+                    sleepDurationMax = 10.0},
+        OnEnter = function()
+            behaviourLoops = math.random(2,4)
+        end,
+        CanEnter = function()
+            return GetFlag(inSlumsCamp,me)
+        end,
+        OnInterrupt = function()
+            ignoreReselectionUponInterrupt = true
+        end
+    }
+
+    nodes.CAMP_Follower.Idle = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    sleepDurationMin = 30.0,
+                    sleepDurationMax = 55.0}
+    }
+
+    -- Clear current behaviour on day<->night transition
+    events.FlagSet = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if e.Event == "InterruptCampBehaviour" then
+                selectedBehaviour = nil
+                Interrupt()
+            elseif e.Event == "InterruptCampBehaviour_WithoutReselection" then
+                Interrupt()
+            end
+        end
+    end
+end}

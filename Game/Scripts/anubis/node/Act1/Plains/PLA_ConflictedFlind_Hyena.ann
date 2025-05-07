@@ -1,0 +1,94 @@
+game.states.PLA_ConflictedFlind_Hyena = State { function ()
+    description = [[Behaviour tree for hyenas running around Fang of Yeenoghu.]]
+
+    modules = { "shared.math" }
+
+    -----------------------------------------
+    -- params section
+    params.patrolSpline = { type = EParamType.String, required = true, help = [[
+        Patrol spline to use
+    ]]}
+
+    params.giggleAnim = { type = EParamType.String, required = false, help = [[
+        Giggle animation
+    ]]}
+
+    params.howlingAnim = { type = EParamType.String, required = false, help = [[
+        Howling animation
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local giggleAnim = nil
+    local howlingAnim = nil
+    local patrolSpline
+    local canWalkOnSpline = true
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        giggleAnim = Animation(params.giggleAnim)
+        howlingAnim = Animation(params.howlingAnim)
+        patrolSpline = Spline(params.patrolSpline)
+    end
+
+    self.OnLeave = function()
+        canWalkOnSpline = true
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.Patrol = Proxy{
+        game.states.PLA_ConflictedFlind_Patrol,
+        params = {
+            patrolSpline = params.patrolSpline,
+            movementSpeed = "Sprint"
+        },
+        Valid = function()
+            return canWalkOnSpline
+        end,
+        OnException = function(e)
+            if ls.CheckType(e, error.StartPatrolFailed) then
+                canWalkOnSpline = false
+                return true
+            end
+            return false
+        end
+    }
+
+    nodes.Giggle = Action {
+        function()
+            LookFrom(patrolSpline)
+            local sleepTime = mod.math.random(0.2, 1.2)
+            Sleep(sleepTime)
+            local anim = math.random() < 0.8 and giggleAnim or howlingAnim
+            try
+                PlayAnimation(anim)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed")
+            end
+            Sleep(3-sleepTime)
+            canWalkOnSpline = true
+        end,
+
+        Valid = function()
+            return not canWalkOnSpline
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+    end
+end}
+
+game.states.PLA_ConflictedFlind_Hyena_ListeningFlindsSpeech = State { function ()
+    description = [[State for behaviour while listening Flind's speech before rushing at Zhents (by Instigate)]]
+
+    nodes.ListeningFlindsSpeech = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

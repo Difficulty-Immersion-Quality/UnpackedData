@@ -1,0 +1,54 @@
+game.states.UND_PetrifiedDrow = State{function()
+    params.DefaultPos = { type = EParamType.String, required = true, help=[[]] }
+    params.LoopAnim = { type = EParamType.String, required = false, help=[[]] }
+
+    description = [[Anubis for petrified drows in Underdark]]
+
+    local defaultPos = Entity(params.DefaultPos)
+    local anim = Animation(params.LoopAnim)
+
+    nodes.MoveToDefaultPos = Action {
+        function()            
+            try
+                MoveTo(defaultPos)
+                LookFrom(defaultPos)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(defaultPos, 3.0)
+                Sleep(6.0)
+            end            
+        end,
+        CanEnter = function()
+            return anim ~= nil and GetDistance2DTo(me, defaultPos) > 2.0
+        end
+    }    
+
+    nodes.LoopAnimation = Action{
+        function()
+            LookFrom(defaultPos)
+            PlayAnimation(anim, false, true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+        CanEnter = function()
+            return anim ~= nil
+        end
+    }
+
+    nodes.GLO_StandAtTrigger = Proxy {        
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.DefaultPos,
+        }
+    }
+
+    nodes.Default = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

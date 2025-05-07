@@ -1,0 +1,101 @@
+game.states.MOO_WallTentacle_Ogre = State {function ()
+    
+    modules = {"shared.moveto", "shared.dialog"}
+
+    local interruptFlag = Flag("MOO_GuardRoom_Event_InterruptOgre_14b85439-f261-4155-a0c9-04ebd5d0832f")
+    local startPoint = Entity("S_MOO_OgreStartListenPoint_6b0f9838-3cad-4bc0-8e25-dd0a0ad25722")
+    local standingPoint = Entity("S_MOO_OgreGuardStandPoint_cc1f276c-d638-46f3-9489-8f975e0772dd")
+    local listenPoints = {
+        Entity("S_MOO_OgreListenPoint_001_a77c8550-ae10-42ce-9a89-35df03fb9f32"),
+        Entity("S_MOO_OgreListenPoint_002_b7f90beb-7f02-4370-9b44-a8da9250e6ac"),
+        Entity("S_MOO_OgreListenPoint_003_4a6e3317-b034-4cba-8db4-e4cd7ffb6c42"),
+        Entity("S_MOO_OgreListenPoint_004_8475eecd-45f6-4ac4-8cf0-58bd0d01baa1")
+    }
+    local guard1 = Entity("S_MOO_GuardRoom_001_3f94bfd0-5a3b-4ce3-8f12-61241b9a6a40")
+    local guard2 = Entity("S_MOO_GuardRoom_002_ba3c32e1-ebc2-441a-b121-d7977452c160")
+
+    local paranoidAnim = Animation("")
+    local hugAnimation = Animation("")
+
+    local AD = Dialog("MOO_GuardRoom_AD_GuardsInterrupt_2ee950e8-4295-56ad-a8bb-d25d8d8b2b63")
+
+    local hugTarget = nil
+
+    local isListening = false
+    local waitForDialogEnd = false
+    local isStartingToLook = false
+
+    nodes.Listen = Action{
+        CanEnter = function()
+            return not GetFlag(interruptFlag) and isListening == true
+        end,
+
+        OnEnter = function()
+            isListening = false
+        end,
+        
+        function()
+            local target = math.random(1, #listenPoints)
+
+            if mod.moveto.MoveToPoint(listenPoints[target], MovementSpeed.Walk, me) then
+                LookFrom(listenPoints[target])
+                 --PlayAnimation(paranoidAnim, false, false)
+                DebugText(me, "ANIM: Look around for weird noises")
+                Sleep(4)
+            else
+                LookAtEntity(listenPoints[target], 3.0)
+                --PlayAnimation(paranoidAnim, true, false)
+                DebugText(me, "ANIM: Look around for weird noises")
+            end
+        end
+        
+    }
+    
+    nodes.StartLook = Action {
+        CanEnter = function()
+            return isStartingToLook
+        end,
+        
+        OnEnter = function()
+            isStartingToLook = false
+        end,
+        
+        function()
+            if mod.moveto.MoveToPoint(startPoint, MovementSpeed.Walk, me) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        checkSight = false,
+                        maxDistance = 20.0
+                    },
+                    guard1,
+                    me,
+                    guard2
+                )
+                Sleep(3)
+                if not GetFlag(interruptFlag) then
+                    isListening = true
+                end
+            else
+                LookAtEntity(startPoint, 3.0)
+                --PlayAnimation(paranoidAnim, true, false)
+                DebugText(me, "ANIM: Look around for weird noises")
+            end
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Stroll, me) then
+                ClearFlag(interruptFlag)
+                LookFrom(standingPoint)
+                Sleep(math.random(40, 80))
+                isStartingToLook = true
+            else
+                LookAtEntity(standingPoint, 3.0)
+            end
+        end
+    }
+end
+}

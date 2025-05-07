@@ -1,0 +1,96 @@
+game.states.PLA_StuckHalfElf_HazardFire = State {
+    function ()
+
+        params.delay = {type = EParamType.Number, required = false, default = 1.0, 
+        help=[[Amount of turns the fire is delayed.]]}
+
+        params.maxSize = {type = EParamType.Number, required = false, default = 200.0, 
+        help=[[Maximum size of puddle]]}
+
+        params.next = {type = EParamType.String, required = false,
+        help=[[next flame in line]]}
+
+        params.startOfTurnDelay = {type = EParamType.Number, required = false, default = 0.0, 
+        help=[[At the start of a turn, delay the tick this much.]]} -- Prevents all the puddles from being created simultaneously.
+
+
+        local delay
+        local maxSize
+        local ignited = false
+        local flame
+        local next
+
+        self.OnInit = function()
+            delay = params.delay
+            maxSize = params.maxSize
+            if params.next then
+                next = Entity(params.next)
+            end
+        end
+
+        nodes.Delay = Action{
+            function()
+                Sleep(6.0)
+                delay = delay - 1
+            end,
+            CanEnter = function()
+                return delay > 0
+            end
+        }
+
+        nodes.WaitForIgnite = Action{
+            function()
+                Sleep(1.0)
+            end,
+            Valid = function()
+                return not ignited and
+                       not FindSurface(me, 0.0, 1.75, SurfaceType.FIRE, 10)
+            end,
+        }
+
+        nodes.CreateFlame = Action {
+            function()
+                if not FindSurface(me, 0.0, 1.0, SurfaceType.FIRE) then
+                    DebugText(me, "Creating minimum surface")
+                    Sleep(5.5)
+                    CreateSurfaceAt(me, SurfaceType.FIRE, 2.0, -1.0)
+                elseif not FindSurface(me, 0.0, 1.5, SurfaceType.FIRE, maxSize) or 
+                       (next ~= nil and
+                        not FindSurface(next, 0.0, 1.5, SurfaceType.FIRE, 10)) then
+                        CreateSurfaceAt(me, SurfaceType.FIRE, 2.0, -1.0)
+                        Sleep(params.startOfTurnDelay)
+                    for i=0, 1, 10 do
+                    DebugText(me, "Creating Puddle")
+                        if not FindSurface(me, 0.0, 1.5, SurfaceType.FIRE, maxSize) or 
+                            (next ~= nil and
+                            not FindSurface(next, 0.0, 1.5, SurfaceType.FIRE, 10)) then
+                                CreatePuddleAt(me, SurfaceType.FIRE, 35, 40, 10, 15, 0.1, -1.0, nil)   
+                                Sleep(1.5)
+                         end
+                    end
+                else
+                    CreateSurfaceAt(me, SurfaceType.FIRE, 2.0, -1.0)
+                    Sleep(params.startOfTurnDelay)
+                end
+            end,
+            OnEnter = function()
+                if not ignited then
+                    ignited = true
+                    flame = PrepareEffect("VFX_Environment_Wreck_Smoke_Thick_01_4bffb4dc-64e9-3dbe-0dff-df803804c0fc")
+                    PlayEffectAt(flame, me)
+                end
+            end,
+        }
+
+        nodes.Sleep = Action {
+            function()
+                Sleep(2.0)
+            end,
+            OnEnter = function()
+                ignited = true
+            end
+        }
+
+
+    end
+}

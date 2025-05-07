@@ -1,0 +1,331 @@
+game.states.DEN_TieflingRefugee_Guard008 = State {function ()
+description = [[Events for the guard in the robbed adventurer situation]]
+
+modules = {"shared.moveto", "shared.dialog"}
+
+-----------------------------------------
+-- Local variables
+
+local robberArea = Entity("S_DEN_Tiefling008_RobberStandArea_27292364-1f45-4bca-baa0-825c3914e89a")
+local confrontLookAt = Entity("S_DEN_RobberKid_ConfrontArea_0326b5fd-6710-4802-ba50-07f5236c4685")
+local endFlag = Flag("DEN_Thieflings_State_AfterRobberKidConfront_081b5119-aa6c-8b1e-b321-d622cbe162d7")
+local confrontFlag = Flag("DEN_Thieflings_State_InKidConfrontation_1b4d990d-fa82-4bb5-b2ae-b910aeccbdf7")
+local alertedFlag = Flag("DEN_Thieflings_Event_GuardNearby_3b7cd1d0-d98e-bacc-269b-1af2b678ac47")
+local confrontStopRestFlag = Flag("DEN_Thieflings_Event_RobbedConfrontationStarted_f6dd9a88-74e4-4d6c-8ad1-431641bfd1df")
+local patrol = false
+local rested = false
+
+local AD = Dialog("DEN_General_AD_TieflingGuard8_dae0f270-bef7-f557-70bc-ae3317e17453")
+local canAD = true
+local disableAD = false
+
+-----------------------------------------
+-- State nodes
+self.OnInit = function()
+SetWeaponUnsheathed(me,true)
+end
+
+-----------------------------------------
+-- Nodes
+
+nodes.Default = Selector{
+    function(nodes)
+        if not GetFlag(confrontFlag) then
+            if nodes.doAD.IsSelectable() then
+                return nodes.doAD
+            elseif patrol or rested then
+                return nodes.Patrol
+            elseif not rested then
+                return nodes.Rest
+            end
+        elseif GetFlag(confrontFlag) and not GetFlag(confrontStopRestFlag) then
+            return nodes.FarRest
+        elseif GetFlag(confrontFlag) and GetFlag(confrontStopRestFlag) then
+            return nodes.MoveToConfront
+        end
+    end
+}
+
+nodes.Default.doAD = Action {
+    function()
+        mod.dialog.StartCheckedAutomatedDialog(
+            AD,
+            {
+                waitForCompletion = false
+            },
+            me
+        )
+        canAD = false
+    end,
+    OnLeave = function()
+        canAD = false
+        StopTimer(me,"ADTimer_DEN_General_AD_TieflingGuard8")
+        StartTimer(me,"ADTimer_DEN_General_AD_TieflingGuard8", 40 + math.random(0,10),0)
+    end,
+    Valid = function()
+        return canAD and not disableAD
+    end
+}
+
+nodes.Default.Patrol = Proxy {
+    OnEnter = function()
+        rested = true
+    end,
+    game.states.DEN_GeneralGroveStates_Patrol,
+    params={
+        spline = "S_DEN_Tiefling008_Patrol_751135fe-5d68-4f33-ab68-b4d28d1bddf9",
+        waitMin = 12.0,
+        waitMax = 17.0
+    },
+    Valid = function()
+        return not GetFlag(confrontFlag)
+    end
+}
+
+nodes.Default.Rest = Proxy {
+    OnEnter = function()
+        patrol = true
+    end,
+    game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+    params={
+        moveTarget = "S_DEN_Tiefling008_RobberStandArea_27292364-1f45-4bca-baa0-825c3914e89a",
+        lookFromMoveTarget = true,
+        waitMin = 12.0,
+        waitMax = 17.0,
+    },
+    Valid = function()
+        return not GetFlag(confrontFlag)
+    end
+}
+
+nodes.Default.FarRest = Proxy {
+    OnEnter = function()
+        patrol = true
+    end,
+    game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+    params={
+        moveTarget = "S_DEN_Thieflings_GuardConfrontationWaitArea_85aa81a3-69d7-4b87-8d4c-c1ca4ff04f24",
+        lookFromMoveTarget = true,
+        waitMin = 6.0,
+        waitMax = 6.0,
+    },
+    Valid = function()
+        return not GetFlag(confrontStopRestFlag)
+    end
+}
+
+nodes.Default.MoveToConfront = Action {
+    OnEnter = function()
+        if patrol then
+            patrol = false
+        end
+        SetWeaponUnsheathed(me,false)
+    end,
+    OnLeave = function()
+        SetWeaponUnsheathed(me,true)
+    end,
+    function()
+        if mod.moveto.MoveToPoint(robberArea,MovementSpeed.Stroll,me) then
+            LookFrom(robberArea)
+            WaitForInterrupt()
+        end
+    end,
+    Valid = function()
+        return GetFlag(confrontFlag)
+    end
+}
+
+-----------------------------------------
+-- event section
+
+events.FlagSet = function(e)
+    if(e.Flag == endFlag.Guid) then
+        SetHasOsirisDialog(me,true)
+        StartTimer(me, "DEN_TieflingRefugee_Guard008_ReenableAD", 15, 0)
+    elseif(e.Flag == confrontFlag.Guid) then
+        disableAD = true
+    elseif(e.Flag == alertedFlag.Guid) then
+        SetHasOsirisDialog(me,false)
+    end
+end
+
+events.EntityEvent=function(e)
+    if e.TargetEntity == me and e.Event == "DEN_GroveRefugeeStopPatrol" then
+        patrol = false
+        rested = false
+    end
+end
+
+events.TimerFinished = function(e)
+    if(e.TimerName == "ADTimer_DEN_General_AD_TieflingGuard8") then
+        canAD = true
+    elseif(e.TimerName == "DEN_TieflingRefugee_Guard008_ReenableAD") then
+        disableAD = false
+    end
+end
+
+end}
+
+game.states.DEN_AttackOnDen_SonOfChef = State {function ()
+    description = [[Chatting with Okta, and Bex/Dannis if tortured adventurer is missing.]]
+
+    local introSceneFlag = Flag("DEN_AttackOnDen_Event_ChefAndSonTalked_1877570b-a0f3-4d65-bbba-7db56293242a")
+
+    nodes.IntroScene = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_IntroSonPos_67d12acb-76a4-4dcf-a73a-e3f61bafb140]]
+        },
+        Valid = function()
+            return not GetFlag(introSceneFlag)
+        end
+    }
+
+    nodes.AfterIntroScene = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_AoDSonPos_65e41402-e1e7-4cc0-b6bb-ea5fb4afda79]]
+        }
+    }
+
+end}
+
+game.states.DEN_TieflingRefugee_Guard008_WithChef = State { function ()
+
+    description = [[Chef's son is rooting through Auntie Ethel's goods after she left the area following Druid Attack.]]
+
+    modules = { "gustav.Act1.GroveRefugee", "shared.dialog"}
+
+    -----------------------------------------
+    -- Params
+    params.Custom = {type=EParamType.State, required=false, default=nil, help=[[State for Custom Behavior]]}
+    -----------------------------------------
+
+    local foodTrader = Entity("S_DEN_Tiefling_FoodTrader_001_1b35671b-e5d7-4943-bbd0-4c816b69b7cb")
+    local canAD = false
+    local canTryAD = false
+    local blockedAD = false
+    local AD = Dialog("DEN_DruidAttack_AD_ChefAndSonAfterAttack_e026e05e-7f01-343e-9286-d3308a7747eb")
+    local soloAD = Dialog("DEN_General_AD_TieflingGuard8_dae0f270-bef7-f557-70bc-ae3317e17453")
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Default = Selector{
+        function(nodes)
+            if ((canTryAD and canAD and mod.dialog.IsSpeakerAvailableAndNear(foodTrader, me, 5.0, true)) or not mod.dialog.IsSpeakerAvailable(foodTrader)) and nodes.doAD.IsSelectable() then
+                return nodes.doAD
+            elseif canTryAD and nodes.doAD.IsSelectable() then
+                return nodes.moveToAndTalk
+            else
+                return nodes.Actions
+            end
+        end
+    }
+
+    nodes.Default.moveToAndTalk  = Proxy {
+        game.states.DEN_GeneralGroveStates_MoveToAndTalk,
+            params={
+                moveTarget = "S_DEN_PostDruidAttack_HagSearchPos4_21c95bc9-f734-443e-b1ce-3c0d3113be83",
+                lookTarget = "S_DEN_Tiefling_FoodTrader_001_1b35671b-e5d7-4943-bbd0-4c816b69b7cb"
+            }
+    }
+
+    nodes.Default.doAD = Action {
+        OnEnter = function()
+            canAD = false
+            canTryAD = false
+        end,
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true,
+                    fallbackSoloDialog = soloAD
+                },
+                me,
+                foodtrader
+            )
+            blockedAD = true
+        end,
+        OnLeave = function()
+            blockedAD = true
+            StopTimer(me,"ADTimer_DEN_DruidAttack_AD_ChefAndSonAfterAttack")
+            StartTimer(me,"ADTimer_DEN_DruidAttack_AD_ChefAndSonAfterAttack", 60 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return not blockedAD
+        end
+    }
+
+    nodes.Default.Actions = Selector{
+        OnEnter = function()
+            canAD = false
+        end,
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.Actions.Table = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_PostDruidAttack_HagSearchPos1_6ba120b1-11cd-4921-83b4-b323f59e67c7",
+            anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0
+        },
+        OnLeave = function()
+            if (mod.dialog.IsSpeakerAvailable(foodTrader)) and not canAD then
+                canTryAD = true
+            end
+        end
+    }
+
+    nodes.Default.Actions.Planter = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_PostDruidAttack_HagSearchPos2_7d4c06bc-bcc6-443c-985e-4ef7a2f3ef3d",
+            anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0
+        },
+        OnLeave = function()
+            if (mod.dialog.IsSpeakerAvailable(foodTrader)) and not canAD then
+                canTryAD = true
+            end
+        end
+    }
+
+    nodes.Default.Actions.Barrels = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_PostDruidAttack_HagSearchPos3_5c1165bd-f170-43ba-86f0-5778a50e0325",
+            anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0
+        },
+        OnLeave = function()
+            if (mod.dialog.IsSpeakerAvailable(foodTrader)) and not canAD then
+                canTryAD = true
+            end
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_MovedToTalk") then
+                canAD = true
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_DruidAttack_AD_ChefAndSonAfterAttack") then
+            blockedAD = false
+        end
+    end
+
+end}

@@ -1,0 +1,58 @@
+
+game.states.WYR_WyrmRock_RoofSteelWatcher = State {
+
+    function()
+
+        modules = { "shared.util" }
+
+        params.patrolSpline = { type = EParamType.String, required = true, help = [[Patrol Spline for a Steel Watcher]] }
+        params.sleepMin = { type = EParamType.Number, required = false, default = 3, help = [[Min sleep time at a patrol point]] }
+        params.sleepMax = { type = EParamType.Number, required = false, default = 9, help = [[Max sleep time at a patrol point]] }
+
+        local patrolSpline = Spline(params.patrolSpline)
+        local patrolSplineIndex = 0
+        local paused = false
+
+        nodes.Talk = Action{
+
+            OnEnter = function()
+                ShortPatrolInterrupt()
+            end,
+
+            function()
+                LookFrom(patrolSpline)
+                if (params.sleepMin < params.sleepMax) then
+                    mod.util.SleepRandom(params.sleepMin, params.sleepMax)
+                else
+                    mod.util.SleepRandom(3, 9)
+                end
+                paused = false
+            end,
+
+            OnInterrupt = function()
+                paused = false
+            end,
+
+            Valid = function()
+                return paused
+            end
+        }
+
+        nodes.Patrol = Action{
+            function()
+                DoPatrol(patrolSpline, false, MovementSpeed.Walk, patrolSplineIndex)
+            end,
+
+            Valid = function()
+                return patrolSpline ~= nil
+            end
+        }
+
+        events.SplineControlPointReached = function(e)
+            patrolSplineIndex = e.NewIndex
+            paused = true
+        end
+
+    end
+
+}

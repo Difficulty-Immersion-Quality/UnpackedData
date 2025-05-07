@@ -1,0 +1,148 @@
+game.states.COL_Necromancer_Zombie_Idle = State{
+    function()
+    
+    modules = { "shared.math", "shared.params", "shared.util" }
+
+    -----------------------------------------
+    -- Params
+    params.sleepMin = {type = EParamType.Number,required = false,default = 7,
+        help = [[Minimum sleep duration. Sleeps happen either at certain patrol points or in between idle steers.]]}
+    params.sleepMax = {type = EParamType.Number,required = false,default = 15,
+        help = [[Maximum sleep duration. Sleeps happen either at certain patrol points or in between idle steers.]]}
+    params.patrolSpline = {type=EParamType.String, required = false, default = "",
+        help = [[Optional patrol spline.]]}
+
+    -----------------------------------------
+    -- Locals
+    local sleepMin = 7
+    local sleepMax = 15
+    local doPatrol = false
+    local doSleep = false
+    local doPickUp = false
+    
+    local pickUpAnimation = Animation("CUST_PickUpThrall_01_f4131b8b-1873-48e2-b04f-2536be80f26c")
+    local zombieGroanAD = Dialog("COL_NecromancerLab_AD_Zombie_2d7fb091-4301-9fab-832e-596ba0db13b0")
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        if params.patrolSpline~=nil and params.patrolSpline~="" then
+            doPatrol = true
+        end
+        if params.sleepMin~=nil and params.sleepMax~=nil then
+            sleepMin = params.sleepMin
+            sleepMax = params.sleepMax
+        end
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes.Sleep = Action{
+        function() 
+            helpers.TryZombieGroanAD()
+            
+            if doPickUp then
+                PlayAnimation(pickUpAnimation,true,false)
+                Sleep(0.5)
+                doSleep = false
+                doPickUp = false
+            else
+                Sleep(math.random(sleepMin,sleepMax))
+                doSleep = false
+            end
+        end,
+        CanEnter = function()
+            return doSleep
+        end,
+        OnLeave = function()   
+            StopAnimation(me)
+        end
+    }
+
+    nodes.FollowPatrol = Proxy{
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = params.patrolSpline,
+            patrolReverse = false,
+            patrolSpeed = "Stroll",
+            startSplineIndex = -1,
+        },
+        CanEnter = function()
+            return doPatrol
+        end
+    }   
+
+    nodes.Idle = Action{
+        function()
+            local duration = math.random(sleepMin,sleepMax)
+            --DebugText(me,"Steer sleep [1]",duration)
+            Sleep(duration)
+            local steerTarget = me.Position + (me.ForwardDirection * 3.0) --multiplied to avoid steering to own position
+            local offset = Vector3(math.random()*2.0-1.0,0.0,math.random()*2.0-1.0) * 1.5 -- > multiplier > relative turn angle
+            steerTarget = steerTarget + offset
+            --DebugText(me,"Steering to [1]",steerTarget)
+            SteerTo(steerTarget)
+            helpers.TryZombieGroanAD()
+        end
+    }
+
+    helpers.TryZombieGroanAD = function()
+        if math.random(100) < 10 then
+            StartAutomatedDialogRateLimitedImmediate(zombieGroanAD,1.0,10.0,me)
+        end
+    end
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Sleep" then
+            DebugText(me,"Sleep")
+            doSleep = true
+        elseif e.Event == "PickUp" then
+            DebugText(me,"PickUp")
+            doPickUp = true
+            doSleep = true
+        end
+    end
+
+    end
+}
+
+game.states.COL_Necromancer_Zombie_Combat = State{
+    function()
+        modules = {"shared.util","shared.math"}
+
+        local candleLighter = Flag("COL_NecromancerLab_State_CandleLighter_91a2d6db-c58c-4b3d-94c6-99d39279133c")
+        local alivePartyMemberInCage = Flag("COL_NecromancerLab_State_PartyMemberAliveInCage_e9ac1d5c-f4d2-4e3d-88f7-9e6d6230499f")
+        local anyCandleDestroyed = Flag("COL_NecromancerLab_State_CandleDestroyed_53ec8d43-1833-4fb1-96bb-dda26c674635")
+        local candle1 = Entity("S_COL_NecromancerLab_Candle1_1f26256e-2cb9-45b4-ac80-dfd313081681")
+        local candle2 = Entity("S_COL_NecromancerLab_Candle2_996f27d7-4072-4729-a433-38dec4cfdbe5")
+        local candle3 = Entity("S_COL_NecromancerLab_Candle3_ab318017-e124-4cc7-a51b-85e9bb1a40b0")
+
+        nodes.LightCandle = Action{
+            function()
+                if not HasActiveStatus(candle1, "BURNING") then
+                    UseItem(candle1.Item)
+                    EndTurn(me)
+                elseif not HasActiveStatus(candle2, "BURNING") then
+                    UseItem(candle2.Item)
+                    EndTurn(me)
+                else
+                    UseItem(candle3.Item)
+                    EndTurn(me)
+                end
+            end
+        }
+
+        self.Valid = function()
+            return GetFlag(alivePartyMemberInCage) and
+                   GetFlag(candleLighter, me) and
+                    not GetFlag(anyCandleDestroyed) and
+                    (not HasActiveStatus(candle1, "BURNING") or
+                    not HasActiveStatus(candle2, "BURNING") or
+                    not HasActiveStatus(candle3, "BURNING")) and
+                   (me.IsInCombat and me.CanActInCombatTeamTurn)
+        end
+
+    end
+}

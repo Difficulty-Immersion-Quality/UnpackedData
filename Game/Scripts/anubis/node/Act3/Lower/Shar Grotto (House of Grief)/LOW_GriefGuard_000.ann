@@ -1,0 +1,149 @@
+game.states.LOW_GriefGuard_000_Patrol = State{
+    function()
+        description = [[]]
+
+        modules = {"shared.character", "shared.dialog"}
+
+        local b_Stop = false
+        local i_patrol
+        local guardsGossiped = Flag("LOW_HouseOfGrief_State_GuardsGossiped_0f37bde1-0f00-4eaa-baaa-3dce8ae0dbd3")
+        local gossipReady = Flag("LOW_HouseOfGrief_State_GossipReady_1fc1b11e-e622-4e6c-8ec3-4808c46c7aa3")
+        local otherGuard = Entity("S_LOW_GriefGuard_001_1442d4e5-7c3d-4509-b72a-422788b4545c")
+        local gossipAD = Dialog("LOW_HouseOfGrief_AD_MerchantGossip_508f0f77-fbb6-4fff-d777-4557ef50ebed")
+        local lookAt = Entity("S_LOW_GriefGuard_000_LookAt_68bb0059-433f-443a-b2a7-1c7d10fc1c6b")
+
+        events.SplineControlPointReached = function(e)
+            i_patrol = e.Index
+            b_Stop = (e.Index == 0 or e.Index == 3 or e.Index == 4)
+        end
+
+        events.FlagSet = function(e)
+            if not GetFlag(guardsGossiped) then
+                if e.Flag == gossipReady.Guid then
+                    if e.Entity == me then
+                        if GetFlag(gossipReady, otherGuard) then
+                            SetFlag(guardsGossiped)
+                        end
+                    end
+                end
+            end
+        end
+
+        nodes = ImmediateSelector{
+            Valid = function(node)
+                return CheckAnySelectable(node)
+            end
+        }
+
+        nodes.GossipWait= Action {
+            function()
+                SetFlag(gossipReady, me)
+                WaitForInterrupt()
+            end,
+            CanEnter = function()
+                return b_Stop
+            end,
+            Valid = function()
+                return (i_patrol == 3) and not (mod.character.IsDefeated(otherGuard)) and not GetFlag(guardsGossiped)
+            end
+        }
+
+        nodes.Gossip= Action {
+            function()
+                if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailable(otherGuard) then
+                    DebugText(me, "Try Gossip")
+                    StartAutomatedDialog(gossipAD , true, me, otherGuard)
+                    Sleep(3.0)
+                    b_Stop = false
+                    ClearFlag(gossipReady, me)
+                end
+            end,
+            CanEnter = function()
+                return b_Stop
+            end,
+            Valid = function()
+                return i_patrol == 3 and GetFlag(gossipReady, me) and GetFlag(gossipReady, otherGuard) and not (mod.character.IsDefeated(otherGuard))
+            end,
+            OnLeave = function()
+                b_Stop = false
+                ClearFlag(gossipReady, me)
+            end
+        }
+
+        nodes.PatrolStop = Action {
+            function()
+                if lookAt ~= nil then
+                    SteerTo(lookAt)
+                end
+                Sleep(math.random(6,18))
+                b_Stop = false
+            end,
+            CanEnter = function()
+                return b_Stop
+            end,
+            Valid = function()
+                return not (i_patrol == 3)
+            end
+        }
+
+        nodes.Fallback = Action {
+            function()
+                b_Stop = false
+            end,
+            CanEnter = function()
+                return b_Stop
+            end
+        }
+
+    end
+}
+
+game.states.LOW_HouseOfGriefGuard_000 = State {function ()
+
+    modules = {"shared.dialog"}
+
+    local hadGoodbye = false
+    local griefDoor = Entity("S_LOW_GriefEntrance_af780377-dc6e-4350-be13-3cdeeb93f20f")
+    local goodbyeAD = Dialog("LOW_HouseOfGrief_AD_MerchantGoodbye_e64a956f-25e9-56e2-c9d1-34d0c85e6a2b")
+
+    nodes.Patrol = Proxy{
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = "S_LOW_GriefGuard_000_Patrol_d34d5abf-41aa-4fd7-affd-2a7d47f32c05",
+            patrolSpeed = "Walk",
+            patrolReverse = true,
+            patrolActions = StateRef{game.states.LOW_GriefGuard_000_Patrol}
+        },
+
+        Valid = function()
+            return hadGoodbye
+        end
+    }
+
+
+    nodes.MerchantLeave = Action {
+        function()
+        Sleep(3.0)
+            if mod.dialog.IsSpeakerAvailable(me) then
+                StartAutomatedDialog(goodbyeAD, true, me)
+            end
+            Sleep(2.0)
+            hadGoodbye = true
+        end,
+        CanEnter = function()
+            return not hadGoodbye
+        end
+    }
+
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(6.0)
+        end,
+        Valid = function()
+            return not hadGoodbye
+        end
+    }
+
+end
+}

@@ -1,0 +1,196 @@
+
+game.states.CAMP_Isobel = State {function()
+    description = [[Behaviour of Isobel at the campsite]]
+    modules = {"shared.util"}
+
+    -- Flags
+    local campNight = Flag("GLO_CAMP_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+    local inCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+    local aradinAttack = Flag("LOW_SorcerousSundries_AradinAttackActive_c48ecbe3-1e99-44fa-914b-57b4c3528b7c")
+
+    -- Animations
+    local chantingAnimStart = Animation("CUST_BarrierChanting_01_Start_3bf94b22-6c6d-4386-8deb-19df841b9806")
+    local chantingAnim = Animation("CUST_BarrierChanting_01_Loop_053c0ce0-dfc0-4cbc-bdd6-764226fde026")
+    local chantingAnimEnd = Animation("CUST_BarrierChanting_01_End_8acfaa73-f434-4065-afcf-c05fcfb3ceba")
+
+    -- State logic
+    local selectedBehaviour = nil
+    local behaviourLoops = 0
+    local ignoreReselectionUponInterrupt = false
+
+    local campPos = nil
+
+    self.CanEnter = function()
+        return GetFlag(inCamp, me) and not GetFlag(aradinAttack)
+    end
+
+    self.OnEnter = function()
+        selectedBehaviour = nil
+        ignoreReselectionUponInterrupt = false
+    end
+
+    nodes.CAMP_Follower = Selector {
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end,
+
+        function(nodes)
+            -- Check if the behaviour was interrupted and enter it again if still valid
+            if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                ignoreReselectionUponInterrupt = false
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+
+            -- Always clear this, in case it was interrupted but was not able to select a node
+            ignoreReselectionUponInterrupt = false
+
+            -- Reduce behaviour loops by 1
+            if behaviourLoops > 0 then
+                behaviourLoops = behaviourLoops - 1
+            end
+
+            if selectedBehaviour == nil or behaviourLoops == 0 or
+            (selectedBehaviour ~= nil and not nodes.TryGetChild(selectedBehaviour).IsSelectable()) then
+                behaviourLoops = 1
+                local selectedNode = FindWeightedRandomSelectable(nodes, {
+                    [nodes.Thinking] = 3,
+                    [nodes.Bored] = 3,
+                    [nodes.Chanting] = 0, --used to be 1, needs to be reactivated when animations are done
+                    [nodes.Praying] = 1,
+                    [nodes.Idle] = 2
+                })
+
+                selectedBehaviour = selectedNode.Name
+                --DebugText(me,"Selected camp behaviour [1]",selectedBehaviour)
+            end
+
+ 			return nodes.TryGetChild(selectedBehaviour)
+        end
+    }
+
+    -- Full Camp Behaviours
+    nodes.CAMP_Follower.Bored = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Bored_01_Loop_23588ba8-fafb-438c-9bc5-660ff6650aef",
+                    loopIdleAnim = false,
+                    sleepDurationMin = 5.0,
+                    sleepDurationMax = 25.0},
+        OnEnter = function()
+            behaviourLoops = math.random(1,3)
+        end
+    }
+
+    nodes.CAMP_Follower.Thinking = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba",
+                    loopIdleAnim = false,
+                    sleepDurationMin = 5.0,
+                    sleepDurationMax = 25.0},
+        OnEnter = function()
+            behaviourLoops = math.random(1,3)
+        end
+    }
+     
+    nodes.CAMP_Follower.Chanting = Action {
+
+        function()
+            if campPos == nil or campPos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                SetUnicastEntityEvent(me,"CampPosRequest")
+                Sleep(2.0)
+                return
+            end
+
+            if campPos == nil or campPos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                Sleep(2.0)
+                return
+            end
+
+            if IsInDangerousSurfaceFor(campPos, me.Character) then
+                SteerTo(campPos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(campPos, MovementSpeed.Walk, true, false, 0.5, 1.5, false)
+
+            if moveResult ~= error.MovementError.None then
+                SteerTo(campPos)
+                Sleep(2.0)
+                return
+            end
+
+            LookFrom(campPos)
+
+            mod.util.SleepRandom(5.0, 10.0)
+            if (chantingAnimStart ~= nil and chantingAnim ~= nil and chantingAnimEnd ~= nil) then
+                --DebugText(me,"CAMP_Idle: play looping anim")
+                PlayLoopingAnimation(chantingAnimStart,{chantingAnim},chantingAnimEnd)
+                --PlayAnimation(chantingAnimStart,false,false)
+                Sleep(3.5)
+                ApplyStatus(me,"PRODUCE_FLAME",false,35.0,me)
+                Sleep(28.5)
+                StopAnimation(me)
+                Sleep(14.0)
+                return
+            end
+            Sleep(10.0)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+            if HasActiveStatus(me,"PRODUCE_FLAME") then
+                RemoveStatus(me,"PRODUCE_FLAME",me)
+            end
+        end
+    }
+     
+    nodes.CAMP_Follower.Praying = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_Praying_01_Start_e5488b36-2aa0-40be-b6e3-2165a9d38f02",
+                    idleAnim = "CUST_Praying_01_Loop_b45ab827-aebd-49ed-9ac7-07a1489a5490",
+                    idleAnimEnd = "CUST_Praying_01_End_a1c0b0da-ea50-48a0-aba8-d2986c8b2737",
+                    loopIdleAnim = false,
+                    sleepDurationMin = 5.0,
+                    sleepDurationMax = 25.0,
+                    idleAnimLength = 35.0,
+                    idleAnimEndLength = 10.0}
+    }
+
+    nodes.CAMP_Follower.Idle = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    sleepDurationMin = 30.0,
+                    sleepDurationMax = 55.0}
+    }
+
+    -- Clear current behaviour on day<->night transition
+    events.FlagSet = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        --For testing
+        if e.TargetEntity == me and e.Event == "InterruptCampBehaviour" then
+            DebugText(me,"Interrupted camp behaviour")
+            selectedBehaviour = nil
+            Interrupt()
+        elseif e.TargetEntity == me and e.Event == "InterruptCampBehaviour_WithoutReselection" then
+            Interrupt()
+        elseif e.TargetEntity == me and e.Event == "CampPositionChange" then
+            -- Camp Position Changed
+            campPos = e.Params[1]
+        end
+    end
+end}

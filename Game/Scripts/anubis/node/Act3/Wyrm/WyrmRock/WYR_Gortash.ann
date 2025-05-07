@@ -1,0 +1,108 @@
+game.states.WYR_Gortash = State{function()
+
+    modules = {"shared.dialog", "shared.status", "shared.math", "shared.util"}
+
+    local posInAudienceHall = Entity("S_WYR_Gortash_DefaultPos_8979ee52-d834-4b5f-8cc7-38155848275a")
+    local posInOffice = Entity("S_WYR_Gortash_OfficePos_fff3874c-e03b-4802-b0ba-e3584b8ca5ee")
+    local posInAudienceHallAfterCeremony = Entity("S_WYR_KillDirectorGortash_GortashAfterCeremonyPos_dd449a60-f892-4170-bdef-26f24a5afd84")
+
+    local beforeCeremonyFlag = Flag("WYR_KillDirectorGortash_State_BeforeCeremony_23a195be-a8d7-4678-94af-743dea65fd95")
+    local afterCeremonyFlag = Flag("WYR_KillDirectorGortash_State_AfterCeremony_a05a6945-21ad-400d-80bc-7b4934571c57")
+    local inOfficeFlag = Flag("WYR_KillDirectorGortash_State_InOffice_12233623-2dc3-4dbe-b493-b491fdf6321d")
+    local ravengardForceRemovalFlag = Flag("WYR_KillDirectorGortash_State_RavengardForceRemoval_cda5ec5a-5614-45d5-aa60-f99e210dab5d")
+
+    local beforeCeremonyAD = Dialog("WYR_KillDirectorGortash_AD_BeforeCeremony_0d95b9b2-fd21-63d4-a86c-7a6073203476")
+    local afterCeremonyAD = Dialog("WYR_KillDirectorGortash_AD_AfterCeremony_bc07218f-1a0b-70ad-934b-c7c110f6d648")
+    local delayedAfterCeremonyAD = false -- need to delay it once to let all the patriars get to their positions
+
+    local patriar_001 = Entity("S_WYR_DillardPortyr_4ae37244-c9eb-41b3-82fb-c302abd01f1e")
+    local patriar_002 = Entity("S_WYR_Patriar_001_36105366-a525-4e6f-8e25-db6da2682978")
+    local patriar_003 = Entity("S_WYR_Patriar_002_e03365dc-cb4b-4e80-b2fd-311b09e6986d")
+    local patriar_004 = Entity("S_GLO_Ravengard_f6620372-ebd0-4511-a39d-8c2d4ad03f03")
+
+    nodes.BeforeCeremony = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                beforeCeremonyAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 6.0,
+                    maxDistance = 35.0,
+                    cullingDistance = 35.0,
+                    checkSight = false
+                },
+                me,
+                patriar_001,
+                patriar_002,
+                patriar_003,
+                patriar_004
+            )
+        end,
+        Valid = function()
+            return GetFlag(beforeCeremonyFlag)
+        end,
+    }
+
+    nodes.AfterCeremony = Action{
+        function()
+            if not delayedAfterCeremonyAD then
+                LookFrom(posInAudienceHallAfterCeremony)
+                Sleep(15.0)
+                delayedAfterCeremonyAD = true
+            end
+            LookFrom(posInAudienceHallAfterCeremony)
+            if GetFlag(ravengardForceRemovalFlag) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    afterCeremonyAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 6.0,
+                        maxDistance = 35.0,
+                        cullingDistance = 35.0,
+                        checkSight = false
+                    },
+                    me,
+                    patriar_001,
+                    patriar_002,
+                    patriar_003
+                )
+            else
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                afterCeremonyAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 6.0,
+                    maxDistance = 35.0,
+                    cullingDistance = 35.0,
+                    checkSight = false
+                },
+                me,
+                patriar_001,
+                patriar_002,
+                patriar_003,
+                patriar_004
+            )
+            end
+            Sleep(6.0)
+        end,
+        Valid = function()
+            return GetFlag(afterCeremonyFlag)
+        end,
+    }
+
+    nodes.InOffice = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(inOfficeFlag)
+        end,
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            Sleep(6.0)
+        end
+    }
+end
+}

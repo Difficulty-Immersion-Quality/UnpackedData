@@ -1,0 +1,42 @@
+game.states.HAV_Harper_ReplacementForFlorrick = State{function()
+
+    description = [[Behaviour for a guard in Haven who is a sub for Florrick if she is dead.]]
+
+    params.PatrolState = { type=EParamType.State,
+        required = false, default = nil,
+        help = [[Use the GEN_Patrol here]]
+    }
+    local HAV_FlorrickDead = Flag("GLO_Florrick_State_Dead_c190fb1f-4c27-4948-87f0-29dc5a9b5b55")
+    local HAV_FlorrickPosition = Entity("S_HAV_FlorrickPos_ab39d643-3ba1-41db-aafe-aca064be0e0c")
+
+
+    nodes = ImmediateSelector{}
+
+        nodes.FlorrickBackup = Action{
+            function()
+                if GetDistanceTo(me,HAV_FlorrickPosition)<= 1 then
+                    Sleep(2.0)
+                    return
+                end
+                local moveResult = MoveTo(HAV_FlorrickPosition,MovementSpeed.Walk, true,true,0.5, 1.0,false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Movement to Florrick's position failed")
+                    Sleep(2.0)
+                end
+            end,
+
+            Valid = function()
+                return GetFlag(HAV_FlorrickDead, nil)
+            end,
+        }
+
+        nodes.Patrol = Proxy{
+            params.PatrolState
+        }
+
+        nodes.Fallback = Action{
+            function()
+                WaitForInterrupt()
+            end,
+        }
+end}

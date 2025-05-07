@@ -1,0 +1,1399 @@
+game.states.MOO_Jailbreak_PrisonerCombat = State { function()
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    params.gnomeLeader = { type = EParamType.Bool, required = false, default = false, help = [[
+        Is this character Wulbren?
+    ]]}
+
+    params.AD = { type = EParamType.String, required = false, default = "", help = [[
+        AD file used during jailbreak.
+    ]]}
+
+    ------------------------------------------------------
+    -- State nodes
+
+    local tieflingWall = Entity("S_MOO_GnomeDestructibleWall_002_eb404040-7b2b-4542-8faa-dd119ff5e763")
+    local gnomeWall = Entity("S_MOO_GnomeDestructibleWall_001_918242db-699a-4886-9cd7-433c62b920a9")
+    local hasToolFlag = Flag("MOO_Jailbreak_State_GnomesHaveTools_740c0cea-1876-d336-7601-2418455692b1")
+    local escapingPrisonFlag = Flag("MOO_Jailbreak_State_Escaping_139ced4b-4340-eb70-4a33-14279f87b2be")
+    local boatRouteFlag = Flag("MOO_Jailbreak_State_BoatEscape_d55f6999-9f49-b742-95d9-12b6526ae5ee")
+    local backupRouteFlag = Flag("MOO_Jailbreak_State_BackupEscape_c2f1053d-c56e-d34d-c200-82d7c8267e7f")
+    local dockRouteFlag = Flag("MOO_Jailbreak_State_DockEscape_7621f16f-7820-26c3-4ab0-1288dc5b26e4")
+    local prisonRouteFlag = Flag("MOO_Jailbreak_State_PrisonEscape_3cc56692-47ac-453a-8748-9c140dbee06f")
+    local tieflingRouteFlag = Flag("MOO_Jailbreak_State_TieflingEscape_957c68da-c432-44af-a69d-a7b44da4b344")
+    local boatPos = Entity("S_MOO_GetawayBoatArea_e5fc26b4-a348-4369-9cc2-ddbdeebfbf92")
+    local tieflingWallPos = Entity("S_MOO_HelpTieflingsArea_1d60e5c0-c305-4b86-aaa1-fef121adf0b4")
+    local escapeRouteFlag
+    local leavingMoonrise = false
+    local waitingToLeaveWithBoat = false
+    local escapeSpline = nil
+    local previousPosition = nil
+
+    --Boat Leader
+
+    local boatLeaderFlag = Flag("MOO_Jailbreak_State_BoatLeader_6d868d94-d360-6638-6dd6-6c34b25c07c8")
+    local prepareBoatCombatADFlag = Flag("MOO_Jailbreak_Event_ADPrepareBoatCombat_97f4eb38-63ac-fb09-83bb-6945216ecfaa")
+    local AD = Dialog(params.AD)
+
+    --Breaking Chains
+
+    local boatReadyFlag = Flag("MOO_Jailbreak_State_BoatReady_8fb4753f-14fc-8477-9dbf-26b606830bcb")
+    local chainsTarget = nil
+    local breakChainsPos = nil
+    local breakChainWeapon = nil
+    local boatAreaTriggerEntity = Entity("S_MOO_GetawayBoatWanderArea_fb55d69a-ce9e-48f3-ac22-c066a9460c76")
+
+    self.Valid = function()
+        return  me.CanActInCombatTeamTurn and
+            ((waitingToLeaveWithBoat and chainsTarget ~= nil)                                           --Character needs to attack chains in combat
+            or (waitingToLeaveWithBoat and GetFlag(boatLeaderFlag, me))                                 --Boat is ready and character has been elected as boat leader
+            or ((escapeRouteFlag == boatRouteFlag.Guid or escapeRouteFlag == tieflingRouteFlag.Guid) and not waitingToLeaveWithBoat)     --Character is running towards boat or towards tieflings
+            or (params.gnomeLeader and not GetFlag(escapingPrisonFlag, me) and GetFlag(hasToolFlag)))            --Wulbren is still in prison and can break out
+            --TODO: Exclude NOT GnomeLeader and AtTieflingWall. Gnomes waiting to break out tieflings that are not Wulbren shouldn't stand idle and should fight normally to buy time.
+    end
+
+    nodes.BreakChains = Action{
+        CanEnter = function()
+            return waitingToLeaveWithBoat and chainsTarget ~= nil
+        end,
+        function()
+            if mod.moveto.MoveToPoint(breakChainsPos,  MovementSpeed.Run, me) then
+                LookFrom(breakChainsPos)
+                if(GetFlag(prepareBoatCombatADFlag, me)) then
+                    StartAutomatedDialog(AD, true, me)
+                    DebugLog("Leader AD played!")
+                end
+                Attack(chainsTarget, true, false)
+                Sleep(1)
+                if(GetFlag(boatReadyFlag)) then
+                    SetEntityEvent(me, "MOO_Jailbreak_BecomeBoatLeader")    --Set boat leader manually if boat gets readied in combat
+                    SetFlag(prepareBoatCombatADFlag, me)
+                    StartAutomatedDialog(AD, true, me)
+                    DebugLog("Leader AD played!")
+                end
+            else
+                SteerTo(breakChainsPos)
+            end
+            Sleep(1)
+            EndTurn(me)
+        end
+    }
+
+    nodes.BoatLeader = Action{
+        CanEnter = function()
+            return waitingToLeaveWithBoat and GetFlag(boatLeaderFlag, me)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(breakChainsPos,  MovementSpeed.Run, me) then
+                LookFrom(breakChainsPos)
+                Sleep(1)
+            else
+                SteerTo(breakChainsPos)
+            end
+            SetFlag(prepareBoatCombatADFlag, me)
+            StartAutomatedDialog(AD, true, me)
+            DebugLog("Leader AD played!")
+            Sleep(1)
+            EndTurn(me)
+        end,
+        OnLeave = function()
+            ClearFlag(prepareBoatCombatADFlag, me)
+        end
+    }
+
+    nodes.BreakGnomeWall = Action{
+        function()
+            Attack(gnomeWall, true, false)
+            Sleep(2)
+            EndTurn(me)
+        end,
+        Valid = function()
+            return params.gnomeLeader and not GetFlag(escapingPrisonFlag, me) and GetFlag(hasToolFlag)
+        end
+    }
+
+    nodes.GoToBoat = Action{
+        function()
+            if(HasActiveStatus(me, "FLANKED") and not HasActiveStatus(me, "DISENGAGE")) then
+                UseSpell("Shout_Disengage", me, nil, nil, nil, true, true, true)
+            elseif not HasActiveStatus(me, "DASH") then
+                UseSpell("Shout_Dash", me, nil, nil, nil, true, true, true)
+            end
+            local moveResult = MoveTo(boatPos, MovementSpeed.Run, false, true, 0.0, 1.0, false)
+            if moveResult == error.MovementError.None then
+                DebugText(me, "Arrived at boat!")
+                waitingToLeaveWithBoat = true
+            elseif moveResult == error.MovementError.NoResources then
+                DebugText(me, "will keep moving to the boat next turn!")
+                Sleep(1)
+                EndTurn(me)
+            else
+                DebugText(me,"DEBUG : Fail to Move")
+                Sleep(1)
+                EndTurn(me)
+            end
+        end,
+        Valid = function()
+            return escapeRouteFlag == boatRouteFlag.Guid and not waitingToLeaveWithBoat
+        end
+    }
+
+    nodes.BreakTieflingWall = Action{
+        function()
+            if(HasActiveStatus(me, "FLANKED") and not HasActiveStatus(me, "DISENGAGE")) then
+                UseSpell("Shout_Disengage", me, nil, nil, nil, true, true, true)
+            elseif not HasActiveStatus(me, "DASH") then
+                UseSpell("Shout_Dash", me, nil, nil, nil, true, true, true)
+            end
+            local moveResult = MoveTo(tieflingWallPos, MovementSpeed.Run, false, true, 0.0, 1.0, false)
+            if moveResult == error.MovementError.None then
+                if (params.GnomeLeader) then
+                    Attack(gnomeWall, true, false)
+                    Sleep(2)
+                    EndTurn(me)
+                else
+                    DebugText(me, "Waiting for tiefling wall to be brought down!")
+                    Sleep(1)
+                    EndTurn(me)
+                end
+            elseif moveResult == error.MovementError.NoResources then
+                DebugText(me, "will keep moving to the tiefling wall next turn!")
+                Sleep(1)
+                EndTurn(me)
+            else
+                DebugText(me,"DEBUG : Fail to Move")
+                Sleep(1)
+                EndTurn(me)
+            end
+        end,
+        Valid = function()
+            return gnomeWall == tieflingWall and not tieflingWall.Item.IsDestroyed
+        end
+    }
+
+    nodes.RunOnSpline = Action{
+        function()
+            if(HasActiveStatus(me, "FLANKED") and not HasActiveStatus(me, "DISENGAGE")) then
+                UseSpell("Shout_Disengage", me, nil, nil, nil, true, true, true)
+            elseif not HasActiveStatus(me, "DASH") then
+                UseSpell("Shout_Dash", me, nil, nil, nil, true, true, true)
+            end
+            if(previousPosition == nil) then
+                previousPosition = me.Position
+                StartRealtimeTimer(me, "MOO_Jailbreak_CheckCombatSplineEndTurn", 4.0, 0)
+            end
+            try
+                DoPatrol(escapeSpline, false, MovementSpeed.Run)
+            catch e then
+                LookFrom(escapeSpline)
+                Sleep(1)
+                EndTurn(me)
+            end
+        end,
+        CanEnter = function()
+            return escapeSpline ~= nil
+        end
+    }
+
+    nodes.LeaveMoonrise = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                leaveMoonriseAD,
+                {
+                    waitForCompletion = true,
+                },
+                me
+            )
+            SetEntityEvent(me, "MOO_Jailbreak_LeaveMoonrise")
+            EndTurn(me)
+        end,
+        CanEnter = function()
+            return leavingMoonrise
+        end
+    }
+
+    nodes.Waiting = Action{
+        function()
+            Sleep(3)
+            EndTurn(me)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "MOO_Jailbreak_SetRoute") then
+                waitingToLeaveWithBoat = false
+                if (escapeSpline == nil) then
+                    escapeSpline = Spline(e.Params[1])
+                    Interrupt()
+                end
+            elseif(e.Event == "MOO_Jailbreak_CancelRoute") then
+                escapeSpline = nil
+            elseif(e.Event == "MOO_Jailbreak_AtBoat") then
+                waitingToLeaveWithBoat = true
+                escapeSpline = nil
+            elseif(e.Event == "MOO_Jailbreak_SetChainAttackTarget") then
+                chainsTarget = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "MOO_Jailbreak_SetChainPos") then
+                breakChainsPos = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "MOO_Jailbreak_SetWeapon") then
+                breakChainWeapon = e.Params[1]
+            end
+        end
+    end
+
+    events.FlagSet = function(e)
+        if (e.Flag == boatRouteFlag.Guid or e.Flag == prisonRouteFlag.Guid or e.Flag == dockRouteFlag.Guid or e.Flag == backupRouteFlag.Guid) and e.Entity == me then
+            escapeRouteFlag = e.Flag
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "MOO_Jailbreak_CheckCombatSplineEndTurn" then
+            SetEntityEvent(me, "MOO_Jailbreak_Timer")
+            if GetDistance2DTo(me.Position, previousPosition) < 1 then
+                EndTurn(me)
+            else
+                previousPosition = me.Position
+                StartRealtimeTimer(me, "MOO_Jailbreak_CheckCombatSplineEndTurn", 4.0, 0)
+            end
+        end
+    end
+
+    events.TurnEnded = function(e)
+        previousPosition = nil
+        StopTimer(me, "MOO_Jailbreak_CheckCombatSplineEndTurn")
+    end
+
+    events.Destroyed = function(e)
+        if e.Entity == chainsTarget then
+            chainsTarget = nil
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        if(e.Event == "MOO_Jailbreak_AtBoat") then
+            waitingToLeaveWithBoat = true
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_FreeTieflings") then
+            gnomeWall = tieflingWall
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_OutsideMoonrise") then
+            escapeSpline = nil
+            leavingMoonrise = true
+            Interrupt()
+        elseif(e.Event == "MOO_Jailbreak_ToDocks") then
+            escapeSpline = nil
+            SetEntityEvent(me, "MOO_Jailbreak_ToDocks")
+        end
+    end
+end
+}
+
+game.states.MOO_Jailbreak_GnomeCellLeader = State { function()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    params.AD = { type = EParamType.String, required = false, default = "", help = [[
+        AD file used during jailbreak.
+    ]]}
+
+    local prisoner1 = Entity("S_GLO_GnomePrisoner_001_4fbd62e8-a486-471e-8a65-00966b058dd5")
+    local prisoner2 = Entity("S_GLO_GnomePrisoner_002_c9a7d921-bef0-4829-8792-d48c529daee5")
+    local plotAD = Dialog("MOO_Jailbreak_AD_GnomesInJail_c01c9f51-ee48-c2df-a3cb-da33f875bb8b")
+    local playerInCellFlag = Flag("MOO_Jailbreak_State_PlayerCloseToGnomes_50174da0-77e4-44d6-98c7-66c444672eb2")
+    local behindGatePos = Entity("S_MOO_PrisonerGnomePos_002_68e7fc10-1756-470b-acc9-ca7604e7c9fd")
+    local byPlayerCellPos = Entity("S_MOO_GnomeByPlayerCellPos_5d0436eb-a13c-480e-90df-191ee1a6a6fa")
+    local tunnelEscapeStartFlag = Flag("MOO_Jailbreak_Event_GnomesStartEscape_0fcfc8b4-bae4-0ca6-d083-580ea884461c")
+
+    --Tool pickup and tracking
+
+    local tunnelOpenFlag = Flag("MOO_Jailbreak_State_GnomePathOpen_ef0aa614-2a18-7bd1-0f79-c3aca59ec3ab")
+    local hasToolFlag = Flag("MOO_Jailbreak_State_GnomesHaveTools_740c0cea-1876-d336-7601-2418455692b1")
+    local gnomeWall = Entity("S_MOO_GnomeDestructibleWall_001_918242db-699a-4886-9cd7-433c62b920a9")
+    local breakWallPos = Entity("S_MOO_TunnelEscapePosition_a68f5a05-9ab1-4a53-b271-dffdf8673ee3")
+    local isPickingUpTool = false
+    local targetTool = nil
+
+    --Escaping
+
+    local tieflingWall = Entity("S_MOO_GnomeDestructibleWall_002_eb404040-7b2b-4542-8faa-dd119ff5e763")
+    local breakWallWaitPos = Entity("S_MOO_TunnelEscapeWaitPosition_292731a5-59d1-4bdc-92ec-594e09ef5125")
+    local tieflingsInCellFlag = Flag("MOO_Jailbreak_State_TieflingsInJail_c00d4fef-f2d6-4308-9dda-19d34b6cbf3c")
+    local escapingPrisonFlag = Flag("MOO_Jailbreak_State_Escaping_139ced4b-4340-eb70-4a33-14279f87b2be")
+    local guardsCloseFlag = Flag("MOO_Jailbreak_State_GuardsCloseToGnomes_f5ed9e52-0804-4b3f-8b98-92a05b654c8a")
+    local boatAreaTrigger = "S_MOO_GetawayBoatWanderArea_fb55d69a-ce9e-48f3-ac22-c066a9460c76"
+    local boatAreaTriggerEntity = Entity("S_MOO_GetawayBoatWanderArea_fb55d69a-ce9e-48f3-ac22-c066a9460c76")
+    local breakChainWeapon = nil
+    local leavingMoonrise = false
+    local waitingToLeaveWithBoat = false
+    local escapeSpline = nil
+
+    --Boat Leader
+
+    local boatLeaderFlag = Flag("MOO_Jailbreak_State_BoatLeader_6d868d94-d360-6638-6dd6-6c34b25c07c8")
+    local prepareBoatADFlag = Flag("MOO_Jailbreak_Event_ADPrepareBoat_f2f69681-6ce7-4e9a-59cf-18d719c09849")
+    local AD = Dialog(params.AD)
+
+    --Breaking Chains
+
+    local boatReadyFlag = Flag("MOO_Jailbreak_State_BoatReady_8fb4753f-14fc-8477-9dbf-26b606830bcb")
+    local chainsTarget = nil
+    local breakChainsPos = nil
+
+    nodes.Escaping = Selector{
+        Valid = function()
+            return GetFlag(escapingPrisonFlag, me)
+        end
+    }
+
+    nodes.Escaping.RunOnSpline = Action{
+        function()
+            try
+                DoPatrol(escapeSpline, false, MovementSpeed.Run)
+                SendCaretSplineControlPointReachedEvents(me, true)
+            catch e then
+                LookFrom(escapeSpline)
+                Sleep(1)
+            end
+        end,
+        CanEnter = function()
+            return escapeSpline ~= nil
+        end
+    }
+
+    nodes.Escaping.LeaveMoonrise = Action{
+        function()
+            SetEntityEvent(me, "MOO_Jailbreak_TryLeaveAD")
+            Sleep(3)
+            SetEntityEvent(me, "MOO_Jailbreak_LeaveMoonrise")
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return leavingMoonrise
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat = Selector{
+        CanEnter = function()
+            return waitingToLeaveWithBoat
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.BreakChains = Action{
+        CanEnter = function()
+            return chainsTarget ~= nil
+        end,
+        function()
+            if(GetFlag(prepareBoatADFlag, me)) then
+                StartAutomatedDialog(AD, true, me)
+            end
+            if not GetEquippedWeapon(me.Character, WeaponHandType.MainHand) ~= nil and breakChainWeapon ~= nil and GetDistance2DTo(breakChainWeapon, boatAreaTriggerEntity) < 10.0 then
+                try
+                    mod.moveto.MoveToPoint(breakChainWeapon,  MovementSpeed.Run, me)
+                    PickUpItem(breakChainWeapon)
+                    Equip(breakChainWeapon)
+                catch e then
+                    breakChainWeapon = nil
+                end
+            end
+            if mod.moveto.MoveToPoint(breakChainsPos,  MovementSpeed.Run, me) then
+                LookFrom(breakChainsPos)
+                try
+                    Attack(chainsTarget, true, false)
+                catch e then
+                    Sleep(1)
+                end
+                Sleep(1)
+            else
+                SteerTo(breakChainsPos)
+            end
+            Sleep(6)
+        end,
+        OnLeave = function()
+            ClearFlag(prepareBoatADFlag, me)
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.GoWaitAtBoat = Action{
+        Valid = function()
+            return not IsInTrigger(me, boatAreaTriggerEntity.Trigger)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(boatAreaTriggerEntity,  MovementSpeed.Run, me) then
+                Sleep(1)
+            end
+            Sleep(1)
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.Default = Proxy{
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 12,
+            sleepMin = 6,
+            trigger = boatAreaTrigger,
+            wanderMax = 8,
+            wanderMin = 4
+        },
+    }
+
+    nodes.Escaping.BreakTieflingWall = Action{
+        OnEnter = function()
+            SetWeaponUnsheathed(me, true, true)
+        end,
+        function()
+            Attack(gnomeWall, true, false)
+            Sleep(5)
+        end,
+        OnLeave = function()
+            SetWeaponUnsheathed(me, true, true)
+        end,
+        Valid = function()
+            return gnomeWall == tieflingWall and not tieflingWall.Item.IsDestroyed and GetFlag(tieflingsInCellFlag)
+        end
+    }
+
+    nodes.Escaping.Waiting = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    nodes.WaitBreakGnomeWall = Action{
+        function()
+            if mod.moveto.MoveToPoint(breakWallWaitPos,  MovementSpeed.Run, me) then
+                LookFrom(breakWallWaitPos)
+            else
+                SteerTo(breakWallWaitPos)
+            end
+            Sleep(2)
+        end,
+        Valid = function()
+            return GetFlag(tunnelEscapeStartFlag) and GetFlag(guardsCloseFlag)
+        end
+    }
+
+    nodes.BreakGnomeWall = Action{
+        OnEnter = function()
+            SetWeaponUnsheathed(me, true, true)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(breakWallPos,  MovementSpeed.Run, me) then
+                LookFrom(breakWallPos)
+            else
+                SteerTo(breakWallPos)
+            end
+            Attack(gnomeWall, true, false)
+            Sleep(5)
+        end,
+        Valid = function()
+            return GetFlag(tunnelEscapeStartFlag) and not GetFlag(guardsCloseFlag)
+        end
+    }
+
+    nodes.PickupTool = Action{
+        function()
+            try
+                MoveTo(targetTool)
+                PickUpItem(targetTool)
+            catch e if ls.CheckType(e, error.MovementFailed) or ls.CheckType(e, error.PickUpItemFailed) then
+                Sleep(2)
+                SetEntityEvent(me, "MOO_Jailbreak_ClearPickup")
+            end
+            Sleep(1)
+        end,
+        Valid = function()
+            return isPickingUpTool and targetTool ~= nil and not GetFlag(hasToolFlag)
+        end
+    }
+
+    nodes.ByPlayerCell = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_MOO_GnomeByPlayerCellPos_5d0436eb-a13c-480e-90df-191ee1a6a6fa"
+        },
+        Valid = function()
+            return GetFlag(playerInCellFlag)
+        end
+    }
+
+    nodes.BehindGate = Action{
+        function()
+            if mod.moveto.MoveToPoint(behindGatePos,  MovementSpeed.Run, me) then
+                LookFrom(behindGatePos)
+            else
+                SteerTo(behindGatePos)
+            end
+            Sleep(2)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    plotAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 120,
+                    },
+                    me,
+                    prisoner1,
+                    prisoner2
+                )
+            Sleep(4)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "MOO_Jailbreak_PickupTool") then
+                if(not isPickingUpTool) then
+                    isPickingUpTool = true
+                    targetTool = e.Params[1]
+                    Interrupt()
+                end
+            elseif(e.Event == "MOO_Jailbreak_SetRoute") then
+                waitingToLeaveWithBoat = false
+                if (escapeSpline == nil) then
+                    escapeSpline = Spline(e.Params[1])
+                    Interrupt()
+                end
+            elseif(e.Event == "MOO_Jailbreak_CancelRoute") then
+                escapeSpline = nil
+            elseif(e.Event == "MOO_Jailbreak_ClearPickup") then
+                isPickingUpTool = false
+                targetTool = nil
+            elseif(e.Event == "MOO_Jailbreak_AtBoat") then
+                waitingToLeaveWithBoat = true
+                escapeSpline = nil
+            elseif(e.Event == "MOO_Jailbreak_SetChainAttackTarget") then
+                chainsTarget = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "MOO_Jailbreak_SetChainPos") then
+                breakChainsPos = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "MOO_Jailbreak_SetWeapon") then
+                breakChainWeapon = e.Params[1]
+            elseif(e.Event == "MOO_Jailbreak_SavegamePatch_317957") then
+                SendCaretSplineControlPointReachedEvents(me, true)
+            end
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Entity == me then
+            if e.Flag == boatLeaderFlag.Guid then
+                Interrupt()
+            end
+        end
+    end
+
+    events.Destroyed = function(e)
+        if e.Entity == chainsTarget then
+            chainsTarget = nil
+        end
+    end
+
+    events.CaretSplineControlPointReached = function(e)
+        if(e.Event == "MOO_Jailbreak_AtBoat") then
+            waitingToLeaveWithBoat = true
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_FreeTieflings") then
+            gnomeWall = tieflingWall
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_OutsideMoonrise") then
+            escapeSpline = nil
+            leavingMoonrise = true
+            SendCaretSplineControlPointReachedEvents(me, false)
+        elseif(e.Event == "MOO_Jailbreak_ToDocks") then
+            escapeSpline = nil
+            SetEntityEvent(me, "MOO_Jailbreak_ToDocks")
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        if(e.Event == "MOO_Jailbreak_AtBoat") then
+            waitingToLeaveWithBoat = true
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_FreeTieflings") then
+            gnomeWall = tieflingWall
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_OutsideMoonrise") then
+            escapeSpline = nil
+            leavingMoonrise = true
+        elseif(e.Event == "MOO_Jailbreak_ToDocks") then
+            escapeSpline = nil
+            SetEntityEvent(me, "MOO_Jailbreak_ToDocks")
+        end
+    end
+
+end
+}
+
+game.states.MOO_Jailbreak_TieflingCellLeader = State { function()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    params.AD = { type = EParamType.String, required = false, default = "", help = [[
+        AD file used during jailbreak.
+    ]]}
+
+    --Follow players outside of dialog
+
+    local inPlayerCellFlag = Flag("MOO_Jailbreak_State_PlayerCloseToTieflings_1ec918a4-f07b-4750-96a1-7e27d78298d2")
+    local behindGatePos = Entity("S_MOO_PrisonerTieflingPos_001_9c279042-4963-490c-8f2e-6476c2aea716")
+    local byPlayerCellPos = Entity("S_MOO_SisterByPlayerCellPos_ce47fc9d-8dd6-42c2-b064-21d07bb9eceb")
+    local prodigyBrother = Entity("S_GLO_ProdigyBrother_d0187724-c0e2-4019-a01d-a03ee8153f1b")
+    local plotAD = Dialog("MOO_Jailbreak_AD_ProdigiesInJail_a8985191-e304-973c-8c1a-12796bf49e8c")
+
+    --Escaping
+
+    local tieflingWall = Entity("S_MOO_GnomeDestructibleWall_002_eb404040-7b2b-4542-8faa-dd119ff5e763")
+    local escapingPrisonFlag = Flag("MOO_Jailbreak_State_Escaping_139ced4b-4340-eb70-4a33-14279f87b2be")
+    local boatEscapeFlag = Flag("MOO_Jailbreak_State_BoatEscape_d55f6999-9f49-b742-95d9-12b6526ae5ee")
+    local waitWallPos = Entity("S_MOO_PrisonerTieflingPos_006_812633fe-4c3d-40e6-b937-3a6ddb855501")
+    local leavingMoonrise = false
+    local waitingToLeaveWithBoat = false
+    local escapeSpline = nil
+    local boatAreaTrigger = "S_MOO_GetawayBoatWanderArea_fb55d69a-ce9e-48f3-ac22-c066a9460c76"
+    local breakChainWeapon = nil
+    --Boat Leader
+
+    local boatLeaderFlag = Flag("MOO_Jailbreak_State_BoatLeader_6d868d94-d360-6638-6dd6-6c34b25c07c8")
+    local prepareBoatADFlag = Flag("MOO_Jailbreak_Event_ADPrepareBoat_f2f69681-6ce7-4e9a-59cf-18d719c09849")
+    local AD = Dialog(params.AD)
+
+    --Breaking Chains
+
+    local boatReadyFlag = Flag("MOO_Jailbreak_State_BoatReady_8fb4753f-14fc-8477-9dbf-26b606830bcb")
+    local chainsTarget = nil
+    local breakChainsPos = nil
+    local boatAreaTriggerEntity = Entity("S_MOO_GetawayBoatWanderArea_fb55d69a-ce9e-48f3-ac22-c066a9460c76")
+
+    nodes.Escaping = Selector{
+        Valid = function()
+            return GetFlag(escapingPrisonFlag, me)
+        end
+    }
+
+    nodes.Escaping.BoatLeader = Action{
+        CanEnter = function()
+            return waitingToLeaveWithBoat and GetFlag(boatLeaderFlag, me)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(readyBoatPos,  MovementSpeed.Run, me) then
+                LookFrom(readyBoatPos)
+                PlayAnimation(readyBoatAnim, false, true)
+                Sleep(1)
+                SetFlag(prepareBoatADFlag, me)
+                mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true,
+                },
+                me
+                )
+            else
+                SteerTo(executionTrigger)
+            end
+            Sleep(15)
+        end,
+        OnLeave = function()
+            ClearFlag(prepareBoatADFlag, me)
+        end
+    }
+
+    nodes.Escaping.WaitForWall = Action{
+        Valid = function()
+            return GetFlag(boatEscapeFlag, me) and not tieflingWall.Item.IsDestroyed
+        end,
+        function()
+            if mod.moveto.MoveToPoint(waitWallPos,  MovementSpeed.Walk, me) then
+                LookFrom(waitWallPos)
+            end
+            Sleep(4)
+        end
+    }
+
+    nodes.Escaping.RunOnSpline = Action{
+        function()
+            try
+                DoPatrol(escapeSpline, false, MovementSpeed.Run)
+                SendCaretSplineControlPointReachedEvents(me, true)
+            catch e then
+                LookFrom(escapeSpline)
+                Sleep(1)
+            end
+        end,
+        CanEnter = function()
+            return escapeSpline ~= nil
+        end
+    }
+
+    nodes.Escaping.LeaveMoonrise = Action{
+        function()
+            Sleep(3)
+            SetEntityEvent(me, "MOO_Jailbreak_LeaveMoonriseOutOfCombat")
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return leavingMoonrise
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat = Selector{
+        CanEnter = function()
+            return waitingToLeaveWithBoat
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.BreakChains = Action{
+        CanEnter = function()
+            return chainsTarget ~= nil
+        end,
+        function()
+            if(GetFlag(prepareBoatADFlag, me)) then
+                StartAutomatedDialog(AD, true, me)
+            end
+            if not GetEquippedWeapon(me.Character, WeaponHandType.MainHand) ~= nil and breakChainWeapon ~= nil and GetDistance2DTo(breakChainWeapon, boatAreaTriggerEntity) < 10.0 then
+                try
+                    mod.moveto.MoveToPoint(breakChainWeapon,  MovementSpeed.Run, me)
+                    PickUpItem(breakChainWeapon)
+                    if IsInInventoryOf(breakChainWeapon, me) then
+                        Equip(breakChainWeapon)
+                    else
+                        breakChainWeapon = nil
+                    end
+                catch e then
+                    breakChainWeapon = nil
+                end
+            end
+            if mod.moveto.MoveToPoint(breakChainsPos,  MovementSpeed.Run, me) then
+                LookFrom(breakChainsPos)
+                try
+                    Attack(chainsTarget, true, false)
+                catch e then
+                    Sleep(1)
+                end
+                Sleep(1)
+            else
+                SteerTo(breakChainsPos)
+            end
+            Sleep(6)
+        end,
+        OnLeave = function()
+            ClearFlag(prepareBoatADFlag, me)
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.GoWaitAtBoat = Action{
+        Valid = function()
+            return not IsInTrigger(me, boatAreaTriggerEntity.Trigger)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(boatAreaTriggerEntity,  MovementSpeed.Run, me) then
+                Sleep(1)
+            end
+            Sleep(1)
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.Default = Proxy{
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 12,
+            sleepMin = 6,
+            trigger = boatAreaTrigger,
+            wanderMax = 8,
+            wanderMin = 4
+        },
+    }
+
+    nodes.Escaping.Waiting = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    nodes.ByPlayerCell = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_MOO_SisterByPlayerCellPos_ce47fc9d-8dd6-42c2-b064-21d07bb9eceb"
+        },
+        Valid = function()
+            return GetFlag(inPlayerCellFlag)
+        end
+    }
+
+    nodes.BehindGate = Action{
+        CanEnter = function()
+            return me == Entity("S_GLO_ProdigySister_44d09b0b-0568-456c-b18d-559a0a3f981d")
+        end,
+        function()
+            if mod.moveto.MoveToPoint(behindGatePos,  MovementSpeed.Run, me) then
+                LookFrom(behindGatePos)
+            else
+                SteerTo(behindGatePos)
+            end
+            Sleep(4)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    plotAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 100,
+                    },
+                    me,
+                    prodigyBrother
+                )
+            Sleep(4)
+        end
+    }
+
+    nodes.BehindGate = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_MOO_PrisonerTieflingPos_001_9c279042-4963-490c-8f2e-6476c2aea716"
+        }
+    }
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "MOO_Jailbreak_SetRoute") then
+                waitingToLeaveWithBoat = false
+                if (escapeSpline == nil) then
+                    escapeSpline = Spline(e.Params[1])
+                    Interrupt()
+                end
+            elseif(e.Event == "MOO_Jailbreak_CancelRoute") then
+                escapeSpline = nil
+            elseif(e.Event == "MOO_Jailbreak_AtBoat") then
+                waitingToLeaveWithBoat = true
+                escapeSpline = nil
+            elseif(e.Event == "MOO_Jailbreak_SetChainAttackTarget") then
+                chainsTarget = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "MOO_Jailbreak_SetChainPos") then
+                breakChainsPos = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "MOO_Jailbreak_SetWeapon") then
+                breakChainWeapon = e.Params[1]
+            elseif(e.Event == "MOO_Jailbreak_SavegamePatch_317957") then
+                SendCaretSplineControlPointReachedEvents(me, true)
+            end
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Entity == me then
+            if e.Flag == boatLeaderFlag.Guid then
+                Interrupt()
+            end
+        end
+    end
+
+    events.Destroyed = function(e)
+        if e.Entity == chainsTarget then
+            chainsTarget = nil
+        end
+    end
+
+    events.CaretSplineControlPointReached = function(e)
+        if(e.Event == "MOO_Jailbreak_AtBoat") then
+            waitingToLeaveWithBoat = true
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_OutsideMoonrise") then
+            escapeSpline = nil
+            leavingMoonrise = true
+            SendCaretSplineControlPointReachedEvents(me, false)
+        elseif(e.Event == "MOO_Jailbreak_ToDocks") then
+            escapeSpline = nil
+            SetEntityEvent(me, "MOO_Jailbreak_ToDocks")
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        if(e.Event == "MOO_Jailbreak_AtBoat") then
+            waitingToLeaveWithBoat = true
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_OutsideMoonrise") then
+            escapeSpline = nil
+            leavingMoonrise = true
+        elseif(e.Event == "MOO_Jailbreak_ToDocks") then
+            escapeSpline = nil
+            SetEntityEvent(me, "MOO_Jailbreak_ToDocks")
+        end
+    end
+
+end
+}
+
+game.states.MOO_Jailbreak_GnomePrisoner = State { function()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    params.inCellState = {type=EParamType.State, required=false, default=StateRef{game.states.Dummy}, help=[[State this character takes when inside the MOO cell.]]}
+    params.AD = { type = EParamType.String, required = false, default = "", help = [[
+        AD file used during jailbreak.
+    ]]}
+
+    --Escaping
+
+    local gnomeWall = Entity("S_MOO_GnomeDestructibleWall_001_918242db-699a-4886-9cd7-433c62b920a9")
+    local tieflingWall = Entity("S_MOO_GnomeDestructibleWall_002_eb404040-7b2b-4542-8faa-dd119ff5e763")
+    local escapingPrisonFlag = Flag("MOO_Jailbreak_State_Escaping_139ced4b-4340-eb70-4a33-14279f87b2be")
+    local leavingMoonrise = false
+    local waitingToLeaveWithBoat = false
+    local escapeSpline = nil
+    local boatAreaTrigger = "S_MOO_GetawayBoatWanderArea_fb55d69a-ce9e-48f3-ac22-c066a9460c76"
+    local boatAreaTriggerEntity = Entity("S_MOO_GetawayBoatWanderArea_fb55d69a-ce9e-48f3-ac22-c066a9460c76")
+
+    --Boat Leader
+
+    local boatLeaderFlag = Flag("MOO_Jailbreak_State_BoatLeader_6d868d94-d360-6638-6dd6-6c34b25c07c8")
+    local prepareBoatADFlag = Flag("MOO_Jailbreak_Event_ADPrepareBoat_f2f69681-6ce7-4e9a-59cf-18d719c09849")
+    local AD = Dialog(params.AD)
+
+    --Breaking Chains
+
+    local boatReadyFlag = Flag("MOO_Jailbreak_State_BoatReady_8fb4753f-14fc-8477-9dbf-26b606830bcb")
+    local chainsTarget = nil
+    local breakChainsPos = nil
+    local breakChainWeapon = nil
+
+    nodes.Escaping = Selector{
+        Valid = function()
+            return GetFlag(escapingPrisonFlag, me)
+        end
+    }
+
+    nodes.Escaping.RunOnSpline = Action{
+        function()
+            try
+                DoPatrol(escapeSpline, false, MovementSpeed.Run)
+                SendCaretSplineControlPointReachedEvents(me, true)
+            catch e then
+                LookFrom(escapeSpline)
+                Sleep(1)
+            end
+        end,
+        CanEnter = function()
+            return escapeSpline ~= nil
+        end
+    }
+
+    nodes.Escaping.LeaveMoonrise = Action{
+        function()
+            Sleep(3)
+            SetEntityEvent(me, "MOO_Jailbreak_LeaveMoonriseOutOfCombat")
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return leavingMoonrise
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat = Selector{
+        CanEnter = function()
+            return waitingToLeaveWithBoat
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.BreakChains = Action{
+        Valid = function()
+            return chainsTarget ~= nil
+        end,
+        function()
+            if(GetFlag(prepareBoatADFlag, me)) then
+                StartAutomatedDialog(AD, true, me)
+            end
+            if not GetEquippedWeapon(me.Character, WeaponHandType.MainHand) ~= nil and breakChainWeapon ~= nil and GetDistance2DTo(breakChainWeapon, boatAreaTriggerEntity) < 10.0 then
+                try
+                    mod.moveto.MoveToPoint(breakChainWeapon,  MovementSpeed.Run, me)
+                    PickUpItem(breakChainWeapon)
+                    Equip(breakChainWeapon)
+                catch e then
+                    breakChainWeapon = nil
+                end
+            end
+            if mod.moveto.MoveToPoint(breakChainsPos,  MovementSpeed.Run, me) then
+                LookFrom(breakChainsPos)
+                try
+                    Attack(chainsTarget, true, false)
+                catch e then
+                    Sleep(1)
+                end
+            else
+                SteerTo(breakChainsPos)
+            end
+            Sleep(6)
+        end,
+        OnLeave = function()
+            ClearFlag(prepareBoatADFlag, me)
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.GoWaitAtBoat = Action{
+        Valid = function()
+            return not IsInTrigger(me, boatAreaTriggerEntity.Trigger)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(boatAreaTriggerEntity,  MovementSpeed.Run, me) then
+                Sleep(1)
+            end
+            Sleep(1)
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.Default = Proxy{
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 12,
+            sleepMin = 6,
+            trigger = boatAreaTrigger,
+            wanderMax = 8,
+            wanderMin = 4
+        },
+    }
+
+    nodes.Escaping.BreakTieflingWall = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return gnomeWall == tieflingWall and not tieflingWall.Item.IsDestroyed
+        end
+    }
+
+    nodes.Escaping.Waiting = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    nodes.InCell = Proxy{
+        params.inCellState
+    }
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "MOO_Jailbreak_SetRoute") then
+                waitingToLeaveWithBoat = false
+                if (escapeSpline == nil) then
+                    escapeSpline = Spline(e.Params[1])
+                    Interrupt()
+                end
+            elseif(e.Event == "MOO_Jailbreak_CancelRoute") then
+                escapeSpline = nil
+            elseif(e.Event == "MOO_Jailbreak_AtBoat") then
+                waitingToLeaveWithBoat = true
+                escapeSpline = nil
+            elseif(e.Event == "MOO_Jailbreak_SetChainAttackTarget") then
+                chainsTarget = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "MOO_Jailbreak_SetChainPos") then
+                breakChainsPos = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "MOO_Jailbreak_SetWeapon") then
+                breakChainWeapon = e.Params[1]
+            elseif(e.Event == "MOO_Jailbreak_SavegamePatch_317957") then
+                SendCaretSplineControlPointReachedEvents(me, true)
+            end
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Entity == me then
+            if e.Flag == boatLeaderFlag.Guid then
+                Interrupt()
+            end
+        end
+    end
+
+    events.Destroyed = function(e)
+        if e.Entity == chainsTarget then
+            chainsTarget = nil
+        end
+    end
+
+    events.CaretSplineControlPointReached = function(e)
+        if(e.Event == "MOO_Jailbreak_AtBoat") then
+            waitingToLeaveWithBoat = true
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_FreeTieflings") then
+            gnomeWall = tieflingWall
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_OutsideMoonrise") then
+            escapeSpline = nil
+            leavingMoonrise = true
+            SendCaretSplineControlPointReachedEvents(me, false)
+        elseif(e.Event == "MOO_Jailbreak_ToDocks") then
+            escapeSpline = nil
+            SetEntityEvent(me, "MOO_Jailbreak_ToDocks")
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        if(e.Event == "MOO_Jailbreak_AtBoat") then
+            waitingToLeaveWithBoat = true
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_FreeTieflings") then
+            gnomeWall = tieflingWall
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_OutsideMoonrise") then
+            escapeSpline = nil
+            leavingMoonrise = true
+        elseif(e.Event == "MOO_Jailbreak_ToDocks") then
+            escapeSpline = nil
+            SetEntityEvent(me, "MOO_Jailbreak_ToDocks")
+        end
+    end
+
+end
+}
+
+game.states.MOO_Jailbreak_TieflingPrisoner = State { function()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    params.inCellState = {type=EParamType.State, required=false, default=StateRef{game.states.Dummy}, help=[[State this character takes when inside the MOO cell.]]}
+    params.waitWallPos = { type = EParamType.String, required = false, default = "", help = [[Position the character stands on while waiting for gnomes to break the walls.]]}
+    params.AD = { type = EParamType.String, required = false, default = "", help = [[
+        AD file used during jailbreak.
+    ]]}
+
+    --Escaping
+
+    local escapingPrisonFlag = Flag("MOO_Jailbreak_State_Escaping_139ced4b-4340-eb70-4a33-14279f87b2be")
+    local leavingMoonrise = false
+    local waitingToLeaveWithBoat = false
+    local escapeSpline = nil
+    local tieflingWall = Entity("S_MOO_GnomeDestructibleWall_002_eb404040-7b2b-4542-8faa-dd119ff5e763")
+    local boatEscapeFlag = Flag("MOO_Jailbreak_State_BoatEscape_d55f6999-9f49-b742-95d9-12b6526ae5ee")
+    local waitWallPos = Entity(params.waitWallPos)
+    local boatAreaTrigger = "S_MOO_GetawayBoatWanderArea_fb55d69a-ce9e-48f3-ac22-c066a9460c76"
+    local boatAreaTriggerEntity = Entity("S_MOO_GetawayBoatWanderArea_fb55d69a-ce9e-48f3-ac22-c066a9460c76")
+
+    --Boat Leader
+
+    local boatLeaderFlag = Flag("MOO_Jailbreak_State_BoatLeader_6d868d94-d360-6638-6dd6-6c34b25c07c8")
+    local prepareBoatADFlag = Flag("MOO_Jailbreak_Event_ADPrepareBoat_f2f69681-6ce7-4e9a-59cf-18d719c09849")
+    local AD = Dialog(params.AD)
+
+    --Breaking Chains
+
+    local boatReadyFlag = Flag("MOO_Jailbreak_State_BoatReady_8fb4753f-14fc-8477-9dbf-26b606830bcb")
+    local chainsTarget = nil
+    local breakChainsPos = nil
+    local breakChainWeapon = nil
+
+    nodes.Escaping = Selector{
+        Valid = function()
+            return GetFlag(escapingPrisonFlag, me)
+        end
+    }
+
+    nodes.Escaping.BoatLeader = Action{
+        CanEnter = function()
+            return waitingToLeaveWithBoat and GetFlag(boatLeaderFlag, me)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(readyBoatPos,  MovementSpeed.Run, me) then
+                LookFrom(readyBoatPos)
+                PlayAnimation(readyBoatAnim, false, true)
+                Sleep(1)
+                SetFlag(prepareBoatADFlag, me)
+                mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true,
+                },
+                me
+                )
+            else
+                SteerTo(executionTrigger)
+            end
+            Sleep(15)
+        end,
+        OnLeave = function()
+            ClearFlag(prepareBoatADFlag, me)
+        end
+    }
+
+    nodes.Escaping.WaitForWall = Action{
+        Valid = function()
+            return GetFlag(boatEscapeFlag, me) and not tieflingWall.Item.IsDestroyed
+        end,
+        function()
+            if mod.moveto.MoveToPoint(waitWallPos,  MovementSpeed.Walk, me) then
+                LookFrom(waitWallPos)
+            end
+            Sleep(4)
+        end
+    }
+
+    nodes.Escaping.RunOnSpline = Action{
+        function()
+            try
+                DoPatrol(escapeSpline, false, MovementSpeed.Run)
+                SendCaretSplineControlPointReachedEvents(me, true)
+            catch e then
+                LookFrom(escapeSpline)
+                Sleep(1)
+            end
+        end,
+        CanEnter = function()
+            return escapeSpline ~= nil
+        end
+    }
+
+    nodes.Escaping.LeaveMoonrise = Action{
+        function()
+            Sleep(3)
+            SetEntityEvent(me, "MOO_Jailbreak_LeaveMoonriseOutOfCombat")
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return leavingMoonrise
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat = Selector{
+        CanEnter = function()
+            return waitingToLeaveWithBoat
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.BreakChains = Action{
+        CanEnter = function()
+            return chainsTarget ~= nil
+        end,
+        function()
+            if(GetFlag(prepareBoatADFlag, me)) then
+                StartAutomatedDialog(AD, true, me)
+            end
+            if not GetEquippedWeapon(me.Character, WeaponHandType.MainHand) ~= nil and breakChainWeapon ~= nil and GetDistance2DTo(breakChainWeapon, boatAreaTriggerEntity) < 10.0 then
+                try
+                    mod.moveto.MoveToPoint(breakChainWeapon,  MovementSpeed.Run, me)
+                    PickUpItem(breakChainWeapon)
+                    Equip(breakChainWeapon)
+                catch e then
+                    breakChainWeapon = nil
+                end
+            end
+            if mod.moveto.MoveToPoint(breakChainsPos,  MovementSpeed.Run, me) then
+                LookFrom(breakChainsPos)
+                try
+                    Attack(chainsTarget, true, false)
+                catch e then
+                    Sleep(1)
+                end
+            else
+                SteerTo(breakChainsPos)
+            end
+            Sleep(6)
+        end,
+        OnLeave = function()
+            ClearFlag(prepareBoatADFlag, me)
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.GoWaitAtBoat = Action{
+        Valid = function()
+            return not IsInTrigger(me, boatAreaTriggerEntity.Trigger)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(boatAreaTriggerEntity,  MovementSpeed.Run, me) then
+                Sleep(1)
+            end
+            Sleep(1)
+        end
+    }
+
+    nodes.Escaping.WaitingAtBoat.Default = Proxy{
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 12,
+            sleepMin = 6,
+            trigger = boatAreaTrigger,
+            wanderMax = 8,
+            wanderMin = 4
+        },
+    }
+
+    nodes.Escaping.Waiting = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    nodes.InCell = Proxy{
+        params.inCellState
+    }
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "MOO_Jailbreak_SetRoute") then
+                waitingToLeaveWithBoat = false
+                if (escapeSpline == nil) then
+                    escapeSpline = Spline(e.Params[1])
+                    Interrupt()
+                end
+            elseif(e.Event == "MOO_Jailbreak_CancelRoute") then
+                escapeSpline = nil
+            elseif(e.Event == "MOO_Jailbreak_AtBoat") then
+                waitingToLeaveWithBoat = true
+                escapeSpline = nil
+            elseif(e.Event == "MOO_Jailbreak_SetChainAttackTarget") then
+                chainsTarget = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "MOO_Jailbreak_SetChainPos") then
+                breakChainsPos = e.Params[1]
+                Interrupt()
+            elseif(e.Event == "MOO_Jailbreak_SetWeapon") then
+                breakChainWeapon = e.Params[1]
+            end
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Entity == me then
+            if e.Flag == boatLeaderFlag.Guid then
+                Interrupt()
+            end
+        end
+    end
+
+    events.Destroyed = function(e)
+        if e.Entity == chainsTarget then
+            chainsTarget = nil
+        end
+    end
+
+    events.CaretSplineControlPointReached = function(e)
+        if(e.Event == "MOO_Jailbreak_AtBoat") then
+            waitingToLeaveWithBoat = true
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_OutsideMoonrise") then
+            escapeSpline = nil
+            leavingMoonrise = true
+            SendCaretSplineControlPointReachedEvents(me, false)
+        elseif(e.Event == "MOO_Jailbreak_ToDocks") then
+            escapeSpline = nil
+            SetEntityEvent(me, "MOO_Jailbreak_ToDocks")
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        if(e.Event == "MOO_Jailbreak_AtBoat") then
+            waitingToLeaveWithBoat = true
+            escapeSpline = nil
+        elseif(e.Event == "MOO_Jailbreak_OutsideMoonrise") then
+            escapeSpline = nil
+            leavingMoonrise = true
+        elseif(e.Event == "MOO_Jailbreak_ToDocks") then
+            escapeSpline = nil
+            SetEntityEvent(me, "MOO_Jailbreak_ToDocks")
+        end
+    end
+
+end
+}

@@ -1,0 +1,405 @@
+game.states.FOR_GnomeGoblin = State{function ()
+
+    params.patrolSpline = {type = EParamType.String, required=false, default=nil, help=[[
+        Spline goblins use to investigate the lever's being pulled
+    ]]}
+
+    params.home = {type = EParamType.String, help=[[
+        Goblins' home trigger
+    ]]}
+
+    params.home2 = {type = EParamType.String, required=false, help=[[
+        Goblin's other home trigger
+    ]]}
+
+    params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+        Idle AD
+    ]]}
+
+    params.customIdle = { type = EParamType.State, required = false,
+    help = [[Additional Behaviour]]
+    }
+
+    params.mockAnimation = { type = EParamType.String, required = false, arrayRange="..",
+    help = [[Mocking animations, if any]]
+    }
+
+    params.leaveDelayBehaviour = { type = EParamType.State, required = false, default=StateRef{game.states.Dummy}, help=[[
+        What the character does before leaving.
+    ]]
+    }
+
+    local speaker = nil
+    local leverTrigger
+    local left = false
+
+    local FOR_GnomeGoblinsPacified = Flag("FOR_GnomeGoblinsPacified_385336a9-30d7-f4f8-fa62-32dff47ff714")
+
+    self.OnInit = function()
+        leverTrigger = FindEntity("S_FOR_GnomeGoblins_NearLevers_ce545f6f-f2b3-4a87-9205-5d69edca93d5")
+    end
+
+    events.DialogStarted = function(ev)
+        if not ev.Instance.Automated then
+            SetEntityEvent(me, "FOR_GnomeGoblin_WitnessMe")
+        end
+    end
+
+    events.EntityEvent = function(ev)
+        if speaker == nil and
+           ev.TargetEntity ~= me and
+           ev.Event == "FOR_GnomeGoblin_WitnessMe" then
+            speaker = ev.TargetEntity
+        elseif ev.TargetEntity == speaker and
+               ev.Event == "FOR_GnomeGoblin_DontWitnessMe" then
+            speaker = nil
+        end
+
+    end
+
+    events.DialogEnded = function(ev)
+        if not ev.Instance.Automated then
+            SetEntityEvent(me, "FOR_GnomeGoblin_DontWitnessMe")
+        end
+    end
+
+    nodes.Action_LeaveDelay = Proxy
+    {
+        params.leaveDelayBehaviour,
+        Valid = function()
+            return GetFlag(FOR_GnomeGoblinsPacified)
+        end
+    }
+
+    nodes.Action_WatchConvo = Action
+    {
+        function()
+            LookAtEntity(speaker, 3.0)
+            Sleep(3.0)
+        end
+        ,
+        Valid = function()
+            if not speaker then
+                return false
+            end
+            if GetFlag(FOR_GnomeGoblinsPacified) then
+                return false
+            end
+            if (IsInTrigger(me, leverTrigger.Trigger) and
+                IsInTrigger(speaker, leverTrigger.Trigger)) or
+                (not IsInTrigger(me, leverTrigger.Trigger) and
+                not IsInTrigger(speaker, leverTrigger.Trigger)) then
+                    return true
+            end
+            return false
+        end
+        ,
+        OnLeave = function()
+            speaker = nil
+        end
+    }
+
+    nodes.Action_NoWatchConvo = Proxy{
+        game.states.FOR_GnomeGoblin_NoWatchConvo,
+        params={
+            patrolSpline = params.patrolSpline,
+            home = params.home,
+            AD = params.AD,
+            customIdle = params.customIdle,
+            mockAnimation = params.mockAnimation,
+            home2 = params.home2},
+            Valid = function()
+                if GetFlag(FOR_GnomeGoblinsPacified) then
+                    return false
+                end
+                if not speaker then
+                    return true
+                end
+                if (IsInTrigger(me, leverTrigger.Trigger) and
+                    IsInTrigger(speaker, leverTrigger.Trigger)) or
+                    (not IsInTrigger(me, leverTrigger.Trigger) and
+                    not IsInTrigger(speaker, leverTrigger.Trigger)) then
+                        return false
+                end
+                return true
+            end
+            ,
+    }
+
+end
+}
+
+game.states.FOR_GnomeGoblin_NoWatchConvo = State{function ()
+
+    params.patrolSpline = {type = EParamType.String, required=false, default=nil, help=[[
+        Spline goblins use to investigate the lever's being pulled
+    ]]}
+
+    params.home = {type = EParamType.String, help=[[
+        Goblin's home trigger
+    ]]}
+
+    params.home2 = {type = EParamType.String, required=false, help=[[
+        Goblin's other home trigger
+    ]]}
+
+    params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+        Idle AD
+    ]]}
+
+    params.customIdle = { type = EParamType.State, required = false,
+    help = [[Additional Behaviour]]
+    }
+
+    params.mockAnimation = { type = EParamType.String, required = false, arrayRange="..4", default = {"CUST_Mocking_01_313bddc4-712f-4f08-874f-db9af7a6c4a1", "CUST_Mocking_02_0b7ed819-a09a-4834-9c92-9f24487b1aee", "CUST_Mocking_03_bb472d3b-75c5-408f-9454-0b7a7bfa83d0", "CUST_Mocking_04_baf690d1-4870-4100-a1b1-f0bfc3d7a695"},
+    help = [[Mocking animations, if any]]
+    }
+
+    local patrolSpline
+    local home
+    local investigating = false
+    local currentSplinePoint = 0
+    local lookFromSpline = false
+    local pullLever = false
+    local lever
+    local GLO_UnfortunateGnome_State_Still = Flag("GLO_UnfortunateGnome_State_Still_d58850bc-2eac-8105-99b1-fec5d247b746")
+    local AD
+    local mockAnimation = {}
+    local home1
+    local home2
+    local FOR_UnfortunateGnome_State_Freed = Flag("FOR_UnfortunateGnome_State_Freed_c829895d-aba7-46e5-bc10-eb2516c8ddd6")
+
+    self.OnInit = function()
+        if params.patrolSpline then
+            patrolSpline = Spline(params.patrolSpline)
+        end
+        if params.AD then
+            AD = Dialog(params.AD)
+        end
+        home = FindEntity(params.home)
+        lever = FindEntity("S_FOR_UnfortunateGnome_Lever_50b03092-6db1-4469-b21d-2104758ce130")
+        home1 = FindEntity(params.home)
+        if params.home2 then
+            home2 = FindEntity(params.home2)
+        end
+        if params.mockAnimation then
+            for i, animation in ipairs(params.mockAnimation) do
+                mockAnimation[i] = Animation(animation)
+            end
+        end
+    end
+
+    events.EntityEvent = function(ev)
+        if (ev.TargetEntity == me) and (ev.Event == "FOR_GnomeGoblins_Investigate") then
+            investigating = true
+        end
+    end
+
+    nodes.Action_Investigate = Action
+    {
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Walk, currentSplinePoint, false)
+        end
+        ,
+
+        CanEnter = function()
+            return (investigating and not pullLever and not lookFromSpline)
+        end
+        ,
+
+        OnLeave = function()
+            ClearPatrol()
+        end
+    }
+
+    events.SplineControlPointReached = function(ev)
+        currentSplinePoint = currentSplinePoint + 1
+        lookFromSpline = true
+        if ev.EndReached then
+            investigating = true
+            pullLever = true
+        end
+    end
+
+    nodes.Action_Investigate_LookFromSpline = Action
+    {
+        function()
+           LookFrom(patrolSpline)
+           Sleep(2.0)
+           lookFromSpline = false
+        end
+        ,
+
+        CanEnter = function()
+            return (not pullLever and lookFromSpline)
+        end
+        ,
+    }
+
+    nodes.Action_Investigate_PullLever = Action
+    {
+        function()
+            LookAtEntity(lever, 3.0)
+            Sleep(2.0)
+            if GetFlag(GLO_UnfortunateGnome_State_Still) and
+               not GetFlag(FOR_UnfortunateGnome_State_Freed) then
+                try
+                    UseItem(lever.Item)
+                catch e if ls.CheckType(e, error.UseItemFailed) then
+                    Sleep(1.0)
+                end
+            else
+                lookFromSpline = false
+                currentSplinePoint = 0
+                pullLever = false
+                investigating = false
+            end
+        end
+        ,
+        CanEnter = function()
+            return pullLever
+        end
+        ,
+    }
+
+    nodes.WatchGnomeSelector = Selector{
+        function(nodes)
+            if not params.customIdle then
+                return nodes.Action_WatchGnome
+            else
+                return GetWeightedCanEnter(nodes, {[nodes.Action_WatchGnome] = 3,
+                                                         [nodes.Action_customIdle] = 3})
+            end
+        end,
+        Valid = function()
+            return not GetFlag(FOR_UnfortunateGnome_State_Freed) and
+                   not GetFlag(GLO_UnfortunateGnome_State_Still)
+        end
+    }
+
+    nodes.WatchGnomeSelector.Action_customIdle = Proxy{
+        params.customIdle
+    }
+
+    nodes.WatchGnomeSelector.Action_WatchGnome = Action
+    {
+        function()
+            Sleep(0.5)
+            if not IsInDangerousSurfaceFor(home, me.Character) then
+                try
+                    MoveTo(home, MovementSpeed.Run)
+                    LookFrom(home)
+                    Sleep(math.random()*1.0)
+                    if AD and
+                       math.random() < 0.8 then
+                        StartAutomatedDialog(AD, true, me)
+                    end
+                    if mockAnimation and
+                       #mockAnimation ~= 0 then
+                        local i = (math.random(#mockAnimation))
+                        PlayAnimation(mockAnimation[i], true)
+                    end
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    LookAtEntity(home, 3.0)
+                    Sleep(2.0)
+                end
+            else
+                LookAtEntity(home, 3.0)
+            end
+            Sleep(1.0)
+            if home2 ~= nil and
+               math.random() < 0.6 then
+                if home ~= home1 then
+                    if not IsInDangerousSurfaceFor(home1, me.Character) then
+                        home = home1
+                    end
+                else
+                    if not IsInDangerousSurfaceFor(home2, me.Character) then
+                        home = home2
+                    end
+                end
+            end
+        end
+    }
+
+    -- Stop throwing things if the gnome is gone.
+    nodes.Action_GnomeGone = Action
+    {
+        function()
+            if not IsInDangerousSurfaceFor(home, me.Character) then
+                try
+                    MoveTo(home, MovementSpeed.Run)
+                    LookFrom(home)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    LookAtEntity(home, 3.0)
+                end
+            else
+                LookAtEntity(home, 3.0)
+            end
+            Sleep(2.0)
+        end,
+        CanEnter = function()
+            return GetFlag(FOR_UnfortunateGnome_State_Freed) or
+                   GetFlag(GLO_UnfortunateGnome_State_Still)
+        end
+    }
+
+end
+}
+
+game.states.FOR_GnomeGoblin_ThrowRocks = State{
+    function()
+
+        params.targets = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[
+            Targets at which to throw rocks.
+        ]]}
+
+        params.pile = {type = EParamType.String, help=[[
+            Goblins' home trigger
+        ]]}
+
+        local hasStone
+        local targets = {}
+        local pile
+        local CUST_CUST_PickUpRock_01 = Animation("CUST_CUST_PickUpRock_01_3ccf77d6-a104-11ea-bb37-0242ac130002")
+
+        self.OnInit = function()
+            for i, target in ipairs(params.targets) do
+                targets[i] = FindEntity(target)
+            end
+            pile = FindEntity(params.pile)
+        end
+
+        nodes.throwStone = Action{
+            function()
+                if not hasStone and
+                   math.random() < 0.3 then
+                    try
+                        MoveTo(pile, MovementSpeed.Run)
+                        LookFrom(pile)
+                        --PlayAnimation(CUST_CUST_PickUpRock_01, true)
+                        --DebugText(me, "Pick Up Rock")
+                        hasStone = true
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(1.0)
+                    end
+                else
+                    local selected = targets[math.random(#targets)]
+                    local pos = selected.Position
+                    UseSpell("Projectile_FOR_GnomeGoblin_ThrowRock", pos, nil, nil, nil, true, true)
+                    hasStone = false
+                end
+            end
+        }
+
+        self.OnLeave = function()
+            hasStone = false
+        end
+
+        self.CanEnter = function()
+            return not IsInDangerousSurfaceFor(FindEntity(params.pile), me.Character)
+        end
+
+    end
+}
+

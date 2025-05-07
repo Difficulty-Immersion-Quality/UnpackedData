@@ -1,0 +1,113 @@
+game.states.LOW_Elfsong_Skoona = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+    modules = {"shared.dialog", "shared.moveto", "shared.math"}
+
+    --------------------------------Variables--------------------------------
+
+    --Animations
+    local aggressiveAnims = nil
+    local boredAnimation = Animation("CUST_Bored_01_Loop_23588ba8-fafb-438c-9bc5-660ff6650aef")
+    local lookAroundAnimation = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7")
+
+    --BackDoor
+    local backDoorPoint = nil
+    local backDoorCharacter = nil
+    local backDoorFlag = nil
+    local localAD = nil
+
+    --FrontDoor and Stairs
+    local frontDoor = nil
+    local stairsPoint = nil
+
+    local exteriorSteerPoint = nil
+    --------------------------------Nodes--------------------------------
+
+    self.OnInit = function()
+
+        aggressiveAnims = {
+            Animation("CUST_Aggressive_01_3d853a6b-a9c3-4019-8b88-0d7f8f7e3312"),
+            Animation("CUST_Aggressive_02_f7f92745-6da2-4762-9a22-a35ae8d78dab")
+        }
+
+        backDoorPoint = Entity("LOW_Elfsong_Skoona_BackDoor_bb593679-db14-4683-af0d-64a3fc400ba8")
+        backDoorCharacter = Entity("S_LOW_HeapsideKitchenHelper_Civilian1_fb90d37e-5fda-4660-bd27-6cf9a4aca4a4")
+        backDoorFlag = Flag("LOW_Elfsong_Event_OnBackDoor_6c502f59-344f-4d93-9c45-82970b1275b2")
+        localAD = Dialog("LOW_Elfsong_AD_Skoona_5dce26d6-a48b-4f83-4534-26a30911919d")
+
+        frontDoor = Entity("S_LOW_Elfsong_Skoona_FrontDoor_f43d5fd7-f772-4b8d-a5b0-2aa760a8beda")
+        stairsPoint = Entity("S_LOW_Elfsong_Skoona_Stairs_7dbac03c-4288-44ee-90f5-83f4920d0783")
+
+        exteriorSteerPoint = Entity("S_LOW_Elfsong_DevellaDissapearOutOfSighTo_6f5f2ef4-4329-4d8b-a6ec-355526d969f1")
+    end
+
+    nodes.Vigilant = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Vigilant.WaitInTheDoor = Action {
+        function()
+            if mod.moveto.MoveToPoint(frontDoor, MovementSpeed.Walk, me) then
+                SteerTo(exteriorSteerPoint)
+                try
+                    PlayAnimation(boredAnimation, true, false)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "Failed to play bored animation")
+                    Sleep(15.0)
+                catch e then
+                    print("pipo")
+                end
+                Sleep(math.random(10,15))
+            end
+        end,
+    }
+
+    nodes.Vigilant.UnderStairs = Action {
+        function()
+            if mod.moveto.MoveToPoint(stairsPoint, MovementSpeed.Walk, me) then
+                SteerTo(exteriorSteerPoint)
+                if (mod.math.CoinToss()) then
+                    mod.dialog.StartCheckedAutomatedDialog(
+                        localAD,
+                        {
+                            waitForCompletion = true
+                        },
+                        me
+                    )
+                end
+                if (mod.math.CoinToss()) then
+                    PlayAnimation(aggressiveAnims[math.random(1,2)], true, false)
+                else
+                    PlayAnimation(lookAroundAnimation, true, false)
+                end
+            end
+        end
+    }
+
+    nodes.Vigilant.CheckBackDoor = Action {
+        function()
+            if mod.moveto.MoveToPoint(backDoorPoint, MovementSpeed.Walk, me) then
+                SetFlag(backDoorFlag, me)
+                SteerTo(backDoorCharacter)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    localAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                ClearFlag(backDoorFlag, me)
+                Sleep(math.random(1,3))
+            end
+        end,
+        CanEnter = function()
+            return not backDoorCharacter.Character.IsDead
+        end
+    }
+
+    --------------------------------Events--------------------------------
+
+
+end}

@@ -1,0 +1,77 @@
+game.states.LOW_TheLodge_SocietyMember = State{function()
+    
+    modules = {"shared.dialog"}
+
+    params.AD = {type = EParamType.String, required=true, help=[[The AD to play.]]}
+
+    params.minADDelay = {type = EParamType.Number,  required=false, default=15.0, help=[[Min Delay before ADs]]}
+
+    params.patrolPause = {type = EParamType.Number,  required=false, default=30.0, help=[[Min Delay before ADs]]}
+
+    params.patrolSpline = {type=EParamType.String, required = false, default=nil, help=[[Patrol spline]]}
+
+    params.animations = {type = EParamType.String, arrayRange = "..3", required = false, default = {}, help = [[Array of animations to be playedat triggers]]}
+
+    local AD = Dialog(params.AD)
+    local minADDelay = params.minADDelay
+
+    local patrolSpline = params.patrolSpline    
+    local patrolPause = params.patrolPause
+    local patrolsPauseActive = false
+
+    local animations = params.animations
+    local currentAnimation
+    local currentAnimationString
+
+    local meditatingStart = Animation([[CUST_Meditating_01_Start_12c9c463-0762-4ef3-a24e-29b5254f580f]])
+    local meditatingEnd = Animation([[CUST_Meditating_01_End_ad0be56c-63b4-4b24-9859-ebcd282ba9f8]])
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "LOW_TheLodge_Societymember_StartAD" then
+            StartAutomatedDialogRateLimitedImmediate(AD, minADDelay, 5.0, me)
+        end
+    end
+
+    nodes.Idle = Action{
+        function()
+            LookFrom(Spline(patrolSpline))
+            if(currentAnimation ~= nil) then
+                if(currentAnimationString == "CUST_Meditating_01_45b1a54b-b127-46d2-bfe6-daa8963398ea") then
+                    PlayLoopingAnimation(meditatingStart, {currentAnimation}, meditatingEnd)
+                    Sleep(math.random(20,30))
+                    StopAnimation(me)
+                    Sleep(5.0)
+                else
+                    StartTimer(me, "LOW_TheLodge_Societymember_StartAD", math.random(3.0, 5.0), 0)
+                    PlayAnimation(currentAnimation,true,false)
+                end
+            else
+                PlayAnimation(Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba"),true,false)
+            end
+            Sleep(math.random(5, 7))
+            patrolsPauseActive = false
+        end,
+
+        Valid = function()
+            return (patrolsPauseActive)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Patrol = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = params.patrolSpline,
+            patrolSpeed = "Stroll"
+        }
+    }
+
+    events.SplineControlPointReached = function(e)
+        currentAnimationString = animations[e.Index+1]
+        currentAnimation = Animation(currentAnimationString)
+        patrolsPauseActive = true
+    end
+end}

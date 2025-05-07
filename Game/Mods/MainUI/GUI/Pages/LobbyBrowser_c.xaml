@@ -1,0 +1,538 @@
+﻿<ls:UIWidget x:Name="LobbyBrowser_c"
+             ls:UIWidget.ContextName="LobbyBrowser"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="2160" d:DesignWidth="3840"
+             d:DataContext="{d:DesignInstance {x:Type ls:DCLobbyBrowser}, IsDesignTimeCreatable=True}"
+             FocusDown="UIDown" FocusUp="UIUp" ls:MoveFocus.FocusMovementMode="Closest" CanCacheFocusSurroundingElements="False">
+    <ls:UIWidget.Template>
+        <ControlTemplate TargetType="ls:UIWidget">
+            <ControlTemplate.Resources>
+                <ResourceDictionary>
+                    <ResourceDictionary.MergedDictionaries>
+                        <ResourceDictionary Source="pack://application:,,,/Core;component/Library/LobbyTemplates_c.xaml"/>
+                        <ResourceDictionary Source="pack://application:,,,/Core;component/Library/NewOptionTemplates_c.xaml"/>
+                    </ResourceDictionary.MergedDictionaries>
+
+                    <System:Double x:Key="ServerNameColumnWidth">720</System:Double>
+                    <System:Double x:Key="PlayersColumnWidth">392</System:Double>
+                    <System:Double x:Key="AdventureColumnWidth">692</System:Double>
+                    <System:Double x:Key="MapColumnWidth">852</System:Double>
+                    <System:Double x:Key="PartyLevelColumnWidth">392</System:Double>
+                    <System:Double x:Key="DifficultyColumnWidth">460</System:Double>
+
+                    <!--These numbers exist because there is no way to normally align a particular cell in a GridView. There's a ContentPresenter added internally with a hardcoded
+                    HorizonalAlignment Left and a Margin of 6,0, so the only way to center the cell is doing it with TextAlignment and have the TextBlock have the same Width than the
+                    Column hardcoded, minus 12.-->
+                    <System:Double x:Key="PlayersCellWidth">380</System:Double>
+                    <System:Double x:Key="PartyLevelCellWidth">480</System:Double>
+
+                    <BitmapImage x:Key="TopButtonsBottomImage" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNav_bar.png"/>
+                    <BitmapImage x:Key="CommunityDivider" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNav_divider.png"/>
+
+                    <ControlTemplate x:Key="CommunityTemplate" TargetType="ContentControl">
+                        <ControlTemplate.Resources>
+                            <BitmapImage x:Key="Background" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNavSelectedBG.png"/>
+                            <BitmapImage x:Key="Arrow" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNavSelectorArrow.png"/>
+                            <BitmapImage x:Key="Selector" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNavSelectorbase.png"/>
+                            <BitmapImage x:Key="Shadow" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel_c/c_topNavSelectedSideShadow.png"/>
+                        </ControlTemplate.Resources>
+                        <Grid Height="120">
+                            <Image x:Name="PageSelectedBg" VerticalAlignment="Center" HorizontalAlignment="Stretch" Source="{StaticResource Background}" Stretch="Fill" Margin="0,0,0,-8"
+                                   Visibility="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType={x:Type ContentControl}}, Converter={StaticResource BoolToVisibleConverter}}"/>
+                            <TextBlock x:Name="PageName" VerticalAlignment="Center" TextAlignment="Center" Margin="40,0" FontSize="{StaticResource ScaledDefaultFontSize}"
+                                       Text="{TemplateBinding Content}" Foreground="{StaticResource LS_accent00TxtColor}" />
+                            <Image x:Name="PageSelectedArrow" VerticalAlignment="Bottom" HorizontalAlignment="Center" Source="{StaticResource Arrow}" Stretch="Uniform"
+                                   Visibility="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType={x:Type ContentControl}}, Converter={StaticResource BoolToVisibleConverter}}"
+                                   Width="48" Margin="0,0,0,-18"/>
+                            <Image x:Name="PageSelectedLine" VerticalAlignment="Bottom" Width="{Binding ActualWidth, ElementName=PageSelectedBg}" Height="60" Source="{StaticResource Selector}"
+                                   Stretch="Fill" Visibility="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType={x:Type ContentControl}}, Converter={StaticResource BoolToVisibleConverter}}"
+                                   Margin="0,0,0,-36"/>
+                            <Image x:Name="PageSelectedShadowLeft" VerticalAlignment="Bottom" HorizontalAlignment="Left" Source="{StaticResource Shadow}" Stretch="None"
+                                   Visibility="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType={x:Type ContentControl}}, Converter={StaticResource BoolToVisibleConverter}}"/>
+                            <Image x:Name="PageSelectedShadowRight" VerticalAlignment="Bottom" HorizontalAlignment="Right" Source="{StaticResource Shadow}" Stretch="None"
+                                   Visibility="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType={x:Type ContentControl}}, Converter={StaticResource BoolToVisibleConverter}}">
+                                <Image.RenderTransform>
+                                    <ScaleTransform ScaleX="-1" CenterX="28"/>
+                                </Image.RenderTransform>
+                            </Image>
+                        </Grid>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="True">
+                                <Setter TargetName="PageName" Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </ResourceDictionary>
+            </ControlTemplate.Resources>
+
+            <Grid x:Name="Root" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Black">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="200"/>
+                    </Grid.RowDefinitions>
+
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="Loaded">
+                            <ls:SetMoveFocusAction TargetName="LobbyBrowser_c"/>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+
+                    <!-- Screen Background -->
+                    <Image x:Name="Bg" Grid.Row="0" Grid.RowSpan="3" Source="{StaticResource OptionsBackground}" VerticalAlignment="Top" HorizontalAlignment="Center" Stretch="Uniform" StretchDirection="UpOnly" />
+
+                    <!-- Top section -->
+                    <Image Grid.Row="0" VerticalAlignment="Bottom" HorizontalAlignment="Center" Stretch="None" Source="{StaticResource TopButtonsBottomImage}" />
+                    <StackPanel x:Name="LobbyBrowserTopButtons" Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="{Binding IsConsolePlatform, Converter={StaticResource BoolToCollapsedConverter}}">
+                        <ls:LSButton x:Name="PrevTabBtn" HorizontalAlignment="Center" Focusable="False" BoundEvent="UITabPrev" Margin="12, 0"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UITabPrev'}"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Tag=" "
+                                 Command="{Binding OnSetCommunity}"
+                                 CommandParameter="{Binding CommunityType, Converter={StaticResource ToStringConverter}}"/>
+                        <ContentControl x:Name="OnlineCommunity" IsEnabled="True" Template="{StaticResource CommunityTemplate}" MinWidth="{Binding ActualWidth, ElementName=LanCommunity}"
+                                    Content="{Binding Source='h5c6f6ec7g160ag4ae8g8e5eg30783e304dc3', Converter={StaticResource TranslatedStringConverter}}"/>
+                        <Image x:Name="CommunitySeparator" VerticalAlignment="Center" HorizontalAlignment="Left" Source="{StaticResource CommunityDivider}" Stretch="None"/>
+                        <ContentControl x:Name="LanCommunity" IsEnabled="False" Template="{StaticResource CommunityTemplate}" MinWidth="{Binding ActualWidth, ElementName=OnlineCommunity}"
+                                    Content="{Binding Source='h6ff20c65ge087g4631ga387g9efd88a1a9e7', Converter={StaticResource TranslatedStringConverter}}"/>
+                        <ls:LSButton x:Name="NextTabBtn" HorizontalAlignment="Center" Focusable="False" BoundEvent="UITabNext" Margin="12, 0"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UITabNext'}"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Tag=" "
+                                 Command="{Binding OnSetCommunity}"
+                                 CommandParameter="LAN"/>
+                    </StackPanel>
+
+                    <!-- Middle section -->
+                    <Grid x:Name="MiddleSection" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Stretch">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="Title" Grid.Row="0" FontSize="{StaticResource ScaledTitleFontSize}" Foreground="{StaticResource LS_tint100}" HorizontalAlignment="Left"
+                               TextAlignment="Left" Margin="10,60"
+                               Text="{Binding Source='h838b653agb63cg44b9g9a8agd3c5e8fb5c8d', Converter={StaticResource TranslatedStringConverter}}"/>
+
+                        <!-- Error Messages -->
+                        <Grid x:Name="Messages" Grid.Row="1" HorizontalAlignment="Center" Width="2900" Height="1610" Margin="0,0,0,40"
+                          Visibility="{Binding LobbyMessage, Converter={StaticResource StringToVisibilityConverter}}">
+                            <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center" Text="{Binding LobbyMessage}" Foreground="{StaticResource LS_tint100}"
+                                   FontSize="{StaticResource ScaledTitleFontSize}" TextWrapping="Wrap" TextAlignment="Center" Margin="30,0"/>
+                        </Grid>
+
+                        <ListView x:Name="MainList" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Stretch" Margin="10,0" ItemsSource="{Binding Lobbies}" AlternationCount="{Binding Lobbies.Count}"
+                              Visibility="{Binding Visibility, ElementName=Messages, Converter={StaticResource InvertVisibilityConverter}}">
+                            <ListView.Resources>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontSize" Value="{StaticResource ScaledDefaultFontSize}"/>
+                                    <Setter Property="TextWrapping" Value="NoWrap"/>
+                                    <Setter Property="HorizontalAlignment" Value="Left"/>
+                                    <Setter Property="TextAlignment" Value="Left"/>
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                </Style>
+
+                                <ControlTemplate x:Key="GridViewScroll" TargetType="ScrollViewer">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <!-- If I take out this ScrollViewer, the game crashes. It seems the GridView code requires it ^_^ -->
+                                        <ScrollViewer Grid.Row="0" Grid.ColumnSpan="2" MinHeight="0" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
+                                                  PanningMode="HorizontalFirst" Focusable="False" CanContentScroll="False">
+                                            <ScrollViewer.Template>
+                                                <ControlTemplate TargetType="ScrollViewer">
+                                                    <ScrollContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                                        ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                                                        CanContentScroll="False"
+                                                                        Margin="{TemplateBinding Padding}"/>
+                                                </ControlTemplate>
+                                            </ScrollViewer.Template>
+                                            <GridViewHeaderRowPresenter AllowsColumnReorder="False" ColumnHeaderContainerStyle="{Binding Path=TemplatedParent.View.ColumnHeaderContainerStyle, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    ColumnHeaderContextMenu="{Binding Path=TemplatedParent.View.ColumnHeaderContextMenu, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    ColumnHeaderTemplate="{Binding Path=TemplatedParent.View.ColumnHeaderTemplate, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    ColumnHeaderTemplateSelector="{Binding Path=TemplatedParent.View.ColumnHeaderTemplateSelector, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    Columns="{Binding Path=TemplatedParent.View.Columns, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                        </ScrollViewer>
+                                        <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" CanContentScroll="{TemplateBinding CanContentScroll}" Margin="{TemplateBinding Padding}" KeyboardNavigation.DirectionalNavigation="Local"/>
+                                        <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Row="1" Grid.Column="1" Margin="0,0,-30,0" Style="{StaticResource MinimalGoldScrollbar}" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" Orientation="Vertical"
+                                               ViewportSize="{TemplateBinding ViewportHeight}" Maximum="{TemplateBinding ScrollableHeight}" Minimum="0.0" Value="{Binding Path=VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                               BorderBrush="{StaticResource LS_tint00}"/>
+                                    </Grid>
+                                </ControlTemplate>
+
+                                <DataTemplate x:Key="LeftColumnHeaderTemplate">
+                                    <TextBlock Text="{TemplateBinding Content}" Foreground="{StaticResource LS_accent00TxtColor}"
+                                           HorizontalAlignment="Left" TextAlignment="Left"/>
+                                </DataTemplate>
+
+                                <DataTemplate x:Key="CenterColumnHeaderTemplate">
+                                    <TextBlock Text="{TemplateBinding Content}" Foreground="{StaticResource LS_accent00TxtColor}"
+                                           HorizontalAlignment="Center" TextAlignment="Center"/>
+                                </DataTemplate>
+                            </ListView.Resources>
+                            <ListView.Template>
+                                <ControlTemplate TargetType="ListView">
+                                    <ScrollViewer Template="{StaticResource GridViewScroll}" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                              BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" Focusable="False">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </ControlTemplate>
+                            </ListView.Template>
+                            <ListView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel/>
+                                </ItemsPanelTemplate>
+                            </ListView.ItemsPanel>
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="Focusable" Value="True"/>
+                                    <Setter Property="ls:MoveFocus.Focusable" Value="True"/>
+                                    <Setter Property="Foreground" Value="{StaticResource LS_baseTxtColor}"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListViewItem">
+                                                <ls:LSNineSliceImage x:Name="Bg" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Height="104"
+                                                                 ImageSource="{StaticResource ButtonBg}" Slices="24,40,24,24">
+                                                    <b:Interaction.Triggers>
+                                                        <b:EventTrigger EventName="Loaded">
+                                                            <b:Interaction.Behaviors>
+                                                                <b:ConditionBehavior>
+                                                                    <b:ConditionalExpression>
+                                                                        <b:ComparisonCondition LeftOperand="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ListViewItem}}" Operator="Equal" RightOperand="0"/>
+                                                                        <b:ComparisonCondition LeftOperand="{Binding IsEnabled, ElementName=MainList}" Operator="Equal" RightOperand="True"/>
+                                                                    </b:ConditionalExpression>
+                                                                </b:ConditionBehavior>
+                                                            </b:Interaction.Behaviors>
+                                                            <ls:SetMoveFocusAction TargetName="LobbyBrowser_c" FocusElement="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ListViewItem}}"/>
+                                                        </b:EventTrigger>
+                                                    </b:Interaction.Triggers>
+                                                    <Grid>
+                                                        <GridViewRowPresenter VerticalAlignment="Center" />
+                                                        <Grid x:Name="Frame" Visibility="Collapsed" Margin="-18">
+                                                            <Grid.Triggers>
+                                                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                                                    <BeginStoryboard Storyboard="{StaticResource SelectorStoryboard}"/>
+                                                                </EventTrigger>
+                                                            </Grid.Triggers>
+                                                            <ls:LSNineSliceImage x:Name="Img1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" MinHeight="116"
+                                                                             ImageSource="{StaticResource ButtonBg_h1}" Slices="34" Opacity="1"/>
+                                                            <ls:LSNineSliceImage x:Name="Img2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" MinHeight="116"
+                                                                             ImageSource="{StaticResource ButtonBg_h2}" Slices="34" Opacity="0"/>
+                                                        </Grid>
+                                                    </Grid>
+                                                </ls:LSNineSliceImage>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="ls:MoveFocus.IsFocused" Value="True">
+                                                        <Setter TargetName="Bg" Property="ImageSource" Value="{StaticResource ButtonBg_h}"/>
+                                                        <Setter TargetName="Frame" Property="Visibility" Value="Visible"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="ls:MoveFocus.IsFocused" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource LS_specialTxtColor}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.View>
+                                <GridView AllowsColumnReorder="False" ColumnHeaderContainerStyle="{StaticResource RealGridViewColumnHeaderContainerStyle}"
+                                      ColumnHeaderTemplate="{StaticResource LeftColumnHeaderTemplate}">
+                                    <GridViewColumn Width="{StaticResource ServerNameColumnWidth}"
+                                                Header="{Binding Source='h4e80f833g0112g4a9bg8ac5gd216744515ce', Converter={StaticResource TranslatedStringConverter}}">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate DataType="{x:Type ls:VMLobby}">
+                                                <TextBlock Text="{Binding Name}" Foreground="{TemplateBinding TextElement.Foreground}" HorizontalAlignment="Left" TextAlignment="Left"
+                                                       VerticalAlignment="Center" Padding="20,0,0,0" Width="{StaticResource ServerNameColumnWidth}" TextWrapping="Wrap"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Width="{StaticResource PlayersColumnWidth}" HeaderTemplate="{StaticResource CenterColumnHeaderTemplate}"
+                                                Header="{Binding Source='h87bf9a1dg8210g4948g9b65g78bc20d51a9e', Converter={StaticResource TranslatedStringConverter}}">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate DataType="{x:Type ls:VMLobby}">
+                                                <TextBlock HorizontalAlignment="Center" Foreground="{TemplateBinding TextElement.Foreground}" TextAlignment="Center" VerticalAlignment="Center"
+                                                       Width="{StaticResource PlayersCellWidth}">
+                                                    <TextBlock.Text>
+                                                        <MultiBinding StringFormat="{}{0}/{1}">
+                                                            <Binding Path="CurrentPlayers"/>
+                                                            <Binding Path="MaxPlayers"/>
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <!-- Temporarily hidden as we have only one adventure -->
+                                    <!--<GridViewColumn Width="{StaticResource AdventureColumnWidth}"
+                                                Header="{Binding Source='hc2962d77gf4dag4647g8f71g15c4bf883277', Converter={StaticResource TranslatedStringConverter}}">
+                                    <GridViewColumn.HeaderContainerStyle>
+                                        <Style TargetType="GridViewColumnHeader" BasedOn="{StaticResource RealGridViewColumnHeaderContainerStyle}">
+                                            <Setter Property="Padding" Value="100,0,0,30"/>
+                                        </Style>
+                                    </GridViewColumn.HeaderContainerStyle>
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate DataType="{x:Type ls:VMLobby}">
+                                            <TextBlock Text="{Binding Adventure}" Foreground="{TemplateBinding TextElement.Foreground}" HorizontalAlignment="Left" TextAlignment="Left"
+                                                       VerticalAlignment="Center" Margin="100,0,0,0"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>-->
+                                    <GridViewColumn Width="{StaticResource MapColumnWidth}"
+                                                Header="{Binding Source='hacf0d8deg89ddg45b2gbcc6ga2eba8ce0034', Converter={StaticResource TranslatedStringConverter}}">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate DataType="{x:Type ls:VMLobby}">
+                                                <TextBlock Text="{Binding Map, Converter={StaticResource TranslatedStringConverter}, ConverterParameter=LocaKey}" Foreground="{TemplateBinding TextElement.Foreground}" HorizontalAlignment="Left" TextAlignment="Left" VerticalAlignment="Center"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Width="{StaticResource PartyLevelColumnWidth}" HeaderTemplate="{StaticResource CenterColumnHeaderTemplate}"
+                                                Header="{Binding Source='he115f203gfd93g4047g9bc1g721d1d759a7b', Converter={StaticResource TranslatedStringConverter}}">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate DataType="{x:Type ls:VMLobby}">
+                                                <TextBlock Text="{Binding PartyLevel}" Foreground="{TemplateBinding TextElement.Foreground}" HorizontalAlignment="Center" TextAlignment="Center"
+                                                       VerticalAlignment="Center" Width="{StaticResource PartyLevelCellWidth}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <!--DM Styles not implemented in lobby browser currently, will be done later-->
+                                    <!--<GridViewColumn Width="{StaticResource DifficultyColumnWidth}"
+                                                Header="{Binding Source='h05489a04g67b7g4ce6gbd79ga8f072b92671', Converter={StaticResource TranslatedStringConverter}}">
+                                    <GridViewColumn.HeaderContainerStyle>
+                                        <Style TargetType="GridViewColumnHeader" BasedOn="{StaticResource RealGridViewColumnHeaderContainerStyle}">
+                                            <Setter Property="Padding" Value="100,0,0,30"/>
+                                        </Style>
+                                    </GridViewColumn.HeaderContainerStyle>
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate DataType="{x:Type ls:VMLobby}">
+                                            <TextBlock Text="{Binding Difficulty}" Foreground="{TemplateBinding TextElement.Foreground}" HorizontalAlignment="Left" TextAlignment="Left"
+                                                       VerticalAlignment="Center" Margin="100,0,0,0"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>-->
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </Grid>
+
+                    <!-- Bottom section-->
+
+
+                    <Grid x:Name="InviteCode" Grid.Row="1" IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Stretch" Visibility="Collapsed">
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="IsVisibleChanged">
+                                <ls:SetMoveFocusAction TargetName="LobbyBrowser_c"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
+
+                        <Border HorizontalAlignment="Center" VerticalAlignment="Stretch" Style="{StaticResource PanelBorderStyle}">
+                            <StackPanel HorizontalAlignment="Stretch" Margin="80,40,80,100">
+                                <TextBlock Style="{StaticResource TitleText}" Margin="0,20" HorizontalAlignment="Stretch"
+                                           Text="{Binding Source='he562a747ga5eag422agbde6g6fb0dd1bddae', Converter={StaticResource TranslatedStringConverter}}"/>
+                                <TextBlock Style="{StaticResource DescriptionText}" Margin="10,36" HorizontalAlignment="Stretch" MaxWidth="900" TextAlignment="Center" TextWrapping="Wrap"
+                                           Text="{Binding Source='h92a117d4g472bg452bg972ag2b79f65d5691', Converter={StaticResource TranslatedStringConverter}}"/>
+                                <ls:LSTextBox x:Name="InviteCodeTextBox" Style="{StaticResource FocusableTextBoxStyle}" Text="{Binding DefaultDirectConnectAddress, Mode=TwoWay}" Width="1200" Height="118" Margin="10" TextImmediateSourceUpdate="True" noesis:Text.Placeholder="{Binding Source='hb51ed435g17bcg466dg81bbg3ccd673fde9f', Converter={StaticResource TranslatedStringConverter}, Mode=OneWay}"/>
+                                <ls:LSButton Style="{StaticResource FocusableButtonStyle}" Content="{Binding Source='h7a174735g0099g4ca9ga1f7ga53ad66b1aa4', Converter={StaticResource TranslatedStringConverter}}" Width="1200" Height="118" Margin="10" Command="{Binding OnDirectConnectLobby}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                    <Control x:Name="IsConnecting" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Template="{StaticResource BusyElement}"
+                             Visibility="Collapsed"/>
+                </Grid>
+
+                <Rectangle x:Name="FiltersBackground" Stretch="Fill" Visibility="Collapsed" Fill="{StaticResource LS_PopUpBackgroundColorMedium}"/>
+                <Grid x:Name="Filters" IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="IsVisibleChanged">
+                            <ls:SetMoveFocusAction TargetName="LobbyBrowser_c"/>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+
+                    <Border HorizontalAlignment="Center" VerticalAlignment="Stretch" Style="{StaticResource PanelBorderStyle}">
+                        <StackPanel HorizontalAlignment="Stretch" Margin="30,2">
+                            <TextBlock x:Name="FiltersTitle" Style="{StaticResource TitleText}" Margin="10,72" HorizontalAlignment="Stretch"
+                                           Text="{Binding Source='h629fc324gb607g4c51g8c8dg8a25509c3e72', Converter={StaticResource TranslatedStringConverter}}"/>
+                            <ItemsControl x:Name="Options" AlternationCount="{Binding Options.Count}" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                              Margin="10 10 10 40" ItemsSource="{Binding Options}" ItemContainerStyle="{StaticResource OptionStyle}" Background="{x:Null}">
+                                <ItemsControl.Template>
+                                    <ControlTemplate>
+                                        <ScrollViewer Template="{StaticResource ScrollViewerTemplate}" Focusable="False">
+                                            <ScrollViewer.Resources>
+                                                <GridLength x:Key="Top">84</GridLength>
+                                                <GridLength x:Key="Bottom">84</GridLength>
+                                            </ScrollViewer.Resources>
+                                            <ItemsPresenter/>
+                                        </ScrollViewer>
+                                    </ControlTemplate>
+                                </ItemsControl.Template>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <StackPanel x:Name="LobbyBrowserBottomButtons" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
+                    <ls:LSButton x:Name="JoinSelectBtn" Focusable="False" BoundEvent="UIAccept" TapTime="{StaticResource DefaultButtonTapTime}" Margin="{StaticResource ButtonHint.Margin}" VerticalAlignment="Bottom"
+                                 Visibility="Collapsed" IsEnabled="False"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIAccept'}"
+                                 Tag="{Binding Source='he8db4684gb4e3g4270ga1a2g5f27409de802',Converter={StaticResource TranslatedStringConverter}}"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Command="{Binding OnConnectLobby}"
+                                 CommandParameter="{Binding Path=FocusedElement.DataContext, ElementName=LobbyBrowser_c}"/>
+                    <ls:LSButton x:Name="RefreshBtn" Focusable="False" BoundEvent="UIRefresh" TapTime="{StaticResource DefaultButtonTapTime}" Margin="{StaticResource ButtonHint.Margin}" VerticalAlignment="Bottom"
+                                 Visibility="Collapsed" IsEnabled="False"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIRefresh'}"
+                                 Tag="{Binding Source='h9667f309g5455g45d6gae8cga1d5f6b1dbe2',Converter={StaticResource TranslatedStringConverter}}"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Command="{Binding Refresh}"/>
+                    <ls:LSButton x:Name="CreateBtn" Focusable="False" BoundEvent="UICreateLobby" TapTime="{StaticResource DefaultButtonTapTime}" Margin="{StaticResource ButtonHint.Margin}" VerticalAlignment="Bottom"
+                                 Visibility="Collapsed" IsEnabled="False"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICreateLobby'}"
+                                 Tag="{Binding Source='h499b9ffbgfc3ag45fdg8df7g2f9e0440b9b4',Converter={StaticResource TranslatedStringConverter}}"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Command="{Binding OnCreateLobby}"/>
+                    <ls:LSButton x:Name="SelectBtn" Focusable="False" BoundEvent="UIAccept" TapTime="{StaticResource DefaultButtonTapTime}" Margin="{StaticResource ButtonHint.Margin}" VerticalAlignment="Bottom"
+                                 Visibility="Collapsed" IsEnabled="False"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIAccept'}"
+                                 Tag="{Binding Source='hd0c08193ga7f2g4a7eg8225g63748c7b3096',Converter={StaticResource TranslatedStringConverter}}"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Command="{Binding Path=FocusedElement.Command ,ElementName=LobbyBrowser_c}" 
+                                 CommandParameter="{Binding Path=FocusedElement.CommandParameter ,ElementName=LobbyBrowser_c}"/>
+                    <ls:LSButton x:Name="FilterBtn" Focusable="False" BoundEvent="UIFilter" Margin="{StaticResource ButtonHint.Margin}" VerticalAlignment="Bottom"
+                                 Visibility="Collapsed" IsEnabled="False"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIFilter'}"
+                                 Tag="{Binding Source='h1da92c84gd954g43ffga332gcda2d31a7083',Converter={StaticResource TranslatedStringConverter}}"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Command="{Binding OnOpenFilters}"/>
+                    <ls:LSButton x:Name="EnterInviteCodeBtn" Focusable="False" BoundEvent="UIEnterCode" Margin="{StaticResource ButtonHint.Margin}" VerticalAlignment="Bottom"
+                                 Visibility="Collapsed" IsEnabled="False"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIEnterCode'}"
+                                 Tag="{Binding Source='haf3ea26agb50cg4213g81e5g2e713394538a',Converter={StaticResource TranslatedStringConverter}}"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Command="{Binding OnInviteCode}"/>
+                    <ls:LSButton x:Name="BackBtn" Focusable="False" BoundEvent="UICancel" Margin="{StaticResource ButtonHint.Margin}" VerticalAlignment="Bottom"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICancel'}"
+                                 Tag="{Binding Source='h9d3b37a6gf7e3g40a8g87d3g21b1d1732512',Converter={StaticResource TranslatedStringConverter}}"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Command="{Binding Back}"
+                                 SoundID="UI_Shared_Cancel"/>
+                </StackPanel>
+
+                <!-- Player slots -->
+                <Control x:Name="PlayerSlots" Style="{StaticResource MinimalPlayerSlotsMenuStyle}"/>
+
+                <Control x:Name="ModVerificationWarning" Template="{StaticResource ModVerificationWindowTemplate}"/>
+            </Grid>
+
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding Community}" Value="LAN">
+                    <Setter TargetName="OnlineCommunity" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="LanCommunity" Property="IsEnabled" Value="True"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ShowModValidationWindow}" Value="True">
+                    <Setter TargetName="LobbyBrowserBottomButtons" Property="IsEnabled" Value="False" />
+                    <Setter TargetName="MainList" Property="IsEnabled" Value="False" />
+                </DataTrigger>
+                
+                <DataTrigger Binding="{Binding LobbyBrowserState}" Value="None">
+                    <Setter TargetName="JoinSelectBtn" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="JoinSelectBtn" Property="IsEnabled" Value="True"/>
+                    <Setter TargetName="RefreshBtn" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="RefreshBtn" Property="IsEnabled" Value="True"/>
+                    <Setter TargetName="CreateBtn" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="CreateBtn" Property="IsEnabled" Value="True"/>
+                    <Setter TargetName="FilterBtn" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="FilterBtn" Property="IsEnabled" Value="True"/>
+                    <Setter TargetName="EnterInviteCodeBtn" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="EnterInviteCodeBtn" Property="IsEnabled" Value="True"/>
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Visibility, ElementName=Messages}" Value="Visible"/>
+                        <Condition Binding="{Binding HasAnyFilterEnabled}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="FilterBtn" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="FilterBtn" Property="IsEnabled" Value="False"/>
+                </MultiDataTrigger>
+                <DataTrigger Binding="{Binding LobbyBrowserState}" Value="Filters">
+                    <Setter TargetName="Filters" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="FiltersBackground" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="PrevTabBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="NextTabBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="MainList" Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding LobbyBrowserState}" Value="InviteCode">
+                    <Setter TargetName="InviteCode" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="PrevTabBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="NextTabBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="MainList" Property="IsEnabled" Value="False"/>
+
+                    <Setter TargetName="EnterInviteCodeBtn" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="EnterInviteCodeBtn" Property="IsEnabled" Value="True"/>
+                    <Setter TargetName="EnterInviteCodeBtn" Property="Tag" Value="{Binding Source='h1d83b83bgc793g4f82gbb5ege61c6fb28475', Converter={StaticResource TranslatedStringConverter}}"/>
+
+                    <Setter TargetName="SelectBtn" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="SelectBtn" Property="IsEnabled" Value="True"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsConnecting}" Value="True">
+                    <Setter TargetName="IsConnecting" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="LobbyBrowserBottomButtons" Property="Opacity" Value="0.7"/>
+                    <Setter TargetName="JoinSelectBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="RefreshBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="CreateBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="FilterBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="EnterInviteCodeBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="BackBtn" Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsJoiningLobby}" Value="True">
+                    <Setter TargetName="IsConnecting" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="LobbyBrowserBottomButtons" Property="Opacity" Value="0.7"/>
+                    <Setter TargetName="JoinSelectBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="RefreshBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="CreateBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="FilterBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="EnterInviteCodeBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="BackBtn" Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsXboxPlatform}" Value="True"/>
+                        <Condition Binding="{Binding IsRefreshing}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="BackBtn" Property="IsEnabled" Value="True"/>
+                </MultiDataTrigger>
+                <DataTrigger Binding="{Binding IsConsolePlatform, Mode=OneTime}" Value="True">
+                    <Setter TargetName="EnterInviteCodeBtn" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="EnterInviteCodeBtn" Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+    <b:Interaction.Triggers>
+        <b:EventTrigger EventName="FocusChanged">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+        <b:EventTrigger EventName="Loaded">
+            <ls:LSPlaySound Sound="Music_Lobby_Screen"/>
+        </b:EventTrigger>
+        <b:EventTrigger EventName="Unloaded">
+            <ls:LSPlaySound Sound="Music_Lobby_Screen_Off"/>
+        </b:EventTrigger>
+    </b:Interaction.Triggers>
+</ls:UIWidget>

@@ -1,0 +1,59 @@
+game.states.HAG_HagLair_Victim_003 = State{
+    function ()
+        modules = {"shared.dialog","shared.params"}
+
+        local HAG_HagLair_Victim_003Box
+        local HAG_HagLair_Victim_003Point
+        local cowerAnim
+        local HAG_HagLair_AD_Victim_003
+        local delayAD = 0
+        local HAG_Hag_SummonedVictims = Flag("HAG_Hag_SummonedVictims_755d8269-7864-b72c-f355-b00aa02cd17e")
+        local HAG_Hag_State_HagGivenMercy = Flag("HAG_Hag_State_HagGivenMercy_a3c0a36a-ccce-4f35-7b54-9ab22d6ac534")
+        local HAG_Hag_State_IsDead = Flag("HAG_Hag_State_IsDead_781391e2-7d33-642d-28c0-e9b06cde32bb")
+
+        self.OnInit = function()
+            HAG_HagLair_Victim_003Box = FindEntity("S_HAG_HagLair_Victim_003Box_1b3a41c1-31b4-4bf4-81b9-634c98185b1b")
+            HAG_HagLair_AD_Victim_003 = FindEntity("HAG_HagLair_AD_Victim_003_119d3bb1-f841-77ee-82b6-f669384f9a0f")
+            HAG_HagLair_Victim_003Point = FindEntity("S_HAG_HagLair_Victim_003Point a6335d9c-0f5b-40bc-951f-75a9911d7d75")
+
+            cowerAnim = Animation("STAT_Fear_Combat_01_Loop_bbf65b93-0377-4f38-9bf0-2bc064f41a13")
+
+            HAG_HagLair_AD_Victim_003 = Dialog("HAG_HagLair_AD_Victim_003_119d3bb1-f841-77ee-82b6-f669384f9a0f")
+        end
+
+        nodes.WaitForPlayer = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            CanEnter = function()
+                return GetFlag(HAG_Hag_SummonedVictims) or
+                       GetFlag(HAG_Hag_State_HagGivenMercy) or
+                       GetFlag(HAG_Hag_State_IsDead)
+            end
+        }
+
+
+        nodes.Cower = Action{
+            function()
+                DebugText(me, "Cowering")
+                LookFrom(HAG_HagLair_Victim_003Point)
+                PlayAnimation(cowerAnim, false, true)
+                if delayAD == 0 then
+                    if mod.dialog.IsSpeakerAvailable(me) and math.random() < 0.3 then
+                        delayAD = 12
+                        StartAutomatedDialog(HAG_HagLair_AD_Victim_003, true, me)
+                    end
+                else
+                    delayAD = delayAD - 1
+                    DebugText(me, "DelayAD [1]", tostring(delayAD))
+                end
+            end,
+            CanEnter = function()
+                return not GetFlag(HAG_Hag_SummonedVictims) and
+                       not GetFlag(HAG_Hag_State_HagGivenMercy) and
+                       not GetFlag(HAG_Hag_State_IsDead)
+            end
+        }
+
+    end
+}

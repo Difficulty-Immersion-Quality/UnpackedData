@@ -1,0 +1,81 @@
+game.states.LOW_EastwayWizards_WizardSide = State{function()
+    modules = {"shared.dialog","shared.util"}
+
+    description = [[For performance reasons we might disable Anubis completely on vignette characters.
+        This Anubis script must not keep any important state that can't be reinitialized once Anubis is reenabled]]
+
+    params.damageCantrip = {type = EParamType.String, required=false, default="Projectile_LOW_EastwayWizards_FireBolt", help=[[
+        Cantrip used to hit the target with.
+    ]]}
+
+    params.targetTrigger = {type = EParamType.String, required=true, help=[[
+        Box trigger in which the mage will seek targets to shoot with spells
+    ]]}
+
+    params.regionBlockFlag = {type = EParamType.String,  required=false, default="", help=[[
+        Blocks the ADs for the entire group of characters (prevents overlap)
+    ]]}
+
+    local regionBlockFlag = Flag(params.regionBlockFlag)
+    local castSpell
+    local targetTemplate, target, targetTrigger
+
+    helpers.Init = function()
+        targetTemplate = FindTemplate("Cat_MinorIllusion_a4d03902-0382-4f88-866d-3bb2225a69a3")
+        targetTrigger = Entity(params.targetTrigger)
+    end
+
+    self.OnLoaded = function()
+        helpers.Init()
+    end
+
+    nodes.Wait = Proxy {
+        game.states.GLO_VignetteParticipant,
+        Valid = function()
+            return (regionBlockFlag and
+            GetFlag(regionBlockFlag, nil)) or
+            castSpell == nil and target == nil
+        end
+    }
+
+    nodes.ShootTarget = Action {
+        function()
+            try
+                UseSpell(params.damageCantrip, Entity(target), nil, nil, nil, true, true, true)
+            catch e if ls.CheckType(e, error.UseSpellFailed) then
+                DebugText(me, "Failed to cast cantrip")
+            end
+            target = nil
+        end,
+        Valid = function()
+            return target ~= nil
+        end
+    }
+
+    nodes.CastSpells = Action {
+        function()
+            Sleep(1.0)
+            try
+                UseSpell(castSpell, me, me, nil, nil, true, true, true)
+            catch e if ls.CheckType(e, error.UseSpellFailed) then
+                DebugText(me, "Failed to cast " .. castSpell)
+            end
+            castSpell = nil
+        end,
+        Valid = function()
+            return castSpell ~= nil and target == nil
+        end
+    }
+
+    events.EntityEvent = function(e) 
+        if e.TargetEntity == me then
+            if e.Event == "LOW_EastwayWizards_WizardSide_CastSpell" then
+                castSpell = e.Params[1]
+            end
+            if e.Event == "LOW_EastwayWizards_WizardSide_TargetSpawned" then
+                target = e.Params[1]
+            end
+        end
+
+    end
+end}

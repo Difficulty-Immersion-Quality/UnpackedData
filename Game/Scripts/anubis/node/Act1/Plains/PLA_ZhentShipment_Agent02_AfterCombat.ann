@@ -1,0 +1,281 @@
+game.states.PLA_ZhentShipment_Agent02_AfterCombat = State { function ()
+    description = [[Behaviour for Olly Zhentarim agent after gnolls are gone.
+        Approaches dead gnolls and went betwen bodies, kicking/checking them, then sits near the chest resting.
+    ]]
+
+    modules = { "shared.math", "shared.dialog", "gustav.Act1.ZhentShipment" }
+
+    -- state vars
+    local needToReactToDeadAgent = false
+    local canKickGnolls = true
+    local canAD = false
+    local justAfterCombatActionPerformed = false
+    local moveToEndTriggerSucceed = false
+    local movedToDeadRugan = false
+    local firstCorpseInspectionDone = false
+    -- object vars
+    local deadGnoll = nil
+    local outsideCaveTrigger = nil
+    -- reference vars
+    local afterCombatWithGnollTrigger = nil
+    local otherAgent = nil
+    -- dialogs
+    local deadBodyReactionAD = Dialog("PLA_ZhentShipment_Olly_AD_AfterCombatReaction_9e7cce17-6b51-fde2-50de-9e69fc1c2bcf");
+    -- flags
+    local bothAgentsAliveFlag = Flag("PLA_ZhentShipment_State_BothAgentsAreAlive_d7404f8a-8101-90c1-3105-0b49cddf7e1f")
+    local agreedToHelpFlag = Flag("PLA_ZhentShipment_State_AgreedToHelpInBattle_185140b4-9dec-49d7-abad-e6e628cdf4cd")
+    local foughtWithGnollsFlag = Flag("PLA_ZhentShipment_State_JoinedFightWithGnolls_834c500f-8718-47b5-b320-8d37b2ad9b92")
+    local talkedAfterKilledGnollsFlag = Flag("PLA_ZhentShipment_State_TalkedAfterKilledGnolls_8c60be2a-fb0a-ec52-ca14-883cab378dc0")
+    -- anims
+    local sittingGroundAnim = Animation("CUST_SittingGround_01_84a7c4b0-e558-4dde-9408-01afe3b24a72")
+    local pokingGnollAnim = Animation("CUST_PokeFire_01_430ac587-588c-4200-a6ea-7113412d2cb3")
+    local kickGnollAnim = Animation("CUST_GroundKicking_01_cd29166e-3971-421a-b5d3-31b678c44277")
+    local kickGnollFastAnim = Animation("CUST_GroundKicking_02_75a83a5d-6843-4243-8e6e-5f67e9818be7")
+    local exhaustedAnim = Animation("CUST_CatchingBreath_01_44b024b3-4e93-4270-993d-41a21a2befe7")
+    local nervousAnim = Animation("CUST_Nervous_01_7f6248f6-1419-44d8-83f9-d4548475b665")
+    local observingAnim = Animation("CUST_Observing_01_02802050-bfcd-49e6-b052-f8039f99fe27")
+    local lootingAnim = Animation("CUST_Packing_02_85243b92-d545-4326-9438-3b3599317773")
+    local inspectingAnim = Animation("CUST_InspectingCorpse_01_88e057b6-22df-45a5-9074-1f5eb6e85892")
+
+    -----------------------------------------
+    -- helpers
+
+    self.OnInit = function()
+        otherAgent = FindEntity("S_PLA_ZhentShipment_Agent_001_fd9b4edd-7828-4e22-85a9-ead2ba9d29e4")
+        outsideCaveTrigger = FindEntity("S_PLA_ZhentShipment_AgentCombatPosition_df8f34a4-7201-4a54-b3a4-c3cd1f1761c1")
+        afterCombatWithGnollTrigger = FindEntity("S_PLA_ZhentShipment_Agent002EndPosition_9178f779-c5ce-47db-b6b9-5398a6805584")
+    end
+
+    -----------------------------------------
+    -- node section
+
+    nodes.WaitingForRugan = Action {
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not moveToEndTriggerSucceed and
+                not otherAgent.Character.IsDead and
+                IsInDialog(otherAgent, true)
+        end,
+    }
+
+    nodes.Active = Selector{
+        Valid = function()
+            return moveToEndTriggerSucceed or
+                otherAgent.Character.IsDead or
+                not IsInDialog(otherAgent, true)
+        end
+    }
+
+    nodes.Active.JustAfterCombat = Action{
+        function()
+            Sleep(1)
+            if not GetFlag(foughtWithGnollsFlag) and not GetFlag(talkedAfterKilledGnollsFlag) and GetFlag(bothAgentsAliveFlag) then
+                Sleep(2)
+                -- moving away from the cave to check what is going on
+                local validPos = FindValidPosition(outsideCaveTrigger, 6.0, me)
+                if validPos ~= nil then
+                    try
+                        MoveTo(validPos, MovementSpeed.Walk)
+                        PlayAnimation(observingAnim)
+                    catch ex if ls.CheckType(ex, error.MovementFailed) then
+                        DebugText(me, "MovementFailed")
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "PlayAnimationFailed (observingAnim)")
+                    end
+                end
+            else
+                try
+                    PlayAnimation(exhaustedAnim)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (exhaustedAnim)")
+                end
+            end
+            justAfterCombatActionPerformed = true
+        end,
+        Valid = function()
+            return not justAfterCombatActionPerformed
+        end
+    }
+
+    nodes.Active.DeadAgentReaction = Selector{
+        CanEnter = function()
+            return not GetFlag(bothAgentsAliveFlag) and justAfterCombatActionPerformed
+        end,
+        Valid = function()
+            return needToReactToDeadAgent
+        end
+    }
+
+    nodes.Active.DeadAgentReaction.FindOtherAgentBody = Action{
+        function()
+            try
+                local validPos = FindValidPosition(otherAgent.Position, 6.0, me)
+                if validPos ~= nil then
+                    MoveTo(validPos, MovementSpeed.Walk)
+                    movedToDeadRugan = true
+                end
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed")
+                Sleep(2)
+                needToReactToDeadAgent = false
+            end
+        end,
+        Valid = function()
+            return not movedToDeadRugan
+        end
+    }
+
+    nodes.Active.DeadAgentReaction.InteractWithAgentBody = Action{
+        function()
+            SteerTo(otherAgent)
+            if GetDistance2DTo(me, otherAgent) < 7 then
+                -- Play AD about dead Rugan
+                if mod.dialog.IsSpeakerAvailable(me) then
+                    StartAutomatedDialog(deadBodyReactionAD, true, me)
+                    Sleep(2)
+                end
+            end
+            needToReactToDeadAgent = false
+            canKickGnolls = false
+        end,
+        CanEnter = function()
+            return movedToDeadRugan
+        end
+    }
+
+    nodes.Active.MoveToDeadGnoll = Proxy{
+        game.states.PLA_ZhentShipment_MoveToDeadGnoll,
+        params = {
+            areaTrigger = "S_PLA_ZhentShipment_BodiesLootingArea_Outside_38d73202-fbcd-4d3a-92c0-a06b9ab353ce",
+            allowGnollTake = true,
+            isCycled = false
+        },
+        CanEnter = function()
+            return justAfterCombatActionPerformed and not needToReactToDeadAgent
+        end,
+        Valid = function()
+            return deadGnoll == nil and canKickGnolls
+        end
+    }
+
+    nodes.Active.KickingGnoll = Action{
+        function()
+            SteerTo(deadGnoll)
+            if GetDistance2DTo(me, deadGnoll) < 3 then
+                try
+                    if not firstCorpseInspectionDone then
+                        firstCorpseInspectionDone = true
+                        PlayAnimation(inspectingAnim)
+                        SteerTo(deadGnoll)
+                        Sleep(1)
+                        PlayAnimation(kickGnollFastAnim)
+                    else
+                        Sleep(mod.math.random(1, 2))
+                        local roll = math.random()
+                        if roll > 0.5 then
+                            PlayAnimation(kickGnollAnim)
+                        elseif roll > 0.2 then
+                            PlayAnimation(pokingGnollAnim)
+                        else
+                            PlayAnimation(lootingAnim)
+                        end
+                    end
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimation Fail (gnollInteraction)")
+                    Sleep(3)
+                end
+            else
+                try
+                    PlayAnimation(nervousAnim, false)
+                    Sleep(8)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimation Fail (nervousAnim)")
+                    Sleep(3)
+                end
+            end
+            deadGnoll = nil
+        end,
+        Valid = function()
+            return deadGnoll ~= nil and canKickGnolls
+        end
+    }
+
+    nodes.Active.MovingToRestPos = Action{
+        function()
+            try
+                PlayAnimation(exhaustedAnim)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (exhaustedAnim)")
+                Sleep(3)
+            end
+            try
+                MoveTo(afterCombatWithGnollTrigger, MovementSpeed.Stroll)
+                moveToEndTriggerSucceed = true
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+                Sleep(3)
+            end
+        end,
+        CanEnter = function()
+            return not canKickGnolls
+        end,
+        Valid = function()
+            return not moveToEndTriggerSucceed
+        end,
+    }
+
+    nodes.Active.Resting = Action{
+        function()
+            LookFrom(afterCombatWithGnollTrigger)
+            try
+                PlayAnimation(exhaustedAnim)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (sittingGroundAnim)")
+                Sleep(3)
+            end
+            Sleep(mod.math.random(2, 4))
+        end,
+        CanEnter = function()
+            return not canKickGnolls
+        end,
+        Valid = function()
+            return moveToEndTriggerSucceed
+        end,
+        OnLeave = function()
+            moveToEndTriggerSucceed = false
+            StopAnimation(me)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_ZhentShipment_Event_MoveToDeadBodyFinished" then
+                deadGnoll = e.Params[1]
+            elseif e.Event == "PLA_ZhentShipment_Event_CancelWaitingForDeadBody" then
+                canKickGnolls = false
+                deadGnoll = nil
+                DebugText(me, "PLA_ZhentShipment_Event_CancelWaitingForDeadBody")
+            end
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == bothAgentsAliveFlag.Guid then
+            needToReactToDeadAgent = true
+        end
+    end
+
+    -- timer is started in the main Agent behaviour
+    events.TimerFinished = function(e)
+        if e.TimerName == "PLA_ZhentShipment_Agent_ADTimer" then
+            if not IsInDialog(me, true) then
+                canAD = true
+            end
+        end
+    end
+end}

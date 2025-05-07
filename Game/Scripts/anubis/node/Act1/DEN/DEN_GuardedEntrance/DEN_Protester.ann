@@ -1,0 +1,469 @@
+game.states.DEN_Protester = State { function ()
+
+    description = [[Generic tiefling protesting near the sacred pond area]]
+
+    params.protestFleePoint = { type= EParamType.String, required = true, help = [[When scared by the bear, flee there for some seconds.]] }
+    params.protestFarState = { type= EParamType.State, required = false, help = [[After being scared, do this.]] }
+    params.kidSolvedState = { type= EParamType.State, required = false, help = [[Once the kid's situation is solved, move away.]] }
+    params.protestPoint = { type= EParamType.String, required = true, help = [[Will stand at this point protestPoint.]] }
+    params.animDelay = {type=EParamType.Int, required=false, default=1, help=[[Put a small number (sleep seconds), different for each npc]]}
+
+    local fledFlag = Flag("DEN_GuardedEntrance_Event_Shapeshift_648f475f-163d-c84b-8e53-10afd17fd4bf")
+    local protestAnim = Animation("CUST_Angry_01_5295fe1e-abec-4873-a09a-23ae6e895a63")
+    local protestPoint = Entity(params.protestPoint)
+    local pondLookAt = Entity("S_DEN_PondWaterfallLookAt_49694eaf-d608-4de5-9861-2086e169fc1e")
+    local snakeCourtDoneFlag = Flag("DEN_ShadowDruid_State_SnakesCourtDone_cf58dd01-e058-42b8-b1f1-976250296ce6")
+
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+
+    nodes.KidSolvedState = Proxy {
+        CanEnter = function()
+            return GetFlag(snakeCourtDoneFlag)
+        end,
+        params.kidSolvedState
+    }
+
+    nodes.ProtestFarState = Proxy {
+        CanEnter = function()
+            return GetFlag(fledFlag)
+                and not GetFlag(snakeCourtDoneFlag)
+        end,
+        params.protestFarState,
+        Valid = function()
+            return not GetFlag(snakeCourtDoneFlag)
+        end
+    }
+
+    -- Generic protesting behaviour
+    nodes.Protest = Action {
+        function()
+            if not IsInDangerousSurfaceFor(protestPoint, me.Character) then
+                if GetDistanceTo(me, protestPoint) > 2.0 then
+                    try
+                        StopAnimation(me)
+                        MoveTo(protestPoint)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(2.0)
+                    end
+                end
+            end
+            SteerTo(pondLookAt)
+            Sleep(params.animDelay + math.random(1, 6)) --trying to add some random so they don't animate all in sync
+            PlayAnimation(protestAnim, false, true)
+            Sleep(math.random(1, 5))
+        end
+    }
+
+end}
+
+game.states.DEN_Protester1_ADStarter = State { function ()
+
+    description = [[Generic tiefling protesting near the sacred pond area]]
+
+    modules = {"shared.dialog"}
+
+    local snakeCourtDoneFlag = Flag("DEN_ShadowDruid_State_SnakesCourtDone_cf58dd01-e058-42b8-b1f1-976250296ce6")
+    local protestAnim = Animation("CUST_Angry_01_5295fe1e-abec-4873-a09a-23ae6e895a63") --replaced when snakeCourtDoneFlag is set
+    local protestPoint = Entity("S_DEN_ProtestPoint_001_9be6e4b2-65dc-4ef8-814d-5f7b13d77ab8") --replaced when snakeCourtDoneFlag is set
+    local fledFlag = Flag("DEN_GuardedEntrance_Event_Shapeshift_648f475f-163d-c84b-8e53-10afd17fd4bf")
+    local AD = Dialog("DEN_GuardedEntrance_AD_Protesters_22214a4d-a6b3-8d4e-11ad-626086976908")
+    local canAD = true
+    local partner1 = Entity("S_DEN_Protester_002_5ba86ab9-b36e-468a-a0ac-0439c0ec205a")
+    local partner2 = Entity("S_DEN_Protester_003_650d1cdc-fff6-49f0-aaa2-0a10bcf89abf")
+    local parentA = Entity("S_DEN_ParentA_d6d88c8b-6ba7-4350-b3b3-d60565a44e90")
+
+    nodes.KidSolvedState = Proxy {
+        CanEnter = function()
+            return GetFlag(snakeCourtDoneFlag)
+        end,
+        game.states.DEN_Protester1_Looking
+    }
+
+    -- Generic protesting behaviour
+    nodes.Protest = Action{
+        function()
+            if not IsInDangerousSurfaceFor(protestPoint, me.Character) then
+                try
+                    MoveTo(protestPoint, MovementSpeed.Stroll)
+                    LookFrom(protestPoint)
+                    PlayAnimation(protestAnim, false, true)
+                    while not GetFlag(snakeCourtDoneFlag) do
+                        Sleep(3)
+                        if canAD
+                            and GetFlag(fledFlag)
+                            and not IsInDialog(me, false)
+                            and not IsInDialog(parentA, false) --never AD over the parents
+                            and mod.dialog.AreSpeakersAvailableAndNear(me, 10.0, true, false, false, {partner1, partner2})
+                            and not GetFlag(snakeCourtDoneFlag) then
+                                StartAutomatedDialog(AD, false, me, partner1, partner2)
+                                canAD = false
+                        end
+                    end
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                end
+            end
+            LookAtEntity(protestPoint, 3.0)
+            Sleep(2.0)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == AD.Guid) then
+            StopTimer(me, "DEN_Protesters_ADTimer")
+            StartTimer(me, "DEN_Protesters_ADTimer", 60, 0)
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == fledFlag.Guid then
+            protestPoint = Entity("S_DEN_ProtestFarPoint_001_bc914a9e-498c-4ae5-b97e-fcffd5450795")
+            protestAnim = Animation("CUST_Aggressive_02_f7f92745-6da2-4762-9a22-a35ae8d78dab")
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_Protesters_ADTimer" then
+            canAD = true
+        end
+    end
+
+end}
+
+game.states.DEN_Protester_PostProtest = State{function ()
+
+    description = [[There big scene is over, but they're still either wiating for the child to return, or chilling a bit further in the cave]]
+
+    params.trigger = {type = EParamType.String, help=[[The trigger at which the character stands.]]}
+    params.animation = {type = EParamType.String, help=[[Animation to loop on the trigger.]]}
+
+    local trigger = Entity(params.trigger)
+    local animation = Animation(params.animation)
+
+    nodes.StandAtTrigger = Action{
+        function()
+            if not IsInDangerousSurfaceFor(trigger, me.Character) then
+                try
+                    MoveTo(trigger, MovementSpeed.Stroll)
+                    LookFrom(trigger)
+                    PlayAnimation(animation, false, true)
+                    WaitForInterrupt()
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                end
+            end
+            LookAtEntity(trigger, 3.0)
+            Sleep(2.0)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+end}
+
+game.states.DEN_Protester1_Looking = State{function ()
+
+    description = [[The child is resolved, they are chilling a bit further in the cave]]
+
+    local waterfallPoint = Entity("S_DEN_Protester1CavePoint_001_1c3de539-cf4e-455d-84c8-2e509c4e87a6")
+    local grovePoint = Entity("S_DEN_Protester1CavePoint_002_c3fc0f17-9814-4b5a-a253-c4a0b128f405")
+    local currentPoint = Entity("S_DEN_Protester1CavePoint_002_c3fc0f17-9814-4b5a-a253-c4a0b128f405")
+    local anim = Animation("CUST_LookingFar_01_5643e3dc-9631-4dba-b303-128fc29abfa7")
+
+    helpers.NextPoint = function()
+        if currentPoint == grovePoint then
+            currentPoint = waterfallPoint
+        else
+            currentPoint = grovePoint
+        end
+    end
+
+    nodes.LookFar = Action {
+        function()
+            helpers.NextPoint()
+            Sleep(2)
+            for i = 1, 4 do
+                if GetDistance2DTo(me, currentPoint) > 1.5 then
+                    try
+                        MoveTo(currentPoint, MovementSpeed.Stroll)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(2.0)
+                    end
+                end
+                if (GetDistance2DTo(me, currentPoint) <= 1.5) then
+                    LookFrom(currentPoint)
+                    Sleep(math.random(1, 3))
+                    PlayAnimation(anim)
+                else
+                    Sleep(2)
+                end
+            end
+        end,
+    }
+end}
+
+
+game.states.DEN_Protester2_Sitting = State{function ()
+
+    local anim = Animation("CUST_Meditating_01_45b1a54b-b127-46d2-bfe6-daa8963398ea")
+    local trigger = Entity("S_DEN_Protester2_CavePoint_e1a16d32-3de0-49de-bf0e-904b6d8082c9")
+
+    nodes.Meditate = Action{
+        function()
+            if not IsInDangerousSurfaceFor(trigger, me.Character) then
+                try
+                    MoveTo(trigger, MovementSpeed.Stroll)
+                    LookFrom(trigger)
+                    PlayAnimation(anim, false, true)
+                    WaitForInterrupt()
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                end
+            end
+            LookAtEntity(trigger, 3.0)
+            Sleep(2.0)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+end}
+
+game.states.DEN_Protester3_Packing = State{function ()
+
+    description = [[The child is resolved, they are chilling a bit further in the cave]]
+
+    modules = {"shared.dialog"}
+
+    local lazyProtester = Entity("S_DEN_Protester_002_5ba86ab9-b36e-468a-a0ac-0439c0ec205a")
+    local lazySphere = Entity("S_DEN_Protest3JudgeSphere_72b19280-feb0-4f61-bb28-be22c8193698")
+    local lazyJudgeAnim = Animation("CUST_Angry_02_Loop_ecfb527c-591d-4501-9d81-0ef25a59ae10")
+    local points = {
+        Entity("S_DEN_Protester3CavePoint_001_3ea6abb9-5741-4b75-a3b1-54707dc53c84"),
+        Entity("S_DEN_Protester3CavePoint_002_026033f7-8fe5-4a4d-9c2e-990fbbe22f32"),
+        Entity("S_DEN_Protester3CavePoint_003_52036382-a3f5-4300-8540-bece5233b393"),
+    }
+    local anims = {
+        Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0"),
+        Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba"),
+    }
+    local currentAction = 3
+    local currentPoint = nil
+
+    helpers.NextPoint = function()
+        currentAction = currentAction + 1
+        if currentAction > #points then
+            currentAction = 1
+        end
+        currentPoint = points[currentAction]
+    end
+
+    helpers.action.JudgeLazy = function()
+        if (currentAction == 1)
+            and (math.random (1, 100) < 80)
+            and IsInTrigger(lazyProtester, lazySphere.Trigger)
+            and mod.dialog.IsSpeakerAvailable(lazyProtester, false) then
+                SteerTo(lazyProtester)
+                PlayAnimation(lazyJudgeAnim, false, true)
+                Sleep(math.random (6, 12))
+                StopAnimation(me)
+                return true
+        end
+        return false
+    end
+
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+
+    nodes.ExamineCart = Action {
+        function()
+            helpers.NextPoint()
+            Sleep(2)
+            for i = 1, 2 do
+                if GetDistance2DTo(me, currentPoint) > 1.5 then
+                    try
+                        MoveTo(currentPoint, MovementSpeed.Stroll)
+                        LookFrom(currentPoint)
+                        Sleep(math.random(2, 3))
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(2.0)
+                    end
+                end
+                if (GetDistance2DTo(me, currentPoint) <= 1.5) then
+                    if helpers.JudgeLazy() then
+                        break
+                    else
+                        LookFrom(currentPoint)
+                        PlayAnimation(anims[math.random(#anims)])
+                    end
+                end
+                Sleep(math.random(3, 5))
+            end
+        end,
+    }
+end}
+
+game.states.DEN_Protester_RitualStopped = State { function ()
+
+    modules = {"shared.moveto","shared.math","shared.dialog"}
+
+    description = [[Generic tiefling protesting near the sacred pond area, after the druid ritual is stopped]]
+
+    params.pacifiedPoint = { type= EParamType.String, required = true, help = [[Will stand at this point trigger when druids are pacified.]] }
+    params.movePoint = { type= EParamType.String, required = false, help = [[Occasionally moves to this point in the grove.]] }
+    params.Static = {type = EParamType.Bool, required = false, default=true, help=[[Does the character move around?]]}
+    params.moveAnimation = { type= EParamType.String, required = false, help = [[Animation done moving between ADs]] }
+    params.idleAnimation = { type= EParamType.String, required = false, help = [[Animation done waiting between ADs]] }
+
+    local movePoint
+    local pacifiedPoint
+    local ADPartner1 = Entity([[S_DEN_Protester_002_5ba86ab9-b36e-468a-a0ac-0439c0ec205a]])
+    local ADPartner2 = Entity([[S_DEN_Protester_003_650d1cdc-fff6-49f0-aaa2-0a10bcf89abf]])
+    local saidAD = false
+    local move = false
+    local canADFlag = Flag("DEN_SacredPond_State_ProtesterCanAD_dfa78ab7-cf39-4619-be33-71a6fbb4e07a")
+    local moveAnimation
+    local idleAnimation
+    local AD = Dialog("DEN_DruidAttack_AD_ProtestersAfterAttack_35b7a807-ea97-a326-5057-efefcf90585e")
+
+    self.OnInit = function()
+        if params.movePoint then
+            movePoint = Entity(params.movePoint)
+        end
+        if params.pacifiedPoint then
+            pacifiedPoint = Entity(params.pacifiedPoint)
+        end
+        if params.moveAnimation then
+            moveAnimation = Animation(params.moveAnimation)
+        end
+        if params.idleAnimation then
+            idleAnimation = Animation(params.idleAnimation)
+        end
+        if params.Static then
+            SetFlag(canADFlag,me)
+        end
+    end
+
+    nodes.GroveAD = Action {
+        function()
+            Sleep(20 + 12 * math.random())
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true
+                },
+                me,
+                ADPartner1,
+                ADPartner2
+            )
+        end,
+
+        Valid = function()
+            return GetFlag(canADFlag,me) and GetFlag(canADFlag,ADPartner1) and GetFlag(canADFlag,ADPartner2) and params.Static
+        end
+    }
+
+    nodes.StayStatic = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params = {
+            waitMin = 8,
+            moveTarget = params.pacifiedPoint,
+            lookFromMoveTarget = true,
+            waitMax = 12,
+        },
+        Valid = function()
+            return params.Static
+        end,
+    }
+
+    nodes.WanderGrove = Selector {
+        function(nodes)
+            if not saidAD then
+                return nodes.WaitToAD
+            elseif not move then
+                return nodes.TryMove
+            else
+                return nodes.Move
+            end
+        end
+    }
+
+    nodes.WanderGrove.WaitToAD = Action {
+        OnEnter = function()
+            StopTimer(me,"DEN_SacredGrove_NoDialogForceMove")
+            StartTimer(me, "DEN_SacredGrove_NoDialogForceMove", math.random(40,50), 0)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(pacifiedPoint,MovementSpeed.Stroll,me) then
+                if not GetFlag(canADFlag,me) then
+                    SetFlag(canADFlag,me)
+                end
+                LookFrom(pacifiedPoint)
+                Sleep(math.random(1.0,4.0))
+                PlayAnimation(idleAnimation,true,false)
+                Sleep(math.random(1.0,4.0))
+            end
+        end
+    }
+
+    nodes.WanderGrove.TryMove = Action {
+        function()
+            Sleep(math.random(5,12))
+            if (mod.math.CoinToss(0.75)) then
+               move = true
+            else
+                saidAD = false
+            end
+        end,
+    }
+
+    nodes.WanderGrove.Move = Action {
+        OnEnter = function()
+            saidAD = false
+            move = false
+        end,
+        function()
+            if mod.moveto.MoveToPoint(movePoint,MovementSpeed.Stroll,me) then
+                LookFrom(movePoint)
+                Sleep(2.0)
+                if (mod.math.CoinToss(0.5)) then
+                    PlayAnimation(moveAnimation,true,false)
+                else
+                    Sleep(math.random(10,15))
+                end
+            end
+        end
+    }
+
+    events.DialogStarted = function(e)
+        if e.Instance.DialogUUID == AD.Guid and not params.Static then
+            if GetFlag(canADFlag,me) then
+                StopTimer(me,"DEN_SacredGrove_NoDialogForceMove")
+            end
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == AD.Guid and not params.Static then
+            if GetFlag(canADFlag,me) then
+                ClearFlag(canADFlag,me)
+                saidAD = true
+                Interrupt()
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_SacredGrove_NoDialogForceMove" then
+            if GetFlag(canADFlag,me) then
+                ClearFlag(canADFlag,me)
+                saidAD = true
+                Interrupt()
+            end
+        end
+    end
+
+end}

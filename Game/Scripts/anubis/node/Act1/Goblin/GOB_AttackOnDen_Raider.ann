@@ -1,0 +1,199 @@
+game.states.GOB_AttackOnDen_Raiders = State { function ()
+
+    description = [[Parent state that sorts out the behaviours of the different raiders that go to Attack on Den.]]
+
+    modules = {"shared.util", "shared.moveto", "shared.math"}
+    ---------------------------------------------------
+    -- Params
+    
+    params.victoryPosition = {type = EParamType.String, required=false, default="", help =[[Position this character will initially move to when victory has been achieved in the Den.]]}
+    params.beforeLeaveState = {type=EParamType.State, required=false, default=nil, help=[[State this character will take before leaving the goblin camp.]]}
+    params.waitingAD = {type = EParamType.String, required=false, default="", help =[[AD this character attempts to play while gathered at the entrance of the Den]]}
+    params.leaveState = {type=EParamType.State, required=false, default=nil, help=[[State this character will take when leaving the goblin camp in order to raid the Den.]]}
+    params.denState = {type=EParamType.State, required=false, default=nil, help=[[State this character will take when victory has been achieved in the Den.]]}
+
+
+    ---------------------------------------------------
+    -- local vars
+    
+    local drowPosition = Entity("S_GOB_DrowLeavePos_d3fc3f03-0cf7-4f1d-930c-247ac08d654f")
+    local atGoblinCamp = true
+    local beforeLeaving = true
+    local drowLeaveSpeech = false
+    local atWaitingPos = false
+    local victoryPosition = Entity(params.victoryPosition)
+    local victoryAchieved = false
+    local waitingAD = nil
+    local initialWaitDelay = true
+    local cheerAnims =  { Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0"),
+                          Animation("CUST_Cheering_02_5e23b082-f75a-4daa-86e1-ab73ec6d30b7"),
+                          Animation("CUST_Cheering_03_34ac373e-2928-4d83-8427-13f34573c64a") }
+    local victoryFlag = Flag("DEN_AttackOnDen_State_Victorious_ebe2c997-93ae-93f2-7f11-34057122b19b") -- object flag
+    local autoWinFlag = Flag("DEN_AttackOnDen_Event_RaidersWinByDefault_e0f44496-90a3-46d1-a1c9-1fbe19ca7632") --global flag
+    local waitingFlag = Flag("GOB_DrowCommander_State_AboutToLeave_687a5a02-6e56-98a4-abb2-a4182ae25c1d") -- object flag
+
+
+    ---------------------------------------------------
+    --state nodes
+    
+    self.OnInit = function()
+        if(params.waitingAD ~= nil) then
+            waitingAD = Dialog(params.waitingAD)
+        end
+    end
+    
+    ---------------------------------------------------
+    -- nodes
+    
+    nodes.AtGoblinCamp = Selector{
+        Valid = function()
+            return atGoblinCamp
+        end
+    }
+
+    nodes.AtGoblinCamp.BeforeLeaving = Selector{
+        Valid = function()
+            return beforeLeaving
+        end
+    }
+
+    nodes.AtGoblinCamp.BeforeLeaving.Default = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return params.beforeLeaveState == nil
+        end
+    }
+
+    nodes.AtGoblinCamp.BeforeLeaving.Specific = Proxy{
+        params.beforeLeaveState,
+        Valid = function()
+            return params.beforeLeaveState ~= nil
+        end
+    }
+    
+    nodes.AtGoblinCamp.Leaving = Selector{
+        Valid = function()
+            return not beforeLeaving
+        end
+    }
+
+    nodes.AtGoblinCamp.Leaving.Waiting = Action{
+        function()
+            if(atWaitingPos) then
+                SteerTo(drowPosition)
+            end
+            mod.util.SleepRandom(4.0,22.0)
+            if(waitingAD ~= nil) then
+                StartAutomatedDialog(waitingAD, true, me)
+            end
+            Sleep(60)
+        end,
+        Valid = function()
+            return params.leaveState == nil
+        end
+    }
+
+    nodes.AtGoblinCamp.Leaving.Specific = Proxy{    --Remove when all raiders have behaviours.
+        params.leaveState,
+        Valid = function()
+            return params.leaveState ~= nil
+        end
+    }
+
+    nodes.AtDen = Selector{
+        Valid = function()
+            return not atGoblinCamp
+        end
+    }
+
+    nodes.AtDen.BeforeRaidVictory = Action{
+        function()
+            mod.util.SleepRandom(1, 12)
+            try
+                PlayAnimation(cheerAnims[math.random(#cheerAnims)], true)
+            catch e if ls.CheckType(ex, error.PlayAnimationFailed) then
+                WaitForInterrupt()
+            end
+            mod.util.SleepRandom(9, 15)
+        end,
+        Valid = function()
+            return not victoryAchieved
+        end
+    }
+
+    nodes.AtDen.AfterRaidVictory = Selector{
+        OnEnter = function()
+            SetWeaponUnsheathed(me, false, false)
+        end,
+        Valid = function()
+            return victoryAchieved
+        end
+    }
+
+    nodes.AtDen.AfterRaidVictory.Default = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return params.denState == nil and params.victoryPosition == ""
+        end
+    }
+
+    nodes.AtDen.AfterRaidVictory.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.victoryPosition
+        },
+        Valid = function()
+            return params.denState == nil and params.victoryPosition ~= ""
+        end
+    }
+
+    nodes.AtDen.AfterRaidVictory.Specific = Proxy{
+        params.denState,
+        Valid = function()
+            return params.denState ~= nil
+        end
+    }
+    
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "GOB_DrowCommander_LeftGoblinCamp" then
+            atGoblinCamp = false
+            beforeLeaving = false
+        elseif e.TargetEntity == me and e.Event == "GOB_DrowCommander_LeavingGoblinCamp" then
+            beforeLeaving = false
+        elseif e.TargetEntity == me and e.Event == "DEN_AttackOnDen_Victory" then
+            victoryAchieved = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == waitingFlag.Guid and e.Entity == me then
+            SetWeaponUnsheathed(me, true, true)
+            atWaitingPos = true
+        elseif e.Flag == autoWinFlag.Guid then
+            ClearPatrol()
+            StopAnimation(me)
+            Interrupt()
+            if(me.ForceUpdate == true) then
+                SetForceUpdate(me, false)
+            end
+            if(victoryPosition == nil) then
+                victoryPosition = FindEntity(params.victoryPosition)
+            end
+            if(victoryPosition ~= nil) then
+                TeleportTo(me, victoryPosition)
+            end
+            victoryAchieved = true
+            SetFlag(victoryFlag, me)
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == victoryFlag.Guid and e.Entity == me then
+            victoryAchieved = false
+        end
+    end
+end}

@@ -1,0 +1,48 @@
+game.states.WYR_Posthouse_Postmaster = State {
+
+    function()
+
+        modules = { "shared.math", "shared.dialog" }
+
+        local writeInBookDialog = Dialog("BHVR_WRLD_WYR_Posthouse_DanzoWritesInBook_64de45c7-cc7e-7370-d211-ab93b55485df")
+        local writeInBookTrigger = Entity("S_WYR_Posthouse_TimelineScene_PostmasterWriting_2ded282c-6f58-46ca-b42a-6a3625141c65")
+        local writeInBookBook = Entity("S_WYR_Posthouse_PostmastersBook_99558a9f-6442-42b0-a636-97be8acbe3d5")
+        local timeToWrite = true;
+
+        self.OnEnter = function()
+            helpers.ResetWriteDelay()
+        end
+
+        helpers.ResetWriteDelay = function()
+            StopTimer(me, "WYR_Posthouse_Postmaster_WriteTimer")
+            StartTimer(me, "WYR_Posthouse_Postmaster_WriteTimer", mod.math.random(10, 20), 0)
+            timeToWrite = false
+        end
+
+        events.TimerFinished = function(e)
+            if(e.TimerName == "WYR_Posthouse_Postmaster_WriteTimer") then
+                timeToWrite = true
+            end
+        end
+
+        nodes.WriteInBook = Action{
+            function()
+                Sleep(1.0)
+                DebugText(me, "Start writing")
+                StartBehaviorDialog(writeInBookDialog, writeInBookTrigger.Trigger, true, me)
+                helpers.ResetWriteDelay()
+            end,
+            Valid = function()
+                return timeToWrite
+            end
+        }
+
+        nodes.Stand = Proxy {
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = [[S_WYR_Posthouse_Postmaster_Point_08b44d08-56e6-4ae8-903e-44ac74d22480]]
+            }
+        }
+
+    end
+}

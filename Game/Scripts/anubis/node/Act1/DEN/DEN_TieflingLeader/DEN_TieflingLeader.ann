@@ -1,0 +1,577 @@
+game.states.DEN_TieflingLeader = State { function ()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    description = [[Zevlor's default state while he's in the DEN.]]
+
+    -----------------------------------------
+    -- local state section
+
+    ---- Raiding Party
+    local gateLookAt = Entity("S_DEN_OpenGateOutsidePos_768e43ba-7bda-4162-be4a-710775ecbf1f")
+    local goblinRaidOverFlag = Flag("DEN_RaidingParty_Quest_GoblinRaidOver_98712d90-c46b-20c4-c4df-02c0117e85a5")
+    local gateSleepIsDone = false
+
+    ---- Confrontation
+    local adventurerLeader = Entity("S_DEN_AdventurerLeader_82d1b843-9e8c-48a5-9d87-caddea5c193c")
+    local rantingToConfrontationAD = Dialog("DEN_RaidingParty_AD_TieflingLeaderRant_2716a593-bcf9-c91a-cb8a-bc33ab487cd7")
+    local arguingLeadersAD = Dialog("DEN_RaidingParty_AD_LeadersArgue_51b39284-b2ca-b037-042f-9bb6bcc3f822")
+    local adventurerIsReady = false
+    local meIsReady = false
+    local adventurerLeaderLeft = false
+
+    local confrontationLookAt = Entity("S_DEN_ConfrontationLookAt_8012202f-6143-4c3f-a482-8394325b8350")
+    local confrontationPos = Entity("S_DEN_ConfrontationPos_005_4843ba4e-3d05-4371-82f5-3bb6f32391a5")
+    local confrontationResolvedFlag = Flag("DEN_RaidingParty_Quest_ConfrontationResolved_dc97da68-5ed9-ffe2-7582-2533be0efbcd")
+    local knockedOutFlag = Flag("DEN_RaidingParty_Event_KnockOutTiefling_8d41adfe-8595-7ba0-fc0c-95ebb61f2fbf")
+    local aradinKOFlag = Flag("DEN_RaidingParty_Event_KnockOutAdventurer_802fa2ca-c3dd-ae55-dc06-2adfadaf9ac0")
+
+    ---- Den intro
+    local doWakingUp = false
+    local introArea = Entity("S_DEN_DenIntroArea_1f1e1858-3530-4235-bf95-32f1d22a9694")
+    local introPoint = Entity("S_DEN_DenIntroPoint_8ad7a3e5-9f17-4ec3-8693-03be2ca571a2")
+    local introAD = Dialog("DEN_TieflingLeader_AD_DenIntro_4de41d3a-88d0-af50-caa6-dd91db9af108")
+    local canDoIntroAD = true
+    local leaveEntranceFlag = Flag("DEN_TieflingLeader_Event_PostConfrontationDone_93acdb2c-7542-4e99-36cc-231cf7ae3be1")
+
+    ---- Cave, default
+    local caveSub = Entity("S_DEN_TieflingLeader_SUB_f667e6fe-2b30-4509-9bba-7918bb71a2a7")
+    local caveOutsidePoint = Entity("S_DEN_LeaderCavePoint_03f82037-c5ca-4cb6-a858-02c5cc6a52ff")
+    local caveMapPoint = Entity("S_DEN_LeaderCaveMapPoint_6bc6d195-3f02-4b3c-8cfc-0b118fd2706f")
+    local caveBookPoint = Entity("S_DEN_LeaderCaveBookPoint_3cd6c095-0af1-4d8f-aaf0-d4ece8e6d662")
+    local prisonGuard = Entity("S_DEN_PrisonGuard_3ff71f38-28e9-4e72-ba17-9f6d3bb2a995")
+
+    local soloAD = Dialog([[DEN_TieflingLeader_AD_20daba5e-fee2-1b6e-2d90-a95426669dcf]])
+    local ADWithGuard = Dialog("DEN_TieflingLeader_AD_WithGuard_43949c72-4e90-ff3e-615c-7a93674ec8ff")
+    local canAD = true
+    local movedToTalk = false
+
+    --default behaviour
+    local atCaveAD = Dialog("DEN_TieflingLeader_AD_20daba5e-fee2-1b6e-2d90-a95426669dcf")
+    local caveMapAnims = {
+        Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba"),
+        Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    }
+    local caveBookAnims = {
+        Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716"),
+        Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+    }
+    ---- Leaving Grove (Goblin Hunt completed)
+    local prepToLeaveFlag = Flag("GLO_TieflingRefugees_State_GoblinLeadershipIsDead_1e6a42ed-8313-4f46-57e2-20dbdb2df923")
+
+
+    -----------------------------------------
+    -- helper functions
+    helpers.ResetADDelay = function()
+        StopTimer(me, "DEN_TieflingLeader_ADTimer")
+        StartTimer(me, "DEN_TieflingLeader_ADTimer", math.random(50, 70), 0)
+        canAD = false
+    end
+
+    helpers.AradinIsKO = function()
+        return GetFlag(aradinKOFlag) and (not adventurerLeader.Character.IsDead) and (IsInTrigger(adventurerLeader, introArea.Trigger) and not(adventurerLeaderLeft))
+    end
+
+    helpers.action.AnimAtCavePoint = function(randLo,randHi,point,table)
+        local loopCount = math.random(randLo,randHi)
+        for i = 1, loopCount, 1 do
+            if mod.moveto.MoveToPoint(point,MovementSpeed.Stroll,me) then
+                LookFrom(point)
+                Sleep(math.random(1, 2))
+                try
+                    PlayAnimation(table[math.random(#table)],true,false)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    Sleep(1)
+                end
+            end
+        end
+        Sleep(math.random(1, 3))
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.PleaAtGate = Action {
+        function()
+            Sleep(1)
+            LookAtEntity(gateLookAt, 3.0)
+        end,
+        Valid = function()
+            return not GetFlag(goblinRaidOverFlag)
+        end
+    }
+
+    nodes.Confrontation = Selector {
+        Valid = function()
+            return
+                not adventurerLeader.Character.IsDead and
+                GetFlag(goblinRaidOverFlag) and
+                not GetFlag(confrontationResolvedFlag)
+        end
+    }
+
+    nodes.Confrontation.OpenTheGate = Action {
+        -- give some time to Zevlor to start his gate dialog before running off
+        function()
+            Sleep(3)
+            gateSleepIsDone = true
+        end,
+        Valid = function()
+            return not gateSleepIsDone
+        end,
+    }
+
+    nodes.Confrontation.MoveToConfrontation = Action {
+        function()
+            if not IsInDialog(me, false) then
+                StartAutomatedDialog(rantingToConfrontationAD, false, me)
+            end
+            if GetDistance2DTo(me, confrontationPos) > 4 then
+                mod.moveto.MoveTo(confrontationPos, 1, 4.0, "Run", "DEN_GoToConfrontation_MoveComplete") --true true
+            else
+                meIsReady = true
+            end
+            Sleep(1)
+        end,
+        Valid = function()
+            return not meIsReady
+        end,
+    }
+
+    nodes.Confrontation.Argue = Selector {
+        Valid = function()
+            return not adventurerIsReady
+        end
+    }
+
+    nodes.Confrontation.Argue.Wait = Action {
+        function()
+            if mod.moveto.MoveToPoint(confrontationPos,MovementSpeed.Run,me) then
+                SteerTo(adventurerLeader)
+            end
+            WaitForInterrupt()
+        end
+    }
+
+    nodes.Confrontation.ConfrontAdventurer = Action {
+        function()
+            if mod.moveto.MoveToPoint(confrontationPos,MovementSpeed.Run,me) then
+                SteerTo(adventurerLeader)
+            end
+            Sleep(5)
+            if not adventurerLeader.Character.IsDead and
+                not IsInDialog(adventurerLeader, true) and
+                CanSee(me, adventurerLeader) and
+                (GetDistance2DTo(me, adventurerLeader) < 20) then
+                    StartAutomatedDialog(arguingLeadersAD, false, me, adventurerLeader)
+                    Sleep(32)
+            end
+        end,
+    }
+
+    nodes.DenIntro = Selector {
+        Valid = function()
+            return not GetFlag(leaveEntranceFlag)
+        end
+    }
+
+    nodes.DenIntro.WakingUp = Action {
+        OnEnter = function()
+            helpers.ResetADDelay() --osiris plays an AD while Zevlor wakes up
+        end,
+        function()
+            Sleep(7)
+            doWakingUp = false
+        end,
+        Valid = function()
+            return
+                doWakingUp and
+                GetFlag(knockedOutFlag)
+        end
+    }
+
+    nodes.DenIntro.StandAtPoint = Action {
+        -- just standing there and looking at the pond, waiting to be talked to
+        function()
+            if not IsInTrigger(me,introArea.Trigger) then
+                --if Aradin died, Zevlor is still at his combat pos
+                mod.moveto.MoveTo(introArea, 1, 1.0, "Walk", "", 2.0, true, true) --Walk if far from the spot, Stroll if at the spot
+            else
+                local aradinIsKO = helpers.AradinIsKO()
+                local currentIntroPoint = nil
+                if aradinIsKO then
+                    currentIntroPoint = adventurerLeader
+                else
+                    currentIntroPoint = introPoint
+                end
+                if not IsInDangerousSurfaceFor(currentIntroPoint, me.Character) then
+                    if GetDistanceTo(me, currentIntroPoint) > 2.0 then
+                        try
+                            MoveTo(currentIntroPoint, MovementSpeed.Stroll, false, false, 0.5, 1.5)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            Sleep(2.0)
+                        end
+                    end
+                end
+                if aradinIsKO then
+                    SteerTo(currentIntroPoint, false, 5)
+                else
+                    LookFrom(introPoint)
+                end
+                Sleep(3)
+                if canDoIntroAD and not IsInDialog(me, false) then
+                    StartAutomatedDialog(introAD,true,me)
+                    canDoIntroAD = false
+                end
+            end
+        end
+    }
+
+    nodes.AtCave = Selector {
+        function(nodes)
+            local partnerIsAvailable = mod.dialog.IsSpeakerAvailable(prisonGuard)
+            if canAD and (movedToTalk or not partnerIsAvailable) then
+                return nodes.doAD
+            elseif canAD and partnerIsAvailable then
+                return nodes.moveToAndTalk
+            else
+                return nodes.Actions
+            end
+        end,
+        Valid = function()
+            return not GetFlag(prepToLeaveFlag)
+        end
+    }
+
+    nodes.AtCave.moveToAndTalk  = Proxy {
+        game.states.DEN_GeneralGroveStates_MoveToAndTalk,
+            params = {
+                moveTarget = "S_DEN_PrisonGuard_3ff71f38-28e9-4e72-ba17-9f6d3bb2a995",
+                lookTarget = "S_DEN_PrisonGuard_3ff71f38-28e9-4e72-ba17-9f6d3bb2a995"
+            }
+    }
+
+    nodes.AtCave.doAD = Action {
+        OnEnter = function()
+            movedToTalk = false
+            SetWeaponUnsheathed(prisonGuard, true)
+            SetEntityEvent(prisonGuard, "WaitOnDialogEnd", ADWithGuard.Guid)
+        end,
+        function()
+            if not IsInDialog(me, false) then 
+                if mod.dialog.IsSpeakerAvailableAndNear(prisonGuard, me, 10.0, true) then
+                    StartAutomatedDialog(ADWithGuard, true, me, prisonGuard)
+                else
+                    StartAutomatedDialog(soloAD, true, me)
+                end
+            end
+            Sleep(2)
+        end
+    }
+
+    nodes.AtCave.Actions = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.AtCave.Actions.InspectMaps = Action {
+        function()
+            helpers.AnimAtCavePoint(2,3,caveMapPoint,caveMapAnims)
+        end,
+    }
+
+    nodes.AtCave.Actions.ReadBook = Action {
+        function()
+            helpers.AnimAtCavePoint(1,2,caveBookPoint,caveBookAnims)
+        end,
+    }
+
+    nodes.Leaving = Action {
+        function()
+            --TODO: flesh this out
+            Sleep(5)
+            DebugText(me, "Preparing to leave the grove to go to Baldur's Gate")
+        end,
+        Valid = function()
+            return GetFlag(prepToLeaveFlag)
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.FlagSet = function(e)
+        if e.Flag == Guid("DEN_RaidingParty_Quest_GoblinRaidOver_98712d90-c46b-20c4-c4df-02c0117e85a5") then
+            SetUnicastEntityEvent(me, "ClearPeaceReturn")
+        elseif e.Flag == Guid("DEN_RaidingParty_Event_KnockOutTiefling_8d41adfe-8595-7ba0-fc0c-95ebb61f2fbf") then
+            doWakingUp = true
+        elseif e.Flag == Guid("DEN_TieflingLeader_Event_PostConfrontationDone_93acdb2c-7542-4e99-36cc-231cf7ae3be1") then
+            --this should go through the Grove state pipeline because Zevlor also move when the flag is set at the end of Goblin Hunt
+            if not GetFlag(Flag("DEN_AttackOnDen_Event_Start_c641da6a-b3f5-4873-bd34-c53768d30d6f")) then
+                mod.moveto.CancelMoveTo()
+                mod.moveto.MoveTo(caveOutsidePoint, 1, 4.0, "Walk", "DEN_TieflingLeader_Event_ArrivedToCave", 6.0, true, true)
+            end
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == adventurerLeader and e.Event == "DEN_GoToConfrontation_MoveComplete" then
+            adventurerIsReady = true
+        end
+        if e.TargetEntity == adventurerLeader and e.Event == "DEN_RaidingParty_LeaveDen" then
+            adventurerLeaderLeft = true
+            Interrupt()
+        end
+        if e.Event == "DEN_TieflingLeader_Event_ArrivedToCave" then
+            StopTimer(me, "DEN_TieflingLeader_ADTimer")
+            canAD = false
+            StartTimer(me, "DEN_TieflingLeader_DefaultADTimer", 30, 0)
+        elseif (e.Event == "DEN_MovedToTalk") then
+            movedToTalk = true
+        end
+    end
+
+    events.DialogEnded = function(e)
+        local uuid = e.Instance.DialogUUID
+        if (uuid == introAD.Guid) then
+            StopTimer(me, "DEN_TieflingLeader_IntroADTimer")
+            StartTimer(me, "DEN_TieflingLeader_IntroADTimer", math.random(15, 30), 0)
+        elseif (uuid == ADWithGuard.Guid) or (uuid == soloAD.Guid) then
+            canAD = false
+            StopTimer(me, "DEN_TieflingLeader_DefaultADTimer")
+            StartTimer(me, "DEN_TieflingLeader_DefaultADTimer", math.random(50, 70), 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_TieflingLeader_IntroADTimer" then
+            canDoIntroAD = true
+        elseif e.TimerName == "DEN_TieflingLeader_DefaultADTimer" then
+            canAD = true
+        end
+    end
+
+end}
+
+
+------------------------------------
+
+
+game.states.DEN_TieflingLeader_Victory = State { function ()
+
+    description = [[Zevlor's Victory state (after Goblin Hunt or Attack on Den)]]
+
+    local victoryPoint = Entity([[S_DEN_LeaderVictoryPos_04e4c483-3125-40bc-9bfe-e9bfa589b6d7]])
+    local victoryWaitPoint = Entity([[S_DEN_VictoryLeaderWaitPos_5e1be949-9a96-471c-b218-87f9fd67c064]])
+    local victoryLookAt = Entity([[S_DEN_DenIntroPoint_8ad7a3e5-9f17-4ec3-8693-03be2ca571a2]])
+    local victoryAD = Dialog([[DEN_TieflingLeader_AD_Victory_ca9a2333-5fe6-6f86-ef2f-9dab8dda58b7]])
+    local victoryCanAD = true
+    local goblinHuntVictoryFlag = Flag("DEN_Refugees_State_LeadersAreDead_1e6a42ed-8313-4f46-57e2-20dbdb2df923")
+    local metPlayerFlag = Flag("DEN_GoblinHunt_Event_LeaderMetPlayer_097d69b7-7e59-49ba-830a-b2b7f950aec7")
+
+    nodes.WaitingForPlayer = Action {
+        function()
+            if not IsInDangerousSurfaceFor(victoryWaitPoint, me.Character)
+                and (GetDistanceTo(me, victoryWaitPoint) > 2.0) then
+                    try
+                        MoveTo(victoryWaitPoint, MovementSpeed.Stroll, false, false, 0.5, 1.5)
+                        LookFrom(victoryWaitPoint)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        SteerTo(victoryWaitPoint)
+                        Sleep(6.0)
+                        return
+                    end
+            else
+                LookFrom(victoryWaitPoint)
+            end
+            Sleep(6.0)
+        end,
+        Valid = function()
+            return GetFlag(goblinHuntVictoryFlag) and not GetFlag(metPlayerFlag)
+        end
+    }
+
+    nodes.Victory = Action {
+        function()
+            if not IsInDangerousSurfaceFor(victoryPoint, me.Character)
+                and (GetDistanceTo(me, victoryPoint) > 2.0) then
+                    try
+                        MoveTo(victoryPoint, MovementSpeed.Stroll, false, false, 0.5, 1.5)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(6.0)
+                    end
+            else
+                Sleep(6.0)
+            end
+            SteerTo(victoryLookAt, false, 5)
+            Sleep(3)
+            if victoryCanAD and not IsInDialog(me, false) then
+                victoryCanAD = false
+                StartAutomatedDialog(victoryAD,true,me)
+            end
+        end
+    }
+
+    events.DialogEnded = function(e)
+        local uuid = e.Instance.DialogUUID
+        if (uuid == victoryAD.Guid)then
+            StopTimer(me, "DEN_TieflingLeader_VictoryADTimer")
+            StartTimer(me, "DEN_TieflingLeader_VictoryADTimer", math.random(50, 70), 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_TieflingLeader_VictoryADTimer" then
+            victoryCanAD = true
+        end
+    end
+
+
+end}
+
+game.states.DEN_PostDruidAttack_Leader = State {function ()
+    description = [[Making preparations in Zevlor's cave with him if he's alive.]]
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    local tieflingTrainer = Entity("S_DEN_Trainer_02025646-347a-4235-aef7-e46b7c94b435")
+
+    local caveMapPoint = Entity("S_DEN_LeaderCaveMapWithTrainerPoint_d1bf94b8-2010-483c-ba1f-5347f1fa8deb")
+    local caveBookPoint = Entity("S_DEN_LeaderCaveBookPoint_3cd6c095-0af1-4d8f-aaf0-d4ece8e6d662")
+
+    local planningAD = Dialog("DEN_DruidAttack_AD_LeadersPrepareAfterAttack_744573bc-3c30-30bb-c1a6-13e90aeb8891")
+
+    local atBooksFlag = Flag("DEN_DruidAttack_State_PostAttackAtBooks_7f071eb0-2817-1728-16bb-007e489d8a41")
+
+    local canADatBooks = true
+    local canAD = true
+
+    --Animations
+    local caveMapAnims = {
+        Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba"),
+        Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    }
+    local caveBookAnims = {
+        Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716"),
+        Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+    }
+
+    helpers.ResetADDelay = function(ADDelay)
+        StopTimer(me, "DEN_PostDruidAttack_PlanningADTimer")
+        StartTimer(me, "DEN_PostDruidAttack_PlanningADTimer", ADDelay, 0)
+        canAD = false
+    end
+
+    helpers.ResetADatBooksDelay = function(ADDelay)
+        StopTimer(me, "DEN_PostDruidAttack_BooksADTimer")
+        StartTimer(me, "DEN_PostDruidAttack_BooksADTimer", ADDelay, 0)
+        canADatBooks = false
+    end
+
+    helpers.action.AnimAtCavePoint = function(randLo,randHi,point,table)
+        local loopCount = math.random(randLo,randHi)
+        for i = 1, loopCount, 1 do
+            if mod.moveto.MoveToPoint(point,MovementSpeed.Stroll, me) then
+                LookFrom(point)
+                Sleep(math.random(1, 2))
+                try
+                    PlayAnimation(table[math.random(#table)], true, false)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    Sleep(1)
+                end
+                if(not IsInDialog(me, true) and GetFlag(atBooksFlag, me) and canADatBooks and  mod.dialog.IsSpeakerAvailable(tieflingTrainer)) then
+                    StartAutomatedDialog(planningAD, false, me, tieflingTrainer)
+                    helpers.ResetADDelay(30)
+                elseif(not IsInDialog(me, true) and not GetFlag(atBooksFlag, me) and canAD and mod.dialog.IsSpeakerAvailable(tieflingTrainer)) then
+                    StartAutomatedDialog(planningAD, false, me, tieflingTrainer)
+                    helpers.ResetADatBooksDelay(90)
+                end
+            end
+        end
+        Sleep(math.random(1, 3))
+    end
+
+    nodes.IsLeader = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+    }
+
+    nodes.IsLeader.CheckMaps = Action {
+        function()
+            helpers.AnimAtCavePoint(3, 4, caveMapPoint, caveMapAnims)
+        end
+    }
+
+    nodes.IsLeader.CheckBooks = Action {
+        OnEnter = function()
+            SetFlag(atBooksFlag, me)
+        end,
+        function()
+            helpers.AnimAtCavePoint(1, 1, caveBookPoint, caveBookAnims)
+        end,
+        OnLeave = function()
+            ClearFlag(atBooksFlag, me)
+        end
+    }
+
+    events.Died = function (e)
+        if (e.Target == tieflingTrainer) then
+            caveMapPoint = Entity("S_DEN_LeaderCaveMapPoint_6bc6d195-3f02-4b3c-8cfc-0b118fd2706f")
+        end
+    end
+end}
+
+game.states.DEN_PleaCombat = State{ function()
+
+    -- Flags
+    local fightOver = Flag("DEN_RaidingParty_Quest_GoblinRaidOver_98712d90-c46b-20c4-c4df-02c0117e85a5")
+
+    -- ADs
+    local useHornDialog = Dialog("BHVR_WRLD_DEN_BlowHorn_9d1528f0-eb0b-430e-64ec-e100f7446f26")
+
+    -- Behaviour Entities
+    local hornPos = Entity("S_DEN_HornPos_db5e93a2-5f8e-473a-b49d-f301eb9b891c")
+    local battleHorn = Entity("S_DEN_BattleHorn_baf1a4c5-b6f9-48c2-908d-164b967655d5")
+    local battleHornBehaviourTrigger = Entity("BHVR_WRLD_DEN_BlowHorn_SceneTrigger_7428af37-618d-42b9-9813-afcb13b8e206")
+   
+    --Bools
+
+    local usedHorn = false
+
+    self.CanEnter = function()
+        return  me.CanActInCombatTeamTurn and
+                not usedHorn and
+                not GetFlag(fightOver)
+    end
+
+    nodes.BlowHorn = Action {
+        function()
+            try
+                if(not HasActiveStatus(battleHorn, "SILENCED")) then
+                    MoveTo(hornPos, MovementSpeed.Run)
+                    SetEntityEvent(me, "DEN_RaidingParty_ZevlorUsedHorn")
+                    StartBehaviorDialog(useHornDialog, battleHornBehaviourTrigger.Trigger, true, me, battleHorn)
+                end
+            catch e if  ls.CheckType(e, error.MovementFailed) or
+                        ls.CheckType(e, error.UseItemFailed) then
+                DebugText(me, "MOVEMENT//USE FAILED")
+                Sleep(1.0)
+                usedHorn = true
+            end
+            usedHorn = true
+        end,
+    }
+
+    events.LeftCombat = function()
+        if GetFlag(fightOver) then
+            SetUnicastEntityEvent(me, "ClearPeaceReturn")
+        end
+    end
+end}

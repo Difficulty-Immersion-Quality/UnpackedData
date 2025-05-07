@@ -1,0 +1,173 @@
+game.states.HAV_TieflingSurvivors_Mol = State {function ()
+
+    modules = { "shared.moveto" }
+
+    description = [[Behaviour of Mol in Haven]]
+
+    local tr_VouchPoint = Entity("S_HAV_EnteringHaven_MolPoint_9052d5fa-fd15-4fae-9faf-3f25544f99da")
+    local idlePoint = Entity("S_HAV_TieflingSurvivors_MolDefaultPosition_3d1d1de8-4dd6-48c8-a2c1-e12c16db56a6")
+    local idleLookAt = Entity("S_HAV_TieflingSurvivors_MolDefaultPosition_LookAt_95504592-5db9-4dfa-8b14-d38200685209")
+    local lanceBoardPoint = Entity("S_HAV_MolsDeal_MolSpot_Lanceboard_e4516c3a-4649-4d8c-b46c-820ad96808f1")
+    local lanceBoard = Entity("S_HAV_MolsDeal_Lanceboard_f85b214b-9669-4e6b-99c8-588b5d82cd19") -- the board itself
+    local tookBoard = false -- indicates whether she took the lanceboard already, so that she doesn't try to take it again if it leaves her inventory
+        
+    local takeBoardAD = Dialog("HAV_MolsDeal_AD_NoticedStolenBoard_d54073d0-64dd-71da-398b-69e70570a81c") 
+  
+    local fl_EnterPermission = Flag("HAV_EnteringHaven_State_GainedAccess_07c776da-353a-9050-e9be-c42d51a99412")    
+    local finishedGame = Flag("HAV_MolsDeal_Event_FinishedGame_eadeec6e-e1ea-3aaf-6800-c92f904a9abe") -- set in dialog, indicates that game is finished
+    local havenHostile = Flag("HAV_General_State_IsHostileToPlayers_3cd1e3a7-6a9a-6558-a9f2-8db69824869b")
+    local movingToBoardStateFlag = Flag("HAV_MolsDeal_Mol_State_MovingToBoard_4dd8c25a-e8b3-4e31-be55-973fc52d10c4")
+    local playingGameStateFlag = Flag("HAV_MolsDeal_Mol_State_PlayingGame_175c745c-036b-4211-85c9-351b8c0936d0")
+    local postGameStateFlag = Flag("HAV_MolsDeal_Mol_State_PostGame_aabe4bf0-5496-4e0b-b35e-ea396a9559c1")
+    local monitorReadyToTalk = Flag("HAV_MolsDeal_State_RaphaelReadyForDialog_55a4441d-28cf-4c9c-a612-6fbf76d6d53b")
+
+    local lanceboardAnimStart = Animation("CUST_PlayLanceBoard_01_Start_fcc00260-4b6c-45cc-ba51-638c8ee21959")
+    local lanceboardAnimLoop = Animation("CUST_PlayLanceBoard_01_Loop_7811e4d3-7fb6-4217-aec2-4710c3fe6552")
+    local lanceboardAnimEnd = Animation("CUST_PlayLanceBoard_01_End_c17e8e76-947f-4b93-82ec-32a5f6932693")
+
+    nodes.EnteringHaven_Voucher = Action{
+        Valid = function()
+            return not GetFlag(fl_EnterPermission) and not GetFlag(movingToBoardStateFlag)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(tr_VouchPoint, MovementSpeed.Walk, me, 0.5) then
+                LookFrom(tr_VouchPoint)
+                Sleep(3.0)
+            end            
+            Sleep(4.0)
+        end
+    }
+
+    nodes.MovingToBoard = Action{
+        Valid = function()
+            return GetFlag(movingToBoardStateFlag)
+        end,
+        function()            
+            if GetDistanceTo(me, lanceBoardPoint) > 2 then
+                if not IsInDangerousSurfaceFor(lanceBoardPoint, me.Character) then
+                    local moveResult = MoveTo(lanceBoardPoint, MovementSpeed.Walk, true, true, 2.0, 3.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        Sleep(3.0)
+                    end
+                else
+                    Sleep(6.0)
+                end
+            else
+                SetEntityEvent(me, "HAV_MolsDeal_ReachedLanceboard") -- Sends event to Osiris
+                Sleep(2.0)
+            end               
+        end
+    }
+
+    nodes.PlayingGame_Sitting = Action{
+        Valid = function()
+            return GetFlag(playingGameStateFlag) and me.IsReposedSitting
+        end,
+        function()
+            --DebugText(me,"Play animation")
+            try
+                PlayLoopingAnimation(nil,{lanceboardAnimLoop},nil,false)
+            catch e then
+                DebugText(me, tostring(e))
+            end
+            Sleep(2.0)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.PlayingGame = Proxy{
+        game.states.Sit,
+        params = {
+            seat = "S_HAV_MolsDeal_LanceboardChair_1_8cca0090-625b-4453-82f7-52b938e3f421",
+            sitIdle = StateRef{game.states.HAV_TieflingSurvivors_Mol_WhileSitting},
+            nonSitIdle = StateRef{game.states.HAV_MolsDeal_CantSitFallback},
+        },
+        Valid = function()
+            return GetFlag(playingGameStateFlag)
+        end
+    }
+
+    nodes.PlayingGame_TakeBoard = Action{
+        CanEnter = function()
+            return not tookBoard and GetFlag(finishedGame)
+        end,
+        function()      
+            if lanceBoard.OnStage and
+                not lanceBoard.Item.IsDestroyed and
+                not lanceBoard.Item.IsInInventory and
+                lanceBoard.Item.CanPickUp and
+                GetDistance2DTo(me, lanceBoard) < 5.0
+            then
+                try
+                    PickUpItem(lanceBoard)
+                    tookBoard = true  
+                catch e if ls.CheckType(e, error.MovementFailed) or ls.CheckType(e, error.PickUpItemFailed) then
+                    Sleep(3)
+                    SetEntityEvent(me, "Pickup failed")
+                end
+            else
+                Sleep(1)
+                StartAutomatedDialog(takeBoardAD, true, me)
+                tookBoard = true
+            end          
+        end
+    }
+
+    nodes.HavenIdle = Action {
+        Valid = function()
+            return GetFlag(postGameStateFlag)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(idlePoint, MovementSpeed.Walk, me, 0.5) then
+                LookAtEntity(idleLookAt, 1.0)
+                Sleep(3.0)
+            end
+            Sleep(4.0)
+        end
+    }
+end}
+
+game.states.HAV_TieflingSurvivors_Mol_WhileSitting = State { function()
+
+    modules = {"shared.dialog"}
+
+    local Raphael = Entity("S_GLO_Monitor_f65becd6-5cd7-4c88-b85e-6dd06b60f7b8")
+    local AD = Dialog("HAV_MolsDeal_Lanceboard_AD_4aa9f87e-968d-a4e2-3f1f-4ac1cd267b63")    
+    local monitorReadyToTalk = Flag("HAV_MolsDeal_State_RaphaelReadyForDialog_55a4441d-28cf-4c9c-a612-6fbf76d6d53b")
+
+    nodes.TalkToRaphael = Action{
+        function()            
+            Sleep(2.0)
+            if GetFlag(monitorReadyToTalk) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 16.0
+                    },
+                    me,
+                    Raphael
+                )
+                ClearFlag(monitorReadyToTalk)
+            end
+        end        
+    }
+end}
+
+game.states.HAV_MolsDeal_CantSitFallback = State { function()
+
+    local failedToUseSeatSent = false
+
+    nodes.PlayingGame = Action {
+        function()
+            if not failedToUseSeatSent then
+                SetEntityEvent(me, "HAV_MolsDeal_Event_FailedToUseSeat")
+                failedToUseSeatSent = true
+            end
+            WaitForInterrupt()
+        end
+    }
+end}

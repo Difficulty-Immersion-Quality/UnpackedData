@@ -1,0 +1,99 @@
+game.states.SCL_MastiffPoachers_TorchDuty = State{function()
+    description = [[Maintain torches to protect the poachers from the curse]]
+    modules = {"shared.util"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local torchItems = {}
+    local torchDestination
+    local helpingPoachersFlag = Flag("SCL_MastiffPoachers_State_HelpingPoachers_948ff7c5-64ca-4b47-83c6-1960879227fa")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    self.OnInit = function()
+        torchItems = {  Entity("S_SCL_PoachersTorch01_0f948dfc-cc51-42a6-824b-4a34f6839241"),
+                        Entity("S_SCL_PoachersTorch02_6f8e23d2-a706-49b2-9c86-53ac6a003616"),
+                        Entity("S_SCL_PoachersTorch03_3cd4a92d-d830-473e-9b7c-9b5f21a8bfcb"),
+                        Entity("S_SCL_PoachersTorch04_01a2bee3-feb7-48f4-b09a-55b88c4eb87a"),
+                        Entity("S_SCL_PoachersTorch05_6072e164-4f78-418c-b856-cc452b018df7"),
+                        Entity("S_SCL_PoachersTorch06_a231ca3c-c04a-45b0-9f8d-32a783d8065b"),
+                    }
+    end
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action - If all lights are off or you offer to help, prepare weapons and play cowering animation
+    nodes.Action_TakePosition = Action{
+        CanEnter = function()
+            return GetFlag(helpingPoachersFlag)
+        end,
+
+        function()
+            Sleep(2.0)
+            WaitForInterrupt()
+        end
+    }
+    -- Action - If a torch is unlit, run to the nearest unlit torch and interact with it
+
+    -- Action - Patrol between torches at random-ish
+    nodes.Action_PatrolTorches = Action{
+        function()
+            local index
+            local distance
+            Sleep(3.0)
+            mod.util.SleepRandom(0.5, 2.0)
+            if #torchItems > 0 then
+                index = math.random(#torchItems)
+                SetEntityEvent(me, "SCL_MastiffPoachers_ReserveTorch", index)
+                Sleep (0.1)
+                distance = GetDistanceTo(me, torchDestination)
+                if distance > 3.0 then
+                    MoveTo(torchDestination)
+                end
+                DebugText(me, "Torch checking animation")
+                Sleep(3.0)
+            else
+                Sleep(2.0)
+            end
+        end,
+
+        OnFinished = function()
+            if torchDestination then
+                SetEntityEvent(me, "SCL_MastiffPoachers_FreeTorch", torchDestination)
+            end
+            torchDestination = nil
+        end
+    }
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+
+    events.EntityEvent = function(ev)
+        if (ev.Event == "SCL_MastiffPoachers_ReserveTorch") then
+            if ev.TargetEntity == me then
+                torchDestination = table.remove(torchItems, ev.Params[1])
+            else
+                table.remove(torchItems, ev.Params[1])
+            end
+        elseif (ev.Event == "SCL_MastiffPoachers_FreeTorch") then
+            table.insert(torchItems, ev.Params[1])
+        end
+    end
+
+    -- Event - all lights are off
+    ------------------------------------------------
+
+end
+}

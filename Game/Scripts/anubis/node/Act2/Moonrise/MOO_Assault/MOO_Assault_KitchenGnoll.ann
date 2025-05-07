@@ -1,0 +1,64 @@
+game.states.MOO_Assault_KitchenGnoll = State{function ()
+    description = [[Behaviour for the Gnolls during the assault]]
+
+    modules = { "shared.moveto" }
+
+    params.AfterAssaultPos = { type = EParamType.String, required = false, help = [[Where the Gnoll will primarly stand after main floor combat is over.]] }
+
+    local mainFloorFinishedFlag = Flag("MOO_Assault_State_MainFloorEnemiesDefeated_1016055f-387a-4564-b3f9-cac9d2735b9d")
+    local afterAssaultPos = Entity(params.AfterAssaultPos)
+    local deadCharacterTable = {}
+    local targetDeadCharacter
+    local eatingCorpseAnim = Animation("CUST_EatingCorpse_01_ea42da9e-15b5-4404-8fe2-9c0080b019c9")
+
+    helpers.action.FindDeadCharacters = function()
+        deadCharacterTable = GetActiveCharacters(me, 12)
+        if #deadCharacterTable > 0 then
+            for i = #deadCharacterTable, 1, -1 do
+                if deadCharacterTable[i].Character.IsDead ~= true then
+                    table.remove(deadCharacterTable, i)
+                end
+            end
+        end
+    end
+
+    nodes.WaitAndEatDead = Action {
+        CanEnter = function()
+            return GetFlag(mainFloorFinishedFlag)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(afterAssaultPos,  MovementSpeed.Walk, me) then
+                Sleep(6 + 8.0 * math.random())
+                helpers.FindDeadCharacters()
+                local targetDeadCharacter = deadCharacterTable[math.random(1, #deadCharacterTable)]
+                if  targetDeadCharacter ~= nil then
+                    if mod.moveto.MoveToPoint(targetDeadCharacter, MovementSpeed.Walk, me) then
+                        SteerTo(targetDeadCharacter)
+                        PlayAnimation(eatingCorpseAnim, false, true)
+                        Sleep(9.25)
+                        StopAnimation(me)
+                        Sleep(2 + 3 * math.random())
+                    end
+                else
+                    Wander(8.0, 10.0, MovementSpeed.Stroll, afterAssaultPos)
+                    Sleep(12 + 8.0 * math.random())
+                end
+            else
+                SteerTo(afterAssaultPos)
+                Sleep(6.0)
+                Wander(8.0, 10.0, MovementSpeed.Stroll, afterAssaultPos)
+            end
+            Sleep(1)
+        end
+    }
+
+    nodes.AssaultIdle = Proxy {
+        game.states.MOO_Assault_CombatReadyIdle,
+        params = {
+            IsCombatIdleAnim = false,
+        }
+    }
+
+end
+}

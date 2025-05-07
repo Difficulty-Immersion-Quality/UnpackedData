@@ -1,0 +1,174 @@
+game.states.WYR_RefugeeCamp_FlamingFistManip = State { function ()
+    description = [[ A behaviour for the flaming fist manip guarding the Big Barn. ]]
+
+    modules = { "shared.moveto", "shared.character", "shared.dialog", "shared.math", "shared.items" }
+
+    local agreedInvestigateFlag = Flag("WYR_RefugeeCamp_State_ManipAgreedInvestigate_ae6869c2-8b25-6b6e-ed00-87ce770cf5fd")
+    local alertedFlag = Flag("WYR_RefugeeCamp_State_GuardsAlerted_2ef42687-4116-4ddb-96b1-dedb0c7c1704")    
+    local nearToysCharFlag = Flag("WYR_RefugeeCamp_FlamingFistManip_State_NearToys_feb33d83-f430-ef2f-187d-36e8ad914052")
+    local afterInvestigationFlag = Flag("WYR_RefugeeCamp_FlamingFistManip_State_OutsideAfterInvestigation_a4e1ef7a-9c22-42e6-bf29-e3d4a1431599")
+    local foundToysFlag = Flag("WYR_RefugeeCamp_State_FoundTrappedToys_c132806f-00ab-955d-9338-348663af1712")
+    local forceInterrogateFlag = Flag("WYR_RefugeeCamp_Event_ManipForceInterrogate_635db5a0-b2f4-7598-1ed9-380eb7688a1c")
+    local toysInvestigatedFlag = Flag("WYR_RefugeeCamp_State_ManipInvestigatedToys_f8dc3fc7-744f-575b-b0a4-b90beafb3a70")
+
+    local defaultPosTrigger = Entity("S_WYR_RefugeeCamp_FlamingFistManip_DefaultPos_e58de1d7-192e-4aea-9ee7-f8ed22a1112c") 
+    local barnPosTrigger = Entity("S_WYR_RefugeeCamp_FlamingFistManip_GainedAccessPos_0849177a-5475-4fd1-ab16-d8a119d7fcfe")
+    local toysPosTrigger = Entity("S_WYR_RefugeeCamp_FlamingFistManip_ToysPos_0c7c5c94-fb33-403a-a07d-3828f2b109ed")    
+    local trespassOutBarnTrigger = Entity("S_WYR_RefugeeCamp_BigBarnTrespassOutPos_Inside_aaeee370-87b7-4fe5-82b2-40263fbfdbef")
+    
+    local sceneTrigger = Entity("BHVR_WRLD_GLO_WritingOnBook_Table_DWR_M_SceneTrigger_f5753e0d-8001-4b54-b84a-2e81263a4931")
+    local writingTableBehavior = Dialog("BHVR_WRLD_GLO_WritingOnBook_Table_DWR_M_c0d3d7db-1733-18ac-8f22-b2b5de0da798")
+    local behaviourBook = Entity("S_WYR_BigBarn_DonationRecord_7123fb6a-e295-4c4c-a149-36e86d668232")
+    local bookPos = Entity("S_WYR_RefugeeCamp_FlamingFistManip_BookPos_f3bf4734-0844-4ee5-a8fb-f2482efa66d4")
+
+    local forceInterrogates = false
+    
+    local manipAndFistAD = Dialog("WYR_RefugeeCamp_AD_ManipAndFist005_3f9f54e0-2c35-15f3-62bf-77b772171e4a")
+    local fist005 = Entity("S_WYR_RefugeeCamp_FlamingFist_005_ea3260b0-3e43-4742-ad3e-b570807bc802")
+    local talkedToFist = false
+    local talkingToFist = false
+
+    -- Post-toys investigation dialog
+    nodes.LeftInvestigationScene = Proxy {
+        game.states.WYR_ADInTrigger,
+        params = {
+            AD = "WYR_RefugeeCamp_AD_FlamingFistManip_GivesInstructions_662f16e1-8623-c8ae-c579-a6330d6f8c2e",
+            minDelay = 8,
+            trigger = "S_WYR_RefugeeCamp_FlamingFistManip_AfterInvestigationPos_fdaeb978-b805-4642-b675-694c446dc3f9"
+        },
+        Valid = function()
+            return GetFlag(afterInvestigationFlag)
+        end
+    }
+
+    nodes.AfterInvestigation = Proxy {
+        game.states.WYR_ADInTrigger,
+        params = {
+            AD = "WYR_RefugeeCamp_AD_FlamingFistManip_AfterToys_30d9a14e-c6a5-1984-b66a-b5da6033bc60",
+            minDelay = 7,
+            trigger = "S_WYR_RefugeeCamp_FlamingFistManip_ToysPos_0c7c5c94-fb33-403a-a07d-3828f2b109ed"
+        },
+        Valid = function()
+            return GetFlag(toysInvestigatedFlag) and 
+                (not GetFlag(afterInvestigationFlag) or IsInDialog(me, false))
+        end
+    }
+
+    -- Alerted state after the player touches the toys
+    nodes.Alerted = Selector {
+        Valid = function()
+            return 
+                GetFlag(alertedFlag) and 
+                not GetFlag(toysInvestigatedFlag)
+        end
+    }
+
+    nodes.Alerted.ForceInterrogateInside = Action {
+        function()
+            if mod.moveto.MoveToPoint(trespassOutBarnTrigger, MovementSpeed.Sprint, me) then
+                LookFrom(trespassOutBarnTrigger)
+            end
+        end,
+        Valid = function()
+            return forceInterrogates
+        end
+    }
+
+    nodes.Alerted.RunToToysAlerted = Action {
+        function()
+            if mod.moveto.MoveToPoint(toysPosTrigger, MovementSpeed.Sprint, me) then
+                LookFrom(toysPosTrigger)
+            end
+        end,
+        Valid = function()
+            return not forceInterrogates
+        end
+    }
+
+    -- Player persuaded manip to investigate the barn together
+    nodes.CalmInsideBarn = Selector{
+        Valid = function()
+            return 
+                GetFlag(agreedInvestigateFlag) and 
+                not GetFlag(alertedFlag) and 
+                not GetFlag(toysInvestigatedFlag)
+        end
+    }
+
+    nodes.CalmInsideBarn.InvestigatingToys = Action {
+        function()
+            if mod.moveto.MoveToPoint(toysPosTrigger, MovementSpeed.Walk, me) then
+                LookFrom(toysPosTrigger)
+            end
+        end,
+        Valid = function()
+            return GetFlag(foundToysFlag)
+        end
+    }
+
+    nodes.CalmInsideBarn.WaitingInBarn = Action {
+        function()
+            if mod.moveto.MoveToPoint(barnPosTrigger, MovementSpeed.Walk, me) then
+                -- one-shot AD conversation
+                if not talkedToFist then
+                    if not mod.character.IsDefeated(fist005) then
+                        if GetDistance2DTo(me, fist005) < 8.0 then
+                            Sleep(1.5)
+                            talkingToFist = true
+                            mod.dialog.StartCheckedAutomatedDialog(
+                                manipAndFistAD, { waitForCompletion = true, checkSight = false }, me, fist005
+                            )
+                            talkingToFist = false
+                            Sleep(2.5)
+                            talkedToFist = true      
+                        end
+                    else
+                        talkedToFist = true 
+                    end
+                end
+                LookFrom(barnPosTrigger)
+            end
+        end,
+        Valid = function()
+            return not GetFlag(foundToysFlag)
+        end
+    }
+
+    -- Default state at the table outside of the barn
+    nodes.Guarding = Action {
+        function()
+            if mod.moveto.MoveToPoint(sceneTrigger, MovementSpeed.Walk, me) then
+                if not IsPerformingWorldBehaviour(me) and 
+                    -- GetDistance2DTo(behaviourBook, bookPos) < 1.0 and
+                    not mod.items.SafeIsDestroyed(behaviourBook)
+                then
+                    try
+                        StartBehaviorDialog(writingTableBehavior, sceneTrigger.Trigger, true, me)
+                    catch e then
+                        DebugLog("WYR_RefugeeCamp_FlamingFistManip: "..tostring(e))
+                        WaitForInterrupt()
+                    end
+                end
+            end
+        end,
+        Valid = function()
+            return not GetFlag(agreedInvestigateFlag) and not GetFlag(alertedFlag)
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    }
+    
+    -- Events
+    events.FlagSet = function(e)
+        if e.Flag == forceInterrogateFlag.Guid then
+            forceInterrogates = true
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == forceInterrogateFlag.Guid and forceInterrogates then
+            forceInterrogates = false
+        end
+    end
+end}

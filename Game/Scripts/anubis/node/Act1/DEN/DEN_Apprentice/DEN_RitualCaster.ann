@@ -1,0 +1,198 @@
+game.states.DEN_RitualCaster = State { function ()
+
+    description = [[Used by the druids who performs the ritual]]
+
+    params.ritualPoint = {
+        type = EParamType.String, required = true, default = nil,
+        help = [[Stand here while doing the ritual.]]
+    }
+    params.firstCaster = {
+        type = EParamType.Bool, required = false, default = false,
+        help = [[Set true only on S_DEN_RitualDruid_004, she'll initiate the ritual.]]
+    }
+
+    -----------------------------------------
+    -- Local variables
+    local ritualPoint = Entity(params.ritualPoint)
+    local lookAt = Entity("S_DEN_PondWaterfallLookAt_49694eaf-d608-4de5-9861-2086e169fc1e")
+    local spellAnimLoop = Animation([[CUST_TheRiteOfThornsStill_01_Loop_bf6be5eb-5bf8-428b-a855-b054f476ef20]])
+    local fallbackAnim = Animation([[CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba]])
+    local AD = Dialog("DEN_SacredPond_AD_Ritual_cf55ee4e-aa10-80ee-e62c-fd8b69aae52b")
+    local ready = false
+    local canAD = false
+
+    local castSpell = params.firstCaster
+    local idol = Entity("S_DEN_SilvanusIdol_a841d36c-9a00-4a26-943e-c0af6895bb16")
+    local idolTrigger = Entity("S_DEN_SacredPondSphere_c2a63769-c305-4772-bffc-eba1eea37ad0")
+
+    local ritualHelper = Entity("S_DEN_RitualHelper_cf34a55b-26ba-4fca-bc0d-168e719c59e6")
+
+    helpers.ResetCasting = function()
+        ready = false
+        StopAnimation(me)
+        if HasActiveStatus(me, "DEN_RITUAL") then
+            RemoveStatus(me, "DEN_RITUAL")
+        end
+    end
+
+    -----------------------------------------
+    -- State nodes
+    self.OnLeave = function()
+        helpers.ResetCasting()
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.GetInPosition = Action {
+        CanEnter = function()
+            return GetDistance2DTo(me, ritualPoint) > 2.0
+        end,
+        OnEnter = function()
+            helpers.ResetCasting()
+        end,
+        function()
+            while IsInDangerousSurfaceFor(ritualPoint, me.Character) do
+                Sleep(math.random(1,6))
+                SteerTo(idol)
+                PlayAnimation(fallbackAnim, true, false)
+            end
+            local distFromPoint = GetDistance2DTo(me, ritualPoint)
+            local longPath = false
+            if distFromPoint > 20.0 then longPath = true end
+            try
+                MoveTo(ritualPoint, MovementSpeed.Walk, true, longPath)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(2)
+            end
+        end
+    }
+
+    nodes.PrepareRitual = Action {
+        CanEnter = function()
+            return not ready
+        end,
+        function()
+            if not HasActiveStatus(me, "DEN_RITUAL") then
+                ApplyStatus(me, "DEN_RITUAL", true, -1)
+            end
+            SteerTo(lookAt)
+            PlayAnimation(spellAnimLoop, false, true)
+            ready = true
+        end,
+    }
+
+    nodes.CastAtIdol = Action {
+        CanEnter = function()
+            return castSpell
+        end,
+        function()
+            Sleep(2)
+            if not IsInDialog(me, false) then
+                SteerTo(lookAt)
+                StartAutomatedDialog(AD, false, me)
+                castSpell = false
+                if IsInTrigger(idol, idolTrigger.Trigger) then
+                    -- cast spell
+                    UseSpell("Target_DEN_TheRiteOfThorns", idol, nil, nil, nil, true, true, true, true)
+                    PlayAnimation(spellAnimLoop, false, true)
+                    Sleep(1)
+                else
+                    Sleep(4)
+                end
+            else
+                castSpell = false
+                SetUnicastEntityEvent(me, "DEN_RitualCasters_DoneAD", ritualHelper)
+            end
+        end
+    }
+
+    nodes.WaitForCasting = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DEN_RitualCaster_CastAtIdol" then
+                if ready and not me.Character.IsDead then
+                    castSpell = true
+                else
+                    SetUnicastEntityEvent(me, "DEN_RitualCasters_DoneAD", ritualHelper)
+                end
+            end
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == AD.Guid) then
+            SetUnicastEntityEvent(me, "DEN_RitualCasters_DoneAD", ritualHelper)
+        end
+    end
+
+    events.Died = function(e)
+        if (e.Target == me)then
+            SetUnicastEntityEvent(me, "DEN_RitualCasters_Died", castSpell, ritualHelper)
+        end
+    end
+
+end}
+
+
+game.states.DEN_RitualStopped = State { function ()
+
+    description = [[Used by the druids who performs the ritual, after the ritual is cancelled]]
+
+    params.pacifiedPoint = {type = EParamType.String, required = true,default = nil,help = [[Sit here to relax because the ritual is stopped.]]}
+    params.pacifiedAD = {type=EParamType.String, required=false, default=nil, help=[[Default AD]]}
+    local idleAnim = Animation([[CUST_SittingGround_01_84a7c4b0-e558-4dde-9408-01afe3b24a72]])
+    local pacifiedAD
+    local pacifiedPoint = Entity(params.pacifiedPoint)
+
+    self.OnInit = function()
+        if params.pacifiedAD ~= nil then
+            pacifiedAD = Dialog(params.pacifiedAD)
+        end
+    end
+
+    self.OnEnter = function()
+        SetWeaponUnsheathed(me, false, true)
+    end
+
+    nodes.Meditate = Action {
+        function()
+            local longPath = false
+            if GetDistance2DTo(me, pacifiedPoint) > 20.0 then
+                longPath = true
+            end
+            try
+                MoveTo(pacifiedPoint, MovementSpeed.Stroll, true, longPath)
+                return true
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(1)
+            end
+            if GetDistance2DTo(me, pacifiedPoint) <= 5.0 then
+                LookFrom(pacifiedPoint)
+                if not me.IsReposedSitting then
+                    SitOnGround(me)
+                end
+                while true do
+                    Sleep(math.random(70, 140))
+                    if (pacifiedAD ~= nil) and not IsInDialog(me, false) then
+                        StartAutomatedDialog(pacifiedAD, true, me)
+                    end
+                end
+            else
+                Sleep(3)
+            end
+        end,
+        OnLeave = function()
+            if me.IsReposedSitting then
+                EndRepose(me)
+            end
+        end,
+    }
+
+end}

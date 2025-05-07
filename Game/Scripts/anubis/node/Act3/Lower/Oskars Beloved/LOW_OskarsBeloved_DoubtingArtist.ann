@@ -1,0 +1,124 @@
+game.states.LOW_OskarsBeloved_DoubtingArtist = State {function ()
+
+    local wanderPos = Entity("S_LOW_OskarsGuildhallPosition_7a0c868f-e4a0-4c24-b764-6dfd116bd253")
+    local stateFlag = Flag("LOW_OskarsBeloved_State_ArtistLeftHideout_76dca7be-5c6a-4444-afa4-3ae4b13d6315")
+    local inAtelier = false
+    local atelierTrigger = Entity("S_LOW_OskarAtelierLocation_3e8a53c0-b280-4cca-849b-53652b99692a")
+    local hauntingFlag = Flag("LOW_OskarsBeloved_State_HauntingHappening_a93014c2-fca7-4ab1-b2f3-ee674737fc7d")    
+    local possessedAnimation = Animation("STAT_Dazed_Combat_01_Loop_06cff5ab-1705-403a-b20f-d5c9defbece5")
+    local stoppedAnimation = false
+
+    nodes.Haunt_IdleAtelier = Action{
+
+        function()
+            Sleep(15 + 3 * math.random())
+            Wander(6.0, 4.0, MovementSpeed.Walk, bedroomtrigger)
+
+        end,
+        Valid = function()
+            return GetFlag(stateFlag) and inAtelier
+        
+        end
+    }
+
+    nodes.Haunt_Possessed_BeforeCombat = Action{
+
+        function()
+            PlayAnimation(possessedAnimation,false,true)
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+            stoppedAnimation = true
+        end,
+        Valid = function()
+            return not inAtelier and GetFlag(stateFlag) and GetFlag(hauntingFlag) and not stoppedAnimation
+        end
+
+    }
+
+    nodes.StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_OskarTeleportTo_e62380f3-2dc0-43fc-9ed7-b38f034603df"
+        },
+ 
+        Valid = function()
+            return not inAtelier and GetFlag(stateFlag) and not GetFlag(hauntingFlag)
+        
+        end
+    }
+
+    nodes.Action_IdleNotHaunt = Action{
+
+        function()
+            Wander(3.0,3.0,MovementSpeed.Walk,wanderPos)
+            Sleep(math.random(15.0, 20.0))
+        end,
+        Valid = function()
+            return not GetFlag(stateFlag)
+        end
+    }
+
+    
+    nodes.Action_Fallback = Action{
+
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "LOW_OskarsBeloved_InAtelier" then 
+            inAtelier = true
+        end
+    end
+
+end}
+
+
+
+game.states.LOW_OskarsBeloved_DoubtingArtist_Combat = State {function ()
+
+    local stateFlag = Flag("LOW_OskarsBeloved_State_ArtistLeftHideout_76dca7be-5c6a-4444-afa4-3ae4b13d6315")
+    local inAtelier = false
+    local hauntingFlag = Flag("LOW_OskarsBeloved_State_HauntingHappening_a93014c2-fca7-4ab1-b2f3-ee674737fc7d")    
+    local possessedAnimation = Animation("STAT_Dazed_Combat_01_Loop_06cff5ab-1705-403a-b20f-d5c9defbece5")
+
+
+
+    nodes.Haunt_Possessed_InCombat = Action{
+
+        function()
+
+                Sleep(2.0)
+                if me.CanActInCombatTeamTurn then
+                    EndTurn(me)
+                end
+        end,
+        Valid = function()
+            return not inAtelier and GetFlag(stateFlag) and GetFlag(hauntingFlag) and me.IsInCombat
+        end
+    }
+    
+    nodes.DefaultCombat = Proxy{
+        game.states.DefaultCombat
+    
+    }
+
+    nodes.Action_Fallback = Action{
+
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    self.Valid = function()
+        return me.IsInCombat
+    end
+
+
+end
+
+
+}

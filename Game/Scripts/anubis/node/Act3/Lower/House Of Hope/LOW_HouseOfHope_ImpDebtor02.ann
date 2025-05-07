@@ -1,0 +1,85 @@
+game.states.LOW_HouseOfHope_ImpDebtor02 = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Flags and variables--------------------------------
+
+    local points = {
+        -- key = value
+        Entity("S_LOW_HouseOfHope_ImpDebtor02_Point1_e4a2ebd1-91c4-429a-8843-59190368b25a"),
+        Entity("S_LOW_HouseOfHope_ImpDebtor02_Point2_5ba22dad-4d9b-44d6-810c-2cfb067e51e0"),
+        Entity("S_LOW_HouseOfHope_ImpDebtor02_Point3_29ab5d2a-e49f-4dad-8310-dc6f0922edad"),
+        Entity("S_LOW_HouseOfHope_ImpDebtor02_Point4_dafe7614-4e77-4366-9381-d09efa631799"),
+    }
+    
+    local fear = Animation("CUST_Nervous_01_7f6248f6-1419-44d8-83f9-d4548475b665")    
+
+    local alarmFlag = Flag("LOW_HouseOfHope_State_RaphaelAlerted_f83c3d6b-d6cf-41a1-a03d-c31df5ea44fe")
+
+    local currentIndex = 0
+    local animationTime = true
+    --------------------------------Nodes--------------------------------
+    
+    nodes.Act = Action {
+        function()
+            -- local index = currentIndex
+            -- while currentIndex == index do
+            --     index = math.random(1,#points)
+            -- end
+            -- currentIndex = index
+            -- if IsInDangerousSurfaceFor(points[index], me.Character) then
+            --     SteerTo(points[index])
+            --     Sleep(math.random(10,15))
+            --     return
+            -- end
+            -- local moveResult = MoveTo(points[index], MovementSpeed.Walk)
+            -- if moveResult ~= error.MovementError.None then
+            --     SteerTo(points[index])
+            -- end
+            PlayAnimation(fear, true, false)
+            StartTimer(me, "LOW_HOH_ImpDebtor02_Wander", 15, 0)
+            animationTime = false
+        end,
+        CanEnter = function()
+            return not GetFlag(alarmFlag) and animationTime
+        end
+    }
+
+    nodes.Wander = Proxy {game.states.GEN_Wander,
+        params = {
+            trigger = [[S_LOW_HouseOfHope_ImpDebtor02_Wander_8f18c73d-9534-423b-a181-e766198e929c]],
+            wanderMin = 4,
+            wanderMax = 8,
+            sleepMin = 7,
+            sleepMax = 15},
+        CanEnter = function()
+            return not GetFlag(alarmFlag) and not animationTime
+        end,
+    }
+
+
+    nodes.StayingInAmbush = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return not GetFlag(alarmFlag) 
+        end
+    }   
+
+
+    nodes.IdleFallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+        --------------------------------Events--------------------------------
+        events.TimerFinished = function(ev)
+            if ev.TimerName == "LOW_HOH_ImpDebtor02_Wander" then
+                animationTime = true
+            end
+        end
+end}

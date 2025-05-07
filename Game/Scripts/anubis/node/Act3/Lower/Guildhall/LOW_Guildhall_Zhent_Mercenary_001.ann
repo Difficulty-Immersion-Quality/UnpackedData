@@ -1,0 +1,94 @@
+game.states.LOW_Guildhall_Zhent_Mercenary_001 = State{function ()
+    
+    modules = { "shared.dialog" }
+
+    local patrolSpline = Spline([[S_LOW_Guildhall_Zhent_PatrolSpline_003_0bd0102f-ad40-4481-9b20-5d0db2428469]])
+    local patrolAD = Dialog([[LOW_Guildhall_AD_Zhent_Mercenary_001_Patrol_a9793f73-5269-c24c-dceb-05a91ccc9be6]])
+    local FinishedTalkingToGuildMember = Flag("LOW_Guildhall_State_AD_Intro_ZhentGuild_Finished_4ab206fc-7590-46e5-98c6-395795dae13d")
+    local startPoint_STR = "S_LOW_Guildhall_Zhent_Mercenary_001_StartPoint_bda0ec72-ae07-440e-ae7b-0da285c9a8c9"
+    local endPoint_STR = "S_LOW_Guildhall_Zhent_Mercenary_001_CombatStartPoint_474f4d5b-2781-466f-8bda-2b3babace347"
+    local secondSpeakerPatrolAD = Entity("S_LOW_Guildhall_Zhent_Mercenary_006_9a307843-3958-4c07-ace9-f1c04b5af558")
+    local doneTalking = false
+    local pause = false
+
+--------------------------------Nodes--------------------------------
+
+    nodes.PreCoup = Selector {
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end,
+    }
+
+    nodes.PreCoup.Action_WaitingForMeeting = Proxy {
+        game.states.GLO_StateInTrigger,
+        params  = {
+            Trigger = startPoint_STR
+        },
+        Valid = function() 
+            return not doneTalking
+        end
+    }
+
+    nodes.PreCoup.PatrolPause = Action{
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+        
+        function()
+            if patrolAD ~= nil then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                patrolAD, 
+                { 
+                    minDelay = 20.0,
+                    waitForCompletion = true,
+                    allowNilSpeakers = false,
+                    maxDistance = 15.0
+                }, me, secondSpeakerPatrolAD
+            )
+            end
+            Sleep(20.0 + 3.0 * math.random())
+        end,
+
+        Valid = function()
+            return pause
+        end,
+
+        OnInterrupt = function()
+            pause = false
+   
+        end,
+
+        OnFinished = function()
+            pause = false
+        end
+    }
+
+    nodes.PreCoup.Patrol = Action{
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Walk, -1)
+        end,
+
+        CanEnter = function()
+            return patrolSpline ~= nil
+        end
+    }
+
+    nodes.FallbackIdle = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+
+     --------------------------------Events--------------------------------
+    events.SplineControlPointReached = function(ev)
+        if ev.Event == "PatrolPause" then
+            pause = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == FinishedTalkingToGuildMember.Guid then
+            doneTalking = true
+        end
+    end
+end}

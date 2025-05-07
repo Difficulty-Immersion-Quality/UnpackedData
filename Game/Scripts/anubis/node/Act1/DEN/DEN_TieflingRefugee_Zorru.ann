@@ -1,0 +1,296 @@
+game.states.DEN_TieflingRefugee_Zorru = State { function ()
+
+    description = [[Patrolling Guard who Lae'zel scares; reacts to her presence based on her treatment of him]]
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    -----------------------------------------
+    -- Local variables
+
+    --Entities
+    local fleePoint = Entity("S_DEN_Tiefling011_RunTo_63b87110-3f5a-4da1-aba3-f28beba02073")
+    local rangerTrader = Entity("S_DEN_TieflingRefugee_RangerTrader_001_637d8d68-2a04-409e-a77d-cf31ac9478ee")
+    local waitForGithPoint = Entity("S_DEN_Tiefling011_GithWaitArea_01d078f0-5d3d-4166-a26b-fbc8136f1790")
+    local gith
+
+    --Animations
+    local laezelAnim = Animation("CUST_HideFear_01_b5d270c7-65fa-41eb-a39d-ce0e250b4e2a")
+    local prevAnim = Animation("CUST_HideFear_01_b5d270c7-65fa-41eb-a39d-ce0e250b4e2a")
+    local transitionAnim = Animation("CUST_HideFear_01_b5d270c7-65fa-41eb-a39d-ce0e250b4e2a") --replace
+    local standAnim = Animation("CUST_HideFear_01_b5d270c7-65fa-41eb-a39d-ce0e250b4e2a")
+    local kneelAnim = Animation("CUST_KneelHideFear_01_Loop_812c6801-f523-4207-870c-5a7b9e9bbde0")
+    local bowAnim = Animation("CUST_LowBowFearful_01_Loop_567aca90-7246-431a-a583-24328f334b6b")
+    local kneelToStandAnim = Animation("CUST_KneelHideFear_01_End_a064ef33-b891-40e5-83cd-983ad4f339c7") --kneel to stand
+    local bowToStandAnim = Animation("CUST_LowBowFearful_01_End_9746a7e5-e657-4900-9e15-cd18dbe2f6e6") --bow to stand
+    local standToKneelAnim = Animation("CUST_KneelHideFear_01_Start_a9018940-3689-446f-a01f-b90809215a17") --stand to kneel
+    local standToBowAnim = Animation("CUST_LowBowFearful_01_Start_99606f3d-f163-40bf-958b-4c711ca9744b") --stand to bow
+
+    --Dialogs
+    local originDialog1 = Guid("DEN_ThingLikeMe_OM_Laezel_AOM_OOM_ee6c3da5-c872-803e-77c5-79f4f22795a8")
+    local originDialog2 = Guid("DEN_ThingLikeMe_OM_Laezel_COM_b1e7f9b2-9726-8868-f1e4-c3a6cf574e2c")
+    local soloAD = Dialog("DEN_General_AD_TieflingGuard11_ba7a68f7-877c-d803-7d7e-2624796719ea")
+    local dualAD = Dialog([[DEN_ThingLikeMe_AD_ZorruGuard_4c0e2646-a6c2-2a2a-2aaf-49a0ab406b91]])
+
+    --Bools
+    local playTransition = false
+    local patrol = false
+    local canAnimate = true
+    local facing = false
+    local canAD = true
+    local patrolPause = false
+    local inOriginScene = false
+    local ADHold = true
+    local movedToTalk = false
+
+    --Flags
+    local interrogatedFlag = Flag("DEN_ThingLikeMe_State_OMPlayed_43e9e5e6-8445-489b-b062-453cf8c47b49")
+    local laezelNearFlag = Flag("DEN_ThingLikeMe_State_AnimateForLaezel_6acad37a-9107-45fd-be56-47f1396085b3")
+    local beforeOMFlag = Flag("DEN_ThingLikeMe_State_BeforeOM_9e9cecdb-44ee-4b32-970c-535d1e7a5496")
+
+    -----------------------------------------
+    -- Nodes
+
+    --Lae'zel is in party, wait for her
+    nodes.WaitForGith = Proxy {
+        OnEnter = function()
+            patrol = false
+            ClearPatrol()
+        end,
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params = {
+            moveTarget = "S_DEN_Tiefling011_GithWaitArea_01d078f0-5d3d-4166-a26b-fbc8136f1790",
+            lookFromMoveTarget = true,
+            anim = "CUST_HideFear_01_b5d270c7-65fa-41eb-a39d-ce0e250b4e2a",
+            loopingAnim = true,
+            waitMin = 0.0,
+            waitMax = 0.0,
+        },
+        Valid = function()
+            return GetFlag(beforeOMFlag, nil) and not GetFlag(interrogatedFlag, nil)
+        end
+    }
+
+    -- Before being scared by Lae'zel
+    nodes.Default = Selector {
+        function(nodes)
+            if not canAD and patrolPause then
+                return nodes.ClearPause
+            elseif canAD and patrolPause then
+                local rangerTraderIsAvailable = mod.dialog.IsSpeakerAvailable(rangerTrader)
+                if (movedToTalk or not rangerTraderIsAvailable) then
+                    return nodes.doAD
+                elseif rangerTraderIsAvailable then
+                    return nodes.moveToAndTalk
+                end
+            end
+            return nodes.Patrol
+        end,
+        Valid = function()
+            return not GetFlag(interrogatedFlag,nil)
+        end
+    }
+
+    nodes.Default.doAD = Action {
+        OnEnter = function()
+            patrolPause = false
+            SetDoNotFace(rangerTrader, true)
+        end,
+        function()
+            if not IsInDialog(me, false) then
+                if mod.dialog.IsSpeakerAvailableAndNear(rangerTrader, me, 5.0, true) then
+                    StartAutomatedDialog(dualAD, ADHold, me, rangerTrader)
+                else
+                    StartAutomatedDialog(soloAD, ADHold, me)
+                end
+            end
+        end,
+        OnLeave = function()
+            SetDoNotFace(rangerTrader, false)
+        end
+    }
+
+    nodes.Default.ClearPause = Action {
+        function()
+            patrolPause = false
+        end
+    }
+
+    nodes.Default.moveToAndTalk  = Proxy {
+        game.states.DEN_GeneralGroveStates_MoveToAndTalk,
+            params = {
+                moveTarget = "S_DEN_Tiefling011_StopAndTalk_ce8078e3-27a0-4fc8-816a-d285a6ede262",
+                lookTarget = "S_DEN_TieflingRefugee_RangerTrader_001_637d8d68-2a04-409e-a77d-cf31ac9478ee"
+            }
+    }
+    
+    nodes.Default.Patrol = Proxy {
+        OnEnter = function()
+            patrolPause = false
+            if not patrol then
+                patrol = true
+            end
+        end,
+        game.states.DEN_GeneralGroveStates_Patrol,
+        params = {
+            spline = "S_DEN_GuardSpline_011_e6d66fe8-e131-460c-907d-fd7aa011d8fc",
+            animOnNode = "CUST_GuardNervous_01_add51b30-ef5b-11e9-81b4-2a2ae2dbcce4",
+            waitMin = 3.0,
+            waitMax = 5.0
+        },
+        Valid = function()
+            return not GetFlag(interrogatedFlag, nil)
+        end
+    }
+
+    --After being scared
+    nodes.CowerAnimTransitions = Action {
+        function()
+            if (prevAnim == kneelAnim) then
+                    transitionAnim = kneelToStandAnim
+            elseif (prevAnim == bowAnim) then
+                    transitionAnim = bowToStandAnim
+            elseif (prevAnim == standAnim) then
+                canAD = false
+                StopTimer(me, "DEN_ThingLikeMe_ADDelayTimer")
+                StartTimer(me, "DEN_ThingLikeMe_ADDelayTimer", 75, 0)
+                if (laezelAnim == kneelAnim) then
+                    transitionAnim = standToKneelAnim
+                elseif (laezelAnim == bowAnim) then
+                    transitionAnim = standToBowAnim
+                end
+            end
+            playTransition = true
+            facing = false
+            canAnimate = true
+        end,
+        Valid = function()
+            return not canAnimate and GetFlag(interrogatedFlag,nil)
+        end
+    }
+
+    nodes.WaitAfterInterrogation = Action{
+        function()
+            if (playTransition == true and not (laezelAnim == prevAnim)) then
+                PlayAnimation(transitionAnim, true, false)
+                playTransition = false
+            end
+            PlayAnimation(laezelAnim, false, true)
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(interrogatedFlag,nil) and inOriginScene
+        end
+    }
+
+    nodes.doAD = Action {
+        function()
+            if not IsInDialog(me, false) then
+                StartAutomatedDialog(soloAD, ADHold, me)
+            end
+        end,
+        Valid = function()
+            return GetFlag(interrogatedFlag, nil) and facing and canAD
+        end
+    }
+
+    nodes.AfterInterrogationCower = Action {
+        function()
+            if mod.moveto.MoveToPoint(fleePoint,MovementSpeed.Run, me) then
+                if gith and GetFlag(laezelNearFlag, nil) and (laezelAnim ~= standAnim) and (facing == false) then
+                    SteerTo(gith)
+                    Sleep(0.5)
+                    facing = true
+                elseif not GetFlag(laezelNearFlag,nil) and (facing == false) then
+                    LookFrom(fleePoint)
+                    Sleep(0.5)
+                    facing = true
+                end
+                if (playTransition == true and not (laezelAnim == prevAnim)) then
+                    PlayAnimation(transitionAnim, true, false)
+                    playTransition = false
+                end
+                PlayAnimation(laezelAnim, false, true)
+                WaitForInterrupt()
+            end
+        end,
+        Valid = function()
+            return canAnimate and GetFlag(interrogatedFlag,nil)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.DialogStarted = function(e)
+        if (e.Instance.DialogUUID == originDialog1) or (e.Instance.DialogUUID == originDialog2) then
+            canAD = false
+            StopTimer(me, "DEN_ThingLikeMe_ADDelayTimer")
+            inOriginScene = true
+        elseif (e.Instance.DialogUUID == soloAD.Guid) or (e.Instance.DialogUUID == dualAD.Guid) then
+            canAD = false
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if ((e.Instance.DialogUUID == originDialog1) 
+            or (e.Instance.DialogUUID == originDialog2))
+            and GetFlag(interrogatedFlag, nil) then
+                patrol = false
+                ClearPatrol()
+                StartTimer(me, "DEN_ThingLikeMe_AfterInterrogation", 6, 0)
+        elseif (e.Instance.DialogUUID == soloAD.Guid) or (e.Instance.DialogUUID == dualAD.Guid) then
+            StopTimer(me, "DEN_ThingLikeMe_ADDelayTimer")
+            StartTimer(me, "DEN_ThingLikeMe_ADDelayTimer", math.random(65, 85), 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if (e.TimerName == "DEN_ThingLikeMe_AfterInterrogation") then 
+            inOriginScene = false
+            StartAutomatedDialogImmediate(soloAD, me)
+            mod.moveto.MoveTo(fleePoint, true, 1.5, "Sprint", "DEN_ThingLikeMe_ArrivedAtFleePoint", 1, true)
+        elseif e.TimerName == "DEN_ThingLikeMe_ADDelayTimer" then
+            canAD = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DEN_ThingLikeMe_HideFear" or e.Event == "DEN_ThingLikeMe_KneelHideFear" or e.Event == "DEN_ThingLikeMe_LowBowFearful" then
+                prevAnim = laezelAnim
+                if not gith and e.Params[1] then
+                    gith = e.Params[1]
+                end
+            end
+            if e.Event == "DEN_ThingLikeMe_HideFear" then
+                if laezelAnim ~= standAnim then
+                    laezelAnim = standAnim
+                    canAnimate = false
+                end
+            elseif e.Event == "DEN_ThingLikeMe_KneelHideFear" then
+                if laezelAnim ~= kneelAnim then
+                    laezelAnim = kneelAnim
+                    canAnimate = false
+                end
+            elseif e.Event == "DEN_ThingLikeMe_LowBowFearful" then
+                if laezelAnim ~= bowAnim then
+                    laezelAnim = bowAnim
+                    canAnimate = false
+                end
+            elseif e.Event == "DEN_GroveRefugeeStopPatrol" then
+                patrol = false
+            elseif e.Event == "DEN_CustomNodeEvent1" and rangerTrader ~= nil and mod.dialog.IsSpeakerAvailable(rangerTrader) then
+                patrolPause = true
+            elseif(e.Event == "DEN_MovedToTalk") then
+                movedToTalk = true
+            elseif e.Event == "DEN_ThingLikeMe_ADDelayTimer" then
+                canAD = true
+            elseif(e.Event == "DEN_ThingLikeMe_ArrivedAtFleePoint") then             
+                ADHold = false
+                StopTimer(me, "DEN_ThingLikeMe_ADDelayTimer")
+                StartTimer(me, "DEN_ThingLikeMe_ADDelayTimer", 30, 0)
+            end
+        end
+    end
+
+end}

@@ -1,0 +1,62 @@
+game.states.LOW_Guildhall_Zhent_Mercenary_004 = State{function ()
+    
+    local triggerStay = [[S_LOW_Guildhall_Zhent_Mercenary_004_StartPoint_afa5bce7-178f-4d68-969a-738f26d644bb]]
+    local allyZhent = Entity("S_LOW_Guildhall_Zhent_Mercenary_003_fbffc206-5f7d-4d27-9fc8-6080a7212602")
+    local patrolAD = Dialog("LOW_Guildhall_AD_Zhent_Mercenary_004_Patrol_bad1fc5e-5fcb-942b-7e4a-186db62969d5")
+    
+    local canPatrol = true
+
+    modules = { "shared.dialog", "shared.moveto" }
+
+    --------------------------------Nodes--------------------------------
+    nodes.PreCoup = Selector{
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end
+    }
+
+    nodes.PreCoup.CheckAlly = Action {
+        function()
+            
+            if mod.moveto.MoveToPoint(allyZhent,MovementSpeed.Walk,me) then
+                if mod.dialog.IsSpeakerAvailableAndNear(allyZhent, me, 10.0, true, false, false) then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    patrolAD, 
+                    { 
+                        minDelay = 20.0,
+                        waitForCompletion = true,
+                        allowNilSpeakers = false,
+                        maxDistance = 15.0
+                    }, me, allyZhent)
+                end
+            end    
+           
+            Sleep(12.0 + 3.0 * math.random())
+            canPatrol = false
+        end,
+
+        CanEnter = function()
+            return canPatrol
+        end
+    }
+
+    nodes.PreCoup.StandGuard = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = triggerStay
+        },    
+        CanEnter = function()
+            return not canPatrol
+        end,
+        OnFinished = function()
+            Sleep(24.0 + 6.0 * math.random())
+            canPatrol = true
+        end
+    }
+
+    nodes.FallbackIdle = Action {
+        function()
+           Sleep(6.0 + 3.0 * math.random())
+        end
+    }
+end}

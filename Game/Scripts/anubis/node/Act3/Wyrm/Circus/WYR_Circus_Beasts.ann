@@ -1,0 +1,62 @@
+game.states.WYR_Circus_Beasts = State { function ()
+    description = [[ Base behaviour tree for circus beasts in the cages. ]]
+
+    modules = { "shared.util", "shared.moveto" }
+
+    params.cageTrigger = {type = EParamType.String, required = true, help=[[
+        The trigger at which the character stands while in a cage
+    ]]}
+
+    params.releasedTrigger = {type = EParamType.String, required = true, help=[[
+        The trigger where the beast runs to after being released.
+    ]]}
+
+    params.releasedFlag = {type = EParamType.String, required = true, help=[[
+        The global state flag for when the beast has been released from the cage.
+    ]]}
+
+    params.pacifiedFlag = {type = EParamType.String, required = true, help=[[
+        The global state flag for when the beast has been calmed down. 
+    ]]}
+
+    params.pacifiedIdle = { type = EParamType.State, required = true, help = [[
+        Idle after the beast has been calmed down.
+    ]]}
+
+    local releasedFlag = Flag(params.releasedFlag)
+    local pacifiedFlag = Flag(params.pacifiedFlag)
+    local cageTrigger = Entity(params.cageTrigger)
+    local releasedTrigger = Entity(params.releasedTrigger)
+    local combatAnim = Animation("CUST_Idle_Still_Combat_01_590ea7e8-ae43-4307-916b-b1133ef47dfa")
+
+    nodes.Released =  Action {
+        function()
+            if mod.moveto.MoveToPoint(releasedTrigger, MovementSpeed.Sprint, me) then
+                LookFrom(releasedTrigger)
+            end
+            --PlayAnimation(combatAnim, true, false)
+            Sleep(1.5)
+            SetEntityEvent(me, "WYR_Circus_BeastReleasedDisappear")
+        end,
+        Valid = function()
+            return GetFlag(releasedFlag)
+        end
+    }
+
+    nodes.Pacified =  Proxy {
+        params.pacifiedIdle,
+        Valid = function()
+            return not GetFlag(releasedFlag) and GetFlag(pacifiedFlag)
+        end
+    }
+
+    nodes.InCage = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.cageTrigger
+        },
+        Valid = function()
+            return not GetFlag(releasedFlag) and not GetFlag(pacifiedFlag)
+        end
+    }
+end}

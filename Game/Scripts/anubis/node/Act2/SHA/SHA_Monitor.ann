@@ -1,0 +1,53 @@
+game.states.SHA_Monitor = State{
+function()
+    description = [[Raphael's behaviour for when he is waiting for the player at the graveyard.]]
+
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Modules
+    local atGraveyard = Flag("SHA_AFamiliarFace_State_RaphaelAtGraveyard_3b3a1869-54e0-45c9-bdc7-b548febbe291")
+
+    local idlePos = Entity("S_SHA_RaphaelPoint_f3af0429-1d3f-4d31-bf75-bfd6e2561cf4")
+    local ad = Dialog("SHA_Monitor_AD_WaitingAtGraveyard_724c2bb9-5236-7b70-ed7b-f805b2c51b20")
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Nodes
+    self.Valid = function()
+        return GetFlag(atGraveyard)
+    end
+
+    nodes = ImmediateSelector{}
+
+    nodes.Action_IdleAtGraveyard = Action{
+        function()
+            if not IsInDangerousSurfaceFor(idlePos, me.Character) then
+                local moveToResult = MoveTo(idlePos, MovementSpeed.Walk, false, false, 0.0, 0.5, false)
+                if moveToResult == error.MovementError.None then
+                    LookFrom(idlePos)
+                else
+                    DebugText(me, "Error: MoveTo failed")
+                    SteerTo(idlePos)
+                end
+            else
+                DebugText(me, "Error: pos in dangerous surface")
+                SteerTo(idlePos)
+            end
+
+            local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(ad,
+                    {
+                    waitForCompletion = true,
+                    fallbackSoloDialog = nil,
+                    minDelay = 20.0 },
+                me)
+            if result == error.AutomatedDialogRateLimitedStartFailed then
+                DebugText(me, "Error: StartCheckedAutomatedDialogRateLimited failed")
+            end
+
+            mod.util.SleepRandom(18.0, 27.0)
+        end
+    }
+    ------------------------------------------------
+end
+}

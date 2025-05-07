@@ -1,0 +1,140 @@
+game.states.LOW_CountingHouse_PinCodeManager = State{function()
+
+    local pressurePlate_1 = Entity("S_LOW_CountingHouse_PinCodePlate_01_0e9ab94d-dae6-4651-b1aa-b6d3c2bb713a")
+    local pressurePlate_2 = Entity("S_LOW_CountingHouse_PinCodePlate_02_f4efdc18-5824-40ba-ac42-3bae2aea8063")
+    local pressurePlate_3 = Entity("S_LOW_CountingHouse_PinCodePlate_03_7799c36a-8b8f-4859-b37b-6ced952ace8c")
+    local pressurePlate_4 = Entity("S_LOW_CountingHouse_PinCodePlate_04_6933889b-8d86-42ad-baf1-0811d49f0109")
+    local pressurePlate_5 = Entity("S_LOW_CountingHouse_PinCodePlate_05_8dc0afaa-17ad-431a-929e-1178a4fbfba0")
+    local pressurePlate_6 = Entity("S_LOW_CountingHouse_PinCodePlate_06_13efb428-f245-4692-8663-3e5aeb3a28e1")
+    local pressurePlate_7 = Entity("S_LOW_CountingHouse_PinCodePlate_07_77407091-acbe-43ff-94ea-341ddcdaf34a")
+    local pressurePlate_8 = Entity("S_LOW_CountingHouse_PinCodePlate_08_ea43abdc-5ce3-4899-9b86-e39872c633b4")
+    local pressurePlate_9 = Entity("S_LOW_CountingHouse_PinCodePlate_09_8e089bf8-7840-4869-b097-78c5467fcacb")
+
+    local pinLight_1 = Entity("S_LOW_CountingHouse_PinCodeLight_1_e5bb9b57-103b-405a-8490-e52513fd3de6")
+    local pinLight_2 = Entity("S_LOW_CountingHouse_PinCodeLight_2_61af76c2-368f-49ae-9c0d-ef8ebe159415")
+    local pinLight_3 = Entity("S_LOW_CountingHouse_PinCodeLight_3_b99a01b1-6c3b-4d3e-b8f7-1679118e01d1")
+    local pinLight_4 = Entity("S_LOW_CountingHouse_PinCodeLight_4_2f8448cc-b9ba-43ee-9892-d549418cd04c")
+
+    local pincodeActivationLever = Entity("S_LOW_CountingHouse_PinCodeLever_6d2dc5a5-ac4c-4d42-a456-77ba79006d80")
+    
+    local correctNumEnteredVFX = nil
+    local incorrectNumEnteredVFX = nil
+    local pinLight_EffectHandlers = {0,0,0,0}
+
+    local correctPincodeEntered = Flag("LOW_CountingHouse_State_CorrectPinCodeEntered_c829bf70-2212-4079-8017-4f0a79b1399a")
+    local greatDoorLockpicked = Flag("LOW_CountingHouse_State_GreatDoorLockpicked_72e6bda9-a5ac-40b3-b56f-f7e0ce338925")
+
+    local pressurePlates = {pressurePlate_1,
+                            pressurePlate_2,
+                            pressurePlate_3,
+                            pressurePlate_4,
+                            pressurePlate_5,
+                            pressurePlate_6,
+                            pressurePlate_7,
+                            pressurePlate_8,
+                            pressurePlate_9}
+
+    local pinLights = {pinLight_1,
+                        pinLight_2,
+                        pinLight_3,
+                        pinLight_4}
+
+    local enteredPin = {}
+    local correctPin = {1,3,5,6}
+
+    self.OnInit = function()
+        correctNumEnteredVFX = PrepareEffect("VFX_Script_CTY_CountingHouse_Pincode_Indicator_01_4391e31d-0cb4-123c-5f4d-9eafeb28e13d")
+        incorrectNumEnteredVFX = PrepareEffect("VFX_Script_CTY_CountingHouse_Pincode_Indicator_02_c48ebaac-0893-7da8-e084-236b2da63f79")
+    end
+    
+    nodes.PinEnter = Action {
+        function()
+            -- Systemic Solution
+            for i=1, #pressurePlates do
+                if(IsInSurface(pressurePlates[i],SurfaceType.WATER_ELECTRIFIED, 1.0)) then
+                    SetFlag(correctPincodeEntered, nil)
+                    helpers.resetPincode()
+                    break
+                end
+            end
+
+            -- Entering Pin with pressure plates
+            if(#enteredPin == 4) and enteredPin[1] == correctPin[1] and enteredPin[2] == correctPin[2]
+            and enteredPin[3] == correctPin[3] and enteredPin[4] == correctPin[4]  then
+                SetFlag(correctPincodeEntered, nil)
+                -- The Greatdoor is opened from Osiris as FlagSet event
+            end
+        end,
+
+        Valid = function()
+            return not GetFlag(correctPincodeEntered) or not GetFlag(greatDoorLockpicked)
+        end,
+
+        OnLeave = function()
+            if(GetFlag(greatDoorLockpicked)) then
+                helpers.resetPincode()
+            end
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "LOW_CountingHouse_PinCodePlatePressed" then
+            local plateNum = helpers.indexOf(pressurePlates,e.Params[1])
+            DebugText(e.Params[1],tostring(plateNum))
+            table.insert(enteredPin,plateNum)
+            if(pinLights[#enteredPin] ~= nil) then
+                if(plateNum == correctPin[#enteredPin]) then
+                    table.insert(pinLight_EffectHandlers,#enteredPin,PlayEffectAt(correctNumEnteredVFX, pinLights[#enteredPin]))
+                else
+                    table.insert(pinLight_EffectHandlers,#enteredPin,PlayEffectAt(incorrectNumEnteredVFX, pinLights[#enteredPin]))
+                    SetEntityEvent(me,"LOW_CountingHouse_DisablePressurePlates")
+                    StartTimer(me, "LOW_PinCodeManager_IncorrectPinEnteredVFX_Timer", 2, 0)
+                    StartTimer(me, "LOW_PinCodeManager_ReenablePressurePlates_Timer", 3, 0)
+                end
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_PinCodeManager_IncorrectPinEnteredVFX_Timer") then
+            helpers.resetPincode()
+        elseif(e.TimerName == "LOW_PinCodeManager_ReenablePressurePlates_Timer") then
+            SetEntityEvent(me,"LOW_CountingHouse_EnablePressurePlates")
+        end
+    end
+
+    helpers.indexOf = function(table,target)
+        for i,e in ipairs(table) do
+            if e == target then
+                return i
+            end
+        end
+        return nil
+    end
+
+    helpers.clearTable = function(table)
+        for i=1, #table do
+            table[i] = nil
+        end
+    end
+
+    helpers.stopVFX = function()
+        for i=1, #pinLight_EffectHandlers do
+            if(pinLight_EffectHandlers[i] ~= 0) then
+                StopEffect(pinLight_EffectHandlers[i])
+            end
+        end
+        pinLight_EffectHandlers = {0,0,0,0}
+    end
+
+    helpers.resetPincode = function()
+        helpers.clearTable(enteredPin)
+        helpers.stopVFX()
+    end
+end}

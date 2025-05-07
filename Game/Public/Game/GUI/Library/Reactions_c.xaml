@@ -1,0 +1,170 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:ls="clr-namespace:ls;assembly=Code"
+                    xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+                    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    mc:Ignorable="d">
+
+    <BitmapImage x:Key="IconReactionOn" UriSource="pack://application:,,,/Core;component/Assets/Reactions_c/c_ico_reactionOn_active.png" />
+    <BitmapImage x:Key="IconReactionOnDisabled" UriSource="pack://application:,,,/Core;component/Assets/Reactions_c/c_ico_reactionOn_disabled.png" />
+    <BitmapImage x:Key="IconReactionAsk" UriSource="pack://application:,,,/Core;component/Assets/Reactions_c/c_ico_reactionAsk_active.png" />
+    <BitmapImage x:Key="IconReactionOff" UriSource="pack://application:,,,/Core;component/Assets/Reactions_c/c_ico_reactionOff_active.png" />
+    <BitmapImage x:Key="IconReactionOffDisabled" UriSource="pack://application:,,,/Core;component/Assets/Reactions_c/c_ico_reactionOff_disabled.png" />
+
+    <DataTemplate x:Key="InterruptCostTemplate" DataType="ls:VMActionResource">
+        <StackPanel Orientation="Horizontal">
+            <TextBlock x:Name="PlusSign" Text="+" FontSize="{StaticResource ScaledMediumFontSize}" Foreground="{StaticResource LS_extraspecialTxtColor}" Margin="8,0,8,0" VerticalAlignment="Center"/>
+            <TextBlock Style="{StaticResource SectionResourceNameStyle}" VerticalAlignment="Center" Text="{Binding MaxValue, StringFormat='{}{0}'}" Visibility="{Binding MaxValue, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter='1'}" Margin="0,0,8,0"/>
+            <ContentPresenter Content="{Binding .}" ContentTemplate="{StaticResource FooterFloatingWarningCost}"/>
+            <TextBlock Style="{StaticResource SectionResourceNameStyle}" VerticalAlignment="Center" Text="{Binding Level, Converter={StaticResource DecimalToRomanConverter}}" Visibility="{Binding Level, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter='1'}" Margin="0,0,0,0"/>
+
+        </StackPanel>
+        <DataTemplate.Triggers>
+            <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                <Setter TargetName="PlusSign" Property="Visibility" Value="Collapsed"/>
+            </Trigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!--Both InterruptItemTemplate and InterruptDecisionItemTemplate have the same visuals, but Bindings change and there's no easy way around it, so we have two templates. If you change one, check the other.-->
+
+    <DataTemplate x:Key="InterruptItemTemplate" DataType="{x:Type ls:VMInterrupt}">
+        <ContentControl x:Name="FocusableContent" Style="{StaticResource FocusableContentControlStyle}" ToolTip="{StaticResource ManagedTooltip}" ToolTipService.Placement="Right" ToolTipService.VerticalOffset="0"  ToolTipService.HorizontalOffset="70" ls:MoveFocus.FocusMovementMode="MainAxisTunnel" Margin="0,0,0,12">
+            <DockPanel Margin="20,10" LastChildFill="False">
+                <Rectangle x:Name="Icon" DockPanel.Dock="Left" VerticalAlignment="Center" Width="100" Height="100" Fill="{Binding Icon}"/>
+                <Image x:Name="State" DockPanel.Dock="Right" VerticalAlignment="Center" Stretch="None" Source="{StaticResource IconReactionOn}"/>
+                <Image x:Name="StateAsk" Visibility="Collapsed" DockPanel.Dock="Right" VerticalAlignment="Center" Stretch="None" Source="{StaticResource IconReactionAsk}"/>
+                <TextBlock x:Name="Name" DockPanel.Dock="Top" HorizontalAlignment="Stretch" TextAlignment="Left" Margin="20,0" FontSize="{StaticResource ScaledDefaultFontSize}" Text="{Binding Name}"
+                           Foreground="{StaticResource LS_accent75TxtColor}" TextTrimming="CharacterEllipsis"/>
+                <StackPanel x:Name="Costs" DockPanel.Dock="Bottom" HorizontalAlignment="Left" Margin="20,0" Orientation="Horizontal">
+
+                    <TextBlock x:Name="CostTxt" FontSize="{StaticResource ScaledMediumFontSize}" Foreground="{StaticResource LS_accent25TxtColor}"
+                               Text="{Binding Source='h8189a676g99feg436fgb9e6g7500c6690fb6', Converter={StaticResource TranslatedStringConverter}, StringFormat='{}{0}:'}"/>
+                    <ItemsControl x:Name="CostsIcons" Margin="10,-2,0,0" AlternationCount="{Binding Costs.Count}" ItemsSource="{Binding Costs}"
+                                  ItemTemplate="{StaticResource InterruptCostTemplate}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="Visibility" Value="{Binding IsHidden, Converter={StaticResource BoolToCollapsedConverter}}"/>
+                                <Setter Property="Margin" Value="0,0,2,0"/>
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                    </ItemsControl>
+                    <TextBlock x:Name="CostFreeTxt" FontSize="{StaticResource ScaledMediumFontSize}" Foreground="{StaticResource LS_accent75TxtColor}"
+                               Visibility="{Binding HasItems, ElementName=CostsIcons, Converter={StaticResource BoolToCollapsedConverter}}"
+                               Text="{Binding Source='ha37e3c9bg31f4g4ab3g8f70gd65ec2a913ce', Converter={StaticResource TranslatedStringConverter}}"/>
+                </StackPanel>
+            </DockPanel>
+        </ContentControl>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding Ask}" Value="True">
+                <Setter TargetName="StateAsk" Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+
+            <DataTrigger Binding="{Binding Enabled}" Value="False">
+                <Setter TargetName="State" Property="Source" Value="{StaticResource IconReactionOff}"/>
+                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource LS_accent00TxtColor}"/>
+                <Setter TargetName="Icon" Property="Opacity" Value="0.55"/>
+                <Setter TargetName="Icon" Property="Effect">
+                    <Setter.Value>
+                        <ls:SaturationEffect Saturation="0.1"/>
+                    </Setter.Value>
+                </Setter>
+                <Setter TargetName="CostTxt" Property="Foreground" Value="{StaticResource LS_accent00TxtColor}"/>
+                <Setter TargetName="CostsIcons" Property="Opacity" Value="0.5"/>
+                <Setter TargetName="CostFreeTxt" Property="Foreground" Value="{StaticResource LS_accent00TxtColor}"/>
+                <Setter TargetName="FocusableContent" Property="BorderThickness" Value="0"/>
+                <Setter TargetName="StateAsk" Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding CanUse}" Value="False">
+                <Setter TargetName="State" Property="Source" Value="{StaticResource IconReactionOnDisabled}"/>
+                <Setter TargetName="Icon" Property="Opacity" Value="0.35"/>
+                <Setter TargetName="CostsIcons" Property="Opacity" Value="0.5"/>
+                <Setter TargetName="FocusableContent" Property="BorderThickness" Value="0"/>
+                <Setter TargetName="StateAsk" Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding (ls:MoveFocus.IsFocused), ElementName=FocusableContent}" Value="True"/>
+                    <Condition Binding="{Binding CanUse}" Value="True"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource LS_extraspecialTxtColor}"/>
+                <Setter TargetName="CostTxt" Property="Foreground" Value="{StaticResource LS_accent75TxtColor}"/>
+                <Setter TargetName="CostFreeTxt" Property="Foreground" Value="{StaticResource LS_extraspecialTxtColor}"/>
+            </MultiDataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding Enabled}" Value="False"/>
+                    <Condition Binding="{Binding CanUse}" Value="False"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="State" Property="Source" Value="{StaticResource IconReactionOffDisabled}"/>
+            </MultiDataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <DataTemplate x:Key="InterruptDecisionItemTemplate" DataType="{x:Type ls:VMInterruptDecision}">
+        <ls:LSButton x:Name="FocusableContent" Style="{StaticResource FocusableButtonStyle}" ContentTemplate="{x:Null}" Margin="4" ToolTip="{StaticResource ManagedTooltip}" ToolTipService.Placement="Right" ToolTipService.HorizontalOffset="20"
+                     Command="{Binding DataContext.InterruptReactCommand, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ls:UIWidget}}">
+            <ls:LSButton.CommandParameter>
+                <MultiBinding Converter="{StaticResource PassThroughConverter}">
+                    <Binding Path="."/>
+                    <Binding Path="Owner"/>
+                </MultiBinding>
+            </ls:LSButton.CommandParameter>
+            <DockPanel Margin="20,10" LastChildFill="False">
+                <Rectangle x:Name="Icon" DockPanel.Dock="Left" VerticalAlignment="Center" Width="106" Height="106" Fill="{Binding Interrupt.Icon}"/>
+                <Image x:Name="State" DockPanel.Dock="Right" VerticalAlignment="Center" Stretch="None" Source="{StaticResource IconReactionOn}" Visibility="Hidden"/>
+                <TextBlock x:Name="Name" DockPanel.Dock="Top" HorizontalAlignment="Stretch" TextAlignment="Left" Margin="20,0,20,0" FontSize="{StaticResource ScaledDefaultFontSize}" Text="{Binding Interrupt.Name}"
+                           Foreground="{StaticResource LS_accent75TxtColor}" TextTrimming="CharacterEllipsis"/>
+                <StackPanel x:Name="Costs" DockPanel.Dock="Bottom" HorizontalAlignment="Left" Margin="20,0" Orientation="Horizontal">
+                    <TextBlock x:Name="CostTxt" FontSize="{StaticResource ScaledMediumFontSize}" Foreground="{StaticResource LS_accent25TxtColor}"
+                               Text="{Binding Source='h8189a676g99feg436fgb9e6g7500c6690fb6', Converter={StaticResource TranslatedStringConverter}, StringFormat='{}{0}:'}"/>
+                    <ItemsControl x:Name="CostsIcons" Margin="10,4,0,0" AlternationCount="{Binding Interrupt.Costs.Count}" ItemsSource="{Binding Interrupt.Costs}"
+                                  ItemTemplate="{StaticResource InterruptCostTemplate}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="Visibility" Value="{Binding IsHidden, Converter={StaticResource BoolToCollapsedConverter}}"/>
+                                <Setter Property="Margin" Value="0,0,2,0"/>
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                    </ItemsControl>
+                    <TextBlock x:Name="CostFreeTxt" FontSize="{StaticResource ScaledMediumFontSize}" Foreground="{StaticResource LS_accent75TxtColor}"
+                               Visibility="{Binding HasItems, ElementName=CostsIcons, Converter={StaticResource BoolToCollapsedConverter}}"
+                               Text="{Binding Source='ha37e3c9bg31f4g4ab3g8f70gd65ec2a913ce', Converter={StaticResource TranslatedStringConverter}}"/>
+                </StackPanel>
+            </DockPanel>
+        </ls:LSButton>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding (ls:MoveFocus.IsFocused), ElementName=FocusableContent}" Value="True">
+                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource LS_extraspecialTxtColor}"/>
+                <Setter TargetName="CostTxt" Property="Foreground" Value="{StaticResource LS_accent75TxtColor}"/>
+                <Setter TargetName="CostFreeTxt" Property="Foreground" Value="{StaticResource LS_extraspecialTxtColor}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Decision}" Value="Use">
+                <Setter TargetName="State" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="FocusableContent" Property="Command" Value="{Binding DataContext.InterruptUndecidedCommand,RelativeSource={RelativeSource AncestorType=ls:UIWidget}}"/>
+                <Setter TargetName="FocusableContent" Property="CommandParameter" Value="{Binding DataContext.Owner, RelativeSource={RelativeSource Mode=Self}}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding DataContext.Layout, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ls:UIWidget}}" Value="Right">
+                <Setter TargetName="Icon" Property="ToolTipService.Placement" Value="Left"/>
+                <Setter TargetName="Icon" Property="ToolTipService.HorizontalOffset" Value="-20"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ItemsControl}}" Value="False">
+                <Setter TargetName="FocusableContent" Property="ls:MoveFocus.Focusable" Value="False"/>
+                <Setter TargetName="FocusableContent" Property="Focusable" Value="False"/>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+</ResourceDictionary>

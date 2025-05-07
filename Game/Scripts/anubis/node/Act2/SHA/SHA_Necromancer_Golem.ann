@@ -1,0 +1,98 @@
+game.states.SHA_Necromancer_Golem = State {function()
+    description=[[Behaviour for the golem that guards the Necromancer]]
+
+    modules = {"shared.util", "shared.moveto"}
+
+    local barricadeArea = Entity("S_SHA_Necromancer_ShadowquakeArea_a41b16b6-d2ae-425c-a0bf-80183a66e7e6")
+    local necromancer = Entity("S_SHA_Necromancer_53651a9f-7ea8-444f-ba2d-224390b72f7d")
+    local necromancerDoor = Entity("S_SHA_Necromancer_HideoutDoor_d5f0872a-c116-4493-bdae-f75dad76e5f7")
+    local tr_sharTempleSub = Entity("S_SHA_Temple_SUB_348b76ee-33d8-471b-a95d-7ded0d6cdfd5")
+    local tr_shadowfellSub = Entity("S_SHA_NightsongPrison_SUB_0a302268-dd92-4462-99e5-ca7491815ec0")
+    local tr_prisonWaitPos = Entity("S_SHA_NightsongPrison_GolemWaitPos_dd1b38e9-6863-45f6-8105-7a7850d1af65")
+
+    local SHA_Necromancer_State_JusticiarsDefeated = Flag("SHA_Necromancer_State_JusticiarsDefeated_30313b78-abb9-450d-942b-7f6bc7837e08")
+    local SHA_Necromancer_State_WaitingForPlayers = Flag("SHA_Necromancer_State_WaitingForPlayers_1ad01a51-4bd3-42e6-a1de-02696bc9da67")
+    local SHA_Necromancer_State_GolemSummoned = Flag("SHA_Necromancer_State_GolemSummoned_9b9ceaed-5981-4fc8-8cfe-49688c5733c8")
+
+    nodes.SharTemple = ImmediateSelector {
+        Valid = function(node)
+            return (IsInTrigger(me, tr_sharTempleSub.Trigger) or IsInTrigger(me, tr_shadowfellSub.Trigger)) and CheckAnySelectable(node)
+        end
+    }
+
+    nodes.SharTemple.WaitAfterSummoned = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(SHA_Necromancer_State_GolemSummoned)
+        end
+    }
+
+    nodes.SharTemple.WaitOutsidePrison = Action{
+        function()
+            local moveResult = MoveTo(tr_prisonWaitPos, MovementSpeed.Stroll, true, true, 3.0, 4.0, false)
+
+            if moveResult ~= error.MovementError.None then
+                DebugText(me, "Movement to wait position failed")
+                Sleep(2.0)
+            end
+
+            LookFrom(tr_prisonWaitPos)
+        end,
+
+        Valid = function()
+            return IsInTrigger(necromancer, tr_shadowfellSub.Trigger)
+        end
+    }
+
+    nodes.SharTemple.WaitingForPlayers = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_SHA_FleshGolem_WaitingForPlayersPoint_7e11aaa2-1b18-431c-bc13-9cc70aef19e2"
+        },
+        Valid = function()
+            return GetFlag(SHA_Necromancer_State_WaitingForPlayers)
+        end
+    }
+
+    nodes.SharTemple.FollowNecromancer = Action{
+        function()
+            local moveResult = MoveTo(necromancer, MovementSpeed.Stroll, true, true, 3.0, 4.0, false)
+
+            if moveResult ~= error.MovementError.None then
+                DebugText(me, "Movement to Necromancer failed")
+                Sleep(2.0)
+            end
+
+            LookFrom(necromancer)
+        end,
+
+        Valid = function()
+            return GetFlag(SHA_Necromancer_State_JusticiarsDefeated) and not necromancerDoor.Item.IsLocked
+        end
+    }
+
+    nodes.SharTemple.GuardNecromancer = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return IsInTrigger(me, barricadeArea.Trigger) and not GetFlag(SHA_Necromancer_State_JusticiarsDefeated)
+        end
+    }
+
+    nodes.SharTemple.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

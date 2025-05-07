@@ -1,0 +1,104 @@
+game.states.GLO_VignetteADManager = State{function()
+    modules = {"shared.dialog","shared.util"}
+
+    description = [[For performance reasons we might disable Anubis completely on vignette characters.
+        This Anubis script must not keep any important state that can't be reinitialized once Anubis is reenabled]]
+
+    params.regionBlockFlag = {type = EParamType.String,  required=false, default="", help=[[
+        Blocks the ADs for the entire group of characters (prevents overlap)
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String,  required=false, default="", help=[[
+        Blocks this specific AD from happening (prevents repetition)
+    ]]}
+
+    params.partners = {type = EParamType.String, arrayRange = "..4", required = false, default = {}, help = [[
+        Dialog Partner list
+    ]]}
+
+    params.AD = {type = EParamType.String, required=true, help=[[
+        The AD to play.
+    ]]}
+
+    params.setDelay = {type = EParamType.Number,  required=false, default=15.0, help=[[
+        Delay between the end of one loop of the AD and the start of the next loop.
+    ]]}
+
+    local AD = Dialog(params.AD)
+    local regionBlockFlag = Flag(params.regionBlockFlag)
+    local dialogBlockFlag = Flag(params.dialogBlockFlag)
+    local partners 
+  
+    helpers.Init = function()
+        if AD == nil then
+            DebugLog("Failed to find the automated dialog"..params.AD)
+        end
+
+        partners = {}
+
+        if params.partners then
+            for _, partner in ipairs(params.partners) do
+                table.insert(partners, Entity(partner)) --don't use Findentity, the entity will be resolved later
+            end
+        end
+    end
+
+    self.OnLoaded = function()
+        helpers.Init()
+    end
+
+    self.CanEnter = function()
+        if AD ~= nil then
+            return (not regionBlockFlag or
+                    not GetFlag(regionBlockFlag, nil)) and
+                    (not dialogBlockFlag or
+                    not GetFlag(dialogBlockFlag, nil)) and
+                    mod.dialog.AreSpeakersAvailableAndNear(me,12.0,false,false,false,partners)
+        else
+            return false
+        end
+    end
+
+    nodes.DoAD = Action
+    {
+        function()
+            -- put a little random sleep in there, so that we don't all start talking at the 
+            -- same time when walking into a place
+            mod.util.SleepRandom(0.5, 2.5)
+            local RetVal = mod.dialog.StartCheckedAutomatedDialogRateLimited(AD,
+                    { maxDistance = 10.0,
+                    checkSight = false,
+                    ignoreCower = false,
+                    waitForCompletion = true,
+                    minDelay = params.setDelay,
+                    cullingDistance = 5.0 },
+                    me, table.unpack(partners))
+                
+            if RetVal == error.AutomatedDialogRateLimitedStartFailed then
+                DebugLog("AD Failed to start" ..params.AD)
+                Sleep(3.0)
+            end
+        end
+    }
+end}
+
+game.states.GLO_VignetteCharacter = State{function()
+
+    params.ADState = {type=EParamType.State, required = false, default = nil, help=[[AD State.]]}
+    params.StandAtTriggerState = {type=EParamType.State, required = false, default = nil, help=[[Stand at trigger State.]]}
+
+    nodes.ADState = Proxy{
+        params.ADState
+    }
+
+    nodes.StandAtTriggerState = Proxy{
+        params.StandAtTriggerState
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(3.0)
+        end
+    }
+
+end}

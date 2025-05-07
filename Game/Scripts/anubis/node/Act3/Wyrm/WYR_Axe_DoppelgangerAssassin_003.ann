@@ -1,0 +1,53 @@
+game.states.WYR_Axe_DoppelgangerAssassin_003 = State{function()
+    description = [[Danthelon Axe doppelganger behavior]]
+
+    local spline = Spline("S_WYR_Axe_DoppelgangerSpline_003_2c5b5334-a6d1-4deb-b00a-b6c403c4b7f5")
+    local reverse = false
+    local pausing = false
+    local impatient = Animation("CUST_CombatReadyImpatient_01_Loop_5d1167c5-e6db-41f7-9851-5ff7407d5ba5")
+
+    local afterFight = Flag("WYR_Axe_State_DoppelgangersFight_4e94de74-bb48-44c5-ac00-0d453a5ac32b")
+
+    nodes.AfterFight = Action{
+        CanEnter = function()
+            return GetFlag(afterFight)
+        end,
+
+        function()
+            Wander(15.0, 3.0, MovementSpeed.Walk, trigger, false)
+            for i = 1, math.random(1, math.random(1, 5)) do
+                try
+                    PlayAnimation(impatient, true, false)
+                catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+                end
+            end
+            --mod.util.SleepRandom(5.0, 15.0)
+        end
+    }
+
+    nodes.Pause = Action{
+        CanEnter = function()
+            return pausing
+        end,
+
+        function()
+            LookFrom(spline)
+            PlayAnimation(impatient, true, false)
+            pausing = false
+        end
+    }
+
+    nodes.Walk = Action{
+        function()
+            DoPatrol(spline, reverse, MovementSpeed.Stroll, -1, false)
+        end
+    }
+
+
+    events.SplineControlPointReached = function(ev)
+        if ev.EndReached then
+            reverse = not reverse
+            pausing = true
+        end
+    end
+end}

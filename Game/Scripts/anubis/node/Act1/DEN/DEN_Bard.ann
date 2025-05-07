@@ -1,0 +1,671 @@
+game.states.DEN_Bard = State {function ()
+    description = [[Behaviour of the tiefling bard in the Druid's Grove]]
+
+    local ADDelay = 40
+    local runCount = 0
+
+    --Flags
+
+    local stolenFlag = Flag("DEN_TieflingBard_Event_StoleInstrument_e753d155-1a17-a732-6298-811b8eb060b4")
+    local moveWorryFlag = Flag("DEN_TieflingBard_Event_MoveWorry_a3a75863-f5f3-2f19-75be-130f2885d5a6")
+    local moveAngryFlag = Flag("DEN_TieflingBard_Event_MoveAngry_35a977a9-6504-18a6-3de7-d85f9560d3b1")
+    local instrumentFlag = Flag("DEN_TieflingBard_State_LookForInstrument_a8f25b5b-461a-40b2-8ca2-f3399ca52a4f")
+    local sulkFlag = Flag("DEN_TieflingBard_State_Sulking_96b64af5-89ee-4e0f-ac67-a56bf4f2f752")
+    local returnedInstrumentFlag = Flag("DEN_TieflingBard_State_ReturnedInstrument_03c9168b-079b-eff1-fbe4-9dcb4425c529")
+    local PlayAnimation
+
+    --Bools
+
+    local startSearch = true
+    local isSulking = false
+    local canAD = false
+    local adOnceBeforeLeaving = true
+    local doneSearching = false
+    local sulkResetADdelay = true
+
+    --Triggers
+
+    local sulkPoint = Entity("S_DEN_BardSulkingPosition_d36445ea-efac-46a1-9228-1b9d839a49db")
+
+    --Strings
+
+    local movementSpeed = "Run"
+
+    --Animations
+
+    local sadAnim = Animation("CUST_DebugAsset_CustomAnim_01_95ff9541-9c09-4356-8f50-da327d7a64bc")
+    local searchAnim = Animation("CUST_DebugAsset_CustomAnim_01_95ff9541-9c09-4356-8f50-da327d7a64bc")
+
+    --Dialogs
+
+    local sulkAD = Dialog("DEN_TieflingBard_AD_Dejected_020b898e-3537-4302-2014-a2fde01cbf5a")
+    local searchAD = Dialog("DEN_TieflingBard_AD_LookingForInstrument_04769e23-1c36-c222-dd9f-5f82e92436e0")
+
+    --Patrol
+    local patrolSpline = Spline("S_DEN_BardSpline_6c9babe4-cb1a-4c09-bf2b-4803d3b85aaf")
+    local canWalkOnSpline = true
+    local splineEvent = ""
+
+    helpers.ResetADDelay = function()
+        StopTimer(me, "DEN_Bard_ADTimer")
+        StartTimer(me, "DEN_Bard_ADTimer", ADDelay, 0)
+        canAD = false
+    end
+
+    nodes.SearchingForInstrument = Selector {
+        Valid = function()
+            return GetFlag(instrumentFlag) and not GetFlag(returnedInstrumentFlag) and not GetFlag(moveAngryFlag)
+        end
+    }
+
+    nodes.SearchingForInstrument.Patrol = Action {
+        function()
+            if startSearch then
+                startSearch = false
+                StartAutomatedDialog(searchAD, true, me)
+                helpers.ResetADDelay()
+            end
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed[movementSpeed])
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+                canWalkOnSpline = false
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end,
+    }
+
+    nodes.SearchingForInstrument.Search = Action {
+        OnEnter = function() 
+            runCount = runCount + 1
+            if(runCount == 3) then
+                movementSpeed = "Walk"
+            end
+            if(runCount > 12) then
+                SetFlag(sulkFlag)
+                ClearFlag(instrumentFlag)
+            end
+        end,
+        function()
+            LookFrom(patrolSpline)
+            if canAD then
+                StartAutomatedDialog(searchAD, true, me)
+                helpers.ResetADDelay()
+            end
+            PlayAnimation(searchAnim, true, false)
+            canWalkOnSpline = true
+        end,
+        OnLeave = function()
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end
+    }
+
+    nodes.Sulking = Action {
+        OnEnter = function()
+            if(sulkResetADdelay) then
+                sulkResetADdelay = false
+            StopTimer(me, "DEN_Bard_ADTimer")
+                canAD = false
+                StartTimer(me, "DEN_Bard_ADTimer", 40, 0)
+            end
+        end,
+        function()
+            if (not IsInTrigger(me, sulkPoint.Trigger)) then
+                if not IsInDangerousSurfaceFor(sulkPoint, me.Character, 3.0) then
+                    MoveTo(sulkPoint)
+                else
+                    SteerTo(sulkPoint)
+                end
+            else
+                LookFrom(sulkPoint)
+                if (canAD) then
+                    StartAutomatedDialog(sulkAD, true, me)
+                    helpers.ResetADDelay()
+                end
+                Sleep(8)
+            end
+        end,
+        Valid = function()
+            return GetFlag(sulkFlag)
+        end
+    }
+
+    nodes.Sitting = Proxy {
+        game.states.Sit,
+        params = {
+            seat = "S_DEN_BardSeat_7ba74a7c-4d13-4a67-8713-861024e3ca56",
+            seatTrigger = "S_DEN_BardStartPosition_f1fd4dfa-161d-4be3-8c25-0f3059b05f22",
+            sitIdle = StateRef{game.states.DEN_Bard_Sitting},
+        },
+        Valid = function()
+            return not GetFlag(sulkFlag)
+        end
+    }  
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_Bard_ADTimer") then canAD = true end
+    end
+
+
+    events.SplineControlPointReached = function(e)
+        canWalkOnSpline = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+end}
+
+game.states.DEN_Bard_Sitting = State {function ()
+
+    local ADDelay = 45
+
+    --Flags
+
+    local startOverFlag = Flag("DEN_TieflingBard_State_TrashedSong_e91632c7-f099-ff10-8edc-6fac066095d6")
+    local quitComposeFlag = Flag("DEN_TieflingBard_State_ConvincedToQuit_43352c49-25c4-1e6c-4531-e6469a9e71c3")
+    local songCompleteFlag = Flag("DEN_TieflingBard_State_FinishedSong_e8ab958f-015b-f97d-5da4-c599b67e5ba0")
+    local contextFlag = Flag("DEN_TieflingBard_State_AtPlayingSpot_86701f4d-9f6e-b92b-e284-addfbec940b9")
+    local sulkFlag = Flag("DEN_TieflingBard_State_Sulking_96b64af5-89ee-4e0f-ac67-a56bf4f2f752")
+    local angryFlag = Flag("DEN_TieflingBard_Event_MoveAngry_35a977a9-6504-18a6-3de7-d85f9560d3b1")
+    local worryFlag = Flag("DEN_TieflingBard_Event_MoveWorry_a3a75863-f5f3-2f19-75be-130f2885d5a6")
+    local stolenFlag = Flag("DEN_TieflingBard_State_StoleInstrument_b84d6452-19c0-bcbc-e2b4-ad09a787a5ca")
+    local instrumentFlag = Flag("DEN_TieflingBard_State_LookForInstrument_a8f25b5b-461a-40b2-8ca2-f3399ca52a4f")
+
+    --Bools
+
+    local canAD = false
+    local needsTuning = false
+    local quitCompose = true
+    local adOnceBeforeLeaving = true
+    local goFindInstrument = false
+    local playing = true
+    local pushedInstrumentState = false
+
+    --Triggers
+
+    local denArea = Entity("S_DEN_BardSeat_7ba74a7c-4d13-4a67-8713-861024e3ca56")
+
+    --Animations
+
+    local luteAnimLoop = Animation("CUST_LutePlaying_01_f6fc1a32-d958-4181-8bc9-62c0c621a9ae")
+    local tuneAnim = Animation("CUST_LuteTuning_01_01cea260-2828-4682-a760-7a5358abd909")
+    local stowAnim = Animation("CUST_LuteStow_01_eed6e6a0-feab-4f2d-acea-d5ea5325da1c")
+
+    --Dialogs
+
+    local composeAD = Dialog("DEN_TieflingBard_AD_ComposingSong_7428d224-ec0f-e65b-fde7-e2c5c7010da0")
+    local startOverAD = Dialog("DEN_TieflingBard_AD_StartingOver_37f44b70-9849-b49a-bdd0-706c9bcf677e")
+    local fullSongAD = Dialog("DEN_TieflingBard_AD_FullSong_5c443720-b7d8-1918-ded0-1163904290b3")
+    local quitComposingAD = Dialog ("DEN_TieflingBard_AD_QuitComposing_d8bb02ef-bbea-3a23-17f1-1f83251ce427")
+    local brokeInstrumentAD = Dialog("DEN_TieflingBard_AD_InstrumentBroken_d1d602dd-237b-729b-2cc3-6b5e72249404")
+    local stolenInstrumentAD = Dialog("DEN_TieflingBard_AD_InstrumentStolen_3c8919be-c572-55ba-918b-9ee4dbbd1d96")
+    local lookForInstrumentAD = Dialog("DEN_TieflingBard_AD_LookingForInstrument_04769e23-1c36-c222-dd9f-5f82e92436e0")
+
+    helpers.ResetADDelay = function()
+        StopTimer(me, "DEN_Bard_ADTimer")
+        StartTimer(me, "DEN_Bard_ADTimer", ADDelay, 0)
+        canAD = false
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    self.OnEnter = function()
+        if(playing and not HasActiveStatus(me, "DEN_PLAYING_INSTRUMENT") and not pushedInstrumentState) then
+            ApplyStatus(me, "DEN_PLAYING_INSTRUMENT", true, -1.0)
+            PushUnsheathedState(me, UnsheathState.Instrument)
+            pushedInstrumentState = true
+        end
+    end
+
+    self.OnLeave = function()
+        if pushedInstrumentState then
+            RemoveStatus(me, "DEN_PLAYING_INSTRUMENT")
+            PopUnsheathedState(me)
+            pushedInstrumentState = false
+        end
+    end
+
+    nodes.StowAndLeaveToFindInstrument = Action {
+        function()
+            StartAutomatedDialog(lookForInstrumentAD, false, me)
+            helpers.ResetADDelay()
+            SetFlag(instrumentFlag)
+            playing = false
+            RemoveStatus(me, "DEN_PLAYING_INSTRUMENT")
+            PlayAnimation(stowAnim, true)
+            SetFlag(stolenFlag)
+            SetFlag(sulkFlag)
+        end,
+        Valid = function()
+            return goFindInstrument and GetFlag(worryFlag) and not GetFlag(songCompleteFlag)
+        end
+    }
+
+    nodes.StowAndLeaveAngry = Action {
+        function()
+            if (adOnceBeforeLeaving) then
+                adOnceBeforeLeaving = false
+                if(GetFlag(stolenFlag)) then
+                    StartAutomatedDialog(stolenInstrumentAD, false, me)
+                else
+                    StartAutomatedDialog(brokeInstrumentAD, false, me)
+                end 
+            end
+            helpers.ResetADDelay()
+            playing = false
+            RemoveStatus(me, "DEN_PLAYING_INSTRUMENT")
+            PlayAnimation(stowAnim, true)
+            SetFlag(sulkFlag)
+        end,
+        Valid = function()
+            return GetFlag(angryFlag)
+        end
+    }
+
+    nodes.Tune = Action {
+        function()
+            PlayLoopingAnimation(nil, {tuneAnim}, nil, false)
+            Sleep(21.6) --TODO: hard-coded animation sleep fix
+            needsTuning = false
+        end,
+        OnLeave = function()
+            needsTuning = false
+        end,
+        Valid = function()
+            return needsTuning and not GetFlag(quitComposeFlag)
+        end
+    }
+
+    nodes.Play = Action {
+        function()
+            PlayLoopingAnimation(nil, {luteAnimLoop}, nil, false)
+            if(canAD) then
+                if (GetFlag(startOverFlag)) then
+                    StartAutomatedDialog(startOverAD, true, me)
+                elseif (GetFlag(songCompleteFlag)) then
+                    StartAutomatedDialog(fullSongAD, true, me)
+                    helpers.ResetADDelay()
+                else
+                    StartAutomatedDialog(composeAD, true, me)
+                end
+            end
+            Sleep(0.2)
+        end,
+        Valid = function()
+            return not GetFlag(quitComposeFlag)
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            if(quitCompose) then
+                playing = false
+                RemoveStatus(me, "DEN_PLAYING_INSTRUMENT")
+                PlayAnimation(stowAnim, true)
+                quitCompose = false
+            end
+            if(canAD and GetFlag(quitComposeFlag)) then
+                StartAutomatedDialog(quitComposingAD, true, me)
+                helpers.ResetADDelay()
+            end
+            Sleep(5)
+        end,
+        Valid = function()
+            return GetFlag(quitComposeFlag)
+        end
+    }
+    
+    -----------------------------------------
+    -- Events
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_Bard_ADTimer") then
+            canAD = true 
+        elseif(e.TimerName == "DEN_Bard_GoFindInstrumentTimer") then
+            goFindInstrument = true
+            Interrupt()
+        end
+    end
+    
+
+    events.DialogEnded = function(e)
+        if(e.Instance.DialogUUID == composeAD.Guid or e.Instance.DialogUUID == startOverAD.Guid) then
+            helpers.ResetADDelay()
+            needsTuning = true
+        end
+    end
+
+    events.ReposeAdded = function(e)
+        SetFlag(contextFlag, me)
+    end
+
+    events.ReposeRemoved = function(e)
+        ClearFlag(contextFlag, me)
+    end
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_TieflingBard_StartSinging") then
+                canAD = true
+            elseif(e.Event == "DEN_TieflingBard_SheatheInstrument") then
+                PopUnsheathedState(me)
+            end
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == Guid("DEN_TieflingBard_Event_MoveAngry_35a977a9-6504-18a6-3de7-d85f9560d3b1") or e.Flag == Guid("DEN_TieflingBard_State_StoleInstrument_b84d6452-19c0-bcbc-e2b4-ad09a787a5ca") then
+            Interrupt()
+        end
+        if e.Flag == Guid("DEN_TieflingBard_State_HasInstrument_48ea8eec-28a1-4482-961b-98ee6db25f14") and e.Entity == me then
+            StopTimer(me, "DEN_Bard_GoFindInstrumentTimer")
+            goFindInstrument = false
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == Guid("DEN_TieflingBard_State_HasInstrument_48ea8eec-28a1-4482-961b-98ee6db25f14") and e.Entity == me then
+            StartTimer(me, "DEN_Bard_GoFindInstrumentTimer", 7.0, 0)
+        end
+    end
+
+end} 
+
+game.states.DEN_AttackOnDen_Bard = State {function ()
+    description = [[Telling kids a story.]]
+
+    nodes.TellStoryToKids = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPointAndTalk,
+        params = {
+            moveTarget = "S_DEN_AttackBardPos_0338cd9c-7fa2-4775-b297-88add42b865a",
+            anim = "CUST_TellStory_01_dbdc1fed-e798-a352-ff99-70945b59700e",
+            lookFromMoveTarget = true,
+            waitMin = 2,
+            waitMax = 4,
+            moveWaitMin = 2,
+            moveWaitMax = 4,
+            AD = "DEN_AttackOnDen_AD_KidStory_09e50bfd-2977-559f-18fe-5a3306d7e5e3"
+        }
+    }
+    
+end}
+
+game.states.DEN_Bard_AfterAttack = State {function ()
+    
+    description = [[Parents are packing and talking to each other about their child.]]
+
+    -----------------------------------------
+    -- Local variables
+
+    local tieflingKid = Entity("S_DEN_TieflingKid_004_6644185d-385e-4dfc-973c-bb854cbfd540")
+    local autoDialog = Guid("DEN_DruidAttack_AD_BardAndKidAfterAttack_7279d31c-d781-4a37-2d46-ea4ddb12c4e6")
+    local canAD = false
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Default = Selector{
+        function(nodes)
+            if canAD then
+                return nodes.stopAndTalk
+            else
+                return FindWeightedRandomSelectable(nodes, {
+                    [nodes.GuardingKids] = 1,
+                    [nodes.Rest] = 1
+                })
+            end
+        end
+    }
+
+    nodes.Default.stopAndTalk  = Proxy {
+        CanEnter = function()
+            return canAD
+        end,
+        OnEnter = function()
+            canAD = false
+        end,
+        game.states.DEN_GeneralGroveStates_stopAndTalk,
+            params={
+                lookTarget = "S_DEN_TieflingKid_004_6644185d-385e-4dfc-973c-bb854cbfd540",
+            }
+        }
+
+    nodes.Default.GuardingKids = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_AttackBardPos_0338cd9c-7fa2-4775-b297-88add42b865a",
+            anim = "CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7",
+            lookFromMoveTarget = true,
+            waitMin = 1.0,
+            waitMax = 2.0
+        }
+    }
+
+    nodes.Default.Rest = Action {
+        function()
+            Sleep(math.random(3.0,5.0))
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.DialogEnded = function(e)
+        if(e.Instance.DialogUUID == autoDialog) then
+            canAD = false
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == tieflingKid) then
+            if(e.Event == "DEN_MovedToTalk") then
+                StartTimer(me, "DEN_GroveRefugee_DialogFailedInterrupt",3.0,0)
+                canAD = true
+                Interrupt()
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_GroveRefugee_DialogFailedInterrupt") and not IsInDialog(me, false) then
+            Interrupt()
+        end
+    end
+
+end}
+
+game.states.DEN_Bard_Camp = State{
+    function()
+        description=[[Generic behaviour for idling at the campsite]]
+
+        modules = {"shared.util", "shared.dialog"}
+
+        local campPos = nil
+        local idlePos = nil
+        local finishedSong = Flag("DEN_TieflingBard_State_FinishedSong_e8ab958f-015b-f97d-5da4-c599b67e5ba0")
+        local lute = Entity("S_DEN_BardInstrument_45a48cf7-baed-4d48-aaf4-1399948314e6")
+
+        local inCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+
+        local astarion = Entity("S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255")
+        local tressym = Entity("S_GLO_Gale_Tressym_ada7ee81-829d-48c7-ba73-9c9ec191d236")
+        local volo = Entity("S_GLO_Volo_2af25a85-5b9a-4794-85d3-0bd4c4d262fa")
+        local wyll = Entity("S_Player_Wyll_c774d764-4a17-48dc-b470-32ace9ce447d")
+
+        local soloAD = Dialog("CAMP_Bard_AD_1e271608-3cea-9698-bb60-acc44204c1cc")
+
+        local recruited = Flag("GLO_Origin_PartOfTheTeam_Alfira_f5d7c888-ccce-4a30-a0a8-6ac0c9f4c094")
+        local convincedToQuit = Flag("DEN_TieflingBard_State_ConvincedToQuit_43352c49-25c4-1e6c-4531-e6469a9e71c3")
+        local smashedLute = Flag("DEN_TieflingBard_State_SmashedLute_d9778e98-9f2e-e522-ba99-116b00fa3454")
+
+        local actionActive = false
+
+        nodes.inCamp = Selector{
+            function(nodes)
+                if GetFlag(recruited) or
+                   GetFlag(convincedToQuit) or
+                   GetFlag(smashedLute) then
+                    return FindWeightedRandomSelectable(nodes,
+                                                        {[nodes.TalkToAstarion] = 3,
+                                                         [nodes.TalkToTara] = 3,
+                                                         [nodes.TalkToWyll] = 3,
+                                                         [nodes.TalkToVolo] = 3,
+                                                         [nodes.TalkToSelf] = 1,
+                                                         [nodes.Idle] = 20})
+                else
+                    return nodes.Idle
+                end                                                   
+            end
+        }
+
+        nodes.inCamp.TalkToAstarion = Proxy{
+            game.states.GLO_PlayAD,
+            params = {AD = "CAMP_Bard_AD_Astarion_8072bdb9-de5d-5f1c-a759-c690c4b39cdd",
+                      partners = {"S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255"},
+                      fallback = nil},
+            CanEnter = function()
+                return GetFlag(inCamp, astarion) and 
+                       not astarion.Character.IsPlayer
+            end
+        }
+
+        
+        nodes.inCamp.TalkToTara = Proxy{
+            game.states.GLO_PlayAD,
+            params = {AD = "CAMP_Bard_AD_GaleTressym_283fb1de-0587-991a-58e4-eb7d412b3813",
+                      partners = {"S_GLO_Gale_Tressym_ada7ee81-829d-48c7-ba73-9c9ec191d236"},
+                      fallback = nil},
+            CanEnter = function()
+                return GetFlag(inCamp, tressym)
+            end
+        }
+
+        nodes.inCamp.TalkToWyll = Proxy{
+            game.states.GLO_PlayAD,
+            params = {AD = "CAMP_Bard_AD_Wyll_e56f19d9-db4c-198d-320d-59175acfe2a3",
+                      partners = {"S_Player_Wyll_c774d764-4a17-48dc-b470-32ace9ce447d"},
+                      fallback = nil},
+            CanEnter = function()
+                return GetFlag(inCamp, wyll) and 
+                       not wyll.Character.IsPlayer
+            end
+        }
+
+        
+        nodes.inCamp.TalkToVolo = Proxy{
+            game.states.GLO_PlayAD,
+            params = {AD = "CAMP_Bard_AD_Volo_b5a2ed4f-7bb0-5bb1-bb78-0a2fbaa0d921",
+                      partners = {"S_GLO_Volo_2af25a85-5b9a-4794-85d3-0bd4c4d262fa"},
+                      fallback = nil},
+            CanEnter = function()
+                return GetFlag(inCamp, volo)
+            end
+        }
+
+        nodes.inCamp.TalkToSelf = Action{
+            function()
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    soloAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 15
+                    },
+                    me
+                )
+            end,
+            CanEnter = function()
+                return mod.dialog.IsSpeakerAvailable(me)
+            end
+        }
+
+        nodes.inCamp.Idle = Action{
+            function()
+                if campPos == nil or campPos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                    SetUnicastEntityEvent(me,"CampPosRequest")
+                    Sleep(2.0)
+                    return
+                end
+
+                idlePos = campPos
+
+                if idlePos == nil or idlePos.UUID == Guid("NULL_00000000-0000-0000-0000-000000000000") then
+                    Sleep(2.0)
+                    return
+                end
+
+                if IsInDangerousSurfaceFor(idlePos, me.Character) then
+                    SteerTo(idlePos)
+                    Sleep(2.0)
+                    return
+                end
+
+                local moveResult = MoveTo(idlePos, MovementSpeed.Walk, true, false, 1.5, 2.5, false)
+
+                if moveResult ~= error.MovementError.None then
+                    SteerTo(idlePos)
+                    Sleep(2.0)
+                    return
+                end
+
+                LookFrom(idlePos)
+
+                if GetFlag(finishedSong) and
+                   IsInInventoryOf(lute, me) and
+                   ((not HasActiveStatus(me, "PERFORM_POSITIVE_BARDDANCE") and
+                     not HasActiveStatus(me, "PERFORM_POSITIVE_THEPOWER")) or
+                     math.random() < 0.3) then --Limited chance to switch songs, so she doesn't play the same thing forever.
+                    Equip(me.Character, lute.Item)
+                    if math.random() < 0.5 then
+                        if HasActiveStatus(me, "PERFORM_POSITIVE_THEPOWER") then
+                            RemoveStatus(me, "PERFORM_POSITIVE_THEPOWER")
+                            Sleep(5.0)
+                        end
+                        UseSpell("Shout_Bard_Perform_BardDance_Lute", me, nil, nil, nil, false, false, false, false)
+                    else
+                        if HasActiveStatus(me, "PERFORM_POSITIVE_BARDDANCE") then
+                            RemoveStatus(me, "PERFORM_POSITIVE_BARDDANCE")
+                            Sleep(5.0)
+                        end
+                        UseSpell("Shout_Bard_Perform_ThePower_Lute", me, nil, nil, nil, false, false, false, false)
+                    end
+                    mod.util.SleepRandom(15.0, 25.0)
+                    return
+                else
+                    mod.util.SleepRandom(0.5, 2.0)
+                end
+                
+
+
+                
+            end,
+
+            OnEnter = function()
+                actionActive = true
+            end,
+    
+            OnLeave = function()
+                actionActive = false
+            end   
+        }
+
+        events.EntityEvent = function(e)
+            -- Camp Position Changed
+            if e.TargetEntity == me and e.Event == "CampPositionChange" then
+                campPos = e.Params[1]
+                if actionActive then 
+                    Interrupt()
+                end
+            end
+        end
+    end
+}

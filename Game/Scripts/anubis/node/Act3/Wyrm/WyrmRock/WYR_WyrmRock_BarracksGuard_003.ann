@@ -1,0 +1,109 @@
+game.states.WYR_WyrmRock_BarracksGuard_003 = State{function()
+
+    modules = {"shared.dialog", "shared.math"}
+
+    local lockpickingChest = Flag("WYR_WyrmRock_State_LockpickingChest_cd42d2db-19c3-4707-889f-84d8a6204549")
+    local lockpickingPos = Entity("S_WYR_WyrmRock_LockpickingPos_a48aa441-77da-416b-a76b-32dc24b94bd4")
+    local lockpickContainer = Entity("S_WYR_WyrmRock_BarracksLockedChest_3e861399-cf12-4b0c-8b3f-e8f0101fde8b")
+    local lockpickDialog = Dialog("WYR_WyrmRock_WB_GnomeLockpicking_26a1be12-a86e-f524-16d4-044f19bf5847")
+    local lockpickSceneTrigger = Entity("WYR_WyrmRock_BarracksGuard_003_SceneTrigger_666ccfbb-38d4-4bfd-a9e5-d9f5afd70ba7")
+    local AD = Dialog("WYR_WyrmRock_BarracksGuard_003_AD_60adf632-3be8-e9e5-ed42-69293d234950")
+
+    local timerName = "Timer_WYR_WyrmRock_BarracksGuard_003_SayAD"
+
+    nodes.Lockpicking = Action {
+        CanEnter = function()
+            return GetDistanceTo(me, lockpickingPos) <= 0.21
+        end,
+
+        Valid = function()
+            return GetFlag(lockpickingChest, nil)
+        end,
+
+        OnEnter = function()
+            StartTimer(me, timerName, mod.math.random(1.0, 3.0), 1)
+        end,
+
+        OnLeave = function()
+            StopTimer(me, timerName)
+        end,
+
+        function()
+            try
+                StartBehaviorDialog(lockpickDialog, lockpickSceneTrigger.Trigger, true, me)
+            catch e then
+                DebugLog("WYR_WyrmRock_BarracksGuard_003: "..tostring(e))
+                WaitForInterrupt()
+            end
+        end,
+
+        OnInterrupt = function()
+            BehaviorDialogRequestGracefulStop(me, true, lockpickDialog)
+        end
+    }
+
+    nodes.AtTrigger = Action {
+        CanEnter = function()
+            return GetDistanceTo(me, lockpickingPos) > 0.2
+        end,
+
+        Valid = function()
+            return GetFlag(lockpickingChest, nil)
+        end,
+
+        OnEnter = function()
+            StartTimer(me, timerName, mod.math.random(1.0, 3.0), 1)
+        end,
+
+        OnLeave = function()
+            StopTimer(me, timerName)
+        end,
+
+        function()
+            if not IsInDangerousSurfaceFor(lockpickingPos, me.Character) then
+                local moveResult = MoveTo(lockpickingPos, MovementSpeed.Walk, false, false, 0.0, 0.2)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "MOVEMENT ERROR")
+                end
+            end
+
+            SteerTo(lockpickContainer)
+            -- if we're going to be stuck in this action, sleep to avoid spamming MoveTo/SteerTo
+            if GetDistanceTo(me, lockpickingPos) > 0.2 then
+                Sleep(mod.math.random(2.0, 4.0))
+            end
+        end
+    }
+
+    nodes.DoNothing = Proxy {
+        game.states.Sit,
+        params = {
+            seat = [[S_WYR_WyrmRock_BarracksGuard_002_Chair_3b181be2-5d6a-496c-a5f6-b16acbe47b67]],
+            sitIdle = StateRef{game.states.Dummy},
+        },
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == timerName then
+            local result = mod.dialog.StartCheckedAutomatedDialogRateLimitedImmediate
+                (
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 6.0,
+                    },
+                    me
+                )
+            if result == error.AutomatedDialogRateLimitedStartFailed then
+                DebugText(me, "Error: StartCheckedAutomatedDialogRateLimitedImmediate failed")
+            end
+            StartTimer(me, timerName, mod.math.random(5.0, 10.0), 1)
+        end
+    end
+end}

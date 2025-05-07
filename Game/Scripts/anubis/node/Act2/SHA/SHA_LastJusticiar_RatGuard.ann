@@ -1,0 +1,42 @@
+game.states.SHA_LastJusticiar_RatGuard = State{function()
+    description=[[This rat will bite the player if they enter a specific trigger]]
+
+    params.GuardArea = {type=EParamType.String, default = "",
+        help = [[Area where the rat will bite the player]]}
+        
+    local guardArea = Entity(params.GuardArea)
+    local biteTarget = nil
+
+    nodes.Bite = Action{
+        function()
+            UseSpell("Target_Bite_Rat_Summon", biteTarget)
+            Sleep(6.0)
+        end,
+
+        CanEnter = function()
+            return biteTarget ~= nil and IsInTrigger(biteTarget, guardArea.Trigger)
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            Sleep(2.0)
+        end,
+
+        CanEnter = function()
+            return biteTarget == nil or not IsInTrigger(biteTarget, guardArea.Trigger)
+        end
+    }
+
+    events.EnteredTrigger = function(e)
+        if e.Trigger == guardArea and e.Target.Character.IsPartyMember then
+            biteTarget = e.Target
+        end
+    end
+
+    events.LeftTrigger = function(e)
+        if e.Trigger == guardArea and  e.Target == biteTarget then
+            biteTarget = nil
+        end
+    end 
+end}

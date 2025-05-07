@@ -1,0 +1,529 @@
+game.states.PLA_FlamingFists = State{function ()
+
+    modules = {"shared.character", "shared.items" }
+
+    params.outsideTrigger = {type = EParamType.String, help=[[
+        Where the character stands while trying to get in.
+    ]]}
+
+    params.insideTrigger = {type = EParamType.String, help=[[
+        Where the character stands while they're inside the building.
+    ]]}
+
+    params.insideWaitTrigger = {type = EParamType.String, help=[[
+        Where the character pauses when they just enter the building.
+    ]]}
+
+    params.PutOutFire = {type = EParamType.State, help = [[Characters try to put out fire]]}
+
+    params.ADOutside = {type = EParamType.String, required = false, default = nil, help=[[
+        AD while trying to clear rubble
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String, required = false, default = nil, help=[[
+        Individual dialog block flag.
+    ]]}
+
+    params.loopAnimOutside = {type = EParamType.String, required = false, default = nil, help=[[
+        Animation while digging.
+    ]]}
+    params.ADInside = {type = EParamType.String, required = false, default = nil, help=[[
+        AD while trying to clear rubble
+    ]]}
+
+    params.loopAnimInside = {type = EParamType.String, required = false, default = nil, help=[[
+        Animation while digging.
+    ]]}
+
+    params.afterFreeHome = {type = EParamType.String, required = false, default = nil, help=[[
+        Trigger at which the Flaming Fist waits after Desire has been freed.
+    ]]}
+
+    params.afterFreeHomeOutside = {type = EParamType.String, required = false, default = nil, help=[[
+        Trigger at which the Flaming Fist waits after Desire has been freed.
+    ]]}
+
+    params.behaviorDialog = {type = EParamType.String, required = false, default = "BHVR_WRLD_PLA_RemoveObstacle_4543dbb3-ea26-5a02-4331-84a6610182d3", help=[[
+        World behaviour dialogue for trying to remove the obstacle
+    ]]}
+
+    local PLA_TavernInvestigation_Quest_WallCollapsed = Flag("PLA_TavernInvestigation_Quest_WallCollapsed_391d017d-cbfb-768a-086d-ea404313eab4")
+    local PLA_TavernInvestigation_State_InstructionGiven = Flag("PLA_TavernInvestigation_State_InstructionGiven_cacad2cd-873d-4661-aed8-94cd366d72f6")
+    local PLA_TavernInvestigation_State_DesireFreed = Flag("PLA_TavernInvestigation_State_DesireFreed_6cbc6d66-e45a-4b98-a9df-59dfad97d1f0")
+    local PLA_FlamingFist1
+    local GLO_Desire
+    local PLA_DesireTrappedRoom
+    local PLA_DesireFreedTrigger3
+    local insideWaitTrigger
+    local lastWanderIndex = 0
+    local CUST_Inspect_01
+    local afterFreeHome = Entity(params.afterFreeHome)
+    local afterFreeHomeOutside = Entity(params.afterFreeHomeOutside)
+    local PLA_TavernInvestigation_DesireDoor2 = Entity("S_PLA_TavernInvestigation_DesireDoor2_e6b2f9ca-a59b-4842-8c1b-1b6499b884f7")
+    local PLA_DesireFreedTrigger_NearDoor = Entity("S_PLA_DesireFreedTrigger4_04f89219-a0fd-4420-8d9a-4e81272e530f")
+
+    local florrickPermaDefeated = Flag("GLO_Florrick_State_PermaDefeated_c190fb1f-4c27-4948-87f0-29dc5a9b5b55")
+    local insidePanicTrigger = Entity("S_PLA_TavernInvestigation_Plains_WanderTrigger_92a5c69d-0021-4c60-afc4-170695c21aa1")
+
+    self.OnInit = function()
+        PLA_FlamingFist1 = FindEntity("S_PLA_FlamingFist1_646a4195-4091-4dc9-81e1-cff2604f3911")
+        PLA_DesireTrappedRoom = FindEntity("S_PLA_DesireTrappedRoom_3063bdd1-3c92-4c46-9804-15098cfe54ad")
+        GLO_Desire = FindEntity("S_GLO_Desire_8b9fa503-7205-4ddd-bdfa-bfaa781d9ea9")
+        PLA_DesireFreedTrigger3 = FindEntity("S_PLA_DesireFreedTrigger3_14dd7e9d-9041-4619-953c-d3c05116d027")
+        insideWaitTrigger = FindEntity(params.insideWaitTrigger)
+
+        CUST_Inspect_01 = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    end
+
+    nodes.DesireFreed = Selector{
+        function(nodes)
+            if GetFlag(florrickPermaDefeated) and 
+               GetFlag(PLA_TavernInvestigation_Quest_WallCollapsed, nil) then
+                return nodes.Panic
+            elseif IsInTrigger(GLO_Desire, PLA_DesireFreedTrigger3.Trigger) or
+               IsInTrigger(GLO_Desire, PLA_DesireFreedTrigger_NearDoor.Trigger) then
+                return nodes.Outside
+            else
+                return nodes.Inside
+            end
+        end,
+        Valid = function()
+            return (not IsInTrigger(GLO_Desire, PLA_DesireTrappedRoom.Trigger) or
+                   mod.items.SafeIsDestroyed(PLA_TavernInvestigation_DesireDoor2)) and
+                   GetFlag(PLA_TavernInvestigation_Quest_WallCollapsed)
+        end
+    }
+
+    nodes.DesireFreed.Inside = Action{
+        function()
+            if not IsInDangerousSurfaceFor(afterFreeHome, me.Character) then
+                if GetDistanceTo(me, afterFreeHome) > 2.0 then
+                    try
+                        MoveTo(afterFreeHome, MovementSpeed.Sprint)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(afterFreeHome, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(afterFreeHome)
+                end
+            else
+                LookAtEntity(afterFreeHome, 3.0)
+            end
+            Sleep(2.0)
+        end
+        }
+
+    nodes.DesireFreed.Outside = Action{
+        function()
+            if not IsInDangerousSurfaceFor(afterFreeHomeOutside, me.Character) then
+                if GetDistanceTo(me, afterFreeHomeOutside) > 2.0 then
+                    try
+                        MoveTo(afterFreeHomeOutside, MovementSpeed.Sprint)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(afterFreeHomeOutside, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(afterFreeHomeOutside)
+                end
+            else
+                LookAtEntity(afterFreeHomeOutside, 3.0)
+            end
+            Sleep(2.0)
+        end
+        }
+
+    nodes.DesireFreed.Panic = Action{
+        function()
+            Wander(insidePanicTrigger, math.random()*3.0+6.0, MovementSpeed.Sprint)
+            Sleep(math.random()+2.0)
+        end
+        }
+
+    nodes.AtObstruction = Proxy{
+        game.states.PLA_FlamingFists_AtObstruction,
+        params = {trigger = params.outsideTrigger,
+                  AD = params.ADOutside,
+                  dialogBlockFlag = params.dialogBlockFlag,
+                  loopAnim = params.loopAnimOutside,
+                  behaviorDialog = params.behaviorDialog},
+    Valid = function()
+        return not GetFlag(PLA_TavernInvestigation_Quest_WallCollapsed, nil) and
+               not PLA_FlamingFist1.Character.IsDead and
+               not HasActiveStatus(PLA_FlamingFist1, "KNOCKED_OUT")
+    end
+    }
+
+    nodes.PutOutFire = Proxy{
+        params.PutOutFire,
+        Valid = function()
+            return not GetFlag(PLA_TavernInvestigation_Quest_WallCollapsed, nil) and
+                (PLA_FlamingFist1.Character.IsDead or
+                    HasActiveStatus(PLA_FlamingFist1, "KNOCKED_OUT"))
+        end
+    }
+
+    nodes.Inside = Action{function()
+        if not IsInDangerousSurfaceFor(insideWaitTrigger, me.Character) then
+            try
+                MoveTo(insideWaitTrigger, MovementSpeed.Run)
+                LookFrom(insideWaitTrigger)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(1.0)
+                return
+            end
+        else
+            LookAtEntity(insideWaitTrigger, 3.0)
+        end
+        Sleep(5.0)
+    end,
+    CanEnter = function()
+        return not GetFlag(PLA_TavernInvestigation_State_InstructionGiven, nil) and
+               GetFlag(PLA_TavernInvestigation_Quest_WallCollapsed, nil) and
+               not PLA_FlamingFist1.Character.IsDead and
+               not HasActiveStatus(PLA_FlamingFist1, "KNOCKED_OUT") and
+               not mod.items.SafeIsDestroyed(PLA_TavernInvestigation_DesireDoor2)
+    end,
+    Valid = function()
+        return not GetFlag(PLA_TavernInvestigation_State_InstructionGiven, nil)
+    end
+    }
+
+    nodes.InsideObstruction = Proxy{
+        game.states.PLA_FlamingFists_AtObstruction,
+        params = {trigger = params.insideTrigger,
+                  AD = params.ADInside,
+                  dialogBlockFlag = params.dialogBlockFlag,
+                  loopAnim = params.loopAnimInside},
+    CanEnter = function()
+        return GetFlag(PLA_TavernInvestigation_Quest_WallCollapsed, nil) and
+               (not mod.character.IsDefeated(PLA_FlamingFist1) or
+                GetFlag(PLA_TavernInvestigation_State_InstructionGiven, nil)
+                or HasActiveStatus(PLA_FlamingFist1, "KNOCKED_OUT")) and
+               not mod.items.SafeIsDestroyed(PLA_TavernInvestigation_DesireDoor2)
+    end
+    }
+
+end
+}
+
+game.states.PLA_FlamingFists_AtObstruction = State{function ()
+
+    params.trigger = {type = EParamType.String, help=[[
+        Where the character stands while trying to get in.
+    ]]}
+
+    params.AD = {type = EParamType.String, required = false, default = nil, help=[[
+        AD while trying to clear rubble
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String, required = false, default = nil, help=[[
+        Individual dialog block flag.
+    ]]}
+
+    params.loopAnim = {type = EParamType.String, required = false, default = nil, help=[[
+        Animation while digging.
+    ]]}
+
+    params.behaviorDialog = {type = EParamType.String, required = false, default = "BHVR_WRLD_PLA_RemoveObstacle_4543dbb3-ea26-5a02-4331-84a6610182d3", help=[[
+        World behaviour dialogue for trying to remove the obstacle
+    ]]}
+
+    local trigger
+
+    self.OnInit = function()
+        trigger = FindEntity(params.trigger)
+    end
+
+    nodes.Behaviour = Proxy{
+        game.states.PLA_FlamingFists_AtObstructionInternal,
+        params = {trigger = params.trigger,
+                  AD = params.AD,
+                  dialogBlockFlag = params.dialogBlockFlag,
+                  loopAnim = params.loopAnim,
+                  behaviorDialog = params.behaviorDialog}
+    }
+
+    nodes.returnToTrigger = Action{function()
+        if not IsInDangerousSurfaceFor(trigger, me.Character) then
+            try
+                MoveTo(trigger, MovementSpeed.Run, false, true)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(1.0)
+                return
+            end
+        else
+            LookAtEntity(trigger, 3.0)
+            Sleep(4.0)
+        end
+    end}
+
+end
+}
+
+game.states.PLA_FlamingFists_AtObstructionInternal = State{function ()
+    modules = {"shared.util"}
+
+    params.AD = {type = EParamType.String, required = false, default = nil, help=[[
+        AD while trying to clear rubble
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String, required = false, default = nil, help=[[
+        Individual dialog block flag.
+    ]]}
+
+    params.loopAnim = {type = EParamType.String, required = false, default = nil, help=[[
+        Animation while digging.
+    ]]}
+
+    params.trigger = {type = EParamType.String, required = false, default = nil, help=[[
+        Trigger at which the character stands
+    ]]}
+
+    params.behaviorDialog = {type = EParamType.String, required = false, default = "BHVR_WRLD_PLA_RemoveObstacle_4543dbb3-ea26-5a02-4331-84a6610182d3", help=[[
+        World behaviour dialogue for trying to remove the obstacle
+    ]]}
+
+    local loopAnim
+    local trigger
+    local inAnimation = false
+    local animationTransition = false
+    local pauseAnimation = false
+    local behaviorDialog = nil
+
+    self.OnInit = function()
+        loopAnim = Animation(params.loopAnim)
+        trigger = FindEntity(params.trigger)
+        behaviorDialog = Dialog(params.behaviorDialog)
+    end
+
+    nodes.AtObstructionSelector = Selector{function(nodes)
+        return GetWeightedCanEnter(nodes, {
+                        [nodes.AtObstruction] = 3,
+                        [nodes.Action_AD] = 1}
+                )
+    end
+    }
+
+    nodes.AtObstructionSelector.AtObstruction = Action{
+        function()
+            if pauseAnimation and inAnimation and behaviorDialog ~= nil then
+                BehaviorDialogRequestGracefulStop(me,false,behaviorDialog)
+            elseif not inAnimation and behaviorDialog ~= nil then
+                DebugText(me,"Sleep")
+                Sleep(math.random()*2.0)
+                DebugText(me,"Start")
+                StartBehaviorDialog(behaviorDialog,trigger.Trigger,false,me)
+            end
+            --DebugText(me,"Trigger: [1]",params.trigger)
+            Sleep(1.0)
+        end
+    }
+
+
+    nodes.AtObstructionSelector.Action_AD = Proxy{
+        game.states.GLO_ADManager,
+        params={
+            AD = params.AD,
+            regionBlockFlag = "PLA_FlamingFists_State_BlockAD_b40a237c-de00-4d22-9434-b6e8957dcbd8",
+            dialogBlockFlag = params.dialogBlockFlag,
+            },
+        CanEnter = function()
+            return inAnimation
+        end
+    }
+
+    self.OnLeave = function()
+        inAnimation = false
+    end
+
+    self.Valid = function()
+        if not trigger then
+            trigger = FindEntity(params.trigger)
+        end
+        return GetDistanceTo(trigger, me) <= 2.0
+    end
+
+    
+    events.DialogActorJoined = function(e)
+        if e.Actor == me and behaviorDialog ~= nil and e.Instance.DialogUUID == behaviorDialog.Guid then
+            inAnimation = true
+        end
+            
+        if e.Actor == me and not e.Instance.Automated then
+            pauseAnimation = true
+        end
+    end
+
+    events.DialogActorLeft = function(e)
+        if e.Actor == me and behaviorDialog ~= nil and e.Instance.DialogUUID == behaviorDialog.Guid then
+            inAnimation = false
+        end
+            
+        if e.Actor == me and not e.Instance.Automated then
+            pauseAnimation = false
+        end
+    end
+
+end
+}
+
+game.states.PLA_FlamingFists_PutOutFire = State{
+    function()
+
+        params.fountainTrigger = {type = EParamType.String, required = false, default = nil, help=[[
+            Trigger at fountain
+        ]]}
+
+        params.fireTrigger = {type = EParamType.String, required = false, default = nil, help=[[
+            Trigger at fire
+        ]]}
+
+        params.fillBucket = {type = EParamType.String, required = false, default = "BHVR_WLRD_PLA_FillBucketWithWater_77d132bc-38ac-da48-89ba-7f87a8fdac3d", help=[[
+            World behaviour dialogue for filling the bucket at the fountain
+        ]]}
+
+        params.throwWater = {type = EParamType.String, required = false, default = "BHVR_WLRD_PLA_ThrowWateratFire_cd12e6b3-e58e-bb58-741b-14f0b2ac2daf", help=[[
+            World behaviour dialogue for throwing water at the fire
+        ]]}
+
+        local DEC_HAR_Bucket_Water_A
+        local PLA_FlamingFists_PanicBox
+        local fountainTrigger
+        local fireTrigger
+        local hasWater = false
+        local fireSurface
+
+        local fillBucket
+        local throwWater
+        local throwWaterAnim = Animation("CINE_Throwing_Water_Bucket_01_0e0277f2-dce3-432f-a8ff-f3520f9cab0b")
+
+        self.OnInit = function()
+            DEC_HAR_Bucket_Water_A = FindTemplate("DEC_HAR_Bucket_Water_A_15fc401f-0b1d-4f35-a43c-635bb0e50358")
+            PLA_FlamingFists_PanicBox = FindEntity("S_PLA_FlamingFists_PanicBox_3d92f904-ec82-41f4-8538-50cab9499b10")
+            fountainTrigger = FindEntity(params.fountainTrigger)
+            fireTrigger = FindEntity(params.fireTrigger)
+            fillBucket = Dialog(params.fillBucket)
+            throwWater = Dialog(params.throwWater)
+        end
+
+        nodes.PutOutFireSelector = ImmediateSelector{
+            function(nodes)
+                if hasWater and
+                   FindSurface(me, 2.0, 8.0, SurfaceType.FIRE) then
+                    return nodes.AtFire
+                elseif not hasWater and
+                       GetDistanceTo(me, fountainTrigger) < 1.5 then
+                    return nodes.AtFountain
+                else
+                    return nodes.Move
+                end
+            end,
+            CanEnter = function()
+                return TemplateIsInInventory(me, DEC_HAR_Bucket_Water_A) --TODO: Replace with Tagged check.
+            end
+        }
+
+        nodes.PutOutFireSelector.AtFire = Action{
+            function()
+                --DebugText(me, "Finding fire surface",validPosition)
+                local firePos = FindSurface(me, 2.0, 3.0, SurfaceType.FIRE) or FindSurface(fireTrigger, 2.0, 8.0, SurfaceType.FIRE)
+                --DebugText(me, "Firepos [1]",firePos)
+                local validPosition = FindValidPosition(firePos, 5.0, me, true) or FindValidPosition(fireTrigger.Position, 5.0, me, true)
+                --DebugText(me, "Valid pos [1]",validPosition)
+                if validPosition == nil then
+                    validPosition = fireTrigger.Position
+                    DebugText(me, "Valid pos trigger fallback [1]",validPosition)
+                end
+                
+                if (validPosition ~= nil) then
+                    --DebugText(me, "Moving to destination [1]",validPosition)
+                    MoveTo(validPosition, MovementSpeed.Run, false, false, 0.0, 3.0)
+                    --DebugText(me, "Steer to [1]",firePos)
+                    SteerTo(firePos)
+
+                    try
+                    --DebugText(me, "Throw water at fire")
+                        StartBehaviorDialog(throwWater, nil, true, me)
+                    catch e then
+                        DebugText(me, "Fallback")
+                        StartBehaviorDialog(throwWater, fireTrigger.Trigger, true, me)
+                    end
+                    CreateSurfaceAt(firePos, SurfaceType.WATER, 1.5, -1.0)
+
+                    hasWater = false
+                else
+                    DebugText(me, "No valid position")
+                    hasWater = false
+                end
+            end
+        }
+
+        helpers.NormalizeVector = function(position)
+            local length = math.sqrt(position.X* position.X + position.Y * position.Y + position.Z * position.Z)
+            if (length == 0.0) then
+                return ls.math.Vector3(1.0,0.0,0.0)
+            else
+                return ls.math.Vector3(position.X / length, position.Y / length, position.Z / length)
+            end
+        end
+
+        nodes.PutOutFireSelector.AtFountain = Action{
+            function()
+                LookFrom(fountainTrigger)
+                Sleep(1.0 + math.random())
+                --DebugText(me, "Fill water")
+                StartBehaviorDialog(fillBucket, fountainTrigger.Trigger, true, me)
+                hasWater = true
+            end
+        }
+
+        nodes.PutOutFireSelector.Move = Action{
+            function()
+                local destination
+                local validPosition
+                --DebugText(me,"Has water [1]",hasWater)
+                if hasWater then
+                    destination = FindSurface(me, 2.0, 8.0, SurfaceType.FIRE) or fireTrigger.Position
+                else
+                    destination = fountainTrigger.Position
+                end
+                validPosition = FindValidPosition(destination, 4.0, me, true)
+                --DebugText(me,"Found valid pos at [1]",validPosition)
+                if validPosition then
+                    try
+                        MoveTo(validPosition, MovementSpeed.Sprint, false, false, 0.0, 1.0)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(destination, 0.3)
+                    end
+                else
+                    DebugText(me, "Throw water at fire fallback")
+                    --PlayAnimation(throwWaterAnim,true,false)
+                    StartBehaviorDialog(throwWater, fireTrigger.Trigger, true, me)
+                end
+            end
+        }
+
+        nodes.Panic = Action{
+            -- If you steal their bucket, they'll run around in confusion.
+            function()
+                Wander(PLA_FlamingFists_PanicBox, 3.0, MovementSpeed.Run)
+                local nearBucket
+                for _, item in ipairs(GetActiveItems(me, 9.0)) do
+                    if item.Item.Template == DEC_HAR_Bucket_Water_A and
+                       CanSee(me, item) then
+                        nearBucket = item
+                        break
+                    end
+                end
+                if nearBucket then
+                    PickUpItem(nearBucket)
+                else
+                    Sleep(2.0)
+                end
+            end
+        }
+
+    end
+}

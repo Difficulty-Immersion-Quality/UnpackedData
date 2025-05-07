@@ -1,0 +1,143 @@
+game.states.HAV_YoungLover_02 = State{function()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    local danis = Entity("S_GLO_YoungLover_01_dd9178e7-1e3f-43bc-8a38-666dfcac7d0c")
+    local waitPoint = Entity("S_HAV_LoverPos_002_c51d63e6-ddc8-4838-baf3-0ace270537f4")
+
+    local loverSpline = Spline("S_HAV_BexSpline_f06519c6-d3a8-46be-8a78-6da960e866c1")
+
+    local loverReturnedFlag = Flag("HAV_SavingPrisoners_State_LoverReturned_b143075b-cc85-4d85-ba72-b24bb981b5e4")
+    local reunionOverFlag = Flag("HAV_LoneLover_Event_ReunionDone_16fc4bc2-2eab-47a6-b83f-ff60a6aeede7")
+
+    local reunionAD = Dialog("HAV_LoneLover_AD_Reunited_cef6128a-aa01-dccd-92f9-6c06d246f73b")
+    local walkAD = Dialog("HAV_LoneLover_AD_StartLoverPromenade_2debbd50-3575-5751-d041-3fcfc97389d8")
+    local noDanisAD = Dialog("HAV_LoneLover_AD_Alone_8fcf9730-3cce-bf65-7581-dbf3f2e97a3b")
+    local promenadePauseAD = Dialog("HAV_LoneLover_AD_Promenade_bb8fc5af-6ad0-f2af-752c-8a9376a088d1")
+
+    local sadAnim = Animation("CUST_Worried_01_a4616816-be6d-4fa1-a65a-2da057196af4")
+
+    local startedPatrol = false
+    local patrolling = false
+
+    nodes.Reunion = Action{
+        function()
+            if mod.moveto.MoveToPoint(waitPoint, MovementSpeed.Walk, me) then
+                Sleep(2)
+                SteerTo(danis)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    reunionAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 30.0
+                    },
+                    me,
+                    danis
+                )
+            else
+                LookAtEntity(waitPoint, 3.0)
+            end
+        end,
+        Valid = function()
+            return not danis.Character.IsDead and GetFlag(loverReturnedFlag) and not GetFlag(reunionOverFlag)
+        end
+    }
+
+    nodes.LoverPromenade = Selector{
+        OnEnter = function()
+            if(not startedPatrol) then
+                patrolling = true
+            end
+        end,
+        Valid = function()
+            return not danis.Character.IsDead and GetFlag(reunionOverFlag)
+        end
+    }
+
+    nodes.LoverPromenade.Patrol = Action{
+        OnEnter = function()
+            SetEntityEvent(danis, "HAV_LoneLover_ResumePromenade")
+        end,
+        function()
+            if(not startedPatrol) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                    walkAD,
+                    {
+                        waitForCompletion = true,
+                    },
+                    me,
+                    danis
+                )
+                startedPatrol = true
+            end
+            DoPatrol(loverSpline, false, MovementSpeed.Stroll)
+        end,
+        CanEnter = function()
+            return patrolling
+        end
+    }
+
+    nodes.LoverPromenade.WaitForLover = Action{
+        function()
+            LookAtEntity(danis)
+            Sleep(8)
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, danis) > 4.0 and not patrolling
+        end
+    }
+
+    nodes.LoverPromenade.MomentWithLover = Action{
+        function()
+            LookFrom(loverSpline)
+            Sleep(5)
+            mod.dialog.StartCheckedAutomatedDialog(
+                promenadePauseAD,
+                {
+                    waitForCompletion = true,
+                },
+                me,
+                danis
+            )
+            Sleep(5)
+            patrolling = true
+        end,
+    }
+
+    nodes.Alone = Action{
+        function()
+            if mod.moveto.MoveToPoint(waitPoint, MovementSpeed.Walk, me) then
+                LookFrom(waitPoint)
+                PlayAnimation(sadAnim, false, true)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    noDanisAD,
+                    {
+                        minDelay = 30.0
+                    },
+                    me
+                )
+            else
+                LookAtEntity(waitPoint, 3.0)
+            end
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    events.FlagSet = function(e)
+        if e.Flag == loverReturnedFlag.Guid then
+            Interrupt()
+        end 
+    end
+
+    events.SplineControlPointReached = function(e)
+        if(e.Event ~= "HAV_LoneLovers_NoStopSplinePoint") then
+            SetEntityEvent(me, e.Event)
+            patrolling = false
+        end
+    end
+    
+end
+}
+

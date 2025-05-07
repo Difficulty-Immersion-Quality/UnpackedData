@@ -1,0 +1,109 @@
+game.states.COL_TadpolingCentre_PodOccupants = State{
+    function()
+    
+    modules = { "shared.math", "shared.params", "shared.util" }
+
+    -----------------------------------------
+    -- Params
+    params.sleepMin = {type = EParamType.Number,required = false,default = 8.0,
+        help = [[Minimum sleep duration. Sleeps happen either at certain patrol points or in between idle steers.]]}
+    params.sleepMax = {type = EParamType.Number,required = false,default = 20.0,
+        help = [[Maximum sleep duration. Sleeps happen either at certain patrol points or in between idle steers.]]}
+    params.patrolSpline = {type=EParamType.String, required = false, default = "",
+        help = [[Optional patrol spline.]]}
+    params.ADonce = {type=EParamType.String, required = false, default = "",
+        help = [[Optional AD to play once on a spline point with the "Sleep_AD" script event.]]}
+    params.podBed = {type=EParamType.String, required = true,
+        help = [[Should repose on this invisible pod bed.]]}
+
+    -----------------------------------------
+    -- Locals
+    local sleepMin = 7
+    local sleepMax = 15
+    local doPatrol = false
+    local doSleep = false
+    local didAD = false
+    local releasedFlag = Flag("COL_TadpolingCentre_Event_ReleasePods_3e81dc65-eb2d-86aa-5163-28450894f868")
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        if params.patrolSpline~=nil and params.patrolSpline~="" then
+            doPatrol = true
+        end
+        if params.sleepMin~=nil and params.sleepMax~=nil then
+            sleepMin = params.sleepMin
+            sleepMax = params.sleepMax
+        end
+    end
+
+    -----------------------------------------
+    -- Nodes
+    
+    nodes.InPod = Proxy{
+        game.states.Sit,
+        params = {
+            seat = params.podBed,
+        },
+        CanEnter = function()
+            return not GetFlag(releasedFlag)
+        end
+    }
+
+    nodes.Sleep = Action{
+        function() 
+            Sleep(math.random(sleepMin,sleepMax))
+            doSleep = false
+        end,
+        CanEnter = function()
+            return doSleep
+        end
+    }
+
+    nodes.FollowPatrol = Proxy{
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = params.patrolSpline,
+            patrolReverse = false,
+            patrolSpeed = "Stroll",
+            startSplineIndex = -1,
+        },
+        CanEnter = function()
+            return doPatrol
+        end
+    }   
+
+    nodes.Idle = Action{
+        function()
+            local duration = math.random(sleepMin,sleepMax)
+            --DebugText(me,"Steer sleep [1]",duration)
+            Sleep(duration)
+            local steerTarget = me.Position + (me.ForwardDirection * 3.0) --multiplied to avoid steering to own position
+            local offset = Vector3(math.random()*2.0-1.0,0.0,math.random()*2.0-1.0) * 1.5 -- > multiplier > relative turn angle
+            steerTarget = steerTarget + offset
+            --DebugText(me,"Steering to [1]",steerTarget)
+            SteerTo(steerTarget)
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Sleep" then
+            doSleep = true
+        elseif e.Event == "Sleep_AD" then
+            doSleep = true
+            if (not didAD and params.ADonce~="") then
+                local AD = Dialog(params.ADonce)
+                if AD ~= nil then
+                    local result = StartAutomatedDialogRateLimitedImmediate(AD,0.2,8.0,me)
+                    if result then
+                        didAD = true
+                    end
+                end
+            end
+        end
+    end
+
+    end
+}

@@ -1,0 +1,71 @@
+game.states.MOO_AssaultHarper_Patrol = State{ function ()
+
+    description = [[Behaviour for Harpers during the assault on Moonrise]]
+
+    modules = { "shared.moveto" }
+
+    params.TowerPatrol = {type = EParamType.String, help=[[
+        Patrol for movement around the tower
+    ]]}
+
+    local orderFlag = Flag("MOO_Assault_Event_JaheiraGaveOrders_f7e185fe-a85a-40e9-a9a6-fcff1fe156d8")
+    local towerPatrol = Spline(params.TowerPatrol)
+    local patrolSplineIndex = -1
+    local lookAroundAnim = Animation("CUST_Investigating_LookingAround_01_dfbe749c-d0c2-4f4f-91cf-f1caaec3f3bf")
+    local isLookingAround = false
+    --So when they return from wandering, they do not repeat the same patrol point event
+    local prevPatrolEvent
+
+    nodes.LookAround = Action {
+        CanEnter = function()
+            return isLookingAround
+        end,
+
+        OnEnter = function()
+            isLookingAround = false
+        end,
+
+        function()
+            Wander(5.0, 3.0, MovementSpeed.Walk)
+            PlayAnimation(lookAroundAnim, true, false)
+            Sleep(2)
+        end
+    }
+
+    nodes.OrderedToPatrol = Action {
+        CanEnter = function()
+            return GetFlag(orderFlag)
+        end,
+
+        OnEnter = function()
+            SetWeaponUnsheathed(me, true)
+        end,
+
+        function()
+            try
+                DoPatrol(towerPatrol, false, MovementSpeed.Run , patrolSplineIndex)
+            catch e if ls.CheckType(e, error.MissingComponent) then
+                DebugText(me, "Error: MissingComponent")
+                Sleep(3.0)
+            end
+        end,
+
+        OnLeave = function()
+            --SetWeaponUnsheathed(me, false, false)
+            ShortPatrolInterrupt()
+        end
+    }
+
+    nodes.AssaultIdle = Proxy {
+        game.states.MOO_Assault_CombatReadyIdle,
+    }
+
+    events.SplineControlPointReached = function(e)
+        patrolSplineIndex = e.NewIndex
+        if e.Event ~= "" and e.Event ~= prevPatrolEvent then
+            prevPatrolEvent = e.Event
+            isLookingAround = true
+        end
+    end
+    
+end}

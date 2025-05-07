@@ -1,0 +1,52 @@
+game.actions.generics.WYR_Windmill_MFKills_Reaction = Action
+{
+    OnEnter = function() 
+        EndRepose(me)
+    end,
+    function(state)
+        Sleep(math.random()*2)
+        local guardTag = Tag("GUARD_0b52f35e-fb1f-4865-bcd2-5d21ef7343cd")
+        if IsTagged(me,guardTag) then
+            SetWeaponUnsheathed(me, true)
+            Sleep(1)
+            local combatReadyAnim = Animation("CUST_Idle_Still_Combat_01_590ea7e8-ae43-4307-916b-b1133ef47dfa")
+            PlayAnimation(combatReadyAnim, false, true)                       
+        else
+            ApplyStatus(me, "ANIM_COWER")
+        end
+        local randomTime = 2 + math.random()*5
+        Sleep(randomTime)
+        local isLead = state.CrimesHumanoid.IsLead()     
+        if isLead and not IsInDialog(me, false) then
+            local arrestDialog = me.Blackboard.GetFact("ArrestDialog")
+            if arrestDialog then
+                local playDialog = Dialog(arrestDialog)
+                try
+                    StartAutomatedDialog(playDialog, false, me)
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    Sleep(1.0)
+                end
+            end
+        end        
+        if isLead then
+            Sleep(18-randomTime)
+        else
+            if IsTagged(me,guardTag) then
+                StopAnimation(me)
+                SetWeaponUnsheathed(me, false)            
+            else
+                RemoveStatus(me, "ANIM_COWER")
+            end
+            WaitForInterrupt()
+        end
+    end,
+    OnLeave = function()
+        local guardTag = Tag("GUARD_0b52f35e-fb1f-4865-bcd2-5d21ef7343cd")
+        if IsTagged(me,guardTag) then
+            StopAnimation(me)
+            SetWeaponUnsheathed(me, false)            
+        else
+            RemoveStatus(me, "ANIM_COWER")
+        end
+    end    
+}

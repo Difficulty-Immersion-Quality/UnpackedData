@@ -1,0 +1,80 @@
+game.states.HAG_HagAmbush_Brothers = State{function ()
+
+    params.arguePoint = {type=EParamType.String, required=true, help=[[Stand here while arguing with Ethel]]}
+    params.waitPoint = {type=EParamType.String, required=true, help=[[Stand here after Ethel situation]]}
+    params.waitAtSwamp = {type = EParamType.State, required = false, help = [[State to stand around at the swamp.]]}
+    params.angryAnimation = {type=EParamType.String, required=true, help=[[Animation while angry]]}
+    params.angryDialogue = {type=EParamType.String, required=false, help=[[Looping AD]]}
+
+
+    local arguePoint = Entity(params.arguePoint)
+    local waitPoint = Entity(params.waitPoint)
+
+    local arguingAnimation = Animation(params.angryAnimation)
+    local HAG_HagAmbush_Quest_Confrontation_PlayerSidedBrothers = Flag("HAG_HagAmbush_Quest_Confrontation_PlayerSidedBrothers_130b6712-6f14-8e62-df19-1b4f33ed07b0")
+    local angryDialogue
+    local HAG_HagAmbush_Hag = Entity("S_HAG_HagAmbush_Hag_fb9cc235-398e-418d-a4a2-5da058fe7055")
+    local HAG_HagAmbush_Brother_001 = Entity("S_HAG_HagAmbush_Brother_001_767e2e80-b340-4e0f-9a6c-fd7df92d6e9e")
+    local HAG_HagAmbush_Brother_002 = Entity("S_HAG_HagAmbush_Brother_002_24c7e849-2ad6-414e-bc38-6ea3f358a80b")
+
+    self.OnInit = function()
+        if params.angryDialogue ~= nil then
+            angryDialogue = Dialog(params.angryDialogue)
+        end
+    end
+
+    nodes.AfterArgument = Action{
+        function()
+            if not IsInDangerousSurfaceFor(waitPoint, me.Character) then
+                if GetDistanceTo(me, waitPoint) > 2.0 then
+                    try
+                        MoveTo(waitPoint)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(waitPoint, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(waitPoint)
+                end
+            else
+                LookAtEntity(waitPoint, 3.0)
+            end
+            Sleep(2.0)
+        end,
+        CanEnter = function()
+            return GetFlag(HAG_HagAmbush_Quest_Confrontation_PlayerSidedBrothers)
+        end
+        }
+
+    nodes.Arguing = Action{
+        function()
+            if not IsInDangerousSurfaceFor(arguePoint, me.Character) then
+                if GetDistanceTo(me, arguePoint) > 2.0 then
+                    try
+                        MoveTo(arguePoint)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(arguePoint, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(arguePoint)
+                    if angryDialogue ~= nil then
+                        PlayAnimation(arguingAnimation, false, true)
+                        StartAutomatedDialog(angryDialogue, true, HAG_HagAmbush_Hag, HAG_HagAmbush_Brother_001, HAG_HagAmbush_Brother_002)
+                        PlayAnimation(arguingAnimation, true, false)
+                    else
+                        PlayAnimation(arguingAnimation, true, false)
+                    end
+                end
+            else
+                LookAtEntity(arguePoint, 3.0)
+                Sleep(2.0)
+            end
+        end,
+        }
+
+
+    end
+}
+
+

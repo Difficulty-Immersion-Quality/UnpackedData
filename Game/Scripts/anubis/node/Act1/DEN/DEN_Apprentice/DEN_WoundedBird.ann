@@ -1,0 +1,100 @@
+game.states.DEN_WoundedBird = State { function ()
+
+    description = [[The wounded bird in the druids' grove]]
+
+    local playLoopAnim = true
+
+    nodes.WoundedExhausted = Proxy {
+        
+        CanEnter = function()
+            return playLoopAnim
+        end,
+        OnEnter = function()
+            LieOnGround(me)
+        end,
+        game.states.GLO_LoopAnimation,
+        params = {
+            loopingAnimation = [[CUST_WoundedBird_01_0f07da0a-116d-41d9-b0c8-c10e3a912ed9]]
+        },
+        OnLeave = function()
+            EndRepose(me)
+        end
+    }
+
+    nodes.Healed = Proxy {
+        game.states.DEN_HealedBird
+    }
+
+    events.StatusRemoved = function(e)
+        if playLoopAnim and (e.Status.StatusID == "EXHAUSTED") then
+            playLoopAnim = false
+            Interrupt()
+        end
+    end
+end}
+
+game.states.DEN_HealedBird = State { function ()
+
+    description = [[The formerly-wounded bird in the druids' grove]]
+
+    local roomSphere = Entity("S_DEN_AppOwnership_6b0e6f9c-bffe-4643-922e-2c97ea39dca7")
+    local canSwoop = nil
+
+    events.SplineControlPointReached = function(e)
+        canSwoop = not e.EndReached and canSwoop
+    end
+
+    nodes.Return = Action {
+        function()
+            try
+                MoveInRange(roomSphere,3.0,10.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(entity,"Move Exception")
+            end
+        end,
+        Valid = function()
+            return not IsInTrigger(me,roomSphere.Trigger)
+        end
+    }
+    nodes.Healed = Selector {
+        function(nodes)
+            return canSwoop == nil and nodes.Swoop or FindWeightedRandomSelectable(nodes, {[nodes.Swoop] = 3, [nodes.Fly] = 9, [nodes.Rest] = 1})
+        end
+    }
+
+    nodes.Healed.Swoop = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = "S_DEN_WoundedSpline_a50bd896-ac68-4efd-885f-eacc9476ea05",
+            patrolSpeed = "Sprint"
+        },
+        Valid = function()
+            return canSwoop ~= false
+        end,
+        OnLeave = function()
+            canSwoop = true
+        end
+    }
+
+    nodes.Healed.Fly = Action {
+        function()
+            Sleep(1)
+            Wander(roomSphere,math.random(1,5),MovementSpeed.Stroll)
+        end
+    }
+
+    nodes.Healed.Rest = Action {
+        function()
+            Sleep(math.random(5,15))
+        end,
+        OnEnter = function()
+            ApplyStatus(me,"EXHAUSTED",true,-1.0)
+            LieOnGround(me)
+        end,
+        OnLeave = function()
+            RemoveStatus(me,"EXHAUSTED")
+            EndRepose(me)
+        end
+    }
+
+end}

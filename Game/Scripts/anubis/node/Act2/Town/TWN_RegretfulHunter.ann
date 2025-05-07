@@ -1,0 +1,118 @@
+game.states.TWN_RegretfulHunter = State {function ()
+    modules = { "shared.moveto", "shared.dialog" }
+
+--------------------------------LOCAL--------------------------------
+    local huntBegunFlag = Flag("TWN_RegretfulHunter_State_HuntHasBegun_92671214-1799-4a88-9cf0-e930c12986ef")
+    local runningBackFlag = Flag("TWN_RegretfulHunter_State_HuntHasBegun_92671214-1799-4a88-9cf0-e930c12986ef")
+    local refusedReleaseFlag = Flag("TWN_RegretfulHunter_State_PlayerRefusedSoulReleaseHunter_30a1f3e6-3d1b-4632-bc96-b516d1d3970e")
+    local agreedReleaseFlag = Flag("TWN_RegretfulHunter_State_PlayerAgreedSoulReleaseHunter_f53c0de8-ded6-4e4f-a083-4743e235d509")
+
+    local standPoint = Entity("S_TWN_HunterStandPoint_e8b30d53-7b4a-4e4c-94ab-9692db5fcd0a")
+    local AD = Dialog("SCL_RegretfulHunter_AD_Idle_143e9b59-dece-d15a-c65f-fbc9dab73b5c")
+    local kneelingAnim = Animation("CUST_Kneeling_01_02aaa9cc-c087-41d4-ac42-461b51306e5f")
+    local isKneeling = false
+
+    local undead = Entity("S_TWN_UndeadTarget_001_2efeb3fc-fd0d-47ce-86f6-07cacfc10ac6")
+--------------------------------NODES--------------------------------
+
+    --Start of situation, Hunter spawns and runs to undead target to join combat
+    nodes.ChaseUndead = Action {
+        function()
+            MoveInRange(undead, 2, 4, MovementSpeed.Sprint, nil, false, false)
+        end,
+
+        Valid = function()
+            return undead.IsInCombat and not undead.Character.IsDead
+        end
+    }
+
+    nodes.WaitingAtHaven = Action{
+        function()
+            Sleep(2)
+              if mod.moveto.MoveToPoint(standPoint, MovementSpeed.Walk, me) then
+                  LookFrom(standPoint)
+                  mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                      AD,
+                      {
+                          waitForCompletion = false,
+                          minDelay = math.random(30, 70)
+                      },
+                      me
+                  )
+              else
+                  LookAtEntity(standPoint, 3.0)
+              end
+          end,
+
+          Valid = function()
+            return not GetFlag(huntBegunFlag) and not GetFlag(runningBackFlag) and not GetFlag(refusedReleaseFlag) and not GetFlag(agreedReleaseFlag)
+          end
+    }
+
+    nodes.Kneeling = Action{
+        function()
+            Sleep(2)
+            if not isKneeling then
+                PlayAnimation(kneelingAnim, false, true)
+                isKneeling = true
+            end
+
+            if GetFlag(refusedReleaseFlag) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = math.random(30, 70)
+                    },
+                    me
+                )
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(refusedReleaseFlag) or GetFlag(agreedReleaseFlag)
+        end,
+
+        OnLeave = function()
+            isKneeling = false
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+end
+}
+
+game.states.TWN_RegretfulHunter_Combat = State {function ()
+    
+    local undead = Entity("S_TWN_UndeadTarget_001_2efeb3fc-fd0d-47ce-86f6-07cacfc10ac6")
+    local inCombatFlag = Flag("TWN_RegretfulHunter_State_HunterInCombatWithTarget_0f9b9260-a6ec-48ee-b53a-e47a5555d87a")
+
+    self.Valid = function()
+        return not undead.Character.IsDead and undead.HitpointsPercentage <= 32.0 and GetFlag(inCombatFlag) 
+        --TODO: Have a check for if he has the spell (I don't think the tag for it is applied when not in party). 
+        --He should always have it for the first encounter, but it may be worth making this flexible so if he enters combat with another target out of party someehow
+        --Example: Hunter enters party, a Player gets hold of spawn item in some way, Hunter leaves party, Player spawns target in range of Hunter before he leaves
+    end
+
+    nodes.SoulRelease = Action {
+        function()
+            try
+                MoveInRange(undead, 4, 8, MovementSpeed.Run, nil, false, false)
+                Sleep(2.5)
+                UseSpell("Projectile_TWN_RegretfulHunter_SoulRelease", undead, nil, nil, nil, true, true, true, true)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Debug : MoveTo failed")
+            end
+            Sleep(4.0)
+            EndTurn(me)
+        end
+    }
+
+end
+}

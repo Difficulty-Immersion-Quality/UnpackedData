@@ -1,0 +1,418 @@
+game.states.GOB_Checkpoint_Guard = State
+{
+    function ()
+        modules = { "shared.dialog", "shared.util" }
+
+        params.partner01 = { type = EParamType.String, required = false, default = "", help = [[first interlocutor]]}
+        params.AD = { type = EParamType.String, required = false, default = "", help = [[Default dialog of the guard]]}
+        params.defaultPosition = { type = EParamType.String, required = false, default = nil, help = [[Default position of the guard]] }
+        params.animBored = { type = EParamType.String, required = false, default = "", help = [[Bored animation]] }
+
+        params.patrolPoint_001_position = { type = EParamType.String, required = false, default = nil, help = [[First patrol point]] }
+        params.patrolPoint_001_animation = { type = EParamType.String, required = false, default = "", help = [[Animation at the first patrol point]] }
+        params.patrolPoint_001_delay = { type = EParamType.Number, required = false, default = 2.0, help = [[Delay at the first patrol point]] }
+        params.patrolPoint_001_dialog =  { type = EParamType.String, required = false, default = "", help = [[]] }
+        params.patrolPoint_002_position = { type = EParamType.String, required = false, default = nil, help = [[Second patrol point]] }
+        params.patrolPoint_002_animation = { type = EParamType.String, required = false, default = "", help = [[Animation at the second patrol point]] }
+        params.patrolPoint_002_delay = { type = EParamType.Number, required = false, default = 2.0, help = [[Delay at the second patrol point]] }
+        params.patrolPoint_002_dialog =  { type = EParamType.String, required = false, default = "", help = [[]] }
+        params.patrolPoint_003_position = { type = EParamType.String, required = false, default = nil, help = [[Third patrol point]] }
+        params.patrolPoint_003_animation = { type = EParamType.String, required = false, default = "", help = [[Animation at the third patrol point]] }
+        params.patrolPoint_003_delay = { type = EParamType.Number, required = false, default = 2.0, help = [[Delay at the third patrol point]] }
+        params.patrolPoint_003_dialog =  { type = EParamType.String, required = false, default = "", help = [[]] }
+
+        params.alarmDefaultPosition = { type = EParamType.String, required = false, default = nil, help = [[The position to which the guard goes when hearing the alarm]] }
+        params.alarmReactionDialog =  { type = EParamType.String, required = false, default = "", help = [[The dialog that the guard says when hearing the alarm]] }
+        params.animAlarmReaction =  { type = EParamType.String, required = false, default = "", help = [[The animation that the guard does when hearing the alarm]] }
+        params.alarmDialogWithBackup =  { type = EParamType.String, required = false, default = "", help = [[The dialog that the main guard plays with the backup guard]] }
+        params.alarmReactionDancing =  { type = EParamType.Bool, required = false, default = false, help = [[]] }
+
+        local alarmInProgress = Flag("GOB_Checkpoint_State_AlarmInProgress_93e1b28b-9b50-2108-94c3-4a689745aeda")
+        local alarmDefaultPosition = Entity(params.alarmDefaultPosition)
+
+        local alarmReactionDialog = Dialog(params.alarmReactionDialog)
+        local animAlarmReaction = Animation(params.animAlarmReaction)
+
+        local anim_Dancing_Start = Animation("CUST_Dancing_01_Start_0a4a0000-7b24-4d6d-9f45-81ed5ab5f245")
+		local anim_Dancing_Loop = { Animation("CUST_Dancing_01_6e23855c-4845-4301-bcf8-9c04f5a782c1") }
+		local anim_Dancing_End = Animation("CUST_Dancing_01_End_f06e76ac-534c-44be-a743-13a150d367c7")
+
+        local AD = Dialog(params.AD)
+        local canAD = true
+        local partner01 = Entity(params.partner01)
+
+        local animBored = Animation(params.animBored)
+        local animStretching = Animation("CUST_Stretching_01_9af703b0-c02f-4c17-bfee-7e11f1f80d6b")
+
+        local defaultPosition = Entity(params.defaultPosition)
+
+        local patrolPoint_001_position = Entity(params.patrolPoint_001_position)
+        local patrolPoint_001_animation = Animation(params.patrolPoint_001_animation)
+        local patrolPoint_001_delay = params.patrolPoint_001_delay
+        local patrolPoint_001_dialog = Dialog(params.patrolPoint_001_dialog)
+
+        local patrolPoint_002_position = Entity(params.patrolPoint_002_position)
+        local patrolPoint_002_animation = Animation(params.patrolPoint_002_animation)
+        local patrolPoint_002_delay = params.patrolPoint_002_delay
+        local patrolPoint_002_dialog = Dialog(params.patrolPoint_002_dialog)
+
+        local patrolPoint_003_position = Entity(params.patrolPoint_003_position)
+        local patrolPoint_003_animation = Animation(params.patrolPoint_003_animation)
+        local patrolPoint_003_delay = params.patrolPoint_003_delay
+        local patrolPoint_003_dialog = Dialog(params.patrolPoint_003_dialog)
+
+        local performedSong = Flag("GOB_Checkpoint_State_PlayerPerformedSong_7f5e3c61-7f9f-3f40-2685-40f3eafe88b7")
+        local reactedOnAlarm = false
+        local alarmDialogWithBackup = Dialog(params.alarmDialogWithBackup)
+        local backupMainGuard = Entity("S_GOB_Checkpoint_Backup_Ranger_01_87bc228e-30d2-4f23-a96e-7e3569a4fb6c")
+        local canStretch = false
+
+        helpers.action.MoveAndLookFromPosition = function(position, movementSpeed, shouldArrive, longPath, minDistance, maxDistance, positionName)
+            try
+                MoveTo(position, movementSpeed, shouldArrive, longPath, minDistance, maxDistance)
+                LookFrom(position)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Movement failed to " .. positionName)
+                Sleep(1.0)
+            end
+        end
+
+        nodes.Selector_NoAlarm = Selector{
+            function(nodes)
+                return FindFirstSelectable(nodes)
+            end,
+
+            Valid = function()
+                return (not GetFlag(alarmInProgress) or reactedOnAlarm == true)
+            end
+        }
+
+        nodes.Selector_NoAlarm.ReturnToPosition = Action {
+            function()
+                helpers.MoveAndLookFromPosition(defaultPosition, MovementSpeed.Walk, false, false, 0.1, 0.5, "defaultPosition")
+            end,
+            CanEnter = function()
+                return (defaultPosition ~= nil and GetDistance2DTo(me, defaultPosition) > 1.0)
+            end
+        }
+
+        nodes.Selector_NoAlarm.Selector_AtDefaultPosition = Selector {
+            function(nodes)
+                return
+                FindWeightedRandomSelectable(nodes, {
+                        [nodes.Action_Talk] = 2,
+                        [nodes.Action_Idle] = 2,
+                        [nodes.Action_Bored] = 1,
+                        [nodes.Action_Stretching] = 1,
+                        [nodes.Action_Patrol] = 2
+                    })
+            end
+        }
+
+        nodes.Selector_NoAlarm.Selector_AtDefaultPosition.Action_Talk = Action {
+            function()
+                mod.util.SleepRandom(2.0, 4.0)
+                StartAutomatedDialog(AD, false, me, partner01)
+            end
+            ,
+            CanEnter = function()
+                return (AD ~= nil and canAD and not IsInDialog(me, false)
+                    and mod.dialog.AreSpeakersAvailableAndNear(me, 10.0, true, false, false, { partner01 }))
+            end
+        }
+
+        nodes.Selector_NoAlarm.Selector_AtDefaultPosition.Action_Idle = Action {
+            function()
+                if (defaultPosition ~= nil) then
+                    LookFrom(defaultPosition)
+                end
+                mod.util.SleepRandom(4.0, 8.0)
+            end
+        }
+
+        nodes.Selector_NoAlarm.Selector_AtDefaultPosition.Action_Bored = Action {
+            function()
+                mod.util.SleepRandom(1.0, 3.0)
+                PlayAnimation(animBored, true)
+                mod.util.SleepRandom(4.0, 8.0)
+                canStretch = true
+            end,
+            CanEnter = function()
+                return animBored ~= nil and canStretch == false
+            end
+        }
+
+        nodes.Selector_NoAlarm.Selector_AtDefaultPosition.Action_Stretching = Action {
+            function()
+                mod.util.SleepRandom(1.0, 3.0)
+                PlayAnimation(animStretching, true)
+                mod.util.SleepRandom(4.0, 8.0)
+                canStretch = false
+            end,
+            CanEnter = function()
+                return animStretching ~= nil and canStretch == true
+            end
+        }
+
+        nodes.Selector_NoAlarm.Selector_AtDefaultPosition.Action_Patrol = Action {
+            function()
+                helpers.MoveAndLookFromPosition(patrolPoint_001_position, MovementSpeed.Walk, false, false, 0.1, 0.5, "patrolPoint_001")
+
+                if (patrolPoint_001_animation ~= nil) then
+                    PlayAnimation(patrolPoint_001_animation)
+                end
+
+                if (patrolPoint_001_dialog ~= nil) then
+                    StartAutomatedDialog(patrolPoint_001_dialog, true, me)
+                end
+
+                if (patrolPoint_001_delay > 0) then
+                    Sleep(patrolPoint_001_delay)
+                end
+
+                if (patrolPoint_002_position ~= nil) then
+                    helpers.MoveAndLookFromPosition(patrolPoint_002_position, MovementSpeed.Walk, false, false, 0.1, 0.5, "patrolPoint_002")
+
+                    if (patrolPoint_002_animation ~= nil) then
+                        PlayAnimation(patrolPoint_002_animation)
+                    end
+
+                    if (patrolPoint_002_dialog ~= nil) then
+                        StartAutomatedDialog(patrolPoint_002_dialog, true, me)
+                    end
+
+                    if (patrolPoint_002_delay > 0) then
+                        Sleep(patrolPoint_002_delay)
+                    end
+                end
+
+                if (patrolPoint_003_position ~= nil) then
+                    helpers.MoveAndLookFromPosition(patrolPoint_003_position, MovementSpeed.Walk, false, false, 0.1, 0.5, "patrolPoint_003")
+
+                    if (patrolPoint_003_animation ~= nil) then
+                        PlayAnimation(patrolPoint_003_animation)
+                    end
+
+                    if (patrolPoint_003_dialog ~= nil) then
+                        StartAutomatedDialog(patrolPoint_003_dialog, true, me)
+                    end
+
+                    if (patrolPoint_003_delay > 0) then
+                        Sleep(patrolPoint_003_delay)
+                    end
+                end
+            end,
+            CanEnter = function()
+                return (patrolPoint_001_position ~= nil)
+            end
+        }
+
+        nodes.Alarm_GoToPosition = Action {
+            function()
+                helpers.MoveAndLookFromPosition(alarmDefaultPosition, MovementSpeed.Run, false, false, 0.1, 0.5, "alarmDefaultPosition")
+            end,
+            CanEnter = function()
+                return (GetFlag(alarmInProgress) and reactedOnAlarm == false and alarmDefaultPosition ~= nil and GetDistance2DTo(me, alarmDefaultPosition) > 0.5)
+            end
+        }
+
+        nodes.Alarm_ReactOnAlarm = Action {
+            function()
+                if (not GetFlag(performedSong)) then
+                    SetWeaponUnsheathed(me, true)
+                    Sleep(8.0)
+                    SetWeaponUnsheathed(me, false)
+                else
+                    if (alarmReactionDialog ~= nil and not IsInDialog(me, false)) then
+                        StartAutomatedDialog(alarmReactionDialog, false, me)
+                    end
+
+                    if (animAlarmReaction ~= nil) then
+                        PlayAnimation(animAlarmReaction, true, false)
+                    elseif params.alarmReactionDancing then
+                        PlayLoopingAnimation(anim_Dancing_Start, anim_Dancing_Loop, anim_Dancing_End)
+                        Sleep(18.0)
+                    end
+                end
+                reactedOnAlarm = true
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end,
+            CanEnter = function()
+                return (GetFlag(alarmInProgress) and reactedOnAlarm == false and alarmDialogWithBackup == nil)
+            end
+        }
+
+        -- Main Guard
+        nodes.Alarm_DialogWithBackup = Action {
+            function()
+                if (CanSee(me, backupMainGuard)
+                    and not IsInDialog(backupMainGuard, false)
+                    and GetDistance2DTo(me, backupMainGuard) < 5.0) then
+                    --DebugText(me, "Starting the dialog!")
+                    Sleep(3.0)
+                    StartAutomatedDialog(alarmDialogWithBackup, true, backupMainGuard, me)
+                end
+            end,
+            CanEnter = function()
+                return (GetFlag(alarmInProgress)
+                    and reactedOnAlarm == false
+                    and alarmDialogWithBackup ~= nil
+                    and not IsInDialog(me, false))
+            end
+        }
+
+        nodes.Alarm_Fallback = Action {
+            function()
+                Sleep(8.0)
+            end,
+            CanEnter = function()
+                return (GetFlag(alarmInProgress) and reactedOnAlarm == false)
+            end
+        }
+
+        -- fallback
+        nodes.State_Idle = Action
+        {
+            function()
+                mod.util.SleepRandom(4.0, 8.0)
+            end
+        }
+
+        events.TimerFinished = function(e)
+            if(e.TimerName == "GOB_Checkpoint_Conversation" and AD ~= nil) then
+                canAD = true
+            end
+        end
+
+        events.DialogEnded = function(e)
+            if (AD ~= nil and e.Instance.DialogUUID == AD.Guid) then
+                canAD = false
+                StartTimer(me, "GOB_Checkpoint_Conversation", 8.0, 0)
+            elseif (alarmDialogWithBackup ~= nil and e.Instance.DialogUUID == alarmDialogWithBackup.Guid) then
+                reactedOnAlarm = true
+            end
+        end
+
+        events.FlagSet = function(e)
+            if (alarmInProgress ~= nil and e.Flag == alarmInProgress.Guid) then
+                reactedOnAlarm = false
+            end
+        end
+
+        events.EntityEvent = function(e)
+            if e.TargetEntity == me then
+                if e.Event == "CMB_BoulderActivate" then
+                    patrolPoint_002_position = nil --
+                end
+            end
+        end
+
+    end
+}
+
+game.states.GOB_Checkpoint_AlarmHandling = State { function()
+
+    modules = { "shared.items" }
+
+    params.alarmDialogAboutRaising =  { type = EParamType.String, required = false, default = "", help = [[The dialog that the guard says before using the alarm]] }
+
+    local alarmDialogAboutRaising = Dialog(params.alarmDialogAboutRaising)
+    local alarm = Entity("S_GOB_Checkpoint_AlarmSystem_17ec4677-d265-43b5-99d1-f62b7051b5f2")
+    local animPlayingDrum = Animation("CUST_Playing_Drum_01_5ad03263-20d9-485f-aa7a-bef408deee7c")
+
+    local alarmNeedsToBeRaised = Flag("GOB_Checkpoint_State_AlarmNeedsToBeRaised_f5de774f-7900-4dc1-8cdc-a2ddb4d37dbf")
+    local alarmRaisedEvent = Flag("GOB_Checkpoint_Event_RaiseAlarm_7c71c2ef-476a-3fd7-47a3-124c8ca1c03a") -- change the name
+    local alarmInProgress = Flag("GOB_Checkpoint_State_AlarmInProgress_93e1b28b-9b50-2108-94c3-4a689745aeda")
+    local alarmIsBroken = Flag("GOB_Checkpoint_State_AlarmIsBroken_1ed76d7c-3abd-4faa-a50d-0194a7eb76f6")
+    local checkpointKnowsAlarmIsBroken = Flag("GOB_Checkpoint_Knows_AlarmIsBroken_c7ec1406-a7ed-4981-ca56-d40d01b066f1")
+    local alarmRaiserDesignated = Flag("GOB_Checkpoint_State_AlarmRaiserDesignated_764ac264-caa4-4b87-8328-06cbfc598c31")
+    local runningToAlarm = Flag("GOB_Checkpoint_State_RunningToAlarm_bb0185e1-7c5c-479f-a45c-b995d16f476e")
+    local knowsAlarmBroken = false
+    local cantReachAlarm = false
+    local electedForAlarm = false
+
+    nodes = Selector{
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Action_DesignateRunner = Action{
+        function()
+            --DebugText(me, "Designate runner")
+            StartAutomatedDialog(alarmDialogAboutRaising, false, me)
+            SetFlag(runningToAlarm, me)
+			SetFlag(alarmRaiserDesignated, nil)
+        end,
+
+        Valid = function()
+            return (me.CanActInCombatTeamTurn
+                and not mod.items.SafeIsDestroyed(alarm)
+                and GetFlag(alarmNeedsToBeRaised)
+                and not GetFlag(alarmInProgress)
+                and not GetFlag(checkpointKnowsAlarmIsBroken)
+                and not GetFlag(alarmRaiserDesignated))
+                and not cantReachAlarm
+                and electedForAlarm
+        end
+    }
+
+    nodes.Action_ActivateToAlarm = Action{
+        function()
+            try
+                UseSpell("Shout_Dash_NPC", me)
+                local moveResult = MoveTo(alarm, MovementSpeed.Run, false, true, 0.5, 1.0, false)
+                if moveResult == error.MovementError.None then
+                    -- DebugText(me, "MOVEMENT FINISHED")
+                    SteerTo(alarm)
+                    SetWeaponUnsheathed(me, false, true)
+                    if not HasActiveStatus(alarm, "SILENCED") then
+                        PlayAnimation(animPlayingDrum, true)
+                        SetFlag(alarmRaisedEvent)
+                        EndTurn(me)
+                    else
+                        knowsAlarmBroken = true
+                        EndTurn(me)
+                    end
+                elseif moveResult == error.MovementError.NoResources then
+                    -- DebugText(me, "Movement to alarm failed - no resources left")
+                    Sleep(1.0)
+                    EndTurn(me)
+                else
+                    -- DebugText(me, "Movement to alarm failed - standard combat actions")
+                    cantReachAlarm = true -- this goblin can't reach the alarm, don't try anymore
+                    ClearFlag(alarmRaiserDesignated, nil)
+                    ClearFlag(runningToAlarm, me)
+                    SetEntityEvent(me, "GOB_Checkpoint_FindNewAlarmRaiser")
+                end
+            end
+        end,
+        OnLeave = function()
+            if knowsAlarmBroken then
+                SetFlag(checkpointKnowsAlarmIsBroken, nil)
+            end
+        end,
+
+        Valid = function()
+            return (me.CanActInCombatTeamTurn
+                and not mod.items.SafeIsDestroyed(alarm)
+                and GetFlag(alarmNeedsToBeRaised)
+                and not GetFlag(alarmInProgress)
+                and not GetFlag(checkpointKnowsAlarmIsBroken)
+                and GetFlag(alarmRaiserDesignated)
+                and GetFlag(runningToAlarm, me))
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "GOB_Checkpoint_GoToAlarm" then
+                electedForAlarm = true
+            end
+        end
+    end
+
+end
+}

@@ -1,0 +1,63 @@
+game.states.END_CraniumRat = State{function ()
+    description = [[Rats swarming around the morphic pool boat]]
+
+    modules = { "shared.util", "shared.math"}
+
+    local allStonesFlag = Flag("GLO_EmperorPrelude_State_AllStonesInPartyInventory_1106e99b-273e-4d19-b3cc-7a9667cf3d53")
+    local gortashPactAndStonesFlag = Flag("GLO_EmperorPrelude_State_GortashPactAndBothStoneInInventory_07352366-dcc0-4424-a9df-c94512ba76c0")
+    local standingAnimStart = Animation("CUST_StandUp_01_Start_2f10630e-9faf-4838-b69b-44da8dcf93aa")
+    local standingAnimLoop = Animation("CUST_StandUp_01_Loop_84c99a2c-efb4-429c-92c0-3a4feb3ef621")
+    local standingAnimEnd = Animation("CUST_StandUp_01_End_4b7704f0-3bc6-4ffd-922b-d0be14c3bb03")
+
+    local isStanding = false
+
+    nodes.AvoidAndStare = Action {
+        CanEnter = function()
+            return GetFlag(allStonesFlag) or GetFlag(gortashPactAndStonesFlag)
+        end,
+
+        function()
+            local player = mod.util.GetNearbyPartyMember(me, 5.0)
+
+            if player ~= nil then
+                if not isStanding then
+                    PlayLoopingAnimation(standingAnimStart, {standingAnimLoop} , standingAnimEnd, false)
+                    isStanding = true
+                end
+                SteerTo(player)
+                Sleep(0.5)
+            else
+                if isStanding then
+                    StopAnimation(me)
+                    isStanding = false
+                end
+                mod.util.SleepRandom(2.0,5.0)
+                Wander(5.0, 1.0, MovementSpeed.Sprint)
+
+                local randomStand = math.random(0, 10)
+                if randomStand >= 8 then
+                    PlayLoopingAnimation(standingAnimStart, {standingAnimLoop} , standingAnimEnd, false)
+                    Sleep(2.0 + 3.0 * math.random())
+                    StopAnimation(me)
+                    Sleep(1)
+                end
+            end
+
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+            isStanding = false
+        end
+    }
+
+    nodes.Wander = Action {
+        function()
+            Sleep(1.0 + 3.0 * math.random())
+            Wander(5.0, 7.0, MovementSpeed.Sprint)
+        end
+    }
+    
+
+end
+}

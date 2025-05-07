@@ -1,0 +1,104 @@
+game.states.GOB_SpidersGuards = State{function()
+    description = [[State for guards of the spider pit]]
+
+    params.BanterState = { type = EParamType.State, required = false, default = nil,
+        help = [[AD state between spider guards, use game.states.GOB_SpidersGuardsBanter for S_GOB_GuardPolite]]}
+
+    params.GuardPos = { type = EParamType.String, required = true,
+        help = [[Guarding position trigger]] }
+
+    params.GuardLookAt = { type = EParamType.String, required = true,
+        help = [[Guarding look at trigger]] }
+
+    local fl_ExecutionPreparing = Flag("GOB_SpiderNest_State_ExecutionPreparing_53989983-ba47-4544-80ba-715c05194150")
+    local fl_SpidersDead = Flag("GOB_SpiderNest_State_SpidersDead_4259e686-af00-4188-b477-c5f931c5058a")
+
+    local tr_GuardPos = nil
+    local tr_GuardLookAt = nil
+
+    self.OnInit = function()
+        tr_GuardPos = FindEntity(params.GuardPos)
+        tr_GuardLookAt = FindEntity(params.GuardLookAt)
+    end
+
+    nodes.Banter = Proxy{
+        params.BanterState,
+
+        CanEnter = function()
+            return params.BanterState ~= nil and GetFlag(fl_SpidersDead)
+        end
+    }
+
+    nodes.Guard = Action{
+        function()
+            try
+                MoveTo(tr_GuardPos)
+                LookAtEntity(tr_GuardLookAt, 3.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_GuardPos failed")
+            end
+            Sleep(1.0)
+        end,
+
+        CanEnter = function()
+            return not GetFlag(fl_ExecutionPreparing) and not GetFlag(fl_SpidersDead)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(2.0)
+        end
+    }
+end}
+
+game.states.GOB_SpidersGuardsBanter = State{function()
+    description = [[State for guards of the spider pit banter. Used for S_GOB_GuardPolite]]
+
+    modules = { "shared.dialog" }
+
+    local b_CanDoAD = true
+    local s_CanDoADTimer = "GOB_GuardPolite_ADTimer"
+
+    local dlg_AD = Dialog("GOB_SpiderNest_AD_SpidersDead1_339a67d7-21ef-b51d-9ec5-58f9a390a08c")
+    local ch_Partner = nil
+
+    local fl_CompanionDied = Flag("GOB_SpiderNest_State_SoloBanter_2bbf728f-ae04-46f9-8dc9-87931451f85e")
+    local fl_SpidersDead = Flag("GOB_SpiderNest_State_SpidersDead_4259e686-af00-4188-b477-c5f931c5058a")
+
+    self.OnInit = function()
+        ch_Partner = FindEntity("S_GOB_GuardVulgar_a063d18e-d513-4d30-80ea-40a5bffb4bd7")
+    end
+
+    self.CanEnter = function()
+        return b_CanDoAD
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+
+    events.Died = function(ev)
+        if ev.Target == ch_Partner then
+            SetFlag(fl_CompanionDied)
+            StopTimer(me, s_CanDoADTimer)
+            StartTimer(me, s_CanDoADTimer, 60.0, 0)
+        end
+    end
+
+    nodes.Banter = Action{
+        function()
+            if mod.dialog.IsSpeakerAvailableAndNear(ch_Partner, me, 15.0, true) then
+                mod.dialog.StartAutomatedDialogWithWait(dlg_AD, me, ch_Partner)
+            end
+            StartTimer(me, s_CanDoADTimer, 60.0, 0)
+            b_CanDoAD = false
+        end,
+
+        CanEnter = function()
+            return b_CanDoAD and GetFlag(fl_SpidersDead)
+        end
+    }
+end}

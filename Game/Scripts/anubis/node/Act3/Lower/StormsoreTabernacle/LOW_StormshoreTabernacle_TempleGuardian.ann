@@ -1,0 +1,117 @@
+game.states.LOW_StormshoreTabernacle_TempleGuardian = State{function ()
+
+    --------------------------------Modules--------------------------------
+
+    modules = {"shared.dialog", "shared.moveto", "shared.math"}
+
+    --------------------------------Variables--------------------------------
+
+    local prayingPoint = nil
+    local prayingAD = nil
+    local prayingShrine = nil
+    local wanderPoint = nil
+
+    local brazier = Entity("S_LOW_Stormshore_Brazier_New_727a3171-2cc7-4957-be16-f323dbb93318")
+    local isBrazierOff = false
+    local flag_isBrazierOff = Flag("LOW_StormshoreTabernacle_State_IsBrazierOff_7c5a6771-6edb-4227-97f3-c823292ac271")
+
+    --------------------------------OnInit--------------------------------
+
+    self.OnInit = function()
+            prayingPoint = Entity("S_LOW_StormshoreTabernacle_PrayingPoint_c381c85b-286a-4d3c-8853-7a63d6964b2b")
+            prayingAD = Dialog("LOW_StormshoreTabernacle_AD_TempleGuardian_Pray_c61135b9-253b-c81f-74ee-5086594f601e")
+            prayingShrine = Entity("S_LOW_GenericGodStatue_d71704b6-24b6-46b7-982c-89acb3edfc20")
+            wanderPoint = Entity("S_LOW_TempleBrazier_ce666dd2-4a32-4008-8f1a-bd3cff574b80")
+        end
+
+    --------------------------------Nodes--------------------------------
+
+    nodes = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    --Move to the generic shrine an pray
+    nodes.Pray = Action {
+        function()
+            if mod.moveto.MoveToPoint(prayingPoint, MovementSpeed.Walk, me) then
+                SteerTo(prayingShrine)
+
+                if (mod.math.CoinToss()) then
+                    mod.dialog.StartCheckedAutomatedDialog(
+                        prayingAD,
+                        {
+                            waitForCompletion = true
+                        },
+                        me
+                    )
+                end
+                Sleep(15 + 20 * math.random())
+            else
+                Sleep(15 + 20 * math.random())
+            end
+        end,
+        CanEnter = function()
+            return not isBrazierOff
+        end
+    }
+
+    nodes.Wander = Action {
+        function()
+            Wander(5.0, 4.0, MovementSpeed.Stroll, wanderPoint)
+            Sleep(12 + 18 * math.random())
+        end,
+        CanEnter = function()
+            return not isBrazierOff
+        end
+    }
+
+    --Check if the brazier is broken or not before
+    nodes.LightBrazier = Action {
+        function()
+            if not IsInDangerousSurfaceFor(brazier, me.Character) then
+                try
+                    UseItem(brazier.Item, true, true, true)
+                    isBrazierOff = false
+                    ClearFlag(flag_isBrazierOff)
+                catch e if ls.CheckType(e, error.UseItemFailed) then
+                    Sleep(10 + 5 * math.random())
+                end
+            end
+        end,
+        CanEnter = function()
+            return isBrazierOff and brazier ~= nil
+        end
+    }
+
+    -- Check Statues
+    --[[nodes.CheckStatues = Action {
+        function()
+            Sleep(15 + 20 * math.random())
+        end
+    }]]
+
+    nodes.RestartPosition = Action {
+        function()
+            if mod.moveto.MoveToPoint(wanderPoint, MovementSpeed.Walk, me) then
+                Sleep(15 + 20 * math.random())
+            else
+                Sleep(20 + 25 * math.random())
+            end
+        end,
+        CanEnter = function()
+            return not isBrazierOff
+        end
+    }
+
+    --------------------------------Events--------------------------------
+    events.FlagSet = function(e)
+        if e.Flag == flag_isBrazierOff.Guid then
+            isBrazierOff = true
+        end
+    end
+
+
+end
+}

@@ -1,0 +1,146 @@
+game.states.CHA_FL0_UndeadGuardian = State{ function()
+    -- Randomize patrol between 2 to 5 points, always switching between the left and right side of the room (with the fifth point being a statue in the middle)
+
+    params.patrolLeft01 = {type = EParamType.String, required = true, help=[[
+        The first left point in the patrol.
+    ]]}
+
+    params.patrolLeft02 = {type = EParamType.String, required = false, default = nil, help=[[
+        The optional second left point in the patrol.
+    ]]}
+
+    params.patrolRight01 = {type = EParamType.String, required = true, help=[[
+        The first right point in the patrol.
+    ]]}
+
+    params.patrolRight02 = {type = EParamType.String, required = false, default = nil, help=[[
+        The optional second right point in the patrol.
+    ]]}
+
+    params.statue = {type = EParamType.String, required = false, default = nil, help=[[
+        The optional statue of Selune position.
+    ]]}
+
+    params.stopAtStatue = {type = EParamType.Int, required = false, default = 0, help=[[
+        Whether the patrol stop at statue of Selune.
+    ]]}
+
+
+    local patrolLeft = {}
+    local patrolRight = {}
+    local stopAtStatue = false
+    local statue = nil
+
+    local goingLeft = 0 --0 means beginning or at the statue ; 1 means on the left side ; -1 means on the right side
+
+    local step
+
+
+    self.OnInit = function()
+        patrolLeft[1]=FindEntity(params.patrolLeft01)
+        if params.patrolLeft02 ~= nil then
+            patrolLeft[2] = FindEntity(params.patrolLeft02)
+        else
+            patrolLeft[2] = patrolLeft[1]
+        end
+
+        patrolRight[1]=FindEntity(params.patrolRight01)
+        if params.patrolRight02 ~= nil then
+            patrolRight[2] = FindEntity(params.patrolRight02)
+        else
+            patrolRight[2] = patrolRight[1]
+        end
+
+        if params.stopAtStatue ~= 0 and params.statue ~= nil then
+            stopAtStatue = true
+            statue = FindEntity(params.statue)
+        end
+    end
+
+    nodes.Selector_Patrol = Selector{
+        function(nodes)
+            return
+                    GetWeightedCanEnter(nodes, {
+                        [nodes.Action_Left] = 2,
+                        [nodes.Action_Right] = 2,
+                        [nodes.Action_Statue] = 1
+                    })
+        end
+    }
+
+    nodes.Selector_Patrol.Action_Left = Action{function()
+        if (math.random()>0.5) then
+            step = 2
+        else
+            step = 1
+        end
+        if IsInDangerousSurfaceFor(patrolLeft[step], me.Character) then
+            LookAtEntity(patrolLeft[step], 3.0)
+            Sleep(1)
+        else
+            try
+                MoveTo(patrolLeft[step], MovementSpeed.Walk)
+                goingLeft = 1
+                LookFrom(patrolLeft[step])
+                Sleep(math.random()*2.0+math.random()*2.0+2.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"DEBUG : Fail to Move")
+                Sleep(1.0)
+            end
+        end
+    end,
+    CanEnter = function()
+        return goingLeft ~= 1
+    end
+    }
+
+    nodes.Selector_Patrol.Action_Right = Action{function()
+        if (math.random()>0.5) then
+            step = 2
+        else
+            step = 1
+        end
+        if IsInDangerousSurfaceFor(patrolRight[step], me.Character) then
+            LookAtEntity(patrolRight[step], 3.0)
+            Sleep(1)
+        else
+            try
+                MoveTo(patrolRight[step], MovementSpeed.Walk)
+                goingLeft = -1
+                LookFrom(patrolRight[step])
+                Sleep(math.random()*3.0+math.random()*3.0+3.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"DEBUG : Fail to Move")
+                Sleep(1.0)
+            end
+        end
+    end,
+    CanEnter = function()
+        return goingLeft ~= -1
+    end
+    }
+
+    nodes.Selector_Patrol.Action_Statue = Action{function()
+        if IsInDangerousSurfaceFor(statue, me.Character) then
+            LookAtEntity(statue, 3.0)
+            Sleep(1)
+        else
+            try
+                MoveTo(statue, MovementSpeed.Walk)
+                goingLeft = 0
+                LookFrom(statue)
+                Sleep(math.random()*3.0+math.random()*3.0+6.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"DEBUG : Fail to Move")
+                Sleep(1.0)
+            end
+        end
+    end,
+    CanEnter = function()
+        return (goingLeft ~= 0) and stopAtStatue
+    end
+    }
+
+
+end
+}

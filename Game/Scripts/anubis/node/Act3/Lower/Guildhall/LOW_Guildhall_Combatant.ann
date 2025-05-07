@@ -1,0 +1,68 @@
+game.states.LOW_Guildhall_Combatant = State{function ()
+    
+    modules = { "shared.dialog" }
+
+    params.PreCoup_State = {type = EParamType.State, default = StateRef{game.states.Dummy},
+        help = [[
+            Behaviour to perform during PreCoup state in Guildhall
+        ]]
+    }
+    params.DuringCoup_State = {type = EParamType.State, default = StateRef{game.states.Dummy},
+        help = [[
+            Behaviour to perform during DuringCoup state in Guildhall
+        ]]
+    }
+    params.PostCoup_State = {type = EParamType.State, default = StateRef{game.states.Dummy},
+        help = [[
+            Behaviour to perform during PostCoup state in Guildhall
+        ]]
+    }
+
+    params.PostCoup_VictoryAD = {type = EParamType.String, default = "",
+        help = [[
+            AD to play after the combatant is victorious in the Guildhall battle
+        ]]
+    }
+
+
+    local DuringCoup = Flag("LOW_Guildhall_State_DuringCoup_6dba56a5-8220-41f4-8849-085e38b80d4e")
+    local PostCoup = Flag("LOW_Guildhall_State_PostCoup_f777d823-f99b-42f5-bc0e-05a58b6c792d")
+
+    nodes.State_PostCoup = 
+    ImmediateSelector {
+        Valid = function(nodes)
+            return GetFlag(PostCoup)
+        end
+    }
+
+    nodes.State_PostCoup.Action = Proxy {
+        params.PostCoup_State,
+        OnEnter = function()
+            if params.PostCoup_VictoryAD ~= "" then
+                StartAutomatedDialogImmediate(Dialog(params.PostCoup_VictoryAD), me)
+            end
+        end
+    }
+
+    nodes.State_DuringCoup = 
+    ImmediateSelector {
+        Valid = function(nodes)
+            return GetFlag(DuringCoup) and not GetFlag(PostCoup)
+        end
+    }
+
+    nodes.State_DuringCoup.Action = Proxy {
+        params.DuringCoup_State
+    }
+
+    nodes.State_PreCoup = 
+    ImmediateSelector {
+        Valid = function(nodes) 
+            return not GetFlag(DuringCoup) and not GetFlag(PostCoup)
+        end
+    }
+
+    nodes.State_PreCoup.Action = Proxy {
+        params.PreCoup_State
+    }
+end}

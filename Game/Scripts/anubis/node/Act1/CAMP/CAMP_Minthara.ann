@@ -1,0 +1,602 @@
+game.states.CAMP_Minthara = State {function()
+    description = [[Behaviour of Minthara at the campsite]]
+
+    -- Flags
+    local campNight = Flag("GLO_CAMP_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+
+    -- Entities
+    local tendingMushroomsPos = ""
+    local plottingFuturePos = ""
+
+    -- State logic
+    local selectedBehaviour = nil
+    local ignoreReselectionUponInterrupt = false
+
+    self.OnEnter = function()
+        selectedBehaviour = nil
+        ignoreReselectionUponInterrupt = false
+    end
+
+    nodes.CAMP_Minthara_InParty = Selector {
+        Valid = function(node)
+            return me.Character.IsPartyMember and CheckAnySelectable(node)
+        end,
+
+        OnLeave = function(node)
+            selectedBehaviour = nil
+        end,
+
+        function(nodes)
+            -- Check if the behaviour was interrupted and enter it again if still valid
+            if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                ignoreReselectionUponInterrupt = false
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+
+            -- Always clear this, in case it was interrupted but was not able to select a node
+            ignoreReselectionUponInterrupt = false
+
+            -- Select new behaviour
+            selectedBehaviour = nil
+            local selectedNode = FindWeightedRandomSelectable(nodes, { 
+                [nodes.Annoyed] = 2,
+                [nodes.ContemplatingSkull] = 3,
+                [nodes.AdjustingOutfit] = 3,
+                [nodes.BotheredbySun] = 4,
+                [nodes.ReadingBook] = 3,
+                [nodes.Meditate] = 3
+            })
+            selectedBehaviour = selectedNode.Name
+            return nodes.TryGetChild(selectedBehaviour)
+        end
+    }
+
+    nodes.CAMP_Minthara_NonParty = Selector {
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end,
+
+        OnLeave = function(node)
+            selectedBehaviour = nil
+        end,
+
+        function(nodes)
+            -- Check if the behaviour was interrupted and enter it again if still valid
+            if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                ignoreReselectionUponInterrupt = false
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+
+            -- Always clear this, in case it was interrupted but was not able to select a node
+            ignoreReselectionUponInterrupt = false
+
+            -- Select new behaviour
+		  selectedBehaviour = nil
+            local selectedNode = FindWeightedRandomSelectable(nodes, {
+                [nodes.TendingMushrooms] = 3,
+                [nodes.PlottingFuture] = 4,
+                [nodes.Annoyed] = 2,
+                [nodes.ContemplatingSkull] = 6,
+                [nodes.TidyingCorner] = 4,
+                [nodes.AdjustingOutfit] = 5,
+                [nodes.BotheredbySun] = 5,
+                [nodes.ReadingBook] = 3,
+                [nodes.Meditate] = 3
+            })
+            selectedBehaviour = selectedNode.Name
+            return nodes.TryGetChild(selectedBehaviour)
+        end
+    }
+
+    -- Full Camp Behaviours
+    nodes.CAMP_Minthara_NonParty.TendingMushrooms = Proxy {
+        game.states.CAMP_Minthara_NonParty_TendingMushrooms
+    }
+
+    nodes.CAMP_Minthara_NonParty.PlottingFuture = Proxy {
+        game.states.CAMP_Minthara_NonParty_PlottingFuture
+    }
+
+    nodes.CAMP_Minthara_NonParty.ContemplatingSkull = Proxy {
+        game.states.CAMP_Minthara_NonParty_ContemplatingSkull
+    }
+
+    nodes.CAMP_Minthara_NonParty.Annoyed = Proxy {
+        game.states.CAMP_Minthara_NonParty_Annoyed
+    }
+
+    nodes.CAMP_Minthara_NonParty.TidyingCorner = Proxy {
+        game.states.CAMP_Minthara_NonParty_TidyingCorner
+    }
+
+    nodes.CAMP_Minthara_NonParty.ReadingBook = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716",
+                    loopIdleAnim = false,
+                    idleAnimLength = 37.83,
+                    idleAnimEndLength = 3.0,
+                    sleepDurationMin = 6.0,
+                    sleepDurationMax = 18.0
+        }
+    }
+
+    nodes.CAMP_Minthara_NonParty.AdjustingOutfit = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Minthara_AdjustingOutfit_01_19bbe55d-e338-4fe3-8900-e17977949ff7",
+                    loopIdleAnim = false,
+                    idleAnimLength = 31.77,
+                    idleAnimEndLength = 3.0,
+                    sleepDurationMin = 6.0,
+                    sleepDurationMax = 18.0
+            }, 
+
+        Valid = function()
+            return not GetFlag(campNight)
+        end
+    }
+
+    nodes.CAMP_Minthara_NonParty.BotheredbySun = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Minthara_BotheredbySun_01_4f4b0dba-d426-4a05-a7af-0ef614dfd091",
+                    loopIdleAnim = false,
+                    idleAnimLength = 25.83,
+                    idleAnimEndLength = 3.0,
+                    sleepDurationMin = 6.0,
+                    sleepDurationMax = 18.0
+            }, 
+
+        Valid = function()
+            return not GetFlag(campNight)
+        end
+    }
+
+    nodes.CAMP_Minthara_NonParty.Meditate = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_Meditating_01_Start_12c9c463-0762-4ef3-a24e-29b5254f580f",
+                    idleAnim = "CUST_Meditating_01_45b1a54b-b127-46d2-bfe6-daa8963398ea",
+                    idleAnimEnd = "CUST_Meditating_01_End_ad0be56c-63b4-4b24-9859-ebcd282ba9f8",
+                    loopIdleAnim = false
+                },
+        OnLeave = function()
+            selectedBehaviour = nil
+        end
+    }
+
+    nodes.CAMP_Minthara_InParty.Annoyed = Proxy {
+        game.states.CAMP_Minthara_NonParty_Annoyed
+    }
+
+    nodes.CAMP_Minthara_InParty.ContemplatingSkull = Proxy {
+        game.states.CAMP_Minthara_NonParty_ContemplatingSkull
+    }
+
+    nodes.CAMP_Minthara_InParty.ReadingBook = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716",
+                    loopIdleAnim = false
+        }
+    }
+
+    nodes.CAMP_Minthara_InParty.Meditate = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnimStart = "CUST_Meditating_01_Start_12c9c463-0762-4ef3-a24e-29b5254f580f",
+                    idleAnim = "CUST_Meditating_01_45b1a54b-b127-46d2-bfe6-daa8963398ea",
+                    idleAnimEnd = "CUST_Meditating_01_End_ad0be56c-63b4-4b24-9859-ebcd282ba9f8",
+                    loopIdleAnim = false
+                }, 
+
+            Valid = function()
+                return not GetFlag(campNight)
+            end
+    }
+
+    nodes.CAMP_Minthara_InParty.AdjustingOutfit = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Minthara_AdjustingOutfit_01_19bbe55d-e338-4fe3-8900-e17977949ff7",
+                    loopIdleAnim = false,
+                    idleAnimLength = 31.77,
+                    idleAnimEndLength = 3.0,
+                    sleepDurationMin = 6.0,
+                    sleepDurationMax = 18.0
+        }
+    }
+
+    nodes.CAMP_Minthara_InParty.BotheredbySun = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Minthara_BotheredbySun_01_4f4b0dba-d426-4a05-a7af-0ef614dfd091",
+                    loopIdleAnim = false,
+                    idleAnimLength = 25.83,
+                    idleAnimEndLength = 3.0,
+                    sleepDurationMin = 6.0,
+                    sleepDurationMax = 18.0
+            }, 
+
+        Valid = function()
+            return not GetFlag(campNight)
+        end
+    }
+
+    --Fallback behaviour
+    nodes.CAMP_Fallback = Proxy {
+        game.states.CAMP_Idle,
+        params = {behaviourPos = "CAMPPOS"}
+    }
+
+    -- Clear current behaviour on day<->night transition
+    events.FlagSet = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if e.Event == "InterruptCampBehaviour" then
+                selectedBehaviour = nil
+                Interrupt()
+            elseif e.Event == "InterruptCampBehaviour_WithoutReselection" then
+                Interrupt()
+            end
+        end
+    end
+end}
+
+game.states.CAMP_Minthara_NonParty_TendingMushrooms = State{function()
+
+    description = [[Minthara tends to the mushrooms at her camp tent.]]
+
+    local behaviourDialog = Dialog("BHVR_WRLD_CAMP_Minthara_TendingMushrooms_6a407916-c5f1-b792-43bb-c99a3b08285f")
+    local sceneTrigger = nil
+
+    nodes.TendingMushrooms = Action {
+        function()
+            SetWeaponUnsheathed(me, false, true)
+
+            if sceneTrigger ~= nil and behaviourDialog ~= nil then
+                PopUnsheathedState(me)
+                Sleep(1.5)
+                DebugText(me, "CAMP_Minthara - Starting TendingMushrooms behaviour")
+                try
+                    StartBehaviorDialog(behaviourDialog, sceneTrigger.Trigger, true, me)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    Sleep(1.0)
+                    DebugText(me, "Behaviour failed to start: [1]",e)
+                    DebugText(me, "Scenetrigger [1]",tostring(sceneTrigger.Name))
+                end
+                DebugText(me, "CAMP_Minthara - Finished TendingMushrooms behaviour")
+                Sleep(1.0)
+            else
+                DebugText(me, "CAMP_Minthara - No scene trigger present")
+                Sleep(2.0)
+            end
+        end,
+
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false, behaviourDialog)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    self.CanEnter = function()
+        return sceneTrigger ~= nil
+    end 
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "CAMP_CamperInCamp_SCLMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TendingMushrooms_SceneTrigger_480647ea-eebb-81a7-4023-8e124421e08d")
+            elseif e.Event == "CAMP_CamperInCamp_HAVEN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TendingMushrooms_SceneTrigger_15fbd298-9c6a-8522-26c2-79e23a610196")
+            elseif e.Event == "CAMP_CamperInCamp_MOONRISE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TendingMushrooms_SceneTrigger_e81c05be-848f-86e5-34eb-7b166eb3f0cd")
+            elseif e.Event == "CAMP_CamperInCamp_SHARTEMPLE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TendingMushrooms_SceneTrigger_44d59320-7925-89aa-32cb-31a10f6b8f43")
+            elseif e.Event == "CAMP_CamperInCamp_INTMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TendingMushrooms_SceneTrigger_d9030fc0-7716-8090-3f63-edb73532e12f")
+            elseif e.Event == "CAMP_CamperInCamp_FARM" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TendingMushrooms_SceneTrigger_d41c06c1-60b7-8dd4-4b05-01abb5ebf717")
+            elseif e.Event == "CAMP_CamperInCamp_SLUMS" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TendingMushrooms_SceneTrigger_08b69de8-66d5-889d-23b2-3a36886e362f")
+            elseif e.Event == "CAMP_CamperInCamp_ELFSONG" then
+                sceneTrigger = nil
+            end
+        end
+    end
+
+end}
+
+game.states.CAMP_Minthara_NonParty_PlottingFuture = State{function()
+
+    description = [[Minthara looks at a map and plots her future at her camp tent.]]
+
+    local behaviourDialog = Dialog("BHVR_WRLD_CAMP_Minthara_PlottingFuture_401a53e5-9306-8650-54e5-63a226ac1dec")
+    local sceneTrigger = nil
+
+    nodes.PlottingFuture = Action {
+        function()
+            SetWeaponUnsheathed(me, false, true)
+
+            if sceneTrigger ~= nil and behaviourDialog ~= nil then
+                PopUnsheathedState(me)
+                Sleep(1.5)
+                DebugText(me, "CAMP_Minthara - Starting PlottingFuture behaviour")
+                try
+                    StartBehaviorDialog(behaviourDialog, sceneTrigger.Trigger, true, me)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    Sleep(1.0)
+                    DebugText(me, "Behaviour failed to start: [1]",e)
+                    DebugText(me, "Scenetrigger [1]",tostring(sceneTrigger.Trigger))
+                end
+                DebugText(me, "CAMP_Minthara - Finished PlottingFuture behaviour")
+                Sleep(1.0)
+            else
+                DebugText(me, "CAMP_Minthara - No scene trigger present")
+                Sleep(2.0)
+            end
+        end,
+
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false, behaviourDialog)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    self.CanEnter = function()
+        return sceneTrigger ~= nil
+    end 
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "CAMP_CamperInCamp_SCLMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_PlottingFuture_SceneTrigger_e08c2fe7-8378-8bff-37cf-aa298f59cea7")
+            elseif e.Event == "CAMP_CamperInCamp_HAVEN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_PlottingFuture_SceneTrigger_bd71ba95-3127-8f7a-1d6e-95f97599efb0")
+            elseif e.Event == "CAMP_CamperInCamp_MOONRISE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_PlottingFuture_SceneTrigger_8092edbb-294c-803d-2b87-972da9ebdee7")
+            elseif e.Event == "CAMP_CamperInCamp_SHARTEMPLE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_PlottingFuture_SceneTrigger_ec5b7b2d-1ee2-83f2-2967-5db84a936d6d")
+            elseif e.Event == "CAMP_CamperInCamp_INTMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_PlottingFuture_SceneTrigger_7189e7cd-1cd3-8ae8-260f-09ce706acf49")
+            elseif e.Event == "CAMP_CamperInCamp_FARM" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_PlottingFuture_SceneTrigger_7c92eece-0574-872c-32a1-2db2f013d531")
+            elseif e.Event == "CAMP_CamperInCamp_SLUMS" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_PlottingFuture_SceneTrigger_a03c75e5-0b92-82e5-1a5e-564dc3961449")
+            elseif e.Event == "CAMP_CamperInCamp_ELFSONG" then
+                sceneTrigger = nil
+            end
+        end
+    end
+
+end}
+
+game.states.CAMP_Minthara_NonParty_ContemplatingSkull = State{function()
+
+    modules = {"shared.moveto"}
+    description = [[Minthara picks up a skull from box of skulls and stares at it.]]
+
+    local behaviourDialog = Dialog("BHVR_WRLD_CAMP_Minthara_ContemplatingSkull_7d4fa26a-d0fc-a099-a9d3-fe5181175aa3")
+    local sceneTrigger = nil
+    local skullBox = nil
+
+    nodes.PlottingFuture = Action {
+        function()
+            SetWeaponUnsheathed(me, false, true)
+
+            if sceneTrigger ~= nil and behaviourDialog ~= nil then
+                PopUnsheathedState(me)
+                Sleep(1.5)
+                DebugText(me, "CAMP_Minthara - Starting ContemplatingSkull behaviour")
+                try
+                    mod.moveto.MoveToPoint(skullBox, MovementSpeed.Walk, me)
+                    SteerTo(skullBox, true, 0)
+                    StartBehaviorDialog(behaviourDialog, sceneTrigger.Trigger, true, me, skullBox)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    Sleep(1.0)
+                    DebugText(me, "Behaviour failed to start: [1]",e)
+                    DebugText(me, "Scenetrigger [1]",tostring(sceneTrigger.Trigger))
+                end
+                DebugText(me, "CAMP_Minthara - Finished ContemplatingSkull behaviour")
+                Sleep(1.0)
+            else
+                DebugText(me, "CAMP_Minthara - No scene trigger present")
+                Sleep(2.0)
+            end
+        end,
+
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false, behaviourDialog)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    self.CanEnter = function()
+        return sceneTrigger ~= nil and skullBox ~= nil
+    end 
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "CAMP_CamperInCamp_SCLMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_ContemplatingSkull_SceneTrigger_a89c22bd-c011-8fd6-2047-7d551b8fbb62")
+                skullBox = Entity("CONT_GEN_Crate_Vegetable_Wood_Empty_A_000_03f04fe5-210c-8a4f-5d83-2577f82e6ed1")
+            elseif e.Event == "CAMP_CamperInCamp_HAVEN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_ContemplatingSkull_SceneTrigger_1f2ec7d3-f251-86f9-35e0-22bf4d55f90e")
+                skullBox = Entity("CONT_GEN_Crate_Vegetable_Wood_Empty_A_000_d0e5da93-dfbb-8eca-3322-1047ee6e8fea")
+            elseif e.Event == "CAMP_CamperInCamp_MOONRISE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_ContemplatingSkull_SceneTrigger_f0db0c00-a4fe-80d9-2678-6e75d9880ac6")
+                skullBox = Entity("CONT_GEN_Crate_Vegetable_Wood_Empty_A_000_a3060db9-c7d0-8f8d-414b-127b12b07e11")
+            elseif e.Event == "CAMP_CamperInCamp_SHARTEMPLE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_ContemplatingSkull_SceneTrigger_028f58bb-c5cd-83e4-3fc8-da1e1d9c59c4")
+                skullBox = Entity("CONT_GEN_Crate_Vegetable_Wood_Empty_A_000_0fcf9b2b-bc76-8242-4f2b-d806b3680d97")
+            elseif e.Event == "CAMP_CamperInCamp_INTMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_ContemplatingSkull_SceneTrigger_42221e0b-8d34-840d-3777-75b09bc4f407")
+                skullBox = Entity("CONT_GEN_Crate_Vegetable_Wood_Empty_A_000_59835f07-19ab-8821-2360-d969b0442678")
+            elseif e.Event == "CAMP_CamperInCamp_FARM" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_ContemplatingSkull_SceneTrigger_8a80158d-8378-8f4c-3afe-fe58091ee836")
+                skullBox = Entity("CONT_GEN_Crate_Vegetable_Wood_Empty_A_000_9f060ecc-a308-867c-5865-a80069e8756b")
+            elseif e.Event == "CAMP_CamperInCamp_SLUMS" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_ContemplatingSkull_SceneTrigger_88e91143-82ff-8f38-2401-854b3e5fbb77")
+                skullBox = Entity("CONT_GEN_Crate_Vegetable_Wood_Empty_A_000_c3a095e3-a926-8135-3012-d19b3c6bb473")
+            elseif e.Event == "CAMP_CamperInCamp_ELFSONG" then
+                sceneTrigger = nil
+                skullBox = nil
+            end
+        end
+    end
+
+end}
+
+game.states.CAMP_Minthara_NonParty_Annoyed = State{function()
+
+    modules = {"shared.moveto"}
+    description = [[Minthara is eager to get back on the road.]]
+
+    local behaviourDialog = Dialog("BHVR_WRLD_CAMP_Minthara_Annoyed_6251d613-394f-a24b-95f3-f59c7970027b")
+    local sceneTrigger = nil
+    local mapTable = nil
+
+    nodes.PlottingFuture = Action {
+        function()
+            --SetWeaponUnsheathed(me, false, true)
+
+            if sceneTrigger ~= nil and behaviourDialog ~= nil then
+                --PopUnsheathedState(me)
+                Sleep(1.5)
+                DebugText(me, "CAMP_Minthara - Starting Annoyed behaviour")
+                try
+                    mod.moveto.MoveToPoint(mapTable, MovementSpeed.Walk, me)
+                    SteerTo(mapTable, true, 0)
+                    StartBehaviorDialog(behaviourDialog, sceneTrigger.Trigger, true, me, mapTable)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    Sleep(1.0)
+                    DebugText(me, "Behaviour failed to start: [1]",e)
+                    DebugText(me, "Scenetrigger [1]",tostring(sceneTrigger.Trigger))
+                end
+                DebugText(me, "CAMP_Minthara - Finished Annoyed behaviour")
+                Sleep(1.0)
+            else
+                DebugText(me, "CAMP_Minthara - No scene trigger present")
+                Sleep(2.0)
+            end
+        end,
+
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true, behaviourDialog)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    self.CanEnter = function()
+        return sceneTrigger ~= nil
+    end 
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "CAMP_CamperInCamp_SCLMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_Annoyed_SceneTrigger_91f5cc96-6d2e-8392-53d6-ed0395227b35")
+                mapTable = Entity("FUR_GEN_House_Table_Rich_Round_Small_B_000_c97a4adb-a286-4ac2-98fe-531f4bb2ae66")
+            elseif e.Event == "CAMP_CamperInCamp_HAVEN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_Annoyed_SceneTrigger_088761bc-9f6e-8ab5-687f-926dc7f8b9d1")
+                mapTable = Entity("FUR_GEN_House_Table_Rich_Round_Small_B_000_e04396fb-ed5d-8e71-1580-328b7b3d0fc5")
+            elseif e.Event == "CAMP_CamperInCamp_MOONRISE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_Annoyed_SceneTrigger_e934a6e9-410b-8495-5907-de23532bca99")
+                mapTable = Entity("FUR_GEN_House_Table_Rich_Round_Small_B_000_b364c911-d572-8f34-23a9-34bfaf8ffefc")
+            elseif e.Event == "CAMP_CamperInCamp_SHARTEMPLE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_Annoyed_SceneTrigger_fbe8f294-62da-87a0-6257-4acc973f1997")
+                mapTable = Entity("FUR_GEN_House_Table_Rich_Round_Small_B_000_1f2d5783-ca18-82f9-2189-fa4a40378d72")
+            elseif e.Event == "CAMP_CamperInCamp_INTMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_Annoyed_SceneTrigger_3b8bb8e4-2a41-88c9-6a06-e56e1567b4da")
+                mapTable = Entity("FUR_GEN_House_Table_Rich_Round_Small_B_000_a45bc323-c809-89ef-2e21-a650760eef5e")
+            elseif e.Event == "CAMP_CamperInCamp_FARM" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_Annoyed_SceneTrigger_73e9bf66-2085-8308-6d8d-6e0683b1a809")
+                mapTable = Entity("FUR_GEN_House_Table_Rich_Round_Small_B_000_af64ca24-b1aa-8623-3ac3-ca44f6b7f546")
+            elseif e.Event == "CAMP_CamperInCamp_SLUMS" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_Annoyed_SceneTrigger_7142bb2c-2f0c-83f4-5790-f5f9b8f27b4a")
+                mapTable = Entity("FUR_GEN_House_Table_Rich_Round_Small_B_000_d30e514b-b7c8-81ec-1270-f3dfc93a345e")
+            elseif e.Event == "CAMP_CamperInCamp_ELFSONG" then
+                sceneTrigger = nil
+                mapTable = nil
+            end
+        end
+    end
+
+end}
+
+game.states.CAMP_Minthara_NonParty_TidyingCorner = State{function()
+
+    description = [[Minthara picks up a skull from box of skulls and stares at it.]]
+
+    local behaviourDialog = Dialog("BHVR_WRLD_CAMP_Minthara_TidyingCorner_c082b525-bb70-57ad-5be7-0d4dcbe47705")
+    local sceneTrigger = nil
+
+    nodes.PlottingFuture = Action {
+        function()
+            SetWeaponUnsheathed(me, false, true)
+
+            if sceneTrigger ~= nil and behaviourDialog ~= nil then
+                PopUnsheathedState(me)
+                Sleep(1.5)
+                DebugText(me, "CAMP_Minthara - Starting TidyingCorner behaviour")
+                try
+                    StartBehaviorDialog(behaviourDialog, sceneTrigger.Trigger, true, me)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    Sleep(1.0)
+                    DebugText(me, "Behaviour failed to start: [1]",e)
+                    DebugText(me, "Scenetrigger [1]",tostring(sceneTrigger.Trigger))
+                end
+                DebugText(me, "CAMP_Minthara - Finished TidyingCorner behaviour")
+                Sleep(1.0)
+            else
+                DebugText(me, "CAMP_Minthara - No scene trigger present")
+                Sleep(2.0)
+            end
+        end,
+
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true, behaviourDialog)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    self.CanEnter = function()
+        return sceneTrigger ~= nil
+    end 
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "CAMP_CamperInCamp_SCLMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TidyingCorner_SceneTrigger_505faa28-6102-8e9e-4484-f351c22aab43")
+            elseif e.Event == "CAMP_CamperInCamp_HAVEN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TidyingCorner_SceneTrigger_c7e14f4e-9342-85b1-592d-a8bbf4f0e9ef")
+            elseif e.Event == "CAMP_CamperInCamp_MOONRISE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TidyingCorner_SceneTrigger_a89e847b-45ef-8f91-4ab5-e4718023faa7")
+            elseif e.Event == "CAMP_CamperInCamp_SHARTEMPLE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TidyingCorner_SceneTrigger_ba42d026-66be-82ac-5305-501ac43749a5")
+            elseif e.Event == "CAMP_CamperInCamp_INTMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TidyingCorner_SceneTrigger_fae59676-2e25-83c5-5bb4-fbbc426fe4e8")
+            elseif e.Event == "CAMP_CamperInCamp_FARM" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TidyingCorner_SceneTrigger_32439df8-2469-8e04-5e3b-7454b0b9d817")
+            elseif e.Event == "CAMP_CamperInCamp_SLUMS" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Minthara_TidyingCorner_SceneTrigger_30ac99be-23e0-8ef0-484e-0b47e5faab58")
+            elseif e.Event == "CAMP_CamperInCamp_ELFSONG" then
+                sceneTrigger = nil
+            end
+        end
+    end
+
+end}

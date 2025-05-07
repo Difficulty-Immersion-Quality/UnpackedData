@@ -1,0 +1,83 @@
+game.states.LOW_Weaponsmith = State {function ()
+
+    description = [[Behaviour of Dammon the weaponsmith in LOW]]
+
+    modules = {"shared.moveto", "shared.dialog", "shared.util"}
+
+    local scimitarTag = Tag("WPN_SCIMITAR_206f9701-7b24-4eaf-9ac4-a47746c251e2")
+    local inspecting = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local inspectingPos = Entity("S_LOW_DammonInspecting_85cc4d24-3cad-452e-b9c7-64b9d7227d71")
+
+    local anvilAnimation = Dialog("BHVR_WRLD_DEN_WeaponSmith_Anvil_76b162f7-e424-4ac7-e028-4241b7ff1599") -- Reuse DEN animations
+    local anvilTrigger = Entity("BHVR_WRLD_LOW_DammonUsingAnvil_SceneTrigger_267e0cd9-4135-48b4-87a1-177d1445d0e4")
+    local anvil = Entity("S_LOW_DammonsAnvil_7980b11e-87c6-4783-8dc7-4a3b9b737272")
+
+    local grindAnimation = Dialog("BHVR_WRLD_DEN_WeaponSmith_Whetstone_2eadef89-54de-ac11-839a-b3218d632f43") -- Reuse DEN animations
+    local grindTrigger = Entity("BHVR_WRLD_LOW_DammonGrindingScimitar_SceneTrigger_4a95fe2d-ab8e-4053-9eeb-34ef91251937")
+    local grindingStone = Entity("S_LOW_DammonsWhetstone_382bdff0-ff93-443d-9bcc-012440cd7f5c")
+
+    nodes = Selector{
+        function(nodes)
+            return GetRandomCanEnter(nodes)
+        end
+    }
+
+    nodes.Action_LookingForTools = Action {
+        function()
+            if mod.moveto.MoveToPoint(inspectingPos, MovementSpeed.Stroll, me, 0.0) then
+                LookFrom(inspectingPos)
+                DebugText(me, "Inspecting logs.")
+                PlayAnimation(inspecting, true)
+                mod.util.SleepRandom(2.0, 4.0)
+            else
+                SteerTo(inspectingPos)
+                Sleep(3.0)
+            end
+        end,
+    }
+
+    nodes.Action_UsingGrinder = Action {
+        function()
+            DebugText(me, "Grinding animation.")
+
+            try
+                mod.util.SleepRandom(2.0, 4.0)
+                SetWeaponUnsheathed(me, true, false)
+                StartBehaviorDialog(grindAnimation, grindTrigger.Trigger, false, me, grindingStone)
+                mod.util.SleepRandom(12.0, 18.0)
+                BehaviorDialogRequestGracefulStop(me, false, nil)
+                while IsPerformingWorldBehaviour(me) do
+                    Sleep(1.0)
+                end
+                SetWeaponUnsheathed(me, false, false)
+                Sleep(3.0)
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me, "Error: AutomatedDialogStartFailed")
+                SetWeaponUnsheathed(me, false, false)
+                Sleep(3.0)
+            end
+
+        end,
+        OnLeave = function()
+            SetWeaponUnsheathed(me, false, true)
+        end,
+        CanEnter = function()
+            local equippedWeapon = GetEquippedItem(me.Character, EquipmentSlot.MeleeMainHand)
+            return equippedWeapon ~= nil and IsTagged(equippedWeapon, scimitarTag)
+        end
+    }
+
+    nodes.Action_UsingAnvil = Action {
+        function()
+            DebugText(me, "Using anvil.")
+            mod.util.SleepRandom(2.0, 4.0)
+            StartBehaviorDialog(anvilAnimation, anvilTrigger.Trigger, false, me, anvil)
+            mod.util.SleepRandom(30.0, 40.0)
+            BehaviorDialogRequestGracefulStop(me, false, nil)
+            while IsPerformingWorldBehaviour(me) do
+                Sleep(1.0)
+            end
+        end,
+    }
+
+end}

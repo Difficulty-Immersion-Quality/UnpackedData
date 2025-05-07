@@ -1,0 +1,56 @@
+game.states.DEN_ServantPraying = State { function ()
+
+    --TODO: this script needs to be renamed because it's not used by "ServantPraying" anymore
+    description = [[She's doing a basic behaviour. The boar comes to her and botters her.]]
+
+    -----------------------------------------
+    -- Params
+    params.prayingIdle = { type = EParamType.State, required = true,
+        help = [[What to do.]]
+    }
+
+    -----------------------------------------
+    -- Local variables
+    local boar = Entity("S_DEN_DruidPet_004_5e856a8e-957a-49b1-8ec7-f430984e08ca")
+    local shooBoarAD = Dialog("DEN_DruidServant_AD_ChaseAwayBoar_ccb1f89e-895b-7a17-75f3-08a8ae3fd11b")
+    local isBotheredByBoar = false
+
+    -----------------------------------------
+    -- Nodes
+    nodes.RepelBoar = Action {
+        CanEnter = function()
+            return isBotheredByBoar
+        end,
+        function()
+            Sleep(math.random(2, 3))
+            if not IsInDialog(me, false) and not IsInDialog(boar, false) then
+                isBotheredByBoar = false
+                StartAutomatedDialog(shooBoarAD, false, me, boar)
+            end
+        end,
+        OnLeave = function()
+            SetEntityEvent(boar, "DEN_ExcitedBoar_StopBothering")
+        end
+    }
+
+    nodes.Pray = Proxy {
+        params.prayingIdle
+    }
+
+
+    nodes.Idle = Action {
+        function()
+            Sleep(1)
+        end
+    }
+    -----------------------------------------
+    -- Events
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DEN_ExcitedBoar_BotherServant" then
+                isBotheredByBoar = true
+            end
+        end
+    end
+
+end}

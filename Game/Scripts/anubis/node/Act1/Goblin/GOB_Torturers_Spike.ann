@@ -1,0 +1,386 @@
+game.states.GOB_Torturers_Spike = State{
+    function()
+
+    ----------------------------------------------
+    -- Params
+    params.outPoint = {type = EParamType.String, required=true, help=[[
+        Point where goblin moves after player persuaded him to.
+    ]]}
+
+
+    --------------------------------------------
+    -- Local variables
+
+    local outPoint -- entity, trigger
+
+    --------------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        outPoint = outPoint or FindEntity(params.outPoint)
+    end
+
+    --------------------------------------------
+    -- Nodes
+
+    nodes.Torture = Proxy {
+        game.states.GOB_Torturers_Torture,
+        params =
+        {
+        }
+    }
+
+    nodes.MovedOut = Proxy {
+        game.states.GOB_Torturers_PostTorture,
+        params =
+        {
+            outPoint=params.outPoint
+        }
+    }
+
+    end
+}
+
+game.states.GOB_Torturers_Torture = State{
+    function()
+
+    local companion = nil
+    local captive = nil
+
+    local persuadedFlag -- global
+    local torturedFlag -- global
+    
+    local adventurerFreedFlag = Flag("GOB_Torturers_State_PrisonerFreed_c3ebd7d6-243c-f355-5cff-94ceb315d5c9")
+
+    local tortureAD = nil
+    local CanPlayAD = true
+
+    local PierceAnimation = nil
+
+    local initHappened = false
+
+    local tortureSpot = Entity("S_GOB_HappyTorturers_TortureSpot_bb601d07-f0a3-4b30-b941-bd47fc7d9fef")
+    local tortureOverLongRestFlag = Flag("GOB_Torturers_State_AfterLongRest_78b07dee-8461-9d1b-028a-1e7cf8d39532")
+    -------------------------------------
+    -- helpers
+    helpers.CheckMoveOut = function()
+        if not initHappened then
+            persuadedFlag = Flag("GOB_Torturers_State_Persuaded_d68ef3fa-08ba-52b9-8f39-7594dfde5c89")
+            torturedFlag = Flag("GOB_Torturers_State_TorturedEnough_5ee00add-a8c8-4d61-4560-80582db6fe58")
+            companion = FindEntity("S_GOB_Torturers_Goblet_0f18201e-2836-4642-8a26-d0a6e1a8a8cc")
+            captive = FindEntity("S_GOB_TortureredAdventurer_0dd6e9f1-d32d-41f1-b230-d540558e0847")
+        end
+        return GetFlag(torturedFlag) or GetFlag(persuadedFlag) or GetFlag(tortureOverLongRestFlag)
+        or GetFlag(adventurerFreedFlag) or captive.Character.IsDead or companion.Character.IsDead
+    end
+
+    self.OnInit = function()
+        companion = companion or FindEntity("S_GOB_Torturers_Goblet_0f18201e-2836-4642-8a26-d0a6e1a8a8cc")
+        captive = FindEntity("S_GOB_TortureredAdventurer_0dd6e9f1-d32d-41f1-b230-d540558e0847")
+        tortureAD = Dialog("GOB_Torturers_Torture_AD_f0c41a90-ce2d-3440-346a-87e94873f2ed")
+        CanPlayAD = (tortureAD ~= nil)
+
+        PierceAnimation = Animation("CUST_Poke_01_8f97f2cc-f0f8-49db-9b56-e9d60bc5271c")
+        persuadedFlag = Flag("GOB_Torturers_State_Persuaded_d68ef3fa-08ba-52b9-8f39-7594dfde5c89")
+        torturedFlag =  Flag("GOB_Torturers_State_TorturedEnough_5ee00add-a8c8-4d61-4560-80582db6fe58")
+        initHappened = true
+    end
+
+    self.Valid = function (node)
+        return not helpers.CheckMoveOut()
+    end
+
+    events.DialogEnded = function(e)
+        if (tortureAD.Guid == e.Instance.DialogUUID) then
+            StartTimer(me, "GOB_Torturers_ReEnableAD", math.random(30.0,40.0), 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "GOB_Torturers_ReEnableAD" then
+            CanPlayAD = true
+        end
+    end
+
+    nodes.PlayAD = Action{
+        function()
+            StartAutomatedDialog(tortureAD, true, me, companion)
+            CanPlayAD = false
+        end,
+
+        Valid = function (node)
+            return CanPlayAD
+        end
+    }
+
+    nodes.Pierce = Action{
+        function()
+            MoveTo(tortureSpot,MovementSpeed.Walk,false,false,0,0,false)
+            SetEntityEvent(companion, "GOB_Tortureres_Event_Stab")
+            SteerTo(captive)
+            local weapon = GetEquippedWeapon(me.Character, WeaponHandType.Any)
+            SetWeaponUnsheathed(me,true,false)
+            if (weapon ~= nil) and
+               (IsEquipmentWithProficiency(weapon, ProficiencyGroup.Clubs)) then
+                PlayAnimation(PierceAnimation)
+                DebugText(me, "Poking Animation")
+            end
+            -- weighted random with weights 10 (for 5), 20 (for 6), 10 (for 7)
+            local randNum = math.random(40)
+            local Timeout = 5.0
+            if randNum > 10 and randNum <= 30 then
+                Timeout = 6.0
+            elseif randNum > 30 then
+                Timeout = 7.0
+            end
+            Sleep(Timeout)
+        end
+    }
+    end
+}
+
+game.states.GOB_Torturers_PostTorture = State {
+    function()
+
+    modules = { "shared.dialog", "shared.moveto" }
+
+    ----------------------------------------------
+    -- Params
+
+    params.outPoint = {type = EParamType.String, required=true, help=[[
+        Point where goblin moves after player persuaded him to.
+    ]]}
+
+    ----------------------------------------------
+    -- Local variables
+
+    local outPoint = Entity(params.outPoint)-- entity, trigger
+    local companion = Entity("S_GOB_Torturers_Goblet_0f18201e-2836-4642-8a26-d0a6e1a8a8cc") -- entity , character
+    local drowCommander = Entity("S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b") -- entity , character
+    local reportedFlag = Flag("GOB_Torturers_State_Reported_1756c594-0337-4c15-a4b9-98b6861a34d7") -- flag , global
+    local reportAD = Dialog("GOB_Torturers_AD_DrowDebrief_521ec862-5326-bb93-414d-1e9ddda93c8c") -- automated dialog, 2 speakers
+    local canAD = false
+    local movedOutFlag = Flag("GOB_Torturers_State_MovedOut_a20ec730-dfec-56a7-6cc3-71ff51e16502") -- character
+    local knowDen = Flag("GOB_Torturers_State_KnowDen_06207c03-9264-9790-99da-49b1df20be0c") --global
+    local torturedEnough = Flag("GOB_Torturers_State_TorturedEnough_5ee00add-a8c8-4d61-4560-80582db6fe58") -- global
+
+    -- PainPriest / Penance specific
+    local painPriest = Entity("S_FOR_PainPriest_cad1854b-8f41-4038-b640-156ee0272f81") -- entity, character
+    local priestFlaggelating = Flag("GOB_PainPriest_State_SelfFlagellating_281a70a7-e26f-41f6-860f-e164976a2b18") -- flag, character
+    local companionFlaggelating = Flag("GOB_PainPriest_State_Penitent_5e6ff7d1-7018-4938-8030-20ec00b3ce64") -- flag, character
+    local orderPenanceAD = Dialog("GOB_Torturers_AD_DoPenance_5bde6c59-76f6-3444-db89-7d52d1b128d8") -- automated dialog, 2 speakers
+    local watchPenanceAD = Dialog("GOB_Torturers_AD_WatchingPainPriest_3231e1b9-bdb5-81a3-886b-e33b4a246e52") -- 2 speakers
+    local playerPenanceFlag = Flag("GOB_PainPriest_Event_TempBlockGoblinsAD_2aeac444-0be1-49e4-bba7-d06d7ee62f0a")
+    local missedPlayerPenance = Flag("GOB_Torturers_State_MissedPlayerPenance_60e93ec5-15f5-49ed-add6-c583962f94e2") -- character flag
+    local canOrderPenance = false
+
+    ---------------------------------------------
+    -- Local functions
+
+    helpers.IsInAD = function(char)
+        if IsInDialog(me,false) and not IsInDialog(me,true) then
+            return true
+        else
+            return false
+        end
+    end
+
+    ---------------------------------------------
+    -- State nodes
+
+    --------------------------------------------------
+    --Nodes
+    nodes.ReportingToDrow = Selector{
+        CanEnter = function()
+            return not (GetFlag(knowDen) or GetFlag(reportedFlag) or drowCommander.Character.IsDead) and GetFlag(torturedEnough)
+        end
+    }
+
+    nodes.ReportingToDrow.Action_MoveToDrow = Action{
+        function()
+            if not mod.moveto.MoveToPoint(drowCommander, MovementSpeed.Walk, me) then
+                Sleep(3.0)
+            end
+        end,
+        Valid = function()
+            return (GetDistance2DTo(me, drowCommander) > 3.0)
+        end
+    }
+
+    nodes.ReportingToDrow.Action_Report = Action{
+        function()
+            Sleep(1)
+            while not mod.dialog.IsSpeakerAvailable(drowCommander, true) do
+                Sleep(1)
+            end
+            Sleep(1)
+            if mod.moveto.MoveToPoint(drowCommander, MovementSpeed.Walk, me) then
+                if not IsInDialog(me, false) and mod.dialog.IsSpeakerAvailable(drowCommander, true) then
+                    StartAutomatedDialog(reportAD, true, drowCommander, me)
+                end
+            else
+                Sleep(2)
+            end
+        end,
+        Valid = function ()
+            return not GetFlag(reportedFlag)
+        end
+    }
+
+    --// Going to PainPriest's room
+    nodes.MoveOut = Action {
+        CanEnter = function()
+            return not GetFlag(movedOutFlag,me)
+        end,
+        OnEnter = function()
+            if helpers.IsInAD(me) then
+                DialogRequestStop(me,nil)
+            end
+            StartTimer(me,"GOB_Torturers_Spike_PenanceADTimeout",18,0)
+            if canOrderPenance then
+                SetFlag(missedPlayerPenance,me)
+            end
+            SetFlag(movedOutFlag,me)
+        end,
+        function ()
+            mod.moveto.MoveToPoint(outPoint, MovementSpeed.Walk, me)
+        end
+    }
+
+    --// Watching PainPriest's auto penance
+    nodes.WatchingPenance = Selector{
+        CanEnter = function()
+            return not canOrderPenance
+                and painPriest
+                and (GetDistance2DTo(me, outPoint) <= 2.0)
+        end,
+        OnEnter = function()
+            if helpers.IsInAD(me) then
+                DialogRequestStop(me,nil)
+            end
+        end,
+    }
+
+    nodes.WatchingPenance.Action_AD = Action{
+        CanEnter = function()
+            return canAD 
+                and not GetFlag(playerPenanceFlag) 
+                and not IsInDialog(me, false) 
+                and not IsInDialog(painPriest, false)
+                and mod.dialog.IsSpeakerAvailableAndNear(companion, me, 10.0, true)
+        end,
+        OnEnter = function()
+            SetDoNotFace(me, true)
+            SetDoNotFace(companion, true)
+            canAD = false
+            StartTimer(me,"GOB_Torturers_Spike_PenanceADTimeout", 42, 0)
+        end,
+        function()
+            Sleep(1)
+            StartAutomatedDialog(watchPenanceAD,true,me,companion)
+        end,
+        OnLeave = function()
+            SetDoNotFace(me, false)
+            SetDoNotFace(companion, false)
+        end,
+    }
+
+    nodes.WatchingPenance.Action_Wait = Action{
+        function()
+            Sleep(1)
+            mod.moveto.MoveToPoint(outPoint, MovementSpeed.Stroll, me)
+            if painPriest then
+                SteerTo(painPriest)
+            else
+                SteerTo(companion)
+            end
+            Sleep(5.0)
+        end
+    }
+
+    --// Watching Globlet's penance
+    nodes.WatchingGobletPenance = Selector{
+        CanEnter = function()
+            return canOrderPenance 
+                and painPriest
+                and canAD 
+                and not companion.Character.IsDead 
+                and (GetDistance2DTo(me, outPoint) <= 3.0)
+        end
+    }
+
+    nodes.WatchingGobletPenance.OrderPenance = Action{
+        function()
+            if mod.dialog.IsSpeakerAvailableAndNear(companion, me, 10.0, true) then
+                StartAutomatedDialog(orderPenanceAD,true,me,companion)
+                --SetEntityEvent(companion,"GOB_Torturers_Events_OrderedPenance")
+                SetFlag(companionFlaggelating,companion)
+            else
+                Sleep(1)
+            end
+        end,
+        CanEnter = function()
+            return not GetFlag(companionFlaggelating,companion)
+        end
+    }
+
+    nodes.WatchingGobletPenance.Watch = Action{
+        function()
+            Sleep(1)
+            SteerTo(painPriest)
+            Sleep(3)
+        end
+    }
+
+    --// Watching player's penance (in silence) or moving back in or fallback
+    nodes.FallbackSleep = Action{
+        function()
+            Sleep(1)
+            mod.moveto.MoveToPoint(outPoint, MovementSpeed.Walk, me)
+            if painPriest then
+                SteerTo(painPriest)
+            end
+            Sleep(3)
+        end
+    }
+
+    ------------------------------------
+    -- Events
+    events.TimerFinished = function(e)
+        if (e.TimerName == "GOB_Torturers_Spike_PenanceADTimeout") and painPriest then
+            canAD=true
+        end
+    end
+
+    events.Died = function (e)
+        if painPriest and e.Target == painPriest then
+            painPriest = nil
+            canOrderPenance = false
+            StopTimer(me, "GOB_Torturers_Spike_PenanceADTimeout")
+            canAD = false
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == Guid("GOB_Torturers_State_MovedOut_a20ec730-dfec-56a7-6cc3-71ff51e16502") and canOrderPenance then
+            SetFlag(missedPlayerPenance,me)
+        end
+    end
+
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if (e.Event == "GOB_PainPriest_ReadyForGoblins") and painPriest then
+                --Pain Priest notifies the goblins when he's completely done with the player's penance
+                --but he doesn't check if the goblins are ready; goblins need to do these checks
+                if GetFlag(movedOutFlag, me) then
+                    StopTimer(me, "GOB_Torturers_Spike_PenanceADTimeout")
+                    canAD = false
+                    StartTimer(me,"GOB_Torturers_Spike_PenanceADTimeout", 3, 0)
+                end
+                canOrderPenance = true
+            end
+        end
+    end
+end
+}

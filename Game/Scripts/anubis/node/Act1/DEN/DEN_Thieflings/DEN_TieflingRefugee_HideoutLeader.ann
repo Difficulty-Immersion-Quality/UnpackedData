@@ -1,0 +1,423 @@
+game.states.DEN_TieflingRefugee_HideoutLeader = State {function ()
+    description = [[Behaviour of the leader of the tiefling kids in the Druids' Grove]]
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    -- Local variables
+
+    --Entities
+    local hideoutPoint = Entity("S_DEN_Thieflings_LeaderHideoutPoint_01_faf58b7e-f755-4071-9185-db4961a5dc08")
+    local cliffPoint = Entity("S_DEN_Thieflings_LeaderHideoutPoint_02_15d41e95-4e66-4f01-b62b-c0ce19df0ca5")
+    local stashPoint = Entity("S_DEN_Thieflings_LeaderHideoutPoint_03_81640fc3-8c81-4b10-9b7f-fd178ec45c88")
+    local groupTalkPoint = Entity("S_DEN_Thieflings_LeaderHideoutPoint_04_d4831bcd-ca8c-41c9-b37d-05a928b0161a")
+    local abandonPos = Entity("S_DEN_Thieflings_LeaderAbandonArea_80d409f7-f96e-4d38-9e2b-08fd28080f81")
+    local hideoutArea = Entity("S_DEN_Hideout_ThiefSpotBox_de0d46cf-d0bf-4879-b79e-bcec68bf64f4")
+    local guard
+    local intruderPos
+
+    --Ints
+    local patrolZone = 1
+
+    --Animations
+    local idleAnimStart = Animation("CUST_ArmsCrossed_01_Start_dafd0bbc-012a-403c-aabe-4963aca9cf25")
+    local idleAnimLoop = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+    local idleAnimEnd = Animation("CUST_ArmsCrossed_01_End_ae43ea68-fc1b-456a-88ce-0e1d504e1d40")
+    local admireAnim = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local mischiefAnim = Animation("CUST_MischeviousPlotting_01_d63ae245-e314-493c-b8e5-0538979109d7")
+
+    --Flags
+    local hostileFlag = Flag("DEN_Hideout_Event_TurnedKidsHostile_17cfabeb-f1d7-9432-0e29-5aecfcef1a18")
+    local leaveCountdownFlag = Flag("DEN_Hideout_Event_LeaveCountdown_e51c07b5-b27b-0614-c38e-feebb0d28f2a")
+    local countdownFinishedFlag = Flag("DEN_Thieflings_Event_CountdownFinished_f1fe5d3f-69cb-d5d6-8fab-9181ccd2db7d")
+    local inHideout = Flag("DEN_Thieflings_State_AtHideoutPoint_5f768dc1-8294-49ee-b2d2-964fcb22f5ff")
+    local atAbandon = Flag("DEN_Thieflings_State_AtAbandonPoint_d76525c1-b7e4-46b0-9847-73a1fdad245e")
+    local startAbandon = Flag("DEN_Thieflings_Event_Abandoning_883a6c02-9091-4b29-8bc3-99e070e3648b")
+    local emptyingStash = Flag("DEN_Thieflings_State_EmptyingStash_2203ac44-6623-40e6-967e-1b95a7c9dfb2")
+    local forceUpdateFlag = Flag("DEN_Thieflings_State_ForceUpdating_dc9ceeb2-c5b7-471e-88c6-7521c84cc97d")
+    local seekingFlag = Flag("DEN_Thieflings_State_LeaderSeeking_0df3b75f-9df9-4cc1-8795-48bb6b575945")
+
+    --Bools
+    local alertedGuard = false
+    local inGroupDialog = false
+    local canAD = true
+
+    --Dialog
+    local groupDialog = Dialog("DEN_Thieflings_AD_HideoutGuards_817cb43a-88c4-f8dc-df52-88543e32dd0f")
+    local trespassDialog = Dialog("DEN_Thieflings_AD_HideoutTrespass_ced07a44-4432-80c0-7394-b587e02d9d2e")
+    local soloAD = Dialog("DEN_Thieflings_AD_HideoutLeader_6e8116e0-927c-8397-e68b-e5c68cbe29ba")
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.AD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                soloAD,
+                {
+                    waitForCompletion = false,
+                },
+                me
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_Thieflings_AD_HideoutLeader")
+            StartTimer(me,"ADTimer_DEN_Thieflings_AD_HideoutLeader", 40 + math.random(0,10),0)
+        end,
+        CanEnter = function()
+            return (not GetFlag(leaveCountdownFlag)
+            and not GetFlag(startAbandon,me)
+            and not GetFlag(countdownFinishedFlag)
+            and not GetFlag(emptyingStash,me))
+            and not GetFlag(seekingFlag,me)
+            and canAD
+        end,
+    }
+
+    nodes.InHideout= Selector {
+        OnEnter = function()
+            SetFlag(inHideout, me)
+        end,
+        function(nodes)
+            if GetFlag(leaveCountdownFlag) or GetFlag(hostileFlag) then
+                return nodes.Countdown
+            elseif GetFlag(seekingFlag,me)
+            and intruderPos ~= nil then
+                return nodes.SeekIntruder
+            elseif inGroupDialog then
+                return nodes.Banter
+            else
+                if patrolZone == 1 or patrolZone == 3 then
+                    return nodes.AtEntrance
+                elseif patrolZone == 2 then
+                    return nodes.AtCliff
+                elseif patrolZone == 4 then
+                    return nodes.AtStash
+                end
+            end
+        end,
+        Valid = function()
+            return not GetFlag(startAbandon,me)
+        end
+    }
+
+    nodes.InHideout.Countdown= Action {
+        OnEnter = function()
+            ClearFlag(seekingFlag,me)
+        end,
+        function()
+            if not GetFlag(hostileFlag) then
+                if mod.moveto.MoveToPoint(hideoutPoint,MovementSpeed.Sprint,me) then
+                    LookFrom(hideoutPoint)
+                    while not GetFlag(countdownFinishedFlag) and not IsInDialog(me, false) do
+                        StartAutomatedDialogImmediate(trespassDialog,me)
+                    end
+                    Sleep(1.0)
+                end
+            else
+                if mod.moveto.MoveToPoint(stashPoint,MovementSpeed.Run,me) then
+                    LookFrom(stashPoint)
+                    Sleep(1.0)
+                end
+            end
+            if GetFlag(countdownFinishedFlag) then
+                StartAutomatedDialog(trespassDialog, true, me)
+        end
+        end,
+        Valid = function()
+            return not GetFlag(startAbandon, me)
+        end
+    }
+
+    nodes.InHideout.SeekIntruder= Action {
+        OnEnter = function()
+            DebugText(me,"Entered Seek Intruder Node")
+        end,
+        function()
+            if mod.moveto.MoveToPoint(intruderPos,MovementSpeed.Run,me) then
+                DebugText(me,"Reached Target")
+                SetEntityEvent(me, "DEN_Thieflings_ReachedIntruderPos")
+                ClearFlag(seekingFlag,me)
+                Sleep(4.0)
+            end
+        end,
+        Valid = function()
+            return not GetFlag(leaveCountdownFlag) and not GetFlag(hostileFlag)
+        end
+    }
+
+    nodes.InHideout.Banter= Action {
+        function()
+            if mod.moveto.MoveToPoint(groupTalkPoint,MovementSpeed.Run,me) then
+                LookFrom(groupTalkPoint)
+                Sleep(1.0)
+            end
+        end,
+        Valid = function()
+            return not GetFlag(hostileFlag) and not GetFlag(seekingFlag,me)
+        end
+    }
+
+    nodes.InHideout.AtEntrance= Action {
+        OnEnter = function()
+            if patrolZone == 1 then
+                patrolZone = 2
+            elseif patrolZone == 3 then
+                patrolZone = 4
+            end
+        end,
+        function()
+            if mod.moveto.MoveToPoint(hideoutPoint,MovementSpeed.Walk,me) then
+                LookFrom(hideoutPoint)
+                Sleep(1)
+                if idleAnimStart ~= nil and idleAnimLoop ~= nil and idleAnimEnd ~= nil then
+                    PlayLoopingAnimation(idleAnimStart,{idleAnimLoop},idleAnimEnd,false)
+                    Sleep(12.0)
+                    StopAnimation(me)
+                    Sleep(3.0)
+                end
+            end
+        end,
+        Valid = function()
+            return not GetFlag(hostileFlag) and not inGroupDialog and not GetFlag(seekingFlag,me)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.InHideout.AtCliff= Action {
+        OnEnter = function()
+            patrolZone = 3
+        end,
+        function()
+            if mod.moveto.MoveToPoint(cliffPoint,MovementSpeed.Walk,me) then
+                LookFrom(cliffPoint)
+                Sleep(1)
+                PlayAnimation(admireAnim,true,false)
+            end
+        end,
+        Valid = function()
+            return not GetFlag(hostileFlag) and not inGroupDialog and not GetFlag(seekingFlag,me)
+        end
+    }
+
+    nodes.InHideout.AtStash= Action {
+        OnEnter = function()
+            patrolZone = 1
+        end,
+        function()
+            if mod.moveto.MoveToPoint(stashPoint,MovementSpeed.Walk,me) then
+                LookFrom(stashPoint)
+                Sleep(1)
+                PlayAnimation(mischiefAnim,true,false)
+            end
+        end,
+        Valid = function()
+            return not GetFlag(hostileFlag) and not inGroupDialog and not GetFlag(seekingFlag,me)
+        end
+    }
+
+    nodes.AbandoningHideout = Action {
+        function()
+            mod.moveto.MoveTo(abandonPos,true,1.5,"Run","DEN_Thieflings_ArriveAtAbandon",2.5,true,false)
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return GetFlag(startAbandon,me) and not GetFlag(atAbandon,me)
+        end
+    }
+
+    nodes.AbandonedHideout= Action {
+        function()
+            if mod.moveto.MoveToPoint(abandonPos,MovementSpeed.Walk,me) then
+                LookFrom(abandonPos)
+                if idleAnimStart ~= nil and idleAnimLoop ~= nil and idleAnimEnd ~= nil then
+                    PlayLoopingAnimation(idleAnimStart,{idleAnimLoop},idleAnimEnd,false)
+                    Sleep(12.0)
+                    StopAnimation(me)
+                    Sleep(3.0)
+                end
+            end
+        end,
+        Valid = function()
+            return GetFlag(atAbandon,me)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_Thieflings_HideoutKidAlertGuard") then
+                alertedGuard = true
+            elseif(e.Event == "DEN_Thieflings_AbandonedHideout") then
+                SetFlag(startAbandon,me)
+            elseif(e.Event == "DEN_Thieflings_ArriveAtAbandon") then
+                SetFlag(atAbandon,me)
+            elseif(e.Event == "DEN_Thieflings_MoveToAlertGuard") then
+                SetFlag(startAbandon,me)
+                if not guard and e.Params[1] then
+                    guard = e.Params[1]
+                end
+                if guard then
+                    mod.moveto.MoveTo(guard,true,1.5,"Run","DEN_Thieflings_HideoutKidAlertGuard")
+                else
+                    alertedGuard = true
+                end
+                Interrupt()
+            elseif(e.Event == "DEN_Thieflings_SetIntruder") then
+                intruderPos = nil
+                if e.Params[1] then
+                    intruderPos = FindValidPosition(e.Params[1].Position,5.0,me)
+                end
+            end
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if(e.Flag == leaveCountdownFlag.Guid) then
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_Thieflings_AD_HideoutLeader")
+            StartTimer(me,"ADTimer_DEN_Thieflings_AD_HideoutLeader", 15, 0)
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == seekingFlag.Guid and e.Entity == me then
+            if inGroupDialog then
+                DialogRequestStop(me,groupDialog)
+            end
+        end
+    end
+
+    events.DialogStarted = function(e)
+        if groupDialog then
+            if(e.Instance.DialogUUID == groupDialog.Guid) then
+                inGroupDialog = true
+            end
+        end
+        if (not e.Instance.Automated or e.Instance.DialogUUID == trespassDialog.Guid) and GetFlag(seekingFlag,me)  then
+            ClearFlag(seekingFlag,me)
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if groupDialog then
+            if(e.Instance.DialogUUID == groupDialog.Guid) then
+                inGroupDialog = false
+                canAD = false
+                StopTimer(me,"ADTimer_DEN_Thieflings_AD_HideoutLeader")
+                StartTimer(me,"ADTimer_DEN_Thieflings_AD_HideoutLeader", 15, 0)
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_Thieflings_AD_HideoutLeader") then
+            canAD = true
+        end
+    end
+
+end}
+
+game.states.DEN_TieflingRefugee_HideoutLeader_NoPeace = State {function ()
+    description = [[Behaviour of the leader of the tiefling kids in the Druids' Grove once the state of the grove has changed from peaceful]]
+
+    modules = {"shared.moveto","shared.dialog"}
+
+    -----------------------------------------
+    -- Local variables
+
+    local idleAnimStart = Animation("CUST_ArmsCrossed_01_Start_dafd0bbc-012a-403c-aabe-4963aca9cf25")
+    local idleAnimLoop = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+    local idleAnimEnd = Animation("CUST_ArmsCrossed_01_End_ae43ea68-fc1b-456a-88ce-0e1d504e1d40")
+    local admireAnim = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local hideoutPoint = Entity("S_DEN_Thieflings_LeaderHideoutPoint_01_faf58b7e-f755-4071-9185-db4961a5dc08")
+    local stashPoint = Entity("S_DEN_Thieflings_LeaderHideoutPoint_03_81640fc3-8c81-4b10-9b7f-fd178ec45c88")
+    local groupTalkPoint = Entity("S_DEN_Thieflings_LeaderHideoutPoint_04_d4831bcd-ca8c-41c9-b37d-05a928b0161a")
+    local hideoutArea = Entity("S_DEN_Hideout_ThiefSpotBox_de0d46cf-d0bf-4879-b79e-bcec68bf64f4")
+    local robberKid = Entity("S_DEN_RobberKid_94e865e9-790d-4633-a378-8fb50832b5e9")
+    local trader = Entity("S_DEN_PickpocketTrader_e1fda08b-45d4-41db-84b5-20e9931ba5af")
+    local scoldDialog = Dialog("DEN_AttackOnDen_AD_HideoutLeaderScolding_6b1882ba-9fd4-a17d-9df1-f1943be0c9d4")
+    local sighDialog = Dialog("DEN_AttackOnDen_AD_HideoutLeaderSighing_f13630b6-a03e-819c-be0f-1f4e99a3cc83")
+    local storytellerFlag = Flag("DEN_AttackOnDen_State_NoStoryteller_cd7198cb-4f9e-5239-3211-9aface6587b6")
+    local canAD = true
+    -----------------------------------------
+    -- Nodes
+
+    nodes.InHideout= Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.InHideout.AtEntrance= Action {
+        function()
+            if mod.moveto.MoveToPoint(hideoutPoint,MovementSpeed.Walk,me) then
+                LookFrom(hideoutPoint)
+                Sleep(1)
+                PlayAnimation(admireAnim,true,false)
+                Sleep(3)
+            end
+        end
+    }
+
+    nodes.InHideout.AtStash= Action {
+        function()
+            if mod.moveto.MoveToPoint(stashPoint,MovementSpeed.Walk,me) then
+                LookFrom(stashPoint)
+                Sleep(1)
+                if canAD and mod.dialog.IsSpeakerAvailableAndNear(robberKid, me, 5.0, true) then
+                    StartAutomatedDialog(scoldDialog,true,me,robberKid,trader)
+                    canAD = false
+                    StartTimer(me,"DEN_HideoutLeader_AoDTimer",60,0)
+                    Sleep(2)
+                elseif idleAnimStart ~= nil and idleAnimLoop ~= nil and idleAnimEnd ~= nil then
+                    PlayLoopingAnimation(idleAnimStart,{idleAnimLoop},idleAnimEnd,false)
+                    Sleep(12.0)
+                    StopAnimation(me)
+                    Sleep(3.0)
+                end
+            end
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.InHideout.AtStory= Action {
+        function()
+            if mod.moveto.MoveToPoint(groupTalkPoint,MovementSpeed.Walk,me) then
+                LookFrom(groupTalkPoint)
+                Sleep(1)
+                if canAD and not GetFlag(storytellerFlag) then
+                    StartAutomatedDialog(sighDialog,true,me)
+                    canAD = false
+                    StartTimer(me,"DEN_HideoutLeader_AoDTimer",60,0)
+                    Sleep(2)
+                elseif idleAnimStart ~= nil and idleAnimLoop ~= nil and idleAnimEnd ~= nil then
+                    PlayLoopingAnimation(idleAnimStart,{idleAnimLoop},idleAnimEnd,false)
+                    Sleep(12.0)
+                    StopAnimation(me)
+                    Sleep(3.0)
+                end
+            end
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_HideoutLeader_AoDTimer") then
+            canAD = true
+        end
+    end
+
+end}

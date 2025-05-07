@@ -1,0 +1,96 @@
+game.states.LOW_TempleWaveservants_Allandra = State{function()
+    description = [[UmberleeFollower02 behavior]]
+    modules = {"shared.dialog","shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local repeatedAD = Dialog("LOW_AllandraGrey_AD_DuringCeremony_3b5f581b-c8a7-060f-2768-fa3da2cf7c57")
+    local defaultPos = Entity("S_LOW_Allandra_FuneralSpot_2b50394e-3351-4b78-a1b2-ba353ad64acd")
+    local endPos = Entity("S_LOW_Allandra_OfficeSpot_49174aa3-b7d3-477d-956b-fdfcb6a7cbaf")
+
+    local ambushFlag = Flag("LOW_BellyOfTheBeast_State_WaveservantsInAmbush_b5d448d1-36c9-4deb-8426-45c0fa67f9d1")
+    local endFuneralFlag = Flag("LOW_WaterQueensHouse_State_FuneralEnded_cebde540-6e92-ea5d-2187-c40eb9f5f95f")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Unless killed, Allandra will keep doing the ceremony with a rate limited AD
+    nodes.Action_ADLoop = Action{
+        function()
+            local moveResult = MoveTo(defaultPos, MovementSpeed.Walk)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(defaultPos)
+                Sleep(2.0)
+                return false
+            end
+            LookFrom(defaultPos)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    repeatedAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 12.0,
+                    },
+                    me
+                )
+        end,
+
+        Valid = function()
+            return not GetFlag(ambushFlag) and not GetFlag(endFuneralFlag)
+        end
+    }
+
+    nodes.EndPosition = Action 
+    {
+        function ()        
+            if IsInDangerousSurfaceFor(endPos, me.Character) then
+                SteerTo(endPos)
+                Sleep(2.0)
+                return false
+            end
+
+            local moveResult = MoveTo(endPos, MovementSpeed.Walk)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(endPos)
+                Sleep(2.0)
+                return false
+            end
+
+            LookFrom(endPos)
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not GetFlag(ambushFlag) and GetFlag(endFuneralFlag)
+        end
+    }
+
+
+    nodes.Fallback = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

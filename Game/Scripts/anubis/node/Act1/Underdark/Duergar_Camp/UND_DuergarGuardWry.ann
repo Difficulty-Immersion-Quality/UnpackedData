@@ -1,0 +1,183 @@
+game.states.UND_DuergarGuardWry = State{function ()
+    description = [[Behavior for Duergar Wry, the overseer looking after the dig process in the Duergar Camp]]
+    
+    modules = {"shared.math"}
+
+    params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled.
+    ]]}
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is about to be destroyed or has been already.
+    ]]}
+    params.WanderPositionBox = {type = EParamType.String, help=[[
+        The trigger in which the character will wander.
+    ]]}
+    params.CaveInEvacuationBox = {type = EParamType.String, help=[[
+        The trigger to which the characters will run if the Rothe is going to crash the cave in or explosives are set.
+    ]]}
+
+    modules = { "shared.util","shared.math" }
+
+    local char_sergeant
+
+    local charList_gnomes = {}
+    
+    local itm_Cane
+    local root_Cane
+
+    local tr_wanderPositionBox
+    local tr_caveInEvacBox
+    local tr_caveInLookAt
+
+    local d_ShoutAD = Dialog("UND_DuergarGuardWry_AD_7dfabc13-1474-ea35-aa86-4ef6a4836dfc")
+
+    local flag_ExplosivesSet = Flag("UND_DuergarCamp_State_ExplosivesAtCaveIn_41633d28-12de-4fad-989f-863f411132c4")
+    local flag_CaveInCleared = Flag("UND_DuergarCamp_State_CaveInCleared_e0d8a48b-e0cf-4cc8-96bc-b637b79ce9bd")
+	local flag_PostMutiny = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+    
+    local anim_Whip = Animation("CUST_Whipping_01_62268e72-f4cf-47da-bfa8-e9c7f71ceb86")
+
+
+    self.OnInit = function()
+        char_sergeant = FindEntity("S_UND_DuergarGuardSergeant_0aeb5411-5f13-4263-acb0-87f0689de2e5")
+
+        root_Cane = FindTemplate("WPN_DUE_Whipping_Cane_A_0_3a9e4e60-9f58-4fb9-8a16-4cf784ad6f0d")
+        itm_Cane = GetFirstItemByTemplateInInventory(me,root_Cane)
+
+        charList_gnomes[1] = FindEntity("S_UND_GnomeForeman_42abeae0-3ccd-4b02-94d7-08175b343321")
+        charList_gnomes[2] = FindEntity("S_GLO_GnomeWorkerDaffy_fdaeccaa-d903-4568-ac36-a0a0ec24977d")
+        charList_gnomes[3] = FindEntity("S_UND_GnomeWorkerLumpy_925df004-4815-4919-8545-d128b74043b1")
+
+        tr_wanderPositionBox = FindEntity(params.WanderPositionBox)
+        tr_caveInEvacBox = FindEntity(params.CaveInEvacuationBox)
+        tr_caveInLookAt = FindEntity("S_UND_DuergarCamp_CaveIn_LookAt_1b97fad4-456b-4a5a-ac43-10841fca2711")
+    end
+
+
+    nodes.State_PostMutiny = Proxy {
+        game.states.UND_DuergarCamp_PostMutiny,
+        params = {PostMutinyPosition = params.PostMutinyPosition},
+        Valid = function()
+            return GetFlag(flag_PostMutiny)
+        end
+    }
+
+    nodes.State_CaveInCleared = Proxy {
+        game.states.UND_DuergarCamp_CaveInCleared,
+        params = {CaveInPosition = params.CaveInPosition},
+        Valid = function()
+            return GetFlag(flag_CaveInCleared)
+        end
+    }
+
+    nodes.State_CaveInEvacuation = Action {
+        function()
+            StartAutomatedDialog(d_ShoutAD,true,me)
+            if GetDistanceTo(me, tr_caveInEvacBox) > 2.0 and not IsInTrigger (me,tr_caveInEvacBox.Trigger) then
+                local tr_randomEvacPos = TriggerGetRandomPosition(tr_caveInEvacBox.Trigger)
+                local tr_validEvacPos = FindValidPosition(tr_randomEvacPos,2.0,me)
+                try
+                    MoveTo(tr_validEvacPos,MovementSpeed.Run)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    LookAtEntity(tr_caveInLookAt, 3.0)
+                    Sleep(2.0)
+                end
+                SteerTo(tr_caveInLookAt)
+                LookAtEntity(tr_caveInLookAt, 3.0)
+            else
+                SteerTo(tr_caveInLookAt)
+                LookAtEntity(tr_caveInLookAt, 3.0)
+            end
+            Sleep(5.0)
+        end,
+        Valid = function()
+            return not GetFlag(flag_CaveInCleared)
+            and (GetFlag(flag_ExplosivesSet) or IsInSurface(tr_wanderPositionBox,SurfaceType.BLACKPOWDER,5.0)
+                or IsInDangerousSurfaceFor(tr_wanderPositionBox,me.Character,0.5,true))
+        end
+    }
+
+    nodes.State_Overseer = Selector {
+        function(nodes)
+            return GetWeightedCanEnter(nodes,{[nodes.Action_SayAD] = 6,
+												[nodes.Action_Wander] = 4,
+												[nodes.Action_PlayAnim] = 10})
+        end,
+        Valid = function()
+            return not GetFlag(flag_CaveInCleared)
+                and not GetFlag(flag_ExplosivesSet)
+        end
+    }
+
+    nodes.State_Overseer.Action_SayAD = Action{
+        function()
+            
+            if GetDistanceTo(me, tr_wanderPositionBox) > 1.5 then
+                local tr_shoutPosition = TriggerGetRandomPosition(tr_wanderPositionBox.Trigger)
+                try
+                    MoveTo(tr_shoutPosition)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    LookAtEntity(tr_caveInLookAt, 3.0)
+                    Sleep(2.0)
+                end
+            end
+            SteerTo(tr_caveInLookAt)
+            LookAtEntity(tr_caveInLookAt, 3.0)
+            StartAutomatedDialog(d_ShoutAD,false,me)
+            mod.util.SleepRandom(3.0,5.0)
+        end,
+        Valid = function()
+            return not GetFlag(flag_ExplosivesSet)
+        end,
+        OnLeave = function()
+            DialogRequestStop(me,d_ShoutAD)
+        end
+    }
+
+    nodes.State_Overseer.Action_Wander = Action{
+        function()
+            try
+                Wander(tr_wanderPositionBox,10.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                LookAtEntity(tr_caveInLookAt, 3.0)
+                Sleep(2.0)
+            end
+            SteerTo(tr_caveInLookAt)
+            LookAtEntity(tr_caveInLookAt, 3.0)
+            mod.util.SleepRandom(3.0,5.0)
+        end,
+        Valid = function()
+            return not GetFlag(flag_ExplosivesSet)
+        end
+    }
+
+    nodes.State_Overseer.Action_PlayAnim = Action{
+        function()
+            local char_gnomeToWhip = charList_gnomes[math.random(1,3)]
+            try
+                MoveTo(char_gnomeToWhip)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Failed to move")
+            end
+            SteerTo(char_gnomeToWhip)
+            LookAtEntity(char_gnomeToWhip, 3.0)
+            if GetDistanceTo(me,char_gnomeToWhip) < 2.0 then
+                SetEntityEvent(char_gnomeToWhip, "GettingWhipped")
+                SetWeaponUnsheathed(me,true)
+                Sleep(1.0)
+                PlayAnimation(anim_Whip,true,false)
+                SetEntityEvent(char_gnomeToWhip, "StoppedWhipping")
+            end
+            mod.util.SleepRandom(2.0,4.0)
+        end,
+        CanEnter = function()
+            return GetEquippedItem(me.Character,EquipmentSlot.MeleeMainHand) == itm_Cane
+        end,
+        Valid = function()
+                return not GetFlag(flag_ExplosivesSet)
+        end,
+        OnLeave = function()
+            SetWeaponUnsheathed(me,false)
+        end
+    }
+end}

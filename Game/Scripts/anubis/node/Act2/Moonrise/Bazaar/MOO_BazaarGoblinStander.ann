@@ -1,0 +1,223 @@
+--Used in game.states.MOO_ExecutionWatcher
+game.states.MOO_BazaarGoblinStander_Listening = State {function()
+  
+    params.StandingPoint = { type = EParamType.String, required = true,
+        help = [[Standing Postion near table]] }
+
+    modules = { "shared.moveto", "shared.dialog" }
+    
+    local goblin000 = Entity("S_MOO_BazaarStander_000_04580ceb-8caf-4a53-999b-743fc9590ef0")
+    local goblin001 = Entity("S_MOO_BazaarStander_001_b23b8e57-880f-4763-af53-7009f2d959d1")
+    local goblin002 = Entity("S_MOO_BazaarStander_002_5aa31a93-79fa-4a82-9e72-cbec77da3a0e")
+    local listeningPoint = Entity("S_MOO_BazaarListenPoint_38e613d6-320a-4a1c-b1d6-b05699f72eb2")
+    local standingPoint
+
+    local listeningAnim = Animation("CUST_Eavesdropping_01_f7388f65-bdbe-45bb-b189-f364485c2dd7")
+
+    local listeningAD = Dialog("MOO_Bazaar_AD_GoblinsListening_dd89728c-e841-db6d-6060-0ff1d776c00e")
+
+    local isListenTimerFinished = false
+    local timerActive = false
+    local isGoblinKilled = false
+
+    self.OnInit = function()
+        standingPoint = Entity(params.StandingPoint)
+    end
+
+    nodes = ImmediateSelector{
+        function(nodes)
+            if isGoblinKilled then
+                return nodes.Cower
+            elseif isListenTimerFinished then
+                return nodes.ListenToDoor
+            else
+                return nodes.Idle
+            end
+        end
+    }
+
+    nodes.Cower = Proxy{
+        game.states.MOO_BazaarGoblinStander_Cower,
+        params ={
+            StandingPoint = params.StandingPoint
+        },
+
+        OnFinished = function()
+            isGoblinKilled = false
+        end
+    }
+
+    nodes.ListenToDoor = Action{
+        function()
+            Sleep(2)
+            mod.dialog.StartCheckedAutomatedDialog(
+                    listeningAD,
+                    {
+                        waitForCompletion = false
+                    },
+                    goblin000,
+                    goblin001,
+                    goblin002
+                )
+            if mod.moveto.MoveToPoint(listeningPoint, MovementSpeed.Walk, me) then
+                LookFrom(listeningPoint)
+            else
+                LookAtEntity(listeningPoint, 3.0)
+            end
+            PlayAnimation(listeningAnim, true, false)
+            isListenTimerFinished = false
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+            isListenTimerFinished = false
+        end
+    }
+    
+
+    nodes.Idle = Action{
+        OnEnter = function()
+            if not timerActive then
+                StartTimer(me,"ADTimer_MOO_BazaarGoblinStander_Listening", math.random(50,80), 0)
+                timerActive = true
+            end
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Walk, me) then
+                LookFrom(standingPoint)
+            else
+                LookAtEntity(standingPoint, 3.0)
+            end
+        end
+
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_MOO_BazaarGoblinStander_Listening") then 
+            isListenTimerFinished = true
+            timerActive = false
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.Event == "MOO_ExecutionGoblinKilled" then
+            isGoblinKilled = true
+        end
+    end
+end
+}
+
+game.states.MOO_BazaarGoblinStander_Idle = State {function()
+
+    modules = { "shared.moveto", "shared.dialog" }
+
+    params.StandingPoint = { type = EParamType.String, required = true,
+        help = [[Standing Postion near table]] }
+
+    params.LeadSpeaker = { type = EParamType.Bool, required = false, default = false,
+        help = [[Is this goblin the lead speaker for the AD?]] }
+    
+    local goblin000 = Entity("S_MOO_BazaarStander_000_04580ceb-8caf-4a53-999b-743fc9590ef0")
+    local goblin001 = Entity("S_MOO_BazaarStander_001_b23b8e57-880f-4763-af53-7009f2d959d1")
+    local goblin002 = Entity("S_MOO_BazaarStander_002_5aa31a93-79fa-4a82-9e72-cbec77da3a0e")
+    local standingPoint
+
+    local afterExecutionAD = Dialog("MOO_Bazaar_AD_GoblinsAfterExecution_76b0bfed-d66d-256f-0776-6c148951ec90")
+
+    local isGoblinKilled = false
+
+    self.OnInit = function()
+        standingPoint = Entity(params.StandingPoint)
+    end
+
+    nodes.Cower = Proxy{
+        CanEnter = function()
+            return isGoblinKilled
+        end,
+        
+        game.states.MOO_BazaarGoblinStander_Cower,
+        params ={
+            StandingPoint = params.StandingPoint
+        },
+
+        OnFinished = function()
+            isGoblinKilled = false
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Walk, me) then
+                LookFrom(standingPoint)
+            else
+                LookAtEntity(standingPoint, 3.0)
+            end
+
+            if params.LeadSpeaker then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    afterExecutionAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = math.random(50.0,80.0)
+                    },
+                    goblin000,
+                    goblin001,
+                    goblin002
+                )
+            end
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "MOO_ExecutionGoblinKilled" then
+            isGoblinKilled = true
+        end
+    end
+
+end
+}
+
+--Reacting to the deaths of any of the goblins in the execution scene
+game.states.MOO_BazaarGoblinStander_Cower = State {function()
+    
+    params.StandingPoint = { type = EParamType.String, required = false,
+        help = [[Standing Postion near table]] }
+
+    modules = { "shared.moveto" }
+
+    local standingPoint
+    local isCowering = true
+
+    self.OnEnter = function()
+        standingPoint = Entity(params.StandingPoint)
+    end
+
+    self.Valid = function()
+        return isCowering
+    end
+
+    nodes.Cower = Action{
+        function()
+            ApplyStatus(me, "ANIM_COWER")
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Run, me) then
+                LookFrom(standingPoint)
+            else
+                LookAtEntity(standingPoint, 3.0)
+            end
+            Sleep(4.0 + 3.0 * math.random())
+            isCowering = false
+        end,
+
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+            isCowering = false
+        end,
+
+        OnFinished = function()
+           isCowering = true 
+        end
+    }
+    
+end
+}

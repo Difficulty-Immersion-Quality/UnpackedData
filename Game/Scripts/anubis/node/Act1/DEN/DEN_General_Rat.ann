@@ -1,0 +1,51 @@
+game.states.DEN_General_Rat = State {function ()
+    description = [[Behaviour of the rat in the den]]
+
+    local caveTrigger = Entity("S_DEN_RatWander_Cave_d5fb0d6f-ec36-44aa-9159-e3ce21a2dac5")
+    local shackTrigger = Entity("S_DEN_RatWander_Shack_683b9c3a-3568-4d8f-83e2-0de771b716d1")
+    local evilKeyChest = Entity("S_DEN_PotatoDispenser_fb5b898f-6f7b-424c-8dd0-09fb353688f2")
+    local positionChangeFlag = Flag("DEN_Rat_Event_MoveToShack_47c82d69-904d-c4be-3977-bead6659cfd0")
+    local playerRemovedKeyFlag = Flag("DEN_Rat_Event_RemovedKey_15ec04be-720c-7390-0884-ff80aa0a167c")
+
+    events.FlagSet = function(e)
+        if e.Flag == Guid("DEN_TieflingRefugees_State_LeftDen_003b304b-f058-4f8a-b9fa-a097e1b6b395") then
+            SetFlag(positionChangeFlag)
+        end
+    end
+
+    nodes.InShack = Action {
+        function()
+            if not GetFlag(playerRemovedKeyFlag) and not evilKeyChest.Item.IsDestroyed then
+                if GetDistance2DTo(me, evilKeyChest) > 2 then
+                    try
+                        MoveTo(evilKeyChest, MovementSpeed.Run)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        SteerTo(evilKeyChest)
+                    end
+                else
+                    SteerTo(evilKeyChest)
+                end
+            else
+                try
+                    Wander(shackTrigger,math.random() + math.random(3,4),MovementSpeed.Run,nil,true,PathClimbingMode.Disabled)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                end
+                Sleep(math.random() + 2.0)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(positionChangeFlag)
+        end
+    }
+
+    nodes.CaveWander = Action {
+        function()
+            try
+                Wander(caveTrigger,math.random() + math.random(3,4),MovementSpeed.Run,nil,true,PathClimbingMode.Disabled)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+            end
+            Sleep(math.random() + 2.0)
+        end
+    }
+end}

@@ -1,0 +1,165 @@
+game.states.GOB_Festivities_ChickenChase = State{function ()
+    description = [[State where goblin takes part as crowd watching Chicken Chase game]]
+
+    modules = { "shared.math", "shared.util", "shared.params", "shared.dialog" }
+
+    params.NonChickenChaseState = { type = EParamType.State, required = true,
+        help = [[Slot for goblins' state tree when there's no Chicken Chase]] }
+
+    params.ChasePos = { type = EParamType.String, required = true,
+        help = [[Trigger position of the goblin as a viewer of the game]] }
+
+    params.ChaseAD = { type = EParamType.String, required = false, default = "",
+        help = [[AD when goblin watches the game of Chicken Chase]] }
+
+    params.ChaseADPartners = { type = EParamType.String, arrayRange = "..", required = false, default = {},
+        help = [[Addition speaker in ChaseAD]] }
+
+    params.ChaseEndAD = { type = EParamType.String, required = false, default = "",
+        help = [[AD when Chicken Chase ends]] }
+
+
+    local fl_ChickeChaseInProgress = Flag("GOB_ChickenChase_State_PlayingChase_34de58e6-ca4a-d171-c1ac-32821bb036ed")
+    local fl_BallChanged = Flag("GOB_ChickenChase_State_OwlbearReplacedChicken_aabd6c48-57e4-12bb-8123-912f747f1f07")
+    local fl_GoalScored = Flag("GOB_ChickenChase_State_GoalScored_79b6eef1-c8b6-d471-f7ca-811c5abf564f")
+
+    local b_AfterChickenChase = false
+
+    local tr_Position = nil
+    local tr_GameArea = nil
+    local ch_Chicken = nil
+    local ch_Owlbear = nil
+    local ch_Ball = nil
+
+    local anim_Praise = Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0")
+    local anim_Mock = Animation("CUST_Mocking_01_313bddc4-712f-4f08-874f-db9af7a6c4a1")
+    local anim_Cheers = { Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0"),
+                          Animation("CUST_Cheering_02_5e23b082-f75a-4daa-86e1-ab73ec6d30b7"),
+                          Animation("CUST_Cheering_03_34ac373e-2928-4d83-8427-13f34573c64a") }
+
+    local dlg_ChaseAD = Dialog(params.ChaseAD)
+    local dlg_ChaseEndAD = Dialog(params.ChaseEndAD)
+    local ch_ChaseADPartners = {}
+
+
+    local b_CanDoAD = false
+    local s_CanDoADTimer = "GOB_Festivities_ChickenChase.AD.CanDoAD"
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        end
+    end
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        StartTimer(me, s_CanDoADTimer, mod.math.random(10.0, 15.0), 0)
+    end
+
+
+    events.FlagSet = function(ev)
+        if ev.Flag == fl_BallChanged.Guid then
+            ch_Ball = ch_Owlbear
+        end
+    end
+
+    events.FlagCleared = function(ev)
+        if ev.Flag == fl_ChickeChaseInProgress.Guid then
+            b_AfterChickenChase = true
+        end
+    end
+
+
+    self.OnInit = function()
+        b_AfterChickenChase = false
+
+        tr_Position = FindEntity(params.ChasePos)
+        tr_GameArea = FindEntity("S_GOB_ChickenChase_PlayerField_4cdeddd0-284f-4159-b777-e12fd03d81a4")
+        ch_Chicken = FindEntity("S_GOB_ChickenBall_d17d3d8e-cf4a-48cd-a5ab-de0083110785")
+        ch_Owlbear = FindEntity("S_FOR_OwlBear_Cub_001_c66b2865-6613-4372-b97a-e330c1d75d09")
+        ch_Ball = ch_Chicken
+
+        if dlg_ChaseAD then
+            ch_ChaseADPartners = mod.params.ParamArrayToEntityList(params.ChaseADPartners)
+        end
+        b_CanDoAD = (dlg_ChaseAD ~= nil)
+    end
+
+    nodes = ImmediateSelector {}
+
+    nodes.NonChickenChaseState = Proxy{
+        params.NonChickenChaseState,
+
+        Valid = function()
+            return not GetFlag(fl_ChickeChaseInProgress) and not b_AfterChickenChase
+        end
+    }
+
+    nodes.AfterChickenChase = Action{
+        function()
+            if dlg_ChaseEndAD ~= nil and not ch_Ball.IsInCombat then
+                StartAutomatedDialogImmediate(dlg_ChaseEndAD, me)
+            end
+            if GetFlag(fl_GoalScored) then
+                PlayAnimation(anim_Praise)
+            else
+                PlayAnimation(anim_Mock)
+            end
+            b_AfterChickenChase = false
+        end,
+
+        OnLeave = function()
+            b_AfterChickenChase = false
+        end,
+
+        Valid = function()
+            return b_AfterChickenChase
+        end
+    }
+
+    nodes.GetReady = Action{
+        function()
+            try
+                mod.util.SleepRandom(1.0, 2.5)
+                MoveTo(tr_Position, MovementSpeed.Run, true, false, 0.0, 0.8)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo to ChickenChase cheering position")
+            end
+        end,
+
+        CanEnter = function()
+            return GetDistanceTo(me, tr_Position) > 0.8
+        end
+    }
+
+    nodes.ChickenChase = Selector{
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end
+    }
+
+    nodes.ChickenChase.Animation = Action{
+        function()
+            if IsInTrigger(me, tr_GameArea.Trigger) then
+                LookAtEntity(ch_Ball, 1.0)
+            end
+            PlayAnimation(anim_Cheers[math.random(#anim_Cheers)])
+            mod.util.SleepRandom(2.0, 4.0)
+        end
+    }
+
+    nodes.ChickenChase.AD = Action{
+        function()
+            if IsInTrigger(me, tr_GameArea.Trigger) then
+                LookAtEntity(ch_Ball, 1.0)
+            end
+            if not IsInDialog(me, false) and mod.dialog.AreSpeakersAvailableAndNear(me, 5.0, true, false, false, ch_ChaseADPartners) then
+                StartAutomatedDialog(dlg_ChaseAD, true, me, table.unpack(ch_ChaseADPartners))
+                helpers.CanDoADReset()
+            end
+            mod.util.SleepRandom(2.0, 4.0)
+        end,
+
+        CanEnter = function()
+            return b_CanDoAD
+        end
+    }
+end}

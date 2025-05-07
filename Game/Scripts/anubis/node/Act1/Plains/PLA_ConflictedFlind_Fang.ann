@@ -1,0 +1,116 @@
+game.states.PLA_ConflictedFlind_Fang = State { function ()
+
+    description = [[Behaviour tree for the Fang of Yeenoghu. He performs ritual (?).]]
+
+    modules = { "shared.math", "shared.params", "shared.dialog" }
+
+    -----------------------------------------
+    -- params section
+    params.ritualAnim = {type = EParamType.String, required = true, help=[[
+        Ritual performance animation to play in idle
+    ]]}
+
+    params.deadBody = { type = EParamType.String, required = true, help = [[
+        Dead body for performing the ritual
+    ]]}
+
+    params.basePositionTrigger = { type = EParamType.String, required = true, help = [[
+        Base position trigger to look from
+    ]]}
+
+    -- grunt ADs
+    params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+        The AD to play.
+    ]]}
+
+    params.regionBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks the ADs for the entire group of characters (prevents overlap)
+    ]]}
+
+    params.dialogBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+        Blocks this specific AD from happening (prevents repetition)
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local ritualAnim = Animation(params.ritualAnim)
+    local body = nil
+    local basePositionTrigger = nil
+    local basePos
+    local groupSyncedAD
+    local dialogBlockFlag
+    local regionBlockFlag
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        basePositionTrigger = FindEntity(params.basePositionTrigger)
+        body = FindEntity(params.deadBody)
+        basePos = me.Position
+        if params.AD then
+            groupSyncedAD = Dialog(params.AD)
+        end
+        if params.regionBlockFlag then
+            regionBlockFlag = Flag(params.regionBlockFlag)
+        end
+        if params.dialogBlockFlag then
+            dialogBlockFlag = Flag(params.dialogBlockFlag)
+        end
+    end
+
+    -----------------------------------------
+    -- node section
+
+    nodes.Ritual = Action {
+        function()
+            if body.OnStage and IsInTrigger(body, basePositionTrigger.Trigger) then
+                if GetDistance2DTo(me, body) > 2 then
+                    try
+                        MoveTo(body, MovementSpeed.Walk, true, false, 0.5, 0.95)
+                    catch ex if ls.CheckType(ex, error.MovementFailed) then
+                        DebugText(me, "MovementFailed")
+                        Sleep(3)
+                    end
+                else
+                    SteerTo(body)
+                    try
+                        PlayAnimation(ritualAnim)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "PlayAnimationFailed (ritual)")
+                        Sleep(5)
+                    end
+                    Sleep(mod.math.random(1.5, 2.5))
+                    if not GetFlag(regionBlockFlag) and not GetFlag(dialogBlockFlag) and
+                        mod.dialog.IsSpeakerAvailable(me)
+                    then
+                        StartAutomatedDialog(groupSyncedAD, false, me)
+                    end
+                end
+            else
+                try
+                    Wander(basePositionTrigger.Trigger, 2.0, MovementSpeed.Walk)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Wander MovementFailed")
+                end
+                Sleep(3)
+            end
+        end,
+        Valid = function()
+            return IsInTrigger(me, basePositionTrigger.Trigger)
+        end
+    }
+
+    nodes.MoveToBasePosition = Action {
+        function()
+            try
+                MoveTo(basePositionTrigger, MovementSpeed.Walk, true, false, 0.1, 0.5)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed")
+                Sleep(mod.math.random(1, 3))
+            end
+        end,
+        Valid = function()
+            return not IsInTrigger(me, basePositionTrigger.Trigger)
+        end
+    }
+end}

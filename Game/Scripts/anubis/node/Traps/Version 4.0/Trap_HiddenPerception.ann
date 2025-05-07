@@ -1,0 +1,77 @@
+game.states.TRAP_InvisiblePerception =  State{function ()
+
+    description = [[Default perception check with a certain DC]]
+
+    params.perceptionDC = {type = EParamType.String, required=false, default="", help=[[
+        difficulty class UUID of perception check
+    ]]}
+
+    params.maxDistance = {type = EParamType.Number, required=false, default=3.0, help=[[
+        maximum distance that players are required to be in
+    ]]}
+
+    local visible = false
+    local failedPlayers = {}
+
+    self.CanEnter = function()
+        return false
+    end
+
+    events.Activated = function()
+        if not visible then
+            SetVisible(me, false)
+            StartTimer(me, "CheckSight", 0.5, -1)
+        end
+    end
+
+    events.Deactivated = function()
+        if not visible then
+            StopTimer(me, "CheckSight")
+        end
+    end
+
+    events.TimerFinished  = function(e)
+        if e.TimerName == "CheckSight" then
+            local actives = GetActiveCharacters(me,  params.maxDistance)
+            for _,char in pairs(actives) do
+                if char.Character.IsPlayer and
+                   not failedPlayers[char.UUID.String] and
+                   CanSee(char, me) then
+                    failedPlayers[char.UUID.String] = true
+                    RequestPassiveRoll(char.Character, me, Skill.Perception, DifficultyClass(params.perceptionDC), "PUZZLE_HiddenPerception")
+                end
+            end
+        end
+    end
+
+    events.RollResult = function(e)
+        if e.RollSubject == me and
+           e.Event == "PUZZLE_HiddenPerception" and
+           e.Type == RollResultType.Success then
+            StopTimer(me, "CheckSight")
+            visible = true
+            -- TODO: call the game to show the feedback
+            SetVisible(me, true)
+            SetEntityEvent(e.Roller, "PUZZLE_DiscoveredHiddenItem", me)
+           end
+    end
+
+    events.EntityEvent = function(e)
+        if not visible and
+           e.TargetEntity == me and
+           e.Event == "StoryReveal" then
+            StopTimer(me, "CheckSight")
+            visible = true
+            -- TODO: call the game to show the feedback
+            SetVisible(me, true)
+        end
+    end
+
+    events.Destroyed = function(e)
+        if e.Entity == minDistance then
+            StopTimer(me, "CheckSight")
+        end
+    end
+end
+}
+    

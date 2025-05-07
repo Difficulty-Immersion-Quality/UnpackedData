@@ -1,0 +1,412 @@
+game.states.CHA_FL1_BanditGuard = State{ function()
+
+    local idlePos = Entity("S_CHA_BanditGuardIdlePos_89f7322e-3255-4525-8843-9cdc39413d03")
+    local combatPos = Entity("S_CHA_FL1_BanditGuardCombatPos_e9e5be1d-0207-4f3a-a2cf-2e3ca8a41403")
+    local crashPos = Entity("S_CHA_BanditGuardCrashPosition_df8c2304-d4f4-4dc5-9530-79964105650f")
+    local trapPos = Entity("S_CHA_FL1_LockDownTrapSpot_5ccd0778-d5d5-4526-b36f-af4b1e48cfa9")
+
+    local pillarCrashed = false
+    local enemyAtTheDoor = false
+    local warnedOther = false
+    local noTrapToSet = false
+
+    local metalDoor = Entity("S_CHA_FL1_MetalGateReplacement_1c9609ee-fc96-4826-bac1-856a609564ac")
+    local rightBehindMetalDoor = Entity("S_CHA_RightBehindMetalDoor_d2f3a045-d1ec-4520-be2b-ac720a26a197")
+    local CHA_Crypt_AD_BanditGuardWarning = Dialog("CHA_Crypt_AD_BanditGuardWarning_d8563d93-5170-fa0d-4877-b7113b3fb3a2")
+    local metalDoorLever = Entity("S_CHA_FL1_MetalLever_41140570-efdb-44d0-8943-8ea29584dd42")
+    local metalDoorLever2 = Entity("S_CHA_FL1_MetalLever_2_7c41cd46-c233-438c-ad5b-03d79cac9a44")
+    local CHA_WrongSideOfMetalDoor = Flag("CHA_FL1_State_WrongSideOfMetalDoor_c8871d03-b737-4201-9368-802e2b437bd0")
+
+    events.EntityEvent=function(e)
+        if e.Event == "CHA_EnemyAtTheCrash" then
+            pillarCrashed = true
+            noTrapToSet = true
+        elseif e.TargetEntity == me then
+            if e.Event == "CHA_FL1_StartLockDown" then
+                enemyAtTheDoor = true
+            elseif e.Event == "CHA_BanditSpot" then
+                enemyAtTheDoor = true
+                noTrapToSet = true
+            elseif e.Event == "CHA_WarnTheOthers" then
+                warnedOther = true
+            elseif e.Event == "SetTrap" then
+                noTrapToSet = true
+            end
+        end
+    end
+
+    nodes = ImmediateSelector{
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Action_SetTrap=Action{
+        function()
+            if not IsInDangerousSurfaceFor(trapPos, me.Character) then
+                try
+                    MoveTo(trapPos,MovementSpeed.Run)
+                    SetEntityEvent(me,"SetTrap")
+                    Sleep(1.0)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : moveto failed")
+                end
+            else
+                DebugText(me, "Trap over dangerous position, trying again in 6 seconds")
+                Sleep(6.0)
+            end
+        end,
+        Valid = function()
+            return enemyAtTheDoor                        and
+                   not noTrapToSet                       and
+                   GetFlag(CHA_WrongSideOfMetalDoor, me)
+        end
+    }
+
+    nodes.Action_UnlockMetalDoor=Action{
+        function()
+            if IsInDangerousSurfaceFor(metalDoorLever, me.Character) then
+                LookAtEntity(metalDoorLever, 3.0)
+            else
+                try
+                    MoveTo(metalDoorLever,MovementSpeed.Run)
+                    UseItem(metalDoorLever.Item)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : Unlock door failed")
+                end
+            end
+            Sleep(1.0)
+        end,
+        Valid= function()
+            return (enemyAtTheDoor and metalDoor.Item.IsLocked and GetFlag(CHA_WrongSideOfMetalDoor,me))
+        end
+    }
+
+    nodes.Action_WarnOther = Action{
+        function()
+            SetWeaponUnsheathed(me, true, false)
+            if metalDoor.Item.IsOpened or not GetFlag(CHA_WrongSideOfMetalDoor,me) then
+                try
+                    StartAutomatedDialog(CHA_Crypt_AD_BanditGuardWarning,false,me)
+                    Sleep(1.0)
+                    SetEntityEvent(me,"CHA_WarnTheOthers")
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    DebugText(me,"Debug : AD failed")
+                    Sleep(1.0)
+                end
+            else
+                if IsInDangerousSurfaceFor(metalDoor, me.Character) then
+                    LookAtEntity(metalDoor, 3.0)
+                    Sleep(1.0)
+                else
+                    if metalDoor.Item.IsOpening then
+                        Sleep(1.0)
+                    else
+                        try
+                            UseItem(metalDoor.Item)
+                        catch e if ls.CheckType(e, error.UseItemFailed) then
+                            DebugText(me,"Debug : OpenDoor failed")
+                            Sleep(1.0)
+                        end
+                    end
+                end
+            end
+        end,
+        Valid = function()
+            return ((enemyAtTheDoor and not pillarCrashed) and not warnedOther)
+        end
+    }
+
+    nodes.Action_CloseMetalDoor = Action{
+        function()
+            if IsInDangerousSurfaceFor(rightBehindMetalDoor, me.Character) then
+                LookAtEntity(rightBehindMetalDoor, 3.0)
+                Sleep(1.0)
+            else
+                try
+                    MoveTo(rightBehindMetalDoor,MovementSpeed.Run)
+                    if metalDoor.Item.IsOpened and not IsInDangerousSurfaceFor(metalDoorLever2, me.Character) then
+                        try
+                            UseItem(metalDoorLever2.Item)
+                        catch e if ls.CheckType(e, error.UseItemFailed) then
+                            DebugText(me,"Debug : CloseDoor failed")
+                        end
+                    end
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo failed")
+                    Sleep(1.0)
+                end
+            end
+        end,
+        CanEnter = function()
+            return ((enemyAtTheDoor and not pillarCrashed) and not metalDoor.Item.IsLocked and GetFlag(CHA_WrongSideOfMetalDoor,me))
+        end,
+        Valid = function()
+            return ((enemyAtTheDoor and not pillarCrashed) and not metalDoor.Item.IsLocked)
+        end
+    }
+
+    nodes.Action_PillarCrashed = Action{
+        function()
+            if IsInDangerousSurfaceFor(crashPos, me.Character) then
+                LookAtEntity(crashPos, 3.0)
+                Sleep(1)
+            else
+                try
+                    MoveTo(crashPos,MovementSpeed.Run)
+                    LookFrom(crashPos)
+                    SetEntityEvent(me,"CHA_InPositionAtTheCrash")
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo failed")
+                    Sleep(1.0)
+                end
+            end
+        end,
+        Valid = function()
+            return pillarCrashed
+        end
+    }
+
+    nodes.Action_EnemyAtTheDoor = Action{
+        function()
+            SetWeaponUnsheathed(me, true, false)
+            if IsInDangerousSurfaceFor(combatPos, me.Character) then
+                LookAtEntity(combatPos, 3.0)
+                Sleep(1)
+            else
+                try
+                    MoveTo(combatPos,MovementSpeed.Run)
+                    LookFrom(combatPos)
+                    SetEntityEvent(me,"CHA_InPosition")
+                    WaitForInterrupt()
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo/LookFrom failed")
+                    Sleep(1.0)
+                end
+            end
+        end,
+        Valid = function()
+            return enemyAtTheDoor
+        end
+    }
+
+    nodes.Action_Idle = Action{
+        function()
+            if IsInDangerousSurfaceFor(idlePos, me.Character) then
+                LookAtEntity(idlePos, 3.0)
+                Sleep(1)
+            else
+                try
+                    MoveTo(idlePos,MovementSpeed.Walk)
+                    LookFrom(idlePos)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Debug : MoveTo/LookFrom failed")
+                    Sleep(1.0)
+                end
+            end
+        end
+    }
+end
+}
+
+game.states.CHA_FL1_BanditGuard_Combat = State{function()
+    modules = { "gustav.Act1.Chapel"}
+
+    ----------------------------------------------------------------------------
+    -- Local variables
+    local pillarCrashed = false
+    local enemyAtTheDoor = false
+    local warnedOther = false
+
+    local CHA_Crypt_AD_BanditGuardCallHelp = Dialog("CHA_Crypt_AD_BanditGuardCallHelp_8eb565c0-5884-f3ab-577f-494bdcc3f5a8")
+    local CHA_WrongSideOfMetalDoor = Flag("CHA_FL1_State_WrongSideOfMetalDoor_c8871d03-b737-4201-9368-802e2b437bd0")
+    local afterWarnOthers = Entity("S_CHA_BanditGuardAfterWarnPos_6fb66fae-f898-4ce8-8a7f-d1426c51a1f5")
+    local metalDoor = Entity("S_CHA_FL1_MetalGateReplacement_1c9609ee-fc96-4826-bac1-856a609564ac")
+    local metalDoorLever = Entity("S_CHA_FL1_MetalLever_41140570-efdb-44d0-8943-8ea29584dd42")
+
+    local canRunBehaviour = true
+    ----------------------------------------------------------------------------
+
+    ----------------------------------------------------------------------------
+    -- Helpers
+    helpers.action.CombatSafeUseItem = function(entity, useDash)
+        DebugText(me,"Try use item")
+        if IsInDangerousSurfaceFor(entity, me.Character) then
+            canRunBehaviour = false
+            return
+        end
+
+        if HasActiveStatus(me, "FLANKED") and CanCast(me.Character, "Shout_Disengage") then
+            UseSpell("Shout_Disengage", me)
+        end
+
+        try
+            UseItem(entity.Item)
+        catch e if ls.CheckType(e, error.UseItemFailed) then
+            DebugText(me,"Debug : UseItem failed")
+
+            if useDash and helpers.UseDashIfFarFrom(entity) then
+                helpers.CombatSafeUseItem(entity, false)
+            else
+                ApplyStatus(me, "CHA_BANDIT_ZEROSPEED", true, -1.0)
+                canRunBehaviour = false
+            end
+        end
+    end
+
+    helpers.action.CombatSafeMoveTo = function(pos, useDash)
+        if IsInDangerousSurfaceFor(pos, me.Character) then
+            canRunBehaviour = false
+            return
+        end
+
+        if HasActiveStatus(me, "FLANKED") and CanCast(me.Character, "Shout_Disengage") then
+            UseSpell("Shout_Disengage", me)
+        end
+
+
+        DebugText(me, "Start running")
+        local moveToResult = MoveTo(pos, MovementSpeed.Run, false, false, 0.2, 1.0, false)
+
+        if moveToResult ~= error.MovementError.None then
+            DebugText(me, "Error : MoveTo failed")
+
+            if useDash and helpers.UseDashIfFarFrom(pos) then
+                DebugText(me, "Using Dash")
+                helpers.CombatSafeMoveTo(pos, false)
+            else
+                ApplyStatus(me, "CHA_BANDIT_ZEROSPEED", true, -1.0)
+                canRunBehaviour = false
+            end
+        end
+    end
+
+    helpers.action.UseDashIfFarFrom = function(entity)
+        local distance = GetDistanceTo(me, entity)
+        if distance > 0.2 and CanCast(me.Character, "Shout_Dash_NPC") then
+            UseSpell("Shout_Dash_NPC", me)
+            return true
+        else
+            return false
+        end
+    end
+
+    helpers.CanTalkToOthers = function()
+        return  metalDoor.Item.IsDestroyed or
+                (not metalDoor.Item.IsDestroyed and metalDoor.Item.IsOpened) or
+                not GetFlag(CHA_WrongSideOfMetalDoor, me)
+    end
+
+    helpers.action.TryWarnOthers = function()
+        if helpers.CanTalkToOthers() then
+            DebugText(me, "Moving to warn others")
+            helpers.CombatSafeMoveTo(afterWarnOthers, true)
+            DebugText(me, "Finished moving")
+
+            try
+                StartAutomatedDialog(CHA_Crypt_AD_BanditGuardCallHelp,false,me)
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me,"Debug : AutomatedDialogStartFailed")
+            end
+
+            SetEntityEvent(me,"CHA_WarnTheOthers")
+            canRunBehaviour = false
+            return true
+        else
+            return false
+        end
+    end
+    ----------------------------------------------------------------------------
+
+    ----------------------------------------------------------------------------
+    -- States
+    self.Valid = function()
+        return  me.CanActInCombatTeamTurn          and
+                not me.IsCombatPaused        and
+                mod.Chapel.CanMoveInTurn(me) and
+                canRunBehaviour              and
+                not warnedOther              and
+                not (not metalDoor.Item.IsDestroyed and metalDoor.Item.IsClosed and HasActiveStatus(metalDoor, "ARCANE_LOCK")) -- Door is closed with ARCANE LOCK spell
+    end
+    ----------------------------------------------------------------------------
+
+    ----------------------------------------------------------------------------
+    -- Nodes
+    nodes = Selector{
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Action_UnlockMetalDoor = Action{
+        function()
+            helpers.CombatSafeUseItem(metalDoorLever, true)
+		end,
+        Valid = function()
+            return  (enemyAtTheDoor or pillarCrashed)    and
+                    metalDoor.Item.IsLocked              and
+                    GetFlag(CHA_WrongSideOfMetalDoor,me)
+        end,
+    }
+
+    nodes.Action_WarnOther = Action{
+        function()
+            DebugText(me, "Action: Warn others")
+            local warnOthersFailed = helpers.TryWarnOthers()
+
+            if not warnOthersFailed then
+                DebugText(me, "Failed warning others, try open door and warn others again")
+                if not metalDoor.Item.IsDestroyed and not metalDoor.Item.IsOpened then
+                    helpers.CombatSafeUseItem(metalDoor, true)
+                end
+                helpers.TryWarnOthers()
+            end
+        end,
+        Valid = function()
+            return  enemyAtTheDoor      and
+                    not metalDoor.Item.IsLocked
+        end
+    }
+    ----------------------------------------------------------------------------
+
+    ----------------------------------------------------------------------------
+    -- Events
+    events.EntityEvent = function(e)
+        if e.Event == "CHA_EnemyAtTheCrash" then
+            pillarCrashed = true
+        elseif e.TargetEntity == me then
+            if e.Event == "CHA_FL1_StartLockDown" then
+                enemyAtTheDoor = true
+            elseif e.Event == "CHA_BanditSpot" then
+                enemyAtTheDoor = true
+            elseif e.Event == "CHA_WarnTheOthers" then
+                warnedOther = true
+            end
+        end
+    end
+
+    events.TurnStarted = function()
+        if not warnedOther then
+            canRunBehaviour = true
+            Interrupt()
+        end
+    end
+
+    events.LeftCombat = function(e)
+        if e.Entity == me then
+            canRunBehaviour = true
+        end
+
+        if HasActiveStatus(me, "CHA_BANDIT_ZEROSPEED") then
+            RemoveStatus(me, "CHA_BANDIT_ZEROSPEED")
+        end
+    end
+
+    events.TurnEnded = function()
+        if HasActiveStatus(me, "CHA_BANDIT_ZEROSPEED") then
+            RemoveStatus(me, "CHA_BANDIT_ZEROSPEED")
+        end
+    end
+    ----------------------------------------------------------------------------
+end
+}

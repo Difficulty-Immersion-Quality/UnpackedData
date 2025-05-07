@@ -1,0 +1,164 @@
+game.states.WYR_DapperDrow_Siblings = State { function()
+
+    description = [[
+        Behaviour which is used for the both dapper drow siblings.
+    ]]
+
+    modules = { "shared.params" }
+
+    params.inTaproomTrigger = {type = EParamType.String, required = false, help=[[
+        The trigger at which the character stands while in the taproom.
+    ]]}
+
+    params.inRoomTrigger = {type = EParamType.String, required = false, help=[[
+        The trigger at which the character stands while in the private room.
+    ]]}
+
+    params.inTaproomBothIdle = { type = EParamType.State, required = true, help = [[
+        State to play when both siblings are in the taproom.
+    ]]}
+
+    params.toRoomPathTriggers = {type = EParamType.String, arrayRange = "1..", required = true, help=[[
+        Path triggers to walk from the taproom to their private room.
+        Note: we can't use patrols because it doesn't have "should always arrive", so the characters can stuck.
+    ]]}
+
+    local someoneWasHiredFlag = Flag("WYR_DapperDrow_State_InProgress_4d795f16-b52c-d25c-0912-a2867d42893e")
+    local inTaproomFlag = Flag("WYR_DapperDrow_State_InTaproom_ce15384c-361d-405e-817a-02dc7951c44f")
+    local movingToRoomFlag = Flag("WYR_DapperDrow_State_MovingToRoom_227569be-d3b8-4739-addd-cadb8c372f35")
+    local waitingInRoomFlag = Flag("WYR_DapperDrow_State_WaitingInRoom_32ff489d-aa5e-4ed6-ae88-e1132633995e")
+    local intimacyInProgressFlag = Flag("WYR_DapperDrow_State_IntimacyInProgress_83aa5591-6e76-42dc-afb1-c3b3f6540fbf")
+    local inRoomAfterIntimacyFlag = Flag("WYR_DapperDrow_State_InRoomAfterIntimacy_beb9b918-45e0-4ba3-9443-236d2aa2fde4")
+    local movingToTaproomFlag = Flag("WYR_DapperDrow_State_MovingToTaproom_ab9408b3-d3c0-4472-983a-908ef1df4b87")
+
+    local roomDoor = Entity("S_WYR_SharessCaress_DapperDrowRoomDoor_2ac2357e-8dd9-4d3e-93eb-06354a681a99")
+    local keyTemplate = nil
+
+    local toRoomPathTriggers = {}
+    local pathPointIndex = 1
+
+    -- state node functions
+    self.OnInit = function()
+        toRoomPathTriggers = mod.params.ParamArrayToEntityList(params.toRoomPathTriggers)
+        keyTemplate = FindTemplate("UNI_WYR_SharessCaress_RoomsKey_2561ddc7-2ca4-409d-aea4-0dcf481722eb")
+    end
+
+    -- helpers
+    helpers.action.MoveToNextPathPoint = function(reverse)
+        local point = nil
+        if pathPointIndex > 0 and pathPointIndex <= #toRoomPathTriggers then
+            point = toRoomPathTriggers[pathPointIndex]        
+        end
+        if point ~= nil then
+            -- Locked door + no key handling
+            if pathPointIndex == #toRoomPathTriggers and 
+                EntityExists(roomDoor) and
+                not roomDoor.Item.IsDestroyed and
+                roomDoor.Item.IsLocked and 
+                not roomDoor.Item.IsOpened and 
+                not TemplateIsInInventory(me, keyTemplate)
+            then
+                try
+                    UseSpell("Target_Knock", roomDoor, nil, nil, nil, true, true, true)
+                    Sleep(1)
+                catch e if ls.CheckType(e, error.UseSpellFailed) then
+                    SetEntityEvent(me, "UseSpellFailed")
+                    Sleep(6.0)
+                end
+            end
+            -- Moving
+            if GetDistance2DTo(me, point) <= 1.0 then
+                pathPointIndex = pathPointIndex + reverse            
+            elseif(not IsInDangerousSurfaceFor(point, me.Character, 2.0)) then   
+                local moveResult = MoveTo(point, MovementSpeed.Walk, true, true, 1.0, 1.0, false, PathClimbingMode.Disabled)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "MoveToNextPathPoint: Move Failed")
+                    Sleep(3.0)
+                end
+            end
+        else
+            DebugText(me, "MoveToNextPathPoint: can't find path point or reached destination")
+            Sleep(3.0)
+        end
+    end
+
+    -- Nodes
+    nodes.InTaproomBoth = Proxy{
+        params.inTaproomBothIdle,
+        OnEnter = function()
+            pathPointIndex = 1
+        end,
+        Valid = function()
+            return GetFlag(inTaproomFlag, me) and not GetFlag(someoneWasHiredFlag)
+        end
+    }
+
+    nodes.InTaproomAlone = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.inTaproomTrigger
+        },    
+        Valid = function()
+            return GetFlag(inTaproomFlag, me) and GetFlag(someoneWasHiredFlag)
+        end
+    }
+
+    nodes.MoveToRoom = Action{
+        function()
+            helpers.MoveToNextPathPoint(1)
+        end,
+        Valid = function()
+            return GetFlag(movingToRoomFlag, me) and not GetFlag(waitingInRoomFlag, me)
+        end,
+    } 
+
+    nodes.InRoomWaitingBeforeIntimacy = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.inRoomTrigger
+        },    
+        OnEnter = function()
+            pathPointIndex = #toRoomPathTriggers
+        end,
+        Valid = function()
+            return GetFlag(waitingInRoomFlag, me)
+        end
+    }
+
+    nodes.InRoomDuringIntimacy = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(intimacyInProgressFlag, me)
+        end
+    }
+
+    nodes.InRoomAfterIntimacy = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.inRoomTrigger
+        },    
+        Valid = function()
+            return GetFlag(inRoomAfterIntimacyFlag, me)
+        end
+    }   
+    
+    nodes.MoveToTaproom = Action{
+        function()
+            helpers.MoveToNextPathPoint(-1)
+        end,
+        Valid = function()
+            return GetFlag(movingToTaproomFlag, me)
+        end,
+    } 
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not GetFlag(inTaproomFlag, me)
+        end
+    }
+end}

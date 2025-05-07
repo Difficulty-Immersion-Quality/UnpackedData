@@ -1,0 +1,59 @@
+game.states.GOB_Branding_GoblinWily = State{function()
+    modules = {"shared.dialog"}
+
+    -- Local params
+    local AD
+    local VoloGuard
+    local talkToGuard = false
+    local fl_VoloGuardPresent = Flag("GOB_VoloBallad_State_GuardPresent_f84e156b-5de5-4ac1-a1b7-f54b8586793c")
+    local fl_VoloPermaDefeated = Flag("GLO_Volo_State_PermaDefeated_90bacc1d-9755-4e24-adc3-9016698a7be6")
+    local fl_GaveVoloToPlayers = Flag("GOB_VoloBallad_State_GuardGaveVoloToPlayers_e1041faa-5c24-bb66-92e9-4826f46d7e90")
+    local fl_VoloEscaped = Flag("GOB_VoloBallad_State_VoloEscaped_13ae819f-b0b7-434d-9ebb-cee412b1a407")
+
+    -- State nodes
+    self.OnInit = function()
+        AD = Dialog("GOB_VoloBallad_AD_GuardAndPatroller_a45fe190-1ff9-fe95-552a-f7b840a78df1")
+        VoloGuard = FindEntity("S_GOB_VoloGuard_c25f0e79-b9f7-453c-8138-964bca267d93")
+    end
+
+    --m.IsSpeakerAvailableAndNear = function(targetSpeaker, sourceSpeaker, maxDistance, checkSight)
+
+    -- Nodes
+    -- Talk to Volo's guard
+    nodes.Action_TalkToGuard = Action{
+        function()
+            SteerTo(VoloGuard)
+            LookAtEntity(VoloGuard, 3.0)
+            if(not GetFlag(fl_VoloPermaDefeated) and not GetFlag(fl_GaveVoloToPlayers) and not GetFlag(fl_VoloEscaped)) then
+                if mod.dialog.AreSpeakersAvailableAndNear(me, 5.0, true, false, false, VoloGuard) then
+                    StartAutomatedDialog(AD, true, me, VoloGuard)
+                end
+            end
+            Sleep(3.0)
+            talkToGuard = false
+        end,
+        CanEnter = function()
+            return talkToGuard
+        end
+    }
+
+    -- Patrol state
+    nodes.Proxy_Patrol = Proxy{
+        game.states.GOB_Branding_Patrol,
+        params = {patrolSpline = "S_GOB_GoblinWily_PatrolSpline_0aeb1c07-d30a-4a8d-af96-5dd72c8462bb"},
+        Valid = function()
+            return not talkToGuard
+        end
+    }
+
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "GOB_VoloBallad_TalkToGuard" and
+           mod.dialog.IsSpeakerAvailable(VoloGuard) and
+           GetFlag(fl_VoloGuardPresent)
+        then
+            talkToGuard = true
+        end
+    end
+end
+}

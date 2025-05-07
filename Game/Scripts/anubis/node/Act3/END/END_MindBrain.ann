@@ -1,0 +1,40 @@
+game.states.END_MindBrain_Combat = State{function()
+    
+    local customControl = true
+    local combatAD = Dialog("END_BrainBattle_AD_MindBrainTurn_fbc23a61-dd88-ca19-81ed-9578236a9b27")
+    local mindBrain = Entity("S_END_MindBrain_f8bb04a3-22e5-41b0-aed7-5dcf852343d1")
+
+    self.Valid = function()
+        return me.IsInCombat and me.CanActInCombatTeamTurn
+    end
+
+    nodes.PlayAD = Action{
+        function()
+            Sleep(1)
+            StartAutomatedDialog(combatAD, true, mindBrain, me)
+            customControl = false
+        end,
+        Valid = function()
+            return customControl
+        end,
+        OnEnter = function()
+            SetCombatTimeout(me, -1.0)
+        end
+    }
+
+    nodes.DefaultCombat = Proxy {
+        CanEnter = function()
+            return not customControl
+        end,
+        game.states.DefaultCombat,
+    }
+
+    events.TurnStarted = function(e)
+        customControl = true
+    end
+
+    events.TurnEnded = function(e)
+        ResetCombatTimeout(me)
+    end
+
+end}

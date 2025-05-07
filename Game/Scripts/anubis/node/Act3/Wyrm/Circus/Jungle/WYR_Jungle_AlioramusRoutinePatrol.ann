@@ -1,0 +1,142 @@
+game.states.WYR_Jungle_AlioramusRoutinePatrol = State { function ()
+
+    description = [[ 
+        Dinosaur simple patroling behaviour - walking around the area, searching for food. 
+    ]]
+    
+    modules = { "shared.math" }
+
+    -----------------------------------------
+    -- params section
+    params.patrolSpline = { type = EParamType.String, required = true, help = [[
+        Patrol spline to use
+    ]]}
+
+    params.movementSpeed = { type = EParamType.String, required = false, default = "Walk", help = [[
+        Movement speed for patrol (Stroll, Walk, Run or Sprint)
+    ]]}
+
+    params.patrolReverse = {type = EParamType.Bool, required = false, default = false, help = [[
+        Whether or not to patrol the spline in reverse
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local targetSplineIndex = -1
+    local canWalkOnSpline = true
+    local patrolSpline = nil
+    local splineEvent = ""
+    local eatingAnimLoop = { Animation("CUST_Eating_01_Loop_0dae0f54-095c-489e-b611-6c42302f96d8") }
+    local eatingAnimStart = Animation("CUST_Eating_01_Start_06ea1c42-85d8-4476-a853-a5c0650189b5")
+    local eatingAnimEnd = Animation("CUST_Eating_01_End_389e4e72-4755-4b4f-a749-4334cb6f0af1")
+    local sniffAnim = Animation("CUST_Sniffing_Air_01_92e7ac17-b123-4a26-8e4f-2f8df2502fc2")
+    local shoutAnim = Animation("CUST_Shout_01_f9335d58-e929-4838-a12f-0275d1a68ce7")
+
+    local sniffAnimLoop = { Animation("CUST_Sniffing_Air_01_Loop_92e7ac17-b123-4a26-8e4f-2f8df2502fc2") }
+    local sniffAnimStart = Animation("CUST_Sniffing_Air_01_Start_671e923e-9017-4684-899f-38e5ed0e7ffd")
+    local sniffAnimEnd = Animation("CUST_Sniffing_Air_01_End_ecad4a02-26d6-436c-bb77-3ef386442429")
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        patrolSpline = Spline(params.patrolSpline)
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.Patroling = Action {
+        function()
+            DoPatrol(patrolSpline, params.patrolReverse, MovementSpeed[params.movementSpeed], targetSplineIndex, false)
+        end,
+        OnLeave = function()
+            if canWalkOnSpline then
+                ShortPatrolInterrupt()
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end
+    }
+
+    nodes.PatrolPointIdle = Selector{
+        function(nodes)
+            if splineEvent == "WYR_Jungle_SplineEvent_Sniff" then
+                return nodes.SniffGround
+            elseif splineEvent == "WYR_Jungle_SplineEvent_Eat" then
+                return nodes.Eating
+            elseif splineEvent == "WYR_Jungle_SplineEvent_Shout" then
+                return nodes.Shout
+            else
+                return nodes.Waiting
+            end
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnLeave = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end,
+        OnInterrupt = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.SniffGround = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(mod.math.random(1, 2))
+            PlayLoopingAnimation(sniffAnimStart, sniffAnimLoop, sniffAnimEnd, false)
+            Sleep(mod.math.random(5, 11))
+            StopAnimation(me)
+            canWalkOnSpline = true            
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.PatrolPointIdle.Eating = Action {
+        function()
+            LookFrom(patrolSpline)
+            PlayLoopingAnimation(eatingAnimStart, eatingAnimLoop, eatingAnimEnd)
+            Sleep(mod.math.random(5, 13))
+            StopAnimation(me)
+            canWalkOnSpline = true
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.PatrolPointIdle.Waiting = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(mod.math.random(4, 7))
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.Shout = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(mod.math.random(3, 4))
+            PlayAnimation(shoutAnim)
+            Sleep(mod.math.random(1, 3))
+            canWalkOnSpline = true            
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+
+        if e.Event ~= nil and e.Event ~= "" then
+            canWalkOnSpline = false
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end    
+end}

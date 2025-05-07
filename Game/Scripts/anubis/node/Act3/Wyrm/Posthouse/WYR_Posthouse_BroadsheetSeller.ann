@@ -1,0 +1,45 @@
+game.states.WYR_Posthouse_BroadsheetSeller = State { function ()
+    description = [[ Lilly Beanbottom the broadsheetseller sells her newspapers at Posthouse, and will eventually get better at it. ]]
+
+    modules = { "shared.dialog","shared.util" }
+
+    local ADStelmane = Dialog("WYR_Posthouse_AD_PaperGirl_b00df48a-4498-e483-acc9-d41ef2570d48")
+    local ADPaperboy = Dialog("LOW_BaldursMouth_AD_PaperBoys_2f9f653b-f5af-f8c0-d17f-47c3a0af158d")
+    local ADSwitchFlag = Flag("GLO_Gazette_StelmanesDeathIsOldNews_f7b59448-5254-4557-83b3-ccab76f03786")
+    local HoldUpNewsPaperBehavior = Dialog("BHVR_WRLD_GLO_PaperBoysWaving_789d3d7a-9c31-8b6e-288a-d0e9157d0db0")
+    local HoldUpNewsPaperTimelineTrigger = Entity("S_WYR_Posthouse_TimelineScene_BroadsheetSeller_de849c48-379e-47bc-8291-3932155aa35a")
+    local timerName = "WYR_Posthouse_Papergirl_PlayAD"
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == timerName then
+            DebugText(me, "Start AD")
+            StartTimer(me, timerName, math.random(15, 20), 0)
+            try
+                if GetFlag(ADSwitchFlag) then
+                    -- StartAutomatedDialogImmediate(ADPaperboy, me) -- not recorded for Silfy
+                else
+                    StartAutomatedDialogImmediate(ADStelmane, me)
+                end
+            catch e then
+                DebugText(me, "failed to start [1]", toString(e))
+            end
+        end
+    end
+
+    nodes.SellPapers = Action {
+        OnEnter = function()
+            StartTimer(me, timerName, math.random(10, 15), 0)
+        end,
+        function()
+            
+            Sleep(0.5)
+            DebugText(me, "Start behavior")
+            StartBehaviorDialog(HoldUpNewsPaperBehavior, HoldUpNewsPaperTimelineTrigger.Trigger, true, me)
+            mod.util.SleepRandom(30.0, 45.0)
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true)
+            StopTimer(me, timerName)
+        end
+    }
+end}

@@ -1,0 +1,87 @@
+game.states.LOW_MurderTribunal = State{
+    function()
+
+    params.seat = {type=EParamType.String, default = "",
+        help = [[The chair on which this character will be seated.]]}
+    params.baptismTrigger = {type=EParamType.String, default = "",
+        help = [[This character will walk here if the Baptism of Blood has started.]]}
+
+        
+    local seat_Internal = nil
+    local baptismTrigger_Internal = nil
+    local baptismStartedFlag = Flag("LOW_MurderTribunal_State_StartedBaptism_9231a565-3cf9-4754-a9c4-db02e7f0eeb8")
+    local trialEndedFlag = Flag("LOW_MurderTribunal_State_TrialResolved_f3fe8b2d-50ea-3b9c-91ea-13f18f60d617")
+    local valeria = Entity("S_GLO_HollyphantDetective_acf70307-3bb9-4b91-b894-fa2120916f58")
+    local abattoirDoor = Entity("S_LOW_MurderTribunal_Abattoir_Door_7e86f8f7-3e80-4035-a0e3-451b18a5b7bf")
+    local abattoirDoorTrigger = Entity("S_LOW_MurderTribunal_Sarevok_AbattoirDoor_Trigger_1c90c7fc-1a48-4b54-a1c6-994509ab92af")
+    local unlockingAbattoirDoor = false
+
+    self.OnInit = function()
+        if params.seat~=nil then
+            seat_Internal = FindEntity(params.seat)
+        end
+        if params.baptismTrigger~=nil then
+            baptismTrigger_Internal = FindEntity(params.baptismTrigger)
+        end
+    end
+
+    nodes.Baptism = ImmediateSelector{
+        CanEnter = function()
+            return GetFlag(baptismStartedFlag) and not GetFlag(trialEndedFlag) and baptismTrigger_Internal ~= nil and not IsInTrigger(me,baptismTrigger_Internal.Trigger) and not IsInDialog(me,true,false)
+        end
+    }
+
+    nodes.Baptism.UnlockAbattoirDoor= Action{
+        function()
+            Sleep(1.0)
+            Unlock(abattoirDoor)
+            Open(abattoirDoor)
+            Sleep(3.0)
+            unlockingAbattoirDoor = false
+        end,
+        OnEnter = function()
+            unlockingAbattoirDoor = true
+        end,
+        Valid = function()
+            return abattoirDoor.Item.IsLocked() and IsInTrigger(me,abattoirDoorTrigger.Trigger) or unlockingAbattoirDoor
+        end
+    }
+
+    nodes.Baptism.GoToAbattoirDoor= Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_MurderTribunal_Sarevok_AbattoirDoor_Point_1c90c7fc-1a48-4b54-a1c6-994509ab92af"
+        },
+        Valid = function()
+            return abattoirDoor.Item.IsLocked() and not IsInTrigger(me,abattoirDoorTrigger.Trigger)
+        end
+    }
+
+    nodes.Baptism.GoToBaptism= Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.baptismTrigger
+        }
+    }
+
+    nodes.AtBaptism = Action{
+        function()
+            if not IsInDialog(me,true,false) then
+                SteerTo(valeria)
+            end
+        end,
+        CanEnter = function()
+            return GetFlag(baptismStartedFlag) and not GetFlag(trialEndedFlag) and baptismTrigger_Internal ~= nil and IsInTrigger(me,baptismTrigger_Internal.Trigger)
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            if not IsInDialog(me,false) and seat_Internal~=nil and not me.IsReposed then
+                UseItem(seat_Internal.Item,true,true)
+            end
+        end
+    }
+
+    end
+}

@@ -1,0 +1,64 @@
+game.states.WYR_Windmill_Civilian1 = State {
+    function()
+
+        modules = { "shared.dialog" }
+
+        local dialog = Dialog("WYR_Windmill_AD_PicnicCivilians_04d29ecf-6575-30e2-5bb2-3bae9ad18532")
+        local civilian2 = Entity("S_WYR_Windmill_Civilian2_4b20c9c6-be85-43ea-975a-213fa34ad0b3")
+        local inTrigger = Entity("S_WYR_Windmill_PickNickCivilians_65d85ea0-798e-4955-b96f-147d01ac17ae")
+        local timerName = "WYR_Windmill_Civilian1_Civilian2_AD"
+
+        local canAD = false
+
+        helpers.startTimer = function()
+            DebugText(me, "Start timer")
+            StopTimer(me, timerName)
+            StartTimer(me, timerName, math.random(15, 35), 0)
+        end
+
+        helpers.stopTimer = function()
+            StopTimer(me, timerName)
+        end
+
+        helpers.StartAD = function()
+            if  IsInTrigger(me, inTrigger.Trigger) and 
+                IsInTrigger(civilian2, inTrigger.Trigger) and
+                not IsInDialog(me, false) and
+                not civilian2.Character.IsDead and
+                mod.dialog.IsSpeakerAvailable(civilian2) then
+                StartAutomatedDialogImmediate(dialog, me, civilian2) 
+            end
+            helpers.restartTimer()  
+        end
+
+        events.TimerFinished = function(e)
+            if(e.TimerName == timerName) and canAD then
+                helpers.StartAD()
+            end
+        end
+
+        events.DialogEnded = function(e)
+            if e.Instance.DialogUUID == dialog.Guid and canAD then
+                helpers.startTimer()
+            end
+        end
+    
+        nodes.LeanBack = Proxy{
+            game.states.Sit,
+            params = {
+                seat = "",
+                sitAnimationOverride = "CUST_SittingGroundLeanBack_01_e9a6d3c6-a2f8-4509-926c-a2225b858c6a",
+                seatTrigger = "S_WYR_Windmill_PickNickCivilians_65d85ea0-798e-4955-b96f-147d01ac17ae"
+            },
+            OnEnter = function()
+                canAD = true
+                helpers.startTimer()   
+            end,
+            OnLeave = function()
+                canAD = false
+                helpers.stopTimer()
+            end
+        }
+
+    end
+}

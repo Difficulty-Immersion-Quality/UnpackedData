@@ -1,0 +1,82 @@
+game.states.GOB_SpiderNest_Adventurer = State{
+    function()
+
+    modules = {"shared.character", "shared.items"}
+
+    description = [[State for the victim at the spider nest]]
+
+    local GOB_GuardPolite = Entity("S_GOB_GuardPolite_56540e3d-f1ac-441b-a690-5f9602c04b86")
+    local GOB_GuardVulgar = Entity("S_GOB_GuardVulgar_a063d18e-d513-4d30-80ea-40a5bffb4bd7")
+    local GOB_SpiderNest_State_Executioner_Ready = Flag("GOB_SpiderNest_State_Executioner_Ready_b9a547ef-b244-47d6-a78d-22b2c7410985")
+    local GOB_SpiderNest_State_Freed = Flag("GOB_SpiderNest_State_Freed_c3a960f6-6488-4e5a-831e-66bde4715d5c")
+    local GEN_DisappearOutOfSight = Flag("GEN_DisappearOutOfSight_5dc33889-cbfb-c3d2-9e4e-8d826bf8566f")
+    local GOB_SpiderNest_ThePit = Entity("S_GOB_SpiderNest_ThePit_0f3188b4-5cfe-4353-8bf0-d528cda0a446")
+    local GOB_GiantSpider_Tiny = Entity("S_GOB_GiantSpider_Tiny_03d2278d-f1fa-41ff-bdbe-03045725d990")
+    local GOB_GiantSpider_Small = Entity("S_GOB_GiantSpider_Small_c3184d85-1e3f-4e64-85bd-5841fef2e27a")
+    local GOB_SpiderNest_CageDoor = Entity("S_GOB_SpiderNest_CageDoor_5c819af6-4db1-459f-8f83-ce9bf2bae07b")
+    local GOB_SpiderNest_State_Fallback_Push = Flag("GOB_SpiderNest_State_Fallback_Push_febf9a49-d604-4ad4-84de-c6cb45b02582")
+
+    nodes.WaitForExecution = Action{
+        function()
+            if not IsInTrigger(me, GOB_SpiderNest_ThePit.Trigger) then
+                SteerTo(GOB_GuardPolite, true)
+            end
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            if not IsInTrigger(me, GOB_SpiderNest_ThePit.Trigger) then
+                return not mod.character.IsDefeated(GOB_GuardPolite) and
+                       CanSee(GOB_GuardPolite, me)
+
+            else
+                return not (mod.character.IsDefeated(GOB_GiantSpider_Tiny) and
+                            mod.character.IsDefeated(GOB_GiantSpider_Small))
+            end
+        end,
+        OnEnter = function()
+            ClearFlag(GOB_SpiderNest_State_Freed, me)
+        end
+    }
+
+    nodes.WaitForExecution_PoliteDead = Action{
+        function()
+            if not IsInTrigger(me, GOB_SpiderNest_ThePit.Trigger) then
+                SetFlag(GOB_SpiderNest_State_Fallback_Push)
+                SteerTo(GOB_GuardVulgar, true)
+            end
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            if not IsInTrigger(me, GOB_SpiderNest_ThePit.Trigger) then
+                return not mod.character.IsDefeated(GOB_GuardVulgar) and
+                       CanSee(GOB_GuardVulgar, me)
+            else
+                return not (mod.character.IsDefeated(GOB_GiantSpider_Tiny) and
+                            mod.character.IsDefeated(GOB_GiantSpider_Small))
+            end
+        end,
+        OnEnter = function()
+            ClearFlag(GOB_SpiderNest_State_Freed, me)
+        end
+    }
+
+    nodes.FreeFromExecution = Action{
+        function()
+            Sleep(20.0)
+            SetFlag(GEN_DisappearOutOfSight, me)
+        end,
+        OnEnter = function()
+            SetFlag(GOB_SpiderNest_State_Freed, me)
+        end
+    }
+
+    self.OnEnter = function()
+        ApplyStatus(me, "ANIM_COWER")
+    end
+
+    self.OnLeave = function()
+        RemoveStatus(me, "ANIM_COWER")
+    end
+
+    end
+}

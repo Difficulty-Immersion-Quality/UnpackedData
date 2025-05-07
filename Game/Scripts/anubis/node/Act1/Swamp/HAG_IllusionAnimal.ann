@@ -1,0 +1,144 @@
+game.states.HAG_IllusionAnimal = State{
+    function ()
+
+        modules = {"shared.items"}
+
+        params.spline = {type=EParamType.String, required = false, default=nil, help=[[Patrol spline]]}
+        params.patrolActions = {type=EParamType.State, required = false, default=nil, help=[[Optional slot for characters who need to do something while in the patrol state]]}
+
+        local HAG_Hag = Entity("S_HAG_Hag_c457d064-83fb-4ec6-b74d-1f30dfafd12d")
+        local HAG_HagSwamp_Outer = Entity("S_HAG_HagSwamp_Outer_9bdef32b-ddf2-44e8-adfe-75e39639bb75")
+        local HAG_HagHouse = Entity("S_HAG_HagHouse_fae45ba1-2da5-4ab7-b24b-8bf7539a3c64")           
+        local HAG_HaghouseDoor = Entity("S_HAG_HaghouseDoor_8d24880f-7b0f-4f5e-9916-f6d8f2447247")
+        local HAG_Resurrection_HagPos = Entity("S_HAG_Resurrection_HagPos_c1034bbe-e49f-47e2-b7fe-e3cdb64e6bcb")
+
+        local HAG_Hag_State_HagInLair = Flag("HAG_Hag_State_HagInLair_b1559527-2aa5-41e1-bab2-89ace2bf450c")
+        local HAG_ForestIllusion_State_HelpHag = Flag("HAG_ForestIllusion_State_HelpHag_7a80f789-88a4-44d8-baa6-d09b1521d31e")
+        local HAG_Hag_State_ToLairBecauseCombat = Flag("HAG_Hag_State_ToLairBecauseCombat_256770d9-04b6-4cdb-92db-e14e30b2700d")
+
+        nodes.GoToHagHouse = Action{
+            function()
+                try
+                    MoveTo(HAG_HagHouse, MovementSpeed.Sprint, false, true)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Wander(3.0, 1.0, MovementSpeed.Walk)
+                end
+            end,
+            CanEnter = function()
+                return GetFlag(HAG_ForestIllusion_State_HelpHag) and
+                       HAG_Hag.Character.IsDead
+            end,
+            Valid = function()
+                return not IsInTrigger(me, HAG_HagHouse.Trigger)
+            end
+        }
+
+        nodes.InHagHouse = Action{
+            function()
+                Sleep(math.random()*3.0)
+                Wander(HAG_HagHouse, 2.0, MovementSpeed.Run)
+                Sleep(math.random()*3.0+2.0)
+            end,
+            CanEnter = function()
+                return GetFlag(HAG_ForestIllusion_State_HelpHag) and
+                       HAG_Hag.Character.IsDead
+            end
+        }
+
+        nodes.GoToHag = Action{
+            function()
+                if IsInTrigger(HAG_Hag, HAG_HagHouse.Trigger) then
+                    MoveTo(HAG_HagHouse, MovementSpeed.Run, false, true)
+                else
+                    MoveTo(HAG_Hag, MovementSpeed.Sprint, false, true)
+                end
+            end,
+            CanEnter = function()
+                return GetFlag(HAG_ForestIllusion_State_HelpHag) and
+                       IsInTrigger(HAG_Hag, HAG_HagSwamp_Outer.Trigger)
+            end
+        }
+
+        nodes.Idle = Proxy{
+            game.states.GEN_Patrol,
+            params = {patrolSpline = params.spline,
+                      patrolActions = params.patrolActions}
+        }
+
+    end
+}
+
+game.states.HAG_Redcap_Patrol = State{
+    function()
+
+        params.patrolSpline = {type=EParamType.String, required = true, help = [[Spline to be patrolled]]}
+
+        local patrolSpline = Spline(params.patrolSpline)
+        local HAG_HagIllusion_TroughPoint_Scene = Entity("HAG_BHVR_WRLD_EatingFromTrough_TimelineSceneTrigger_19fb97ad-db6a-4a23-831f-31c6e35c43a4")
+        local HAG_HagIllusion_TroughPoint = Entity("S_HAG_HagIllusion_TroughPoint_2bd98fe1-3252-4ea0-be0c-3c66b9ed7596")
+
+        local eatingAnim = Dialog("HAG_BHVR_WRLD_EatingFromTrough_0e04e854-9ed0-84ab-9c13-0235bbfe6de4") 
+        local gettingBloodAnim = Dialog("HAG_BHVR_WRLD_GettingBloodFromTrough_7737b876-4346-0421-4d13-d0489eb16ca2")
+
+        local lookFromSpline = false
+        local drinkBlood = false
+        local bloodPoint
+
+        events.SplineControlPointReached = function(e)
+            bloodPoint = FindSurface(me, 0.0, 7.5, SurfaceType.BLOOD)
+            if bloodPoint ~= nil or 
+               GetDistanceTo(me, HAG_HagIllusion_TroughPoint) <= 8.0 and
+               math.random() < 0.2 then
+                drinkBlood = true                
+            elseif math.random() < 0.7 then
+                lookFromSpline = true
+            end
+        end
+
+        nodes = ImmediateSelector{
+            Valid = function(node)
+                return CheckAnySelectable(node)
+            end
+        }
+        
+        nodes.DrinkBlood = Action{
+            function()
+                try
+                    if bloodPoint ~= nil then
+                        MoveTo(bloodPoint)
+                    else
+                        MoveTo(HAG_HagIllusion_TroughPoint)
+                        LookFrom(HAG_HagIllusion_TroughPoint)
+                    end
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    drinkBlood = false
+                end
+                if drinkBlood then -- Cheaper to check this here than to add a Valid.
+                    if HasActiveStatus(me, "HAG_DISGUISE_SHEEP") then
+                        StartBehaviorDialog(eatingAnim, HAG_HagIllusion_TroughPoint_Scene.Trigger, true, me)
+                    else
+                        StartBehaviorDialog(gettingBloodAnim, HAG_HagIllusion_TroughPoint_Scene.Trigger, true, me)
+                    end
+                end
+                drinkBlood = false
+            end,
+            CanEnter = function()
+                return drinkBlood
+            end
+
+        }
+
+        nodes.LookFromSpline = Action{
+            function()
+                LookFrom(patrolSpline)
+                Sleep(1.5*math.random()+5.0)
+                lookFromSpline = false
+            end,
+            CanEnter = function()
+                return lookFromSpline
+            end
+
+        }
+
+    end
+}

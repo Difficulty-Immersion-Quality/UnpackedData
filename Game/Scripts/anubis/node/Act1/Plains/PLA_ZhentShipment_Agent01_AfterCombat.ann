@@ -1,0 +1,424 @@
+game.states.PLA_ZhentShipment_Agent01_AfterCombat = State { function ()
+    description = [[
+        Behaviour for Rugan Zhentarim agent after gnolls are gone.
+        Approaches gnolls/dead Olly then patrol between 3 points (chest, stuff and cave entrance)
+    ]]
+
+    modules = { "shared.math", "shared.dialog", "gustav.Act1.ZhentShipment" }
+
+    params.delayTimeAD = { type = EParamType.Number, required = false, default = 60.0, help = [[
+        (AD) Pause in seconds between ADs play
+    ]]}
+
+    -- state vars
+    local canWalkOnSpline = true
+    local canAD = false
+    local exhaustedAnimPlayed = false
+    local needToReactToDeadAgent = false
+    local deadBodyReactionPlayed = false
+    local movedToDeadOlly = false
+    local afterLastDialogPlayed = false
+    -- object vars
+    local splineEvent = nil
+    local deadGnoll = nil
+    local outsideCaveTrigger = nil
+    local basePosTrigger = nil
+    local patrolSplineName = "S_PLA_ZhentShipment_Agent001_AfterCombat_Spline_d1d2325f-df1f-4291-9c9a-5474b6edd44a"
+    local patrolSpline = nil
+    local otherAgent = nil
+    local chest = nil
+    local backpack = nil
+    local backpackTrigger = nil
+    -- dialogs
+    local deadBodyReactionAD = Dialog("PLA_ZhentShipment_Agents_AD_AfterCombatReaction_99eb602c-b4ba-887c-aec4-6207530245cf");
+    local afterFightRepeatedAD = Dialog("PLA_ZhentShipment_AD_BetweenAgents_f09276eb-9c83-5755-edf0-d9cc723e98c2")
+    local chestAD = Dialog("PLA_ZhentShipment_Agents_AD_ChestAfterCombat_693adae6-6cf7-23d3-41c7-45f9feca85c3")
+    -- flags
+    local bothAgentsAliveFlag = Flag("PLA_ZhentShipment_State_BothAgentsAreAlive_d7404f8a-8101-90c1-3105-0b49cddf7e1f")
+    local chestNotInPlaceFlag = Flag("PLA_ZhentShipment_State_ChestNotInPlace_fe735132-788b-4a27-b606-5d7266290b55")
+    local agreedToHelpFlag = Flag("PLA_ZhentShipment_State_AgreedToHelpInBattle_185140b4-9dec-49d7-abad-e6e628cdf4cd")
+    local foughtWithGnollsFlag = Flag("PLA_ZhentShipment_State_JoinedFightWithGnolls_834c500f-8718-47b5-b320-8d37b2ad9b92")
+    local talkedAfterKilledGnollsFlag = Flag("PLA_ZhentShipment_State_TalkedAfterKilledGnolls_8c60be2a-fb0a-ec52-ca14-883cab378dc0")
+    local hasmetFlag = Flag("PLA_ZhentShipment_Quest_HasMet_5359e72b-f8ca-d2d6-4c3a-8fc00efe5c2c")
+    local persuadedFlag = Flag("PLA_ZhentShipment_State_Persuaded_0cc48ea5-9dad-42f1-bf61-d609bd83b914")
+    local intimidatedFlag = Flag("PLA_ZhentShipment_State_Intimidated_641d7a2e-724a-1533-41a9-9d074a5de560")
+    local lostFlag = Flag("PLA_ZhentShipment_State_ChestLost_a672d90e-72fa-4ce3-8152-6969e39ab521")
+    -- anims
+    local lookFarAnim = Animation("CUST_GuardNervous_01_add51b30-ef5b-11e9-81b4-2a2ae2dbcce4") -- TODO: Looking Far (M)
+    local lootingAnim = Animation("CUST_Packing_02_85243b92-d545-4326-9438-3b3599317773")
+    local packingAnim2 = Animation("CUST_LookingForValuables_01_4afbf021-5e28-4366-89de-ab1a5f55f709") -- 2nd version of the anim
+    local inspectAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local lookingAroundAnim = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7") -- This anim is 51 sec long
+    local kickGnollAnim = Animation("CUST_GroundKicking_01_cd29166e-3971-421a-b5d3-31b678c44277")
+    local exhaustedAnim = Animation("CUST_CatchingBreath_01_44b024b3-4e93-4270-993d-41a21a2befe7")
+
+    -----------------------------------------
+    -- helpers
+    helpers.action.TryStartTwoAgentsAD = function()
+        if GetFlag(bothAgentsAliveFlag) then            
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                afterFightRepeatedAD,
+                {
+                    waitForCompletion = false,
+                    minDelay = params.delayTimeAD,
+                },
+                me,
+                otherAgent
+            )            
+        end
+    end
+
+    self.OnInit = function()
+        otherAgent = FindEntity("S_PLA_ZhentShipment_Agent_002_7eda738e-8a85-4975-a1e1-1b3b2c4d641c")
+        chest = FindEntity("S_PLA_ZhentShipment_Chest_fc3f4359-ec62-4cbf-8756-ecb9780c34e8")
+        outsideCaveTrigger = FindEntity("S_PLA_ZhentShipment_AgentCombatPosition_df8f34a4-7201-4a54-b3a4-c3cd1f1761c1")
+        patrolSpline = Spline(patrolSplineName)
+        basePosTrigger = FindEntity("S_PLA_ZhentShipment_Agent001Position_Base_ce82e584-aa13-4cfc-aefa-78421ad4859d")
+        backpack = FindEntity("S_PLA_ZhentShipment_ZhentBackpack_000_1bd43073-7a20-4dd9-879e-8c6a2584c545")
+        backpackTrigger = FindEntity("S_PLA_ZhentShipment_Backpacktrigger_119587e4-6f39-4769-bb1a-f2936e51b680")
+    end
+
+    -----------------------------------------
+    -- node section
+
+    nodes.JustAfterCombat = Action{
+        function()
+            try
+                Sleep(2)
+                PlayAnimation(GetFlag(bothAgentsAliveFlag) and exhaustedAnim or lookFarAnim)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (exhaustedAnim)")
+            end
+            Sleep(2)
+            exhaustedAnimPlayed = true
+        end,
+        CanEnter = function()
+            return GetFlag(foughtWithGnollsFlag) or not GetFlag(bothAgentsAliveFlag)
+        end,
+        Valid = function()
+            return not exhaustedAnimPlayed
+        end
+    }
+
+    nodes.DeadAgentReaction = Selector{
+        CanEnter = function()
+            return not GetFlag(bothAgentsAliveFlag)
+        end,
+        Valid = function()
+            return needToReactToDeadAgent
+        end
+    }
+
+    nodes.DeadAgentReaction.FindOtherAgentBody = Action{
+        function()
+            try
+                MoveTo(otherAgent, MovementSpeed.Walk)
+                movedToDeadOlly = true
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MovementFailed")
+                needToReactToDeadAgent = false
+            end
+        end,
+        Valid = function()
+            return not movedToDeadOlly
+        end
+    }
+
+    nodes.DeadAgentReaction.LootOlly = Action{
+        function()
+            SteerTo(otherAgent)
+            try
+                PlayAnimation(lookingAroundAnim, false)
+                Sleep(1)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (lookingAround)")
+                Sleep(5)
+            end
+            if GetDistance2DTo(me, otherAgent) < 3 then
+                if mod.dialog.IsSpeakerAvailable(me) then
+                    StartAutomatedDialog(deadBodyReactionAD, false, me)
+                end
+                Sleep(4)
+                try
+                    PlayAnimation(lootingAnim)
+                    SetEntityEvent(me, "PLA_ZhentShipment_Looting")
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (looting)")
+                    Sleep(5)
+                end
+            end
+            needToReactToDeadAgent = false
+        end,
+        CanEnter = function()
+            return movedToDeadOlly
+        end
+    }
+
+    nodes.GnollBodyReaction = Selector{
+        CanEnter = function()
+            return GetFlag(bothAgentsAliveFlag) and GetFlag(hasmetFlag)
+        end,
+        Valid = function()
+            return not deadBodyReactionPlayed
+        end
+    }
+
+    nodes.GnollBodyReaction.MoveToDeadGnoll = Proxy{
+        game.states.PLA_ZhentShipment_MoveToDeadGnoll,
+        params = {
+            areaTrigger = "S_PLA_ZhentShipment_BodiesLootingArea_Outside_38d73202-fbcd-4d3a-92c0-a06b9ab353ce",
+            allowGnollTake = true
+        },
+        Valid = function()
+            return deadGnoll == nil
+        end
+    }
+
+    nodes.GnollBodyReaction.InteractWithBody = Action{
+        function()
+            SteerTo(deadGnoll)
+            if GetDistance2DTo(me, deadGnoll) < 5 then
+                try
+                    PlayAnimation(kickGnollAnim)
+                    helpers.TryStartTwoAgentsAD()
+                    PlayAnimation(lookingAroundAnim, false)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (kickGnollAnim)")
+                    Sleep(5)
+                end
+            end
+            Sleep(4)
+            deadGnoll = nil
+            deadBodyReactionPlayed = true
+        end,
+        CanEnter = function()
+            return deadGnoll ~= nil
+        end
+    }
+
+    nodes.WaitingForPlayers = Action {
+        function()
+            if (not GetFlag(foughtWithGnollsFlag) and GetFlag(bothAgentsAliveFlag)) or GetFlag(persuadedFlag) then
+                if GetDistance2DTo(me, outsideCaveTrigger) > 5.0 then
+                    local validPos = FindValidPosition(outsideCaveTrigger, 7.0, me)
+                    if validPos ~= nil then
+                        try
+                            DebugText(me, "Moving to the valid pos")
+                            MoveTo(validPos, MovementSpeed.Run)
+                        catch ex if ls.CheckType(ex, error.MovementFailed) then
+                            DebugText(me, "MovementFailed (outsideCaveTrigger)")
+                        end
+                        LookFrom(outsideCaveTrigger)
+                    end
+                end
+            else
+                if GetDistance2DTo(me, basePosTrigger) > 5.0 then
+                    local validPos = FindValidPosition(basePosTrigger, 5.0, me)
+                    if validPos ~= nil then
+                        try
+                            MoveTo(basePosTrigger, MovementSpeed.Walk)
+                        catch ex if ls.CheckType(ex, error.MovementFailed) then
+                            DebugText(me, "MovementFailed (basePosTrigger)")
+                            Sleep(5)
+                        end
+                    end
+                end
+                LookFrom(basePosTrigger)
+            end
+            try
+                PlayAnimation(lookingAroundAnim, false)
+                Sleep(mod.math.random(5, 15))
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (lookingAround)")
+                Sleep(5)
+            end
+            helpers.TryStartTwoAgentsAD()
+        end,
+        Valid = function()
+            return not GetFlag(talkedAfterKilledGnollsFlag) or GetFlag(persuadedFlag)
+        end
+    }
+
+    nodes.AfterLastDialog = Action {
+        function()
+            try
+                PlayAnimation(lookingAroundAnim, false)
+                Sleep(3)
+                helpers.TryStartTwoAgentsAD()
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (lookingAround)")
+                Sleep(5)
+            end
+            afterLastDialogPlayed = true
+        end,
+        CanEnter = function()
+            return GetFlag(talkedAfterKilledGnollsFlag) and not GetFlag(persuadedFlag)
+        end,
+        Valid = function()
+            return not afterLastDialogPlayed
+        end
+    }
+
+    nodes.Patrol = Proxy{
+        game.states.PLA_ConflictedFlind_Patrol,
+        params = {
+            patrolSpline = patrolSplineName,
+            movementSpeed = "Walk"
+        },
+        CanEnter = function()
+            return GetFlag(talkedAfterKilledGnollsFlag)
+        end,
+        Valid = function()
+            return canWalkOnSpline or splineEvent == "" or splineEvent == nil
+        end,
+        OnException = function(e)
+            if ls.CheckType(e, error.StartPatrolFailed) then
+                canWalkOnSpline = false
+                return true
+            end
+            return false
+        end
+    }
+
+    nodes.PatrolPointIdle = Selector{
+        function(nodes)
+            if splineEvent == "PLA_ZhentShipment_SplineEvent_CheckChest" then
+                return nodes.CheckChest
+            elseif splineEvent == "PLA_ZhentShipment_SplineEvent_Packing" then
+                return nodes.PackStuff
+            elseif splineEvent == "PLA_ZhentShipment_SplineEvent_LookForGnolls" then
+                return nodes.LookFar
+            else
+                return nodes.LookFar
+            end
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnLeave = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.LookFar = Action {
+        function()
+            LookFrom(patrolSpline)
+            for i = 1, 2 do
+                try
+                    PlayAnimation(lookFarAnim)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (lookFarAnim")
+                    Sleep(5)
+                end
+                helpers.TryStartTwoAgentsAD()
+                LookFrom(patrolSpline)
+                Sleep(mod.math.random(1, 2))
+            end
+            Sleep(mod.math.random(1, 2))
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.CheckChest = Action{
+        function()
+            if not GetFlag(persuadedFlag) and not GetFlag(intimidatedFlag) and not GetFlag(lostFlag) then
+                if mod.dialog.IsSpeakerAvailable(me) then
+                    Sleep(mod.math.random(1, 2))
+                    if GetFlag(bothAgentsAliveFlag) and mod.dialog.IsSpeakerAvailableAndNear(otherAgent, me, 15.0, false) then
+                        StartAutomatedDialog(chestAD, false, me, otherAgent)
+                    else
+                        StartAutomatedDialog(chestAD, false, me)
+                    end
+                end
+            end
+            if GetFlag(chestNotInPlaceFlag) or GetFlag(persuadedFlag) or GetFlag(intimidatedFlag) then
+                -- chest is not in it's place
+                LookFrom(patrolSpline)
+                for i = 1, math.random(2, 3) do
+                    try
+                        PlayAnimation(lookingAroundAnim, false)
+                        Sleep(10)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "PlayAnimationFailed (lookingAround)")
+                        Sleep(5)
+                    end
+                end
+            elseif GetDistance2DTo(me, chest) < 10 then
+                -- chest is here and near
+                try
+                    MoveTo(chest)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "MovementFailed")
+                    Sleep(3)
+                end
+                SteerTo(chest)
+                for i = 1, math.random(1, 2) do
+                    try
+                        PlayAnimation(inspectAnim)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "PlayAnimationFailed (inspect)")
+                        Sleep(5)
+                    end
+                    helpers.TryStartTwoAgentsAD()
+                end
+            end
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.PackStuff = Action{
+        function()
+            if backpack ~= nil and not backpack.Item.IsDestroyed and GetDistance2DTo(backpack, backpackTrigger) < 3.0 then
+                StopAnimation(me)
+                Sleep(1.0)
+                SteerTo(backpack)
+                try
+                    PlayAnimation(packingAnim2)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (packing)")
+                    Sleep(5)
+                end
+            else
+                try
+                    PlayAnimation(lookingAroundAnim, false)
+                    Sleep(6)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "PlayAnimationFailed (lookingAroundAnim)")
+                    Sleep(5)
+                end
+            end
+            helpers.TryStartTwoAgentsAD()
+            Sleep(mod.math.random(1, 2))
+            canWalkOnSpline = true
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_ZhentShipment_Event_MoveToDeadBodyFinished" then
+                deadGnoll = e.Params[1]
+            elseif e.Event == "PLA_ZhentShipment_Event_CancelWaitingForDeadBody" then
+                deadBodyReactionPlayed = true
+            end
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == bothAgentsAliveFlag.Guid then
+            needToReactToDeadAgent = true
+            deadBodyReactionPlayed = true
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        if e.Event ~= nil then
+            canWalkOnSpline = false
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+end}

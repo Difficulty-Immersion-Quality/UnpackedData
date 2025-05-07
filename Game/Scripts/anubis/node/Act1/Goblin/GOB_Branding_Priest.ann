@@ -1,0 +1,339 @@
+game.states.GOB_Branding_Priest = State{function()
+    modules = {"shared.status"}
+
+    -- Local params
+    local goblins = {}
+    local totemPos
+    local chantAnimation
+    local dungeonPos
+
+    local scared = false
+    local atChapel = false
+
+    local raidFlag = Flag("GOB_DrowCommander_Event_RaidersSortie_26816b01-2d64-b50c-3bf6-bffd7dc5f0b9")
+    local dungeonFlag = Flag("GOB_GoblinPriest_Event_AwaitCeremorphosis_cbf4c784-ca27-2ea8-6153-416bd3c48f97")
+
+
+    -- State nodes
+    self.OnInit = function()
+        goblins[1] = FindEntity("S_GOB_GoblinSulky_dd21e1d9-c426-4b12-b5a0-ef3445e9e967")
+        goblins[2] = FindEntity("S_GOB_GoblinGlib_f63f921c-ae35-4574-9a70-30aee55fdb26")
+        goblins[3] = FindEntity("S_GOB_GoblinJolly_59557329-d49b-448b-bdd0-fd66ae0d67f6")
+        goblins[4] = FindEntity("S_GOB_GoblinWily_d8667091-dd64-499c-8bee-000cf42175fc")
+
+        totemPos = FindEntity("S_GOB_Branding_PriestTotem_Position_1e0582e3-630e-4672-b526-900c1bffdf57")
+        chantAnimation = Animation("CUST_Chanting_01_2b033b5d-6402-4ffe-af56-124a5dd7ba0e")
+        dungeonPos = FindEntity("S_GOB_GoblinPriest_PrayingPoint_fa423870-8805-4af9-ba58-670d1bcdc5dd")
+    end
+
+    -- Nodes
+    -- Scared state
+    nodes.Action_StandScared = Action{
+        OnEnter = function()
+            DebugText(me, "I'm scared")
+        end,
+        function()
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return scared
+        end
+    }
+
+    nodes.Action_InDungeon = Action{
+        function()
+            if not IsInDangerousSurfaceFor(dungeonPos, me.Character) then
+                if GetDistanceTo(me, dungeonPos) > 2.0 then
+                    try
+                        MoveTo(dungeonPos,MovementSpeed.Walk)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(dungeonPos, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(dungeonPos)
+                    PlayAnimation(chantAnimation)
+                end
+            else
+                LookAtEntity(dungeonPos, 3.0)
+            end
+            Sleep(10.0)
+        end,
+        Valid = function()
+            return GetFlag(dungeonFlag,me)
+        end
+    }
+
+    -- At chapel state
+    nodes.Action_AtChapel = Action{
+        OnEnter = function()
+            DebugText(me, "At chapel")
+        end,
+        function()
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return atChapel
+        end
+    }
+
+    -- Raid starts, start praying
+    nodes.Action_RaidHappens = Action{
+        function()
+            DebugText(me, "Praying to Absolute for the win of goblins")
+            LookAtEntity(totemPos, 3.0)
+            PlayAnimation(chantAnimation)
+            Sleep(10.0)
+        end,
+        CanEnter = function()
+            return raidFlag ~= nil and GetFlag(raidFlag, nil)
+        end
+    }
+
+    -- Branding ceremony proxy
+    nodes.Proxy_BrandingCeremony = Proxy{
+        game.states.GOB_Branding_Priest_BrandGoblins,
+        Valid = function()
+            return not mod.status.AreAllEntitiesDead(goblins)
+        end
+    }
+
+    -- Fallback
+    nodes.Action_Fallback = Action{
+        OnEnter = function()
+            DebugText(me, "Can't brand anyone, goblins dead")
+        end,
+        function()
+            WaitForInterrupt()
+        end,
+    }
+
+    -- Events
+    events.EntityEvent = function(e)
+        if e.Event == "GOB_GoblinPriest_MovedToScaredPoint" then
+            scared = true
+        elseif e.Event == "GOB_GoblinPriest_Event_MovedToChapel" then
+            atChapel = true
+        end
+    end
+
+end
+}
+
+game.states.GOB_Branding_Priest_BrandGoblins = State{function()
+    modules = {"shared.status","shared.util"}
+
+    -- Local params
+    local goblins = {}
+    local goblinToBrand = 1
+    local goblin = nil
+
+    local brandingPosition
+    local brandingAnimation
+    local brandToolsPos
+    local brandBrazier
+    local heatingBrandAnimation
+
+    local totemPos
+    local chantAnimation
+
+    local sermonAD
+
+    local startBranding = false
+    local waitingToBrand = false
+    local applyBrand = false
+    local finishedBranding = false
+    local finishedSermon = false
+
+    -- Helpers
+    -- Return true if can get goblin, false if all are dead
+    helpers.GetNextGoblin = function()
+        goblin = nil
+
+        -- All goblins dead, don't even try
+        if mod.status.AreAllEntitiesDead(goblins) then
+            return false
+        end
+
+        local potentialGoblin
+
+        -- Get next goblin in the list
+        while goblin == nil and goblinToBrand <= #goblins do
+            potentialGoblin = goblins[goblinToBrand]
+            goblinToBrand = goblinToBrand + 1
+
+            if not potentialGoblin.Character.IsDead and not potentialGoblin.IsInCombat then
+                goblin = potentialGoblin
+                return true
+            end
+        end
+        -- Reach end of array without a goblin
+        startBranding = false
+        waitingToBrand = false
+        applyBrand = false
+        finishedBranding = true
+        goblinToBrand = 1
+        return false
+    end
+
+    -- State nodes
+    self.OnInit = function()
+        goblins[1] = FindEntity("S_GOB_GoblinSulky_dd21e1d9-c426-4b12-b5a0-ef3445e9e967")
+        goblins[2] = FindEntity("S_GOB_GoblinGlib_f63f921c-ae35-4574-9a70-30aee55fdb26")
+        goblins[3] = FindEntity("S_GOB_GoblinJolly_59557329-d49b-448b-bdd0-fd66ae0d67f6")
+        goblins[4] = FindEntity("S_GOB_GoblinWily_d8667091-dd64-499c-8bee-000cf42175fc")
+
+        brandingPosition = FindEntity("S_GOB_Branding_CenterPoint_25c1af34-7a05-4427-bec9-bd68ca820051")
+        brandingAnimation = Animation("CUST_Branding_01_b47d643a-aa6f-4e5d-a3ed-e7d4e579c2db")
+        brandToolsPos = FindEntity("S_GOB_BrandingTools_Position_c41e9432-73a0-46f5-b0bd-34e7de290dff")
+        brandBrazier = FindEntity("134b398b-ce91-4b6f-811e-ab83b6b85fb8")
+        heatingBrandAnimation = Animation("CUST_HeatingBrand_01_6bec1fa2-7ceb-46d5-8481-6ad6691cf3b4")
+        sermonAD = Dialog("GOB_GoblinPriest_AD_AfterBranding_383dee4e-e2c0-23f7-410f-e31e694ac7ad")
+
+        totemPos = FindEntity("S_GOB_Branding_PriestTotem_Position_1e0582e3-630e-4672-b526-900c1bffdf57")
+        chantAnimation = Animation("CUST_Chanting_01_2b033b5d-6402-4ffe-af56-124a5dd7ba0e")
+    end
+
+    -- Nodes
+    -- Finished branding all the goblins. Will restart after finishes the animation and the sleep function
+    nodes.Action_FinishedBranding = Action{
+        function()
+            try
+                MoveTo(brandingPosition)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Fail to reach position")
+            end
+            LookFrom(brandingPosition)
+            mod.util.SleepRandom(3.0,4.0)
+            try
+                StartAutomatedDialog(sermonAD,true,me)
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me,"Debug : AD failed")
+            end
+            mod.util.SleepRandom(6.0,7.0)
+            finishedSermon = true
+        end,
+        Valid = function()
+            return finishedBranding and not finishedSermon
+        end,
+        OnLeave = function()
+            DialogRequestStop(me,sermonAD)
+        end
+    }
+
+    nodes.Action_Praying = Action{
+        function()
+            try
+                MoveTo(totemPos)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Fail to reach position")
+            end
+            LookFrom(totemPos)
+            mod.util.SleepRandom(2.0,3.0)
+            PlayAnimation(chantAnimation)
+            mod.util.SleepRandom(10.0,15.0)
+            try
+                MoveTo(brandToolsPos)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Fail to reach position")
+            end
+            LookFrom(brandToolsPos)
+            if brandBrazier.OnStage and
+                not brandBrazier.Item.IsDestroyed and
+                GetDistance2DTo(brandBrazier, brandToolsPos) < 2.0
+            then
+                PlayAnimation(heatingBrandAnimation)
+            end
+            mod.util.SleepRandom(5.0,7.0)
+            for _,g in pairs(goblins) do
+               SetEntityEvent(g,"GOB_GoblinPriest_StartSermon")
+            end
+            finishedSermon = false
+        end,
+        Valid = function()
+            return finishedBranding and finishedSermon
+        end
+    }
+
+    -- Apply brand animation
+    nodes.Action_ApplyBrand = Action{
+        function()
+            try
+                MoveTo(brandingPosition)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Fail to reach position")
+            end
+            LookFrom(brandingPosition)
+            if GetDistanceTo(me, goblin) < 2.0 then
+                PlayAnimation(brandingAnimation)
+            end
+            applyBrand = false
+            startBranding = true
+        end,
+        Valid = function()
+            return applyBrand
+        end
+    }
+
+    -- Wait as each goblin has his own AD with different duration
+    nodes.Action_Branding_Wait = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return waitingToBrand
+        end
+    }
+
+    -- Call goblin to brand
+    nodes.Action_Branding = Action{
+        function()
+            if helpers.GetNextGoblin() then
+                SetEntityEvent(goblin, "GOB_GoblinPriest_GetBrand")
+                waitingToBrand = true
+            end
+        end,
+        Valid = function()
+            return startBranding
+        end
+    }
+
+    -- Move to branding position at the start
+    nodes.Action_MoveToPosition = Action{
+        function()
+            try
+                MoveTo(brandingPosition)
+                LookFrom(brandingPosition)
+                startBranding = true
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Fail to reach position")
+                Sleep(1.0)
+            end
+        end
+    }
+
+    -- Events
+    events.EntityEvent = function(e)
+        if e.Event == "GOB_GoblinPriest_Event_ApplyBrand" then
+            startBranding = false
+            waitingToBrand = false
+            applyBrand = true
+            finishedBranding = false
+        elseif e.Event == "GOB_GoblinPriest_Event_ForceNextGoblin" then
+            startBranding = true
+            waitingToBrand = false
+            applyBrand = false
+            finishedBranding = false
+        end
+    end
+
+    events.Dying = function(e)
+        if goblin ~= nil and e.Target == goblin and not mod.status.AreAllEntitiesDead(goblins) then
+            startBranding = true
+            waitingToBrand = false
+            applyBrand = false
+            finishedBranding = false
+        end
+    end
+end
+}

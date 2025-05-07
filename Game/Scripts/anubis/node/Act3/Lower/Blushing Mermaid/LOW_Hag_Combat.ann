@@ -1,0 +1,46 @@
+game.states.LOW_Hag_Combat = State{function()
+    
+    modules = {"shared.character"}
+    
+    local maskedVictim_1 = Entity("S_LOW_BlushingMermaid_MaskedVictim_01_453e3292-b7ff-4a13-873a-82da3bfc2511")
+    local maskedVictim_2 = Entity("S_LOW_BlushingMermaid_MaskedVictim_02_518fab8f-2d1d-46c8-9a45-9045156d0053")
+    local maskedVictim_3 = Entity("S_LOW_BlushingMermaid_MaskedVictim_03_0406349d-d0fc-4bf5-8d18-5b8b8c9e6456")
+    local maskedVictim_4 = Entity("S_LOW_BlushingMermaid_QuenoraGrizly_9d475536-34f0-4a6f-9191-3a635b81a232")
+
+    local hagSummonedMaskedVictims = Flag("LOW_BlushingMermaid_State_HagSummonedMaskedVictims_9f668b40-cd80-48ea-bca7-ac4c046163f4")
+    local finishedVictimsSummon = false;
+
+    local maskedVictimsSummonAD = Dialog("HAG_HagLair_AD_SummonVictims_65915e0d-7b96-3a31-66f3-584fdd758854")
+
+    self.Valid = function()
+        return me.IsInCombat
+    end
+    
+    nodes.SummonVictims = Action{
+        
+        CanEnter = function()
+            return  me.CanActInCombatTeamTurn and
+                    (not mod.character.IsDefeated(maskedVictim_1) or
+                    not mod.character.IsDefeated(maskedVictim_2) or
+                    not mod.character.IsDefeated(maskedVictim_3) or
+                    not mod.character.IsDefeated(maskedVictim_4)) and
+                    not GetFlag(hagSummonedMaskedVictims) and me.CanSpeak
+        end,
+
+        function()
+            Sleep(1.0)
+            StartAutomatedDialog(maskedVictimsSummonAD, true, me)
+            SetFlag(hagSummonedMaskedVictims, nil)
+            Sleep(5.0)
+            finishedVictimsSummon = true
+        end,
+
+        Valid = function()
+            return finishedVictimsSummon ~= true
+        end
+    }
+    
+    nodes.DefaultCombat = Proxy{
+        game.states.DefaultCombat    
+    }
+end}

@@ -1,0 +1,70 @@
+ game.states.TrapLogic_EventActivation = State{function()
+    params.activationEvent = {type = EParamType.String, required = false, default = "TrapActivationEvent", help = [[
+        Event that activates the trap.
+    ]]}
+
+    params.deactivationEvent = {type = EParamType.String, required = false, default = "TrapDeactivationEvent", help = [[
+        Event that stops the trap.
+    ]]}
+
+    params.activeBehaviour = {type = EParamType.State, required=false, default=nil, help=[[
+        What the trap does when activated.
+    ]]}
+
+    params.inactiveBehaviour = {type = EParamType.State, required=false, default=nil, help=[[
+        What the trap does when deactivated.
+    ]]}
+
+    local trapActive = false
+
+    local activeCompleted = false
+    local inactiveCompleted = false
+
+    nodes = Selector{
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.ActiveBehaviour = Proxy{
+        params.activeBehaviour,
+        Valid = function()
+            return trapActive and
+                   not activeCompleted
+        end,
+        OnLeave = function()
+            if trapActive then
+                activeCompleted = true
+            end
+        end,
+        OnEnter = function()
+            inactiveCompleted = false
+        end
+    }
+
+    nodes.InactiveBehaviour = Proxy{
+        params.inactiveBehaviour,
+        Valid = function()
+            return not trapActive and
+                   not inactiveCompleted
+        end,
+        OnLeave = function()
+            if not trapActive then
+                inactiveCompleted = true
+            end
+        end,
+        OnEnter = function()
+            activeCompleted = false
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == params.activationEvent then
+            trapActive = true
+        elseif e.TargetEntity == me and e.Event == params.deactivationEvent then
+            trapActive = false
+        end
+    end
+
+end
+}

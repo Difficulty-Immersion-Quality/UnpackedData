@@ -1,0 +1,102 @@
+local __env = require 'larian.anubis.env'
+local __enum = require 'larian.anubis.enum'
+local __expression = require 'larian.anubis.expression'
+local __util = require 'larian.util'
+
+local function makeStub(type, ...)
+    return {
+        type = type,
+        _args = {...}
+    }
+end
+
+local function makeState(...)
+    return makeStub(__enum.Stub.State, ...)
+end
+
+local function makeAction(...)
+    return makeStub(__enum.Stub.Action, ...)
+end
+
+local function validateStubType(stub, expected)
+    local t = type(stub)
+
+    if t ~= "table" or stub.type ~= expected then
+        local got = (t == "table" and stub.type) or t
+
+        __util.Throw("%s: %s expected, got %s", stub.fqdn, expected, got)
+        return 1
+    else
+        return 0
+    end
+end
+
+local function loadScript(game, path)
+    local env = __env.MakeScriptEnv{
+        game = game,
+
+        State = makeState,
+        Action = makeAction,
+        Expression = __expression.MakeStub,
+        ExpressionRef = __expression.MakeRef
+    }
+
+    local chunk = ls.Load(path, env)
+    try
+        chunk()
+    catch e then
+    end
+end
+
+local m = {}
+
+m.Load = function (game, nodes)
+    for _, path in ipairs(nodes) do
+        loadScript(game, path)
+    end
+
+    local errors = 0
+
+    for k, v in pairs(game.roots) do
+        v.name = k
+        v.fqdn = "game.roots." .. k
+
+        validateStubType(v, __enum.Stub.State)
+    end
+
+    for k, v in pairs(game.states) do
+        v.name = k
+        v.fqdn = "game.states." .. k
+
+        validateStubType(v, __enum.Stub.State)
+    end
+
+    for k, v in pairs(game.expressions) do
+        v.name = k
+        v.fqdn = "game.expressions." .. k
+
+        validateStubType(v, __enum.Stub.Expression)
+    end
+
+    if game.actions ~= nil then
+        for k, v in pairs(game.actions) do
+            local domain = "game.actions." .. k .. "."
+
+            for name, stub in pairs(v) do
+                if type(stub) == "function" then
+                    stub = makeAction(stub)
+                    v[name] = stub
+                end
+
+                stub.name = name
+                stub.fqdn = domain .. name
+
+                validateStubType(stub, __enum.Stub.Action)
+            end
+        end
+    end
+
+    return game
+end
+
+return m

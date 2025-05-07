@@ -1,0 +1,65 @@
+game.states.UND_DuergarRaftCaptain = State{function()
+    params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled.
+    ]]}
+    params.CaveInPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move if Cave In is destroyed.
+    ]]}
+
+    local tr_homeTrigger
+
+    local flag_LakeEncounterHappened = Flag("UND_DarkLake_State_LakeEncounterHappened_8fbcde00-13b9-633c-7ccf-2486d983ca3e")
+    local flag_CaveInCleared = Flag("UND_DuergarCamp_State_CaveInCleared_e0d8a48b-e0cf-4cc8-96bc-b637b79ce9bd")
+	local flag_PostMutiny = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+
+    self.OnInit = function()
+        tr_homeTrigger = FindEntity("S_UND_DuergarRaftCaptain_FirePitTrigger_bca8bf9a-8c24-4c07-81bc-d015490ea68f")
+    end
+
+    nodes.State_AtLake = Action {
+        function()
+			WaitForInterrupt()
+		end,
+        Valid = function()
+            return not GetFlag(flag_LakeEncounterHappened)
+        end
+    }
+    
+    nodes.State_PostMutiny = Proxy {
+        game.states.UND_DuergarCamp_PostMutiny,
+        params = {PostMutinyPosition = params.PostMutinyPosition},
+        Valid = function()
+            return GetFlag(flag_PostMutiny)
+        end
+    }
+
+    nodes.State_CaveInCleared = Proxy {
+        game.states.UND_DuergarCamp_CaveInCleared,
+        params = {CaveInPosition = params.CaveInPosition},
+        Valid = function()
+            return GetFlag(flag_CaveInCleared)
+        end
+    }
+
+    nodes.AtHomeTrigger = function()
+        if not IsInDangerousSurfaceFor(tr_homeTrigger, me.Character) then
+            if GetDistanceTo(me, tr_homeTrigger) > 3.0 then
+                try
+                    MoveTo(tr_homeTrigger,MovementSpeed.Walk)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    LookAtEntity(tr_homeTrigger, 3.0)
+                    Sleep(2.0)
+                end
+            else
+                LookFrom(tr_homeTrigger)
+            end
+        else
+            LookAtEntity(tr_homeTrigger, 3.0)
+        end
+        Sleep(10.0)
+    end
+    
+    nodes.Idling = function()
+        Sleep(5.0)
+    end
+end}

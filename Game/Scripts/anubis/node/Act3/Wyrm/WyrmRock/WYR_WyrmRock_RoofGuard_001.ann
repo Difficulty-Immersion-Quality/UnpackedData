@@ -1,0 +1,121 @@
+game.states.WYR_WyrmRock_RoofGuard_001 = State { function ()
+
+    description = [[ 
+        Simple patroling behaviour for the flaming fist inside the big barn.
+    ]]
+    
+    modules = { "shared.math", "shared.items" }
+
+    -----------------------------------------
+    -- local state section
+    local patrolSpline = Spline("S_WYR_WyrmRock_RoofGuard_001_PatrolSpline_f79dbd36-cf74-4667-a31b-e4c768c9c680")
+    local restAnim = Animation("CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef")
+    local lookFarAnim = Animation("CUST_LookingFar_01_5643e3dc-9631-4dba-b303-128fc29abfa7")
+    local bench = Entity("S_WYR_WyrmRock_RoofGuardBench_3a829a2d-075b-4f89-bb39-de48023f3259")
+    local chair = Entity("S_WYR_WyrmRock_RoofGuardChair_02931c0c-84d6-43c5-aac1-c134e5299470")
+
+    local itemToSitOn = nil
+    local animToPlay = nil
+    local targetSplineIndex = -1
+    local canWalkOnSpline = true
+    local splineEvent = ""
+
+    -----------------------------------------
+    -- node section
+    nodes.Patroling = Action {
+        function()
+            DoPatrol(patrolSpline, true, MovementSpeed.Stroll, targetSplineIndex, false)
+        end,
+        OnLeave = function()
+            if canWalkOnSpline then
+                ShortPatrolInterrupt()
+            end
+        end,
+        Valid = function()
+            return canWalkOnSpline
+        end
+    }
+
+    nodes.PatrolPointIdle = Selector{
+        function(nodes)
+            if splineEvent == "WYR_WyrmRock_SplineEvent_Rest" then
+                animToPlay = restAnim
+                return nodes.PlayAnim
+            elseif splineEvent == "WYR_WyrmRock_SplineEvent_LookFar" then
+                animToPlay = lookFarAnim
+                return nodes.PlayAnim
+            elseif splineEvent == "WYR_WyrmRock_SplineEvent_SitBench" then
+                itemToSitOn = bench
+                return nodes.Sit
+            elseif splineEvent == "WYR_WyrmRock_SplineEvent_SitChair" then
+                itemToSitOn = chair
+                return nodes.Sit
+            else
+                return nodes.Waiting
+            end
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnLeave = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end,
+        OnInterrupt = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.PatrolPointIdle.PlayAnim = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(1)
+            if animToPlay ~= nil then
+                PlayAnimation(animToPlay, false)
+                Sleep(mod.math.random(10, 15))
+                animToPlay = nil
+            end
+            canWalkOnSpline = true
+        end,
+    }
+
+    nodes.PatrolPointIdle.Sit = Action {
+        function()
+            if itemToSitOn ~= nil and
+                not mod.items.SafeIsDestroyed(itemToSitOn) and 
+                GetDistance2DTo(me, itemToSitOn) < 5.0 and 
+                CanReposeOn(me, itemToSitOn) 
+            then
+                UseItem(itemToSitOn.Item)
+                Sleep(mod.math.random(7, 13))           
+            end
+            itemToSitOn = nil
+            canWalkOnSpline = true
+        end,
+        OnLeave = function()
+            EndRepose(me)
+        end
+    }
+
+    nodes.PatrolPointIdle.Waiting = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(mod.math.random(5, 14))
+            canWalkOnSpline = true
+        end,
+    }
+
+    -----------------------------------------
+    -- event section
+    events.SplineControlPointReached = function(e)
+        targetSplineIndex = e.NewIndex
+        if e.Event ~= nil and e.Event ~= "" then
+            canWalkOnSpline = false
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+end}

@@ -1,0 +1,282 @@
+game.states.DEN_Intolerant_Default = State { function ()
+
+    description = [[Marcoryl, a druid who isn't particularly welcoming.]]
+
+    modules = { "shared.moveto"}
+
+    -----------------------------------------
+    --Local variables
+
+    --Entities
+    local outDoorPoint = Entity("S_DEN_IntolerantOutDoor_086b342c-3ca2-4e4d-8dbb-091d4da60048")
+    local inDoorPoint = Entity("S_DEN_IntolerantInDoor_66d4cde6-e7c6-4f7c-8c6f-355ca0d1030a")
+    local shelvesPoint = Entity("S_DEN_IntolerantAtShelves_e1de778a-e931-4012-9c9d-f54d355ac8b6")
+    local bedPoint = Entity("S_DEN_IntolerantAtBed_9fbc9e31-6f55-4a22-889d-dbc23ede3334")
+    local quartersDoor = Entity("S_DEN_DruidDormitoryDoor_e762551e-ccce-495a-9995-bb7d6b8a592b")
+
+    --Animations
+    local bedAnims = {
+        Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba"),
+        Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    }
+    local shelfAnims = {
+        Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716"),
+        Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+    }
+
+    --Ints
+    local tally = 0
+    local tableTallyMax = 5
+    local quartersTallyMax = 8
+
+    -----------------------------------------
+    --Helpers
+
+    helpers.action.MoveToPoint = function(point)
+        local speed = MovementSpeed.Stroll
+        if GetDistance2DTo(me, point) > 9 then
+            speed = MovementSpeed.Walk
+        end
+        try
+            --try without climbing
+            MoveTo(point, speed, false, false, 1.0, 1.0, true, PathClimbingMode.Disabled, PathDroppingMode.Disabled)
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            try
+                --try again with climbing and dropping
+                DebugText(me, "moving without climbing failed")
+                MoveTo(point, speed, false, false, 1.0, 1.0, true, PathClimbingMode.Enabled, PathDroppingMode.Enabled)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                --abandon the project
+                return false
+            end
+        end
+        return true
+    end
+
+    helpers.action.ActInQuarters = function(point, table)
+        if helpers.MoveToPoint(point) then
+            LookFrom(point)
+            Sleep(math.random(2, 4))
+            try
+                PlayAnimation(table[math.random(#table)], true, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                Sleep(6)
+            end
+            helpers.IncrementTally()
+        end
+        Sleep(math.random(2, 4))
+    end
+
+    helpers.IncrementTally = function()
+        tally = tally+1
+    end
+
+    helpers.ProgressTally = function()
+        if tally < quartersTallyMax then
+            tally = tally+1
+        else
+            tally = 0
+        end
+    end
+
+    helpers.action.QuartersDoor = function()
+        while quartersDoor.Item.IsClosing do
+            Sleep(1)
+        end
+        if quartersDoor.Item.IsClosed then
+            try
+                UseItem(quartersDoor.Item, true, false, true, false)
+            catch e if ls.CheckType(e, error.UseItemFailed) then
+                DebugText(me,"Debug : OpenDoor failed")
+                Open(quartersDoor)
+            end
+        end
+        while quartersDoor.Item.IsOpening do
+            Sleep(1)
+        end
+        helpers.ProgressTally()
+    end
+
+    -----------------------------------------
+    --Nodes
+
+    --Marcoryl has two main behaviours: sitting at the table with Loic, and going into the quarters to inspect books.
+    nodes.LairPatrolling = Selector {
+        function(nodes)
+            if tally < tableTallyMax then
+                return nodes.AtTable
+            elseif tally < quartersTallyMax then
+                return nodes.AtQuarters
+            else
+                return nodes.ManageDoor
+            end
+        end,
+    }
+
+    nodes.LairPatrolling.ManageDoor = Action {
+        function()
+            --if at table, else in quarters
+            local point = inDoorPoint
+            if tally < quartersTallyMax then
+                point = outDoorPoint
+            end
+            if helpers.MoveToPoint(point) then
+                helpers.QuartersDoor()
+            else
+                Sleep(2.5)
+                helpers.ProgressTally()
+            end
+        end
+    }
+
+    --AtTable
+    nodes.LairPatrolling.AtTable = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+    }
+
+    nodes.LairPatrolling.AtTable.SitDown = Proxy {
+        game.states.Sit,
+        params = {
+            seat = [[S_DEN_IntolerantStool_2b8a4baa-9d7a-49ec-af0d-495382faf80b]],
+            seatTrigger = [[S_DEN_IntolerantSeatSphere_389a97ae-d00d-45f6-a2ca-296cf0b583ca]],
+            sitIdle = StateRef{game.states.DEN_Intolerant_ADWith},
+            nonSitIdle = StateRef{game.states.DEN_Intolerant_NotSitting}
+        },
+    }
+
+    nodes.LairPatrolling.AtTable.Sleep = Action {
+        function()
+            Sleep(math.random(4, 8))
+            helpers.IncrementTally()
+        end
+    }
+
+    --AtQuarters
+    nodes.LairPatrolling.AtQuarters = Selector {
+        function(nodes)
+            return FindWeightedRandomSelectable(nodes, {
+                    [nodes.AtBed] = 3,
+                    [nodes.AtShelves] = 2
+            })
+        end
+    }
+
+    nodes.LairPatrolling.AtQuarters.AtBed = Action {
+        function()
+            helpers.ActInQuarters(bedPoint, bedAnims)
+        end
+    }
+
+    nodes.LairPatrolling.AtQuarters.AtShelves = Action {
+        function()
+            helpers.ActInQuarters(shelvesPoint, shelfAnims)
+        end
+    }
+
+end}
+
+
+game.states.DEN_Intolerant_ADWith = State { function ()
+
+    description = [[Marcoryl, a druid who isn't particularly welcoming. Chat with Loic.]]
+
+    modules = { "shared.dialog"}
+
+    local canAD = false
+    local AD = Dialog([[DEN_DruidServant_AD_Debate_e4eed069-ce61-63a5-ee83-d6003462ddfc]])
+    local partner = Entity([[S_DEN_ServantGnome_003_0d971a2f-5fd7-4358-8966-147ed8b106dd]])
+
+    nodes.ADWith = Action {
+        CanEnter = function()
+            return canAD
+        end,
+        OnEnter = function()
+            canAD = false
+        end,
+        function()
+            if mod.dialog.IsSpeakerAvailableAndNear(partner, me, 10.0, true, false) then
+                StartAutomatedDialog(AD, true, partner, me) --loic is first
+            else
+                StopTimer(me, "DEN_Intolerant_ADTimer")
+                StartTimer(me, "DEN_Intolerant_ADTimer", 12.0, 0)
+                canAD = false
+                Sleep(math.random(4, 8))
+            end
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            while not canAD do
+                Sleep(1)
+            end
+        end
+    }
+    -----------------------------------------
+    -- event section
+    -- timers
+    events.DialogStarted = function(e)
+        if (e.Instance.DialogUUID == Guid([[DEN_DruidServant_AD_Debate_e4eed069-ce61-63a5-ee83-d6003462ddfc]])) then
+            canAD = false
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == Guid([[DEN_DruidServant_AD_Debate_e4eed069-ce61-63a5-ee83-d6003462ddfc]])) then
+            StopTimer(me, "DEN_Intolerant_ADTimer")
+            StartTimer(me, "DEN_Intolerant_ADTimer", 40.0, 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_Intolerant_ADTimer" then
+            canAD = true
+        end
+    end
+
+    events.FlagSet = function(e)
+        if e.Flag == Guid("DEN_ShadowDruid_Event_ReactionDone_be576fb3-ba9c-4375-8870-e0f66e6eeb4c") then
+            StopTimer(me, "DEN_Intolerant_ADTimer")
+            StartTimer(me, "DEN_Intolerant_ADTimer", 15.0, 0)
+        end
+    end
+end}
+
+
+game.states.DEN_Intolerant_NotSitting = State { function ()
+
+    description = [[Marcoryl, a druid who isn't particularly welcoming. His seat is missing]]
+
+    modules = { "shared.moveto"}
+
+    local lairTablePoint = Entity("S_DEN_IntolerantTable_870dd841-452c-4117-92f2-51905e4bdefb")
+    local tableAnims = {
+        Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba"),
+        Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    }
+
+    nodes.StandAtTable = Action{
+        CanEnter = function()
+            return GetDistanceTo(me, lairTablePoint) > 1.5
+        end,
+        function()
+            if mod.moveto.MoveToPoint(lairTablePoint, MovementSpeed.Stroll, me) then
+                LookFrom(lairTablePoint)
+                Sleep(math.random(2, 4))
+                try
+                    PlayAnimation(tableAnims[math.random(#tableAnims)],true,false)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    Sleep(6)
+                end
+            else
+                Sleep(math.random(2, 4))
+            end
+        end
+    }
+
+    nodes.TalkToLoic = Proxy {
+        game.states.DEN_Intolerant_ADWith
+    }
+end}

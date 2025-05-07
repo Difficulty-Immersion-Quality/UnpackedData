@@ -1,0 +1,285 @@
+game.states.DEN_TieflingRefugee_001 = State {function ()
+    description = [[The behavior of the tiefling Eramas carefully packing near Auntie Ethel]]
+
+    modules = {"gustav.Act1.GroveRefugee", "shared.dialog"}
+
+    -----------------------------------------
+    -- Local variables
+
+    local crateItems = {
+        Entity("S_DEN_Refugee001_Crate1_866a17cd-c8b5-4834-bfbd-1be317bd45e4"),
+        Entity("S_DEN_Refugee001_Crate2_facbab48-ef60-4819-a60b-729b914980f0")
+    }
+    local goodsPos = {}
+    local AD = Dialog("DEN_General_AD_Refugee1_fb1a85da-8bff-0b6a-49ea-02ad2aa7be50")
+    local blockedAD = false
+    local canAD = false
+
+    -----------------------------------------
+    -- State nodes
+
+    self.OnInit = function()
+        mod.GroveRefugee.SetGoodsPos(crateItems, goodsPos)
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Default = Selector{
+        function(nodes)
+            if canAD and nodes.doAD.IsSelectable() then
+                return nodes.doAD
+            elseif not canAD and nodes.doAD.IsSelectable() then
+                return nodes.moveToAndTalk
+            else
+                return nodes.Actions
+            end
+        end
+    }
+
+    nodes.Default.doAD = Action {
+        OnEnter = function()
+            canAD = false
+        end,
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true
+                },
+                me
+            )
+            blockedAD = true
+        end,
+        OnLeave = function()
+            blockedAD = true
+            StopTimer(me,"ADTimer_DEN_General_AD_Refugee1")
+            StartTimer(me,"ADTimer_DEN_General_AD_Refugee1", 40 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return not blockedAD
+        end
+    }
+
+    nodes.Default.moveToAndTalk  = Proxy {
+        game.states.DEN_GeneralGroveStates_MoveToAndTalk,
+            params={
+                moveTarget = "S_DEN_Refugee001_PackingPosition3_fee3b7bc-6735-44c0-abca-18079b18a23d",
+            }
+        }
+
+    nodes.Default.Actions = Selector{
+        OnEnter = function()
+            canAD = false
+        end,
+        function(nodes)
+            if mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+            and mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2]) then
+                return FindDifferentRandomSelectable(nodes)
+            else
+                return FindRandomSelectable(nodes)
+            end
+        end
+    }
+
+   nodes.Default.Actions.AtCrate1 = Proxy {
+        Valid = function()
+           return mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1]) --must use local variables as params cannot pass updated vector3
+        end,
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_Refugee001_PackingPosition1_1880af7f-b8a8-420b-8679-9b8090c3f225",
+            lookTarget = "S_DEN_Refugee001_Crate1_866a17cd-c8b5-4834-bfbd-1be317bd45e4",
+            anim = "CUST_DistractedPackingGoods_01_13c725bc-dc9d-4679-aedb-4cef01d0c9ae",
+            waitMin = 0,
+            waitMax = 0
+        }
+    }
+
+    nodes.Default.Actions.AtCrate2 = Proxy {
+        Valid = function()
+           return mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])--must use local variables as params cannot pass updated vector3
+        end,
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_Refugee001_PackingPosition2_f212bfda-407f-4327-b991-04bc433777ce",
+            lookTarget = "S_DEN_Refugee001_Crate2_facbab48-ef60-4819-a60b-729b914980f0",
+            anim = "CUST_Packing_02_85243b92-d545-4326-9438-3b3599317773",
+            repeatMin = 1.0,
+            repeatMax = 2.0,
+            waitMin = 0,
+            waitMax = 0
+        }
+    }
+
+    nodes.Default.Actions.Wander = Proxy {
+        CanEnter = function()
+            return not mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+            and not mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])
+        end,
+        game.states.DEN_GeneralGroveStates_Wander,
+        params={
+            anchor = "S_DEN_Refugee001_PackingPosition3_fee3b7bc-6735-44c0-abca-18079b18a23d",
+            wanderMin = 2.0,
+            wanderMax = 3.0
+        }
+    }
+
+    nodes.Default.Actions.Rest = Action {
+        CanEnter = function()
+            return not mod.GroveRefugee.CheckItemLocation(crateItems[1],goodsPos[1])
+            and not mod.GroveRefugee.CheckItemLocation(crateItems[2],goodsPos[2])
+        end,
+        function()
+            Sleep(math.random(3,5))
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_MovedToTalk") then
+                canAD = true
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_General_AD_Refugee1") then
+            blockedAD = false
+        end
+    end
+
+end}
+
+game.states.DEN_AttackOnDen_RangerTrader = State {function ()
+    description = [[Tending to an Ox in the safety area.]]
+
+    modules = { "shared.dialog" }
+
+    local ox = Entity("S_DEN_Mule_001_06ed1274-9d16-4320-b5ad-162fca5fb85d")
+    local AD = Dialog([[DEN_AttackOnDen_AD_CaringForOx_645356fb-3ff6-5901-6c02-b4f59d0fd42b]])
+    local canAD = true
+   
+    nodes.AD = Action{
+        CanEnter = function()
+            return canAD
+        end,
+        OnEnter = function()
+            canAD = false
+        end,
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = false
+                },
+                me
+            )
+        end,
+        OnLeave = function()
+            StartTimer(me, "DEN_AttackOnDen_RangerTrader_ADTimer", 40,0)
+        end,
+        Valid = function()
+            return not ox.Character.IsDead
+        end
+    }
+
+    nodes.Standing = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_AoDRangerPos_61e250e2-c5e4-42fe-b0ce-768bcc491662]]
+        }
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_AttackOnDen_RangerTrader_ADTimer") then 
+            canAD = true
+        end
+    end
+
+end}
+
+game.states.DEN_RangerTrader_LootingAdventurers = State { function ()
+
+    description = [[The ranger trader is picking through the adventurer's camp following the druid attack.]]
+
+    local AD = Dialog("DEN_DruidAttack_AD_RangerTraderLootingAfterAttack_7b173de8-1212-ecaf-a195-d945e025d9b1")
+    local canAD = false
+
+    -----------------------------------------
+    -- Nodes
+    nodes.Default = Selector {
+        function(nodes)
+            if nodes.doAD.IsSelectable() then
+                return nodes.doAD
+            else
+                return FindDifferentRandomSelectable(nodes)
+            end
+        end
+    }
+
+    nodes.Default.doAD = Action {
+        CanEnter = function()
+            return canAD
+        end,
+        OnEnter = function()
+            canAD = false
+        end,
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true
+                },
+                me
+            )
+        end,
+        OnLeave = function()
+            StopTimer(me,"ADTimer_DEN_DruidAttack_AD_RangerTraderLootingAfterAttack")
+            StartTimer(me,"ADTimer_DEN_DruidAttack_AD_RangerTraderLootingAfterAttack", 40 + math.random(0,10),0)
+        end
+    }
+
+    nodes.Default.Chest = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_PostDruidAttack_AdventurerLootPoint1_e9645ba8-d575-4415-95ea-f64bbb4be6c4",
+            anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+            lookFromMoveTarget = true,
+            waitMin = 2.0,
+            waitMax = 4.0
+        }
+    }
+
+    nodes.Default.Barrels = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_PostDruidAttack_AdventurerLootPoint2_7aa9f6a0-2870-43bf-8859-d5a0ce4e5e55",
+            anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+            lookFromMoveTarget = true,
+            waitMin = 2.0,
+            waitMax = 4.0
+        }
+    }
+
+    nodes.Default.Table = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_PostDruidAttack_AdventurerLootPoint3_1a6fe0ae-7a8a-4782-82c9-aeb51b4a7e75",
+            anim = "CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0",
+            lookFromMoveTarget = true,
+            waitMin = 2.0,
+            waitMax = 4.0
+        }
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_DruidAttack_AD_RangerTraderLootingAfterAttack") then
+            canAD = true
+        end
+    end
+
+end}

@@ -1,0 +1,88 @@
+game.states.LOW_TempleWaveservants_OutsideOfficeGuard = State 
+{
+    function()
+    description = [[Outside office guard behaviour]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.DefaultPos = {
+        type = EParamType.String,
+        required = true,
+        help=[[Default position for the character to be in]]
+    }
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local defaultPos = Entity(params.DefaultPos)
+    local startAnim = Animation("CUST_ArmsCrossed_01_Start_dafd0bbc-012a-403c-aabe-4963aca9cf25")
+    local loopAnim = { Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71") }
+    local endAnim = Animation("CUST_ArmsCrossed_01_End_ae43ea68-fc1b-456a-88ce-0e1d504e1d40")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    nodes.Action_BackToPosition = Action 
+    {
+        function ()        
+            mod.util.SleepRandom (1.0,2.0)
+            if IsInDangerousSurfaceFor(defaultPos, me.Character) then
+                SteerTo(defaultPos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(defaultPos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(defaultPos)
+                Sleep(2.0)
+                return false
+            end
+
+            LookFrom(defaultPos)
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, defaultPos) > 1.0
+        end
+    }
+
+    -- Action
+    nodes.Action_StandingGuard = Action
+    {
+        function ()   
+            LookFrom(defaultPos)       
+            PlayLoopingAnimation(startAnim, loopAnim, endAnim)
+            WaitForInterrupt()
+        end,       
+
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, defaultPos) <= 1.0
+        end
+    }
+
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

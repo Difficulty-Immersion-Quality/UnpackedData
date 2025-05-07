@@ -1,0 +1,73 @@
+game.states.FOR_CourierDog = State {function()
+    description = [[Behaviour of Courier Dog when encountered in the forest]]
+
+    modules = { "shared.dialog", "shared.util" }
+
+    params.checkForPlayersNearCorpse = {type = EParamType.Bool, help=[[
+        Expression for player near courier corpse
+    ]]}
+
+    -- Flags
+    local FOR_Courier_State_DogCalm = Flag("FOR_Courier_State_DogCalm_4bc486f9-804c-4d77-6f4a-8ce64e18e8e6")
+    local DogMoved2Camp = Flag("CAMP_Courier_Dog_Moved2Camp_7dcb7732-1c76-463a-bec9-251f30860e6c")
+
+    -- Dialogs
+    local courierDogAD = Dialog("FOR_Courier_AD_Dog_3c3aa46f-618f-7707-2e87-26b900d3f48e")
+
+    -- Behaviours Vars
+    local courierCorpse
+    local wanderRadius = 4.0
+
+    self.OnInit = function()
+        courierCorpse = FindEntity("S_FOR_Courier_bf842d88-0c39-48b8-b4a1-f9ab140ee6ca")
+    end
+
+    nodes = ImmediateSelector {}
+
+    nodes.JustWait = Action {
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(DogMoved2Camp)
+        end
+    }
+
+    nodes.ApproachPlayer = Action {
+        function()
+            local player = mod.util.GetNearbyPlayer(courierCorpse, wanderRadius)
+
+            -- Prevent race condition
+            -- Player close enough to satisfy Valid(), but then leaves range immediately
+            -- mod.util.GetNearbyPlayer() can also return nil
+            if player ~= nil then
+                MoveTo(player, MovementSpeed.Run, true)
+            end
+
+            if mod.dialog.IsSpeakerAvailable(me) then
+                StartAutomatedDialog(courierDogAD, false, me)
+            end
+        end,
+
+        Valid = function()
+            return  not GetFlag(FOR_Courier_State_DogCalm) and
+                    params.checkForPlayersNearCorpse
+        end,
+    }
+
+    nodes.Wander = Action {
+        function()
+            if GetDistance2DTo(me, courierCorpse) > wanderRadius then
+                MoveInRange(courierCorpse, 0.5, 1.0)
+            end
+
+            Wander(4.0, 5.0, MovementSpeed.Walk, courierCorpse)
+        end,
+
+        Valid = function()
+            return  GetFlag(FOR_Courier_State_DogCalm) or
+                    not params.checkForPlayersNearCorpse
+        end
+    }
+end}

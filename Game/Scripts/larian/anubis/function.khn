@@ -1,0 +1,169 @@
+local __util = require 'larian.util'
+local __enum = require 'larian.anubis.enum'
+local __type = require 'larian.anubis.type'
+
+local __m = {}
+
+-- Prototypes
+
+__m.PrototypeBuilder = ls.Class("larian.anubis.function.PrototypeBuilder", function(self)
+    local _fields = __util.OrderedMap()
+
+    self.Request = function (name, value)
+        local index = _fields.Find(name)
+
+        if index ~= nil then
+            return index
+        end
+
+        if type(value) == "function" then
+            value = __m.MakePrototype(self, value)
+        end
+
+        return _fields.Set(name, value)
+    end
+
+    self.Finalize = function()
+        local names = {}
+        local returns = {}
+        local setters = ""
+
+        for name in pairs(_fields) do
+            table.insert(returns, name .. "=" .. name)
+            setters = setters .. name .. " = params." .. name .. "\n"
+            table.insert(names, name)
+        end
+
+        if #names == 0 then
+            return {
+                makeAccessor = function() return function() return {} end end,
+                values = {}
+            }
+        end
+
+        names = table.concat(names, ", ")
+        returns = table.concat(returns, ", ")
+
+        local code = string.format([[
+            local %s
+            return function(params)
+                if params then
+                    %s
+                end
+                return {%s}
+            end
+        ]], names, setters, returns)
+
+        local chunk = load(code, code, "t", {})
+
+        return {
+            makeAccessor = chunk,
+            values = _fields
+        }
+    end
+end)
+
+__m.MakePrototype = function(data, func)
+    __util.AssertType(data, "nil", __m.PrototypeBuilder)
+    __util.AssertType(func, "function")
+
+    local map = {}
+
+    local count = debug.getinfo(func, "u").nups
+
+    for i = 1, count do
+        local name, v = debug.getupvalue(func, i)
+
+        local index = 0
+
+        if name ~= "_ENV" then
+            if data == nil then
+                __util.Throw(
+                    "State'less function %s contain an upvalue (closure-captured variable) %s, which is not allowed",
+                    func, name
+                )
+            else
+                index = data.Request(name, v)
+            end
+        end
+
+        table.insert(map, index)
+    end
+
+    return {
+        type = __enum.Prototype.Function,
+        func = func,
+        map = map
+    }
+end
+
+__m.MakePrototypes = function(data, items)
+    __util.AssertType(data, "nil", __m.PrototypeBuilder)
+
+    local result = {}
+
+    for k, v in pairs(items) do
+        try
+            result[k] = __m.MakePrototype(data, v)
+        catch e then
+            __util.Rethrow(e, "Processing key '%s' of functions table:\n%s", k, items)
+        end
+    end
+
+    return result
+end
+
+-- Instances
+
+__m.MakeInstanceData = function(prototype)
+    local accessor = prototype.makeAccessor()
+
+    return {accessor = accessor}
+end
+
+__m.ResolveDataVariables = function(instance, prototype, params)
+    local values = {}
+
+    for key, item in pairs(prototype.values) do
+        values[key] = __type.ResolveVariable(item, params)
+    end
+
+    instance.accessor(values)
+end
+
+__m.MakeInstance = function(data, prototype, env)
+    __util.AssertTypedTable(prototype, __enum.Prototype.Function)
+
+    local count = debug.getinfo(prototype.func, "u").nups
+
+    if count == 0 then
+        return prototype.func
+    end
+
+    local func = debug.copyfunction(prototype.func) -- luacheck: ignore
+
+    for i = 1, count do
+        local accessorIndex = prototype.map[i]
+
+        if accessorIndex == 0 then
+            debug.setupvalue(func, i, env)
+        elseif data then
+            debug.upvaluejoin(func, i, data.accessor, accessorIndex)
+        end
+    end
+
+    return func
+end
+
+__m.MakeInstances = function(data, prototypes, env)
+    local result = {}
+
+    for name, spec in pairs(prototypes) do
+        __util.AssertTypedTable(spec, __enum.Prototype.Function)
+        result[name] = __m.MakeInstance(data, spec, env)
+    end
+
+    return result
+end
+
+return __m

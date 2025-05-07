@@ -1,0 +1,146 @@
+game.states.LOW_HagSurvivors_SurrogateMother = State{function()
+
+    modules = {"shared.dialog"}
+
+    local patrolSpline = Spline("S_LOW_HagSurvivors_SurrogateMother_PatrolSpline_f49af443-445b-4ded-8a61-2ddc2893eb6b")    
+    local sheepPatrolStop = false
+    local sheepPatrolPauseDuration = 9.0
+    local reverseSheepPatrol = false
+
+    local humanIdleTrigger = Entity("S_LOW_HagSurvivors_HagSpySpot_fb54b8c1-9697-4edc-9f4a-dba4414d2028")
+    local humanIdleTriggerString = "S_LOW_HagSurvivors_HagSpySpot_fb54b8c1-9697-4edc-9f4a-dba4414d2028"
+
+    local sheepIdleAD = Dialog("LOW_HagSurvivors_AD_SurrogateMother_SheepForm_Idle_d5ff513e-c79e-6c0b-6328-723751710ba7")
+    local hagSpyBetrayalAD = Dialog("LOW_HagSurvivors_AD_SurrogateMother_HagSpyBetrayal_f6de0947-b307-275d-8305-486ff8a3955d")
+    local relievedAD = Dialog("LOW_HagSurvivors_AD_SurrogateMother_Relieved_9882fa8e-d4b5-9607-ebfe-c9ddf0ce7812")
+    local connorConvoAD = Dialog("LOW_HagSurvivors_AD_SurrogateMother_Connor_4d07c2f7-46f3-932f-fadd-c054883a742f")
+    local connor = Entity("S_HAG_Hagspawn_HusbandJake_133bf997-7c0d-4c64-88c9-9b9cd439dbb5")
+
+    local mayrinaCuredFlag = Flag("LOW_HagSurvivors_State_SurrogateMotherCured_f76de6bd-5212-4fd5-beeb-5b05a41f55b7")
+    local hagSpyPermaDefeatedFlag = Flag("LOW_HagSurvivors_State_HagSpy_PermaDefeated_e62f1c84-d463-4c2e-ba55-aa6e558ec43c")
+    local hagTrulyDeadFlag = Flag("LOW_BlushingMermaid_State_HagIsTrulyDead_c7c3e64d-dcfc-431b-a224-535a0c4a8e9c")
+
+    local postCuredAnimation = Animation("CUST_Worried_01_a4616816-be6d-4fa1-a65a-2da057196af4")
+
+    nodes.IdleHuman = Action{        
+        CanEnter = function()
+            return GetFlag(hagSpyPermaDefeatedFlag)
+        end,
+
+        function()
+            LookFrom(humanIdleTrigger)
+            Sleep(math.random(3.0,7.0))
+
+            local AD
+            if(not GetFlag(hagTrulyDeadFlag)) then
+                if(mod.dialog.IsSpeakerAvailable(connor)) then
+                    AD = connorConvoAD
+                else
+                    AD = hagSpyBetrayalAD
+                end
+            elseif(GetFlag(hagTrulyDeadFlag)) then
+                AD = relievedAD
+            end
+
+            if(AD == connorConvoAD) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 30,
+                    },
+                    me,
+                    connor
+                )
+            else
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 30,
+                    },
+                    me
+                )
+            end
+
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, humanIdleTrigger) <= 2.0
+        end
+    }
+
+    nodes.StandAtTriggerHuman = Proxy {
+        CanEnter = function()
+            return GetFlag(hagSpyPermaDefeatedFlag)
+        end,
+
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = humanIdleTriggerString
+        }
+    }
+
+    nodes.PostCuredConfusion = Action {
+        CanEnter = function()
+            return GetFlag(mayrinaCuredFlag) and not GetFlag(hagSpyPermaDefeatedFlag)
+        end,
+
+        function()
+            Sleep(1.0)
+            PlayAnimation(postCuredAnimation,false,true)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.SheepPatrol = Action {
+        OnEnter = function()
+            if(math.random() > 0.5) then
+                reverseSheepPatrol = true
+            end
+        end,
+        function()
+            DoPatrol(patrolSpline, reverseSheepPatrol, MovementSpeed.Walk, -1)
+            reverseSheepPatrol = false
+            
+        end,
+        Valid = function()
+            return not sheepPatrolStop and not GetFlag(mayrinaCuredFlag)
+        end
+    }
+
+    nodes.SheepPatrolStop = Action {
+        CanEnter = function()
+            return sheepPatrolStop
+        end,
+        function()
+            sheepPatrolStop = false
+            LookFrom(patrolSpline)
+            ClearPatrol()
+            Sleep(math.random(1,5)+sheepPatrolPauseDuration)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(5.0)
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        ShortPatrolInterrupt()
+        sheepPatrolStop = true
+        if(math.random() > 0.7) then
+            mod.dialog.StartCheckedAutomatedDialogImmediate(
+                sheepIdleAD,
+                {
+                    waitForCompletion = false
+                },
+                me
+            )
+        end
+    end
+end}

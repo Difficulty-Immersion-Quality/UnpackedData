@@ -1,0 +1,230 @@
+game.states.DEN_BirdSender = State { function ()
+
+    description = [[Druid who's sending a bird to find Halsin.]]
+
+    local canAD = true
+    local ADDelay = 45.0
+    local AD = Dialog("DEN_SacredPond_AD_BirdSender_3ccfc9f7-5bcb-adbc-9cd2-d19fc8c557ef")
+
+    local mainArea = Entity("S_DEN_SenderMainArea_4c6ed570-1e77-4305-bf5f-879750f48f14")
+    local points = {
+        Entity("S_DEN_SenderPondPoint_2856ce2d-4476-495a-95f3-4012d36c7264"),
+        Entity("S_DEN_SenderFlowerPoint_5c98f4ff-9be3-4233-a2b4-7d054cf8ee62"),
+        Entity("S_DEN_SenderWorkPoint_451e1034-7278-49eb-9b6b-2d3a0dc203a6"),
+    }
+    local secondFlowPoint = Entity("S_DEN_SenderFlowerPoint_000_c05171f0-4704-48d1-9781-f4588e2bc3b0")
+    local anims = {
+        Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba"),
+        Animation("CUST_TendingToFlowersGround_01_1b739520-113d-4724-880f-7df89f3cba0a"),
+        Animation("CUST_Organizing_01_0e82e372-b47d-4d62-933b-068725cdfd06")
+    }
+    local currentAction = 1 --first action will be to tend to flowers
+    local currentPoint = nil
+    local currentAnim = nil
+
+    local organizeDialog = Dialog("BHVR_WRLD_DEN_Organizing_01_bd4a49f8-6080-c87c-486c-daf536318dc1")
+    local organizeTrigger = Entity("S_BHVR_WRLD_DEN_Organizing_001_7239117b-ba7e-4cee-993e-45c75d581170")
+
+    local playerApproachTrigger = Entity("S_DEN_Sender_PlayerApproach_4c5333fd-c4ea-4ddd-8819-eb72e4783793")
+    local playerApproached = false
+
+    local whisperBehaviorDialog = Dialog("BHVR_WRLD_DEN_BirderSender_WhisperToBird_9ed3dd5a-89ea-6a8d-0403-f167d2278b58")
+    local whisperTrigger = Entity("S_DEN_Sender_TimelineScene_WhisperToBird_27bea111-d4ee-4629-8b45-8c440566dfcc")
+    local whisperAD = Dialog("DEN_SacredPond_AD_SearchingBird_cbfff229-fd9a-8468-4ad3-2ac28d58ec94")
+    local birdTakeOffFlag = Flag("DEN_SenderBird_Event_TakeOff_ce3a4f22-36e7-1763-1eb8-a97f9f182125")
+    local birdIsGoneFlag = Flag("DEN_SacredPond_State_BirdLeft_9858f80e-2973-41cf-9118-24c9a1e0c743")
+    --local birdWhisperStart = Flag("DEN_SacredPond_Event_TalkToBird_2604956b-16ca-4b88-b248-2b2bd388b213") -- todo
+    --local birdWhisperStartAD = Flag("DEN_SacredPond_Event_StartAD_5b5706ad-787d-4c3a-af64-d29e95bd32e0") -- todo
+    local birdPoint = Entity([[S_DEN_BirdWhisperPoint_c13ead85-c09f-4eff-881a-d30e1f69161f]])
+    local bird = Entity("S_DEN_SenderBird_bf90aa40-232b-40fd-a43e-699bb964e337")
+
+    local boar = Entity("S_DEN_DruidPet_004_5e856a8e-957a-49b1-8ec7-f430984e08ca")
+    local shooBoarAD = Dialog("DEN_DruidServant_AD_ChaseAwayBoar_ccb1f89e-895b-7a17-75f3-08a8ae3fd11b")
+    local isBotheredByBoar = false
+
+    -----------------------------------------
+    -- helper functions
+    helpers.SetAction = function(index)
+        currentPoint = points[index]
+        currentAnim = anims[index]
+    end
+
+    helpers.SwithFlowerPoint = function(index)
+        if currentPoint == points[2] then
+            currentPoint = secondFlowPoint
+        elseif currentPoint == secondFlowPoint then
+            currentPoint = points[2]
+        end
+    end
+
+    helpers.NextAction = function()
+        currentAction = currentAction + 1
+        if currentAction > #points then
+            currentAction = 1
+        end
+        helpers.SetAction(currentAction)
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.WithBird = Selector{
+        CanEnter = function()
+            return not GetFlag(birdIsGoneFlag)
+        end,
+        function(nodes)
+            if playerApproached then
+                return nodes.PlayerApproached
+            else
+                return nodes.WaitingForPlayer
+            end
+        end
+    }
+
+    nodes.WithBird.WaitingForPlayer = Action {
+        function()
+            if GetDistance2DTo(me, birdPoint) > 1.5 then
+                try
+                    MoveTo(birdPoint, MovementSpeed.Stroll)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(2.0)
+                end
+            end
+            Sleep(1.0)
+            DebugText(me, "Start behavior")
+            StartBehaviorDialog(whisperBehaviorDialog, whisperTrigger.Trigger, true, me)
+            Sleep(1.0)
+        end
+    }
+
+    nodes.WithBird.PlayerApproached = Action {
+        function()
+            if GetDistance2DTo(me, birdPoint) > 1.5 then
+                try
+                    MoveTo(birdPoint, MovementSpeed.Stroll)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(2.0)
+                end
+            end
+            Sleep(1.0)
+            DebugText(me, "Start behavior")
+            StartBehaviorDialog(whisperBehaviorDialog, whisperTrigger.Trigger, false, me)
+            Sleep(1.0)
+            DebugText(me, "Start AD")
+            StartAutomatedDialogImmediate(whisperAD, me, bird)
+            --StartAutomatedDialog(whisperAD, true, me, bird)
+            Sleep(1.0)
+            while not GetFlag(birdIsGoneFlag) do
+                Sleep(1.0)
+            end
+            DebugText(me, "Stopping")
+            BehaviorDialogRequestGracefulStop(me, false)
+            Sleep(5.0)
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end
+    }
+
+    nodes.RepelBoar = Action {
+        CanEnter = function()
+            return isBotheredByBoar
+        end,
+        function()
+            Sleep(math.random(2, 3))
+            if not IsInDialog(me, false) and not IsInDialog(boar, false) then
+                isBotheredByBoar = false
+                StartAutomatedDialog(shooBoarAD, false, me, boar)
+            end
+        end,
+        OnLeave = function()
+            SetEntityEvent(boar, "DEN_ExcitedBoar_StopBothering")
+        end
+    }
+
+    nodes.NextAction = Action {
+        CanEnter = function()
+            return currentPoint == nil
+        end,
+        OnEnter = function()
+            helpers.NextAction()
+        end,
+        function()
+            Sleep(2.0)
+        end
+    }
+
+    nodes.Default = Action {
+        -- TODO: more actions, moving from left to right going at the desk and plants
+        function()
+            local i = 0
+            local max = currentAction * 2
+            Sleep(1)
+            while (i < max) and not isBotheredByBoar do
+                if GetDistance2DTo(me, currentPoint) > 1.5 then
+                    try
+                        MoveTo(currentPoint, MovementSpeed.Stroll)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(2.0)
+                    end
+                end
+                if (GetDistance2DTo(me, currentPoint) <= 1.5) then
+                    LookFrom(currentPoint)
+                    Sleep(math.random(1, 3))
+                    if(currentAction < 3) then
+                        PlayAnimation(currentAnim)
+                    elseif(currentAction == 3) then
+                        StartBehaviorDialog(organizeDialog, organizeTrigger.Trigger, true, me)
+                    end
+                end
+                helpers.SwithFlowerPoint()
+                if isBotheredByBoar then
+                    break
+                end
+                Sleep(math.random(3, 5))
+                if isBotheredByBoar then
+                    break
+                end
+                if canAD and (not isBotheredByBoar) and IsInTrigger(me, mainArea.Trigger) and not IsInDialog(me, false) then
+                    --The AD is work-related, so only do it when in the main area (desk and flower)
+                    canAD = false
+                    StartTimer(me, "DEN_ServantSender_ADTimer", ADDelay, 0)
+                    StartAutomatedDialog(AD, true, me)
+                end
+                Sleep(math.random(1, 3))
+                i = i + math.random(1, 2)
+            end
+            currentPoint = nil
+        end,
+        OnLeave = function()
+            currentPoint = nil
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_ServantSender_ADTimer" then
+            canAD = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DEN_ExcitedBoar_BotherServant" then
+                isBotheredByBoar = true
+            end
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == whisperAD.Guid then
+            SetFlag(birdTakeOffFlag)
+        end
+    end
+
+    events.EnteredTrigger = function(e)
+        if e.Trigger == playerApproachTrigger and e.Target.Character.IsPartyMember then
+            playerApproached = true
+        end
+    end
+end}

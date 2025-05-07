@@ -1,0 +1,203 @@
+local __env = require 'larian.anubis.env'
+local __enum = require 'larian.anubis.enum'
+local __function = require 'larian.anubis.function'
+local __util = require 'larian.util'
+
+local __m = {}
+
+__m.Prototype = ls.Class('larian.anubis.module.Prototype', function (self, fqdn, data)
+    local function checkCategoryConflict(category, key)
+        __util.Assert(
+            category[key] == nil,
+            "Name clash: Name %s already exists in %s category",
+            key, category
+        )
+    end
+
+    local function checkConflictWithCommon(_, key)
+        checkCategoryConflict(self.common, key)
+    end
+
+    local function checkConflictWithOther(current, key)
+        for _, category in pairs(self) do
+            if category ~= current then
+                checkCategoryConflict(category, key)
+            end
+        end
+    end
+
+    local function makeCategory(conflictCheck)
+        local category = {}
+
+        local meta = {
+            __newindex = function(table, key, value)
+                conflictCheck(table, key)
+
+                if type(value) == "function" then
+                    value = __function.MakePrototype(data, value)
+                end
+
+                rawset(table, key, value)
+            end
+        }
+
+        setmetatable(category, meta)
+
+        return category
+    end
+
+    local parts = ls.string.SplitRight(fqdn, ".", 2)
+    self._fqdn = fqdn
+    self._name = parts[2] or parts[1]
+
+    self.common = makeCategory(checkConflictWithOther)
+
+    self.api = makeCategory(checkConflictWithCommon)
+    self.action = makeCategory(checkConflictWithCommon)
+    self.callback = makeCategory(checkConflictWithCommon)
+    self.event = makeCategory(checkConflictWithCommon)
+    self.selector = makeCategory(checkConflictWithCommon)
+end)
+
+function __m.Prototype:__newindex(name, value)
+    self.common[name] = value
+end
+
+local function iteratePrototype(prototype, key)
+    local item
+
+    repeat
+        key, item = next(prototype, key)
+    until key == nil or key:find("_", 1, true) ~= 1
+
+    return key, item
+end
+
+function __m.Prototype:__pairs()
+    return iteratePrototype, self, nil
+end
+
+local function instantiateCategory(data, prototype, this, env)
+    local instance = {}
+
+    local categoryEnv = {
+        this = this
+    }
+
+    setmetatable(categoryEnv, env.__as_meta)
+
+    for key, value in pairs(prototype) do
+        if __util.CheckType(value, __enum.Prototype.Function) then
+            value = __function.MakeInstance(data, value, categoryEnv)
+        end
+
+        instance[key] = value
+    end
+
+    return instance
+end
+
+local INSTANCE_META = {
+    __pairs = function(self)
+        return iteratePrototype, self, nil
+    end
+}
+
+__m.MakeInstance = function(data, prototype, env)
+    local instance = {
+        _name = prototype._name,
+        _fqdn = prototype._fqdn
+    }
+
+    local thisCategories = {}
+
+    for name, category in pairs(prototype) do
+        if env[name] ~= nil then
+            local this = {}
+            thisCategories[name] = this
+
+            instance[name] = instantiateCategory(data, category, this, env[name])
+        end
+    end
+
+    for name, _ in pairs(thisCategories) do
+        __util.MergeTableInto(thisCategories[name], instance.common)
+        __util.MergeTableInto(thisCategories[name], instance[name])
+    end
+
+    setmetatable(instance, INSTANCE_META)
+
+    return instance
+end
+
+__m.Load = function(specs, env)
+    local modules = {}
+
+    for fqdn, path in pairs(specs) do
+        local env = __env.MakeScriptEnv{
+            AnubisModule = function()
+                return __m.Prototype(fqdn, data)
+            end
+        }
+
+        local chunk = ls.Load(path, env)
+
+        try
+            modules[fqdn] = chunk()
+        catch e then
+            __util.Rethrow(e, "While loading module %s from %s", fqdn, path)
+        end
+    end
+
+    for fqdn, module in pairs(modules) do
+        modules[fqdn] = __m.MakeInstance(nil, module, env)
+    end
+
+    return modules
+end
+
+local function setModule(modules, name, module)
+    local existing = modules[name]
+
+    if existing ~= nil then
+        __util.Throw(
+            "State already have module %s imported under name %s, while importing module %s",
+            existing._fqdn, name, module._fqdn
+        )
+    end
+
+    modules[name] = module
+end
+
+__m.Import = function(modules, import)
+    local result = {}
+
+    for _, fqdn in ipairs(import) do
+        local module = modules[fqdn]
+
+        __util.Assert(module ~= nil, "Module %s does not exist", fqdn)
+
+        local name = module._name
+
+        setModule(result, name, module)
+    end
+
+    for name, fqdn in pairs(import) do
+        if type(name) ~= "number" then
+            __util.Assert(
+                type(name) == "string",
+                "State 'modules' declaration should be table with integer or string keys"
+            )
+
+            local module = modules[fqdn]
+
+            __util.Assert(module ~= nil, "Module %s does not exist", fqdn)
+
+            setModule(result, name, module)
+        end
+    end
+
+    return result
+end
+
+return __m

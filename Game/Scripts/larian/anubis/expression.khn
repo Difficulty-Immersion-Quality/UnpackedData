@@ -1,0 +1,216 @@
+local __enum = require 'larian.anubis.enum'
+local __env = require 'larian.anubis.env'
+local __module = require 'larian.anubis.module'
+local __socket = require 'larian.anubis.socket'
+local __util = require 'larian.util'
+
+local __m = {}
+
+-- Stubs
+
+__m.MakeStub = function(...)
+    return {
+        type = __enum.Stub.Expression,
+        __args = {...}
+    }
+end
+
+-- Prototypes
+
+local function makePrototype(...)
+    local kwargs = __util.KWArgs("Expression", ...)
+
+	local expression = {type=__enum.Prototype.Expression}
+
+    expression.evaluator = kwargs.TakeRequired(1, "evaluator function", "function")
+    expression.args = kwargs.TakeOptional("args", {}, "argument types", __util.Array)
+    expression.result = kwargs.TakeOptional(
+        "result", ls.anubis.enums.EParamType.Bool, "result type", ls.anubis.enums.EParamType
+    )
+    expression.ttl = kwargs.TakeOptional("ttl", nil, "cache period", "nil", "number")
+    expression.modules = kwargs.TakeOptional("modules", {}, "module imports", "table")
+
+    kwargs.Validate()
+
+    __util.Assert(expression.result ~= ls.anubis.enums.EParamType.State,
+        "Expression can't have return EParamType.State type"
+    )
+
+    local info = debug.getinfo(expression.evaluator, "u")
+    local expected = info.nparams + (info.isvararg and 1 or 0)
+
+    expression.isVarArg = info.isvararg
+
+    __util.Assert(#expression.args == expected,
+        "Number of args= items (%d) does not match number of evaluator function params (%d)",
+        #expression.args, expected
+    )
+
+    return expression
+end
+
+__m.Unstub = function(stub, modules, env)
+    __util.AssertTypedTable(stub, __enum.Stub.Expression, __enum.Prototype.Expression)
+
+    if stub.type == __enum.Prototype.Expression then
+        return
+    end
+
+    try
+        local prototype = makePrototype(table.unpack(stub.__args))
+        stub.__args = nil
+
+        local importedModules = __module.Import(modules, prototype.modules)
+        prototype.modules = nil
+
+        local prototypeEnv = __env.MakePrototype(env, importedModules)
+        prototype.evaluator = __util.CopyFunctionWithEnv(prototype.evaluator, prototypeEnv.callback)
+
+        __util.MergeTableInto(stub, prototype)
+    catch e then
+        __util.Rethrow(e, "While parsing expression %s", stub.fqdn)
+    end
+end
+
+-- Configs
+
+local function validateValue(type_, value)
+    if __util.IsTable(value) then
+        __util.AssertTypedTable(value, __enum.Ref.Expression)
+
+        if __util.CheckType(value, __enum.Ref.Expression) then
+            local expression = value.expression
+
+            __util.Assert(
+                expression.result == type_,
+                "Referenced expression %s does have result type %s, but required argument type is %s",
+                expression.fqdn, expression.result, type_
+            )
+        else
+            __util.Assert(
+                value.valueType == type_,
+                "Referenced param %s does have type %s, but required argument type is %s",
+                value.name, value.valueType, type_
+            )
+        end
+    else
+        if type_ == ls.anubis.enums.EParamType.Bool then
+            __util.AssertType(value, "boolean")
+        elseif type_ == ls.anubis.enums.EParamType.Int then
+            __util.AssertType(value, "int")
+        elseif type_ == ls.anubis.enums.EParamType.Number then
+            __util.AssertType(value, "number")
+        elseif type_ == ls.anubis.enums.EParamType.String then
+            __util.AssertType(value, "string")
+        elseif type_ == ls.anubis.enums.EParamType.Vector3 then
+            __util.AssertType(value, ls.math.Vector3)
+        elseif type_ == ls.anubis.enums.EParamType.State then
+            __util.Throw("EParamType.State values are not allowed in Expressions")
+        end
+    end
+end
+
+__m.MakeRef = function(...)
+    local kwargs = __util.KWArgs("ExpressionRef", ...)
+
+    local expression = kwargs.TakeRequired(1, "game.expressions.* reference", __enum.Prototype.Expression)
+
+    local args = {}
+
+    for i = 2, math.huge do
+        local arg = kwargs.TakeOptional(i)
+
+        if arg == nil then
+            break
+        end
+
+        args[i - 1] = arg
+    end
+
+    kwargs.Validate()
+
+    return {
+        type = __enum.Ref.Expression,
+        expression = expression,
+        args = args
+    }
+end
+
+__m.ValidateRefArgs = function(ref)
+    __util.AssertTypedTable(ref, __enum.Ref.Expression)
+
+    local expression = ref.expression
+
+    try
+        for i, arg in ipairs(ref.args) do
+            local type_ = expression.args[i]
+
+            if type_ == nil and expression.isVarArg then
+                type_ = expression.args[#expression.args]
+            else
+                __util.Assert(type_ ~= nil, "Excessive argument #%d (max arguments: %d): %s", i, #expression.args, arg)
+            end
+
+            try
+                validateValue(type_, arg)
+            catch e then
+                __util.Rethrow(e, "While validating arg #%d", i)
+            end
+        end
+    catch e then
+        __util.Rethrow(e, "While validating expression %s reference", expression.fqdn)
+    end
+end
+
+-- Instances
+
+function resolve(builder, parent, ref, reaction)
+    __util.AssertTypedTable(ref, __enum.Ref.Expression)
+
+    local args = {}
+    local subexpressions = {}
+
+    local standalone = ref.expression
+
+    local evaluator = function()
+        local result
+
+        try
+            for i, expression in pairs(subexpressions) do
+                try
+                    args[i] = expression.Evaluate()
+                catch e then
+                    __util.Rethrow(e, "While evaluating argument #%d expression", i)
+                end
+            end
+
+            result = standalone.evaluator(table.unpack(args))
+
+            validateValue(standalone.result, result)
+        catch e then
+            __util.Rethrow(e, "While evaluating %s%s", standalone.fqdn, args)
+        end
+
+        return result
+    end
+
+    local expression = builder.AddExpression(parent, evaluator, standalone.ttl, reaction)
+
+    for i, arg in pairs(ref.args) do
+        if __util.CheckType(arg, __enum.Ref.Expression) then
+            subexpressions[i] = resolve(builder, expression, arg, nil)
+        else
+            __util.Assert(not __util.IsTable(arg), "Tables are not allowed in expression args")
+
+            args[i] = arg
+        end
+    end
+
+    return expression
+end
+
+__m.Resolve = function(builder, ref, reaction)
+    return resolve(builder, nil, ref, reaction)
+end
+
+return __m

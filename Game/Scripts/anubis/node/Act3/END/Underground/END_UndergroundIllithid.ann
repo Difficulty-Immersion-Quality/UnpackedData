@@ -1,0 +1,49 @@
+game.states.END_UndergroundIllithid = State{function()
+
+    local atHaltPoint = false
+    local patrolSpline = Spline("S_END_Underground_IllitihidPatrol_415236b2-b0d4-4b38-addb-aee9d81e7f89")
+
+    self.Valid = function()
+        return not me.IsInCombat
+    end
+
+    nodes.State_PausePatrolDeathKnight = Action{
+        CanEnter = function()
+            return atHaltPoint
+        end,
+        
+        OnEnter = function()
+            atHaltPoint = false
+        end,
+
+        function()
+            if not atHaltPoint then
+                Sleep(6.0)
+            end
+        end
+    }
+
+    nodes.State_PatrolDeathKnight = Action{
+        Valid = function()
+           return not atHaltPoint;
+        end,
+
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Walk, 0)
+            catch e if ls.CheckType(e, error.MissingComponent) then
+                DebugText(me, "Error: MissingComponent")
+                Sleep(3.0)
+            end
+        end
+    }
+
+    
+
+    events.SplineControlPointReached = function(e)
+        if e.Event == "END_Underground_Illithid_HaltPoint" then
+            atHaltPoint = true
+        end
+    end
+end
+}

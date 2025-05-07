@@ -1,0 +1,95 @@
+game.states.END_Gortash = State{function ()
+    description = [[Gortash waits for the player]]
+
+    modules = { "shared.moveto" }
+
+    local spottedPlayerFlag = Flag("END_MorphicPool_State_SpottedPlayer_cd1494d6-6bcd-422a-a347-6caa927e52d1")
+    local moveToPoolFlag = Flag("END_MorphicPool_Event_GortashMove_7f2b9da1-250e-4bc1-b773-0468cb509fe6")
+
+    local spottingPoint = Entity("S_END_MorphicGortashPoint_6bf2ed03-4bc6-4383-b17a-1b8fc71c8082")
+    local waitingPoint = Entity("S_END_GortashWaitingPoint_41064123-ccd7-4a32-8db6-2e4321b02b3f")
+    local poolPoint = Entity("S_END_GortashConfrontationPoint_1b15a963-1cbe-47a5-aa0d-62317f5f047b")
+
+    local isCrossbowSwapped = false
+    local crossbowTemplate
+    local crossbow
+    local torchTemplate
+    local torch
+
+    self.OnInit = function()
+        crossbowTemplate = FindTemplate("MAG_Gortash_HeavyCrossbow_45d888b5-e002-4bb8-85d7-6df569aceaa4")
+        crossbow = GetFirstItemByTemplateInInventory(me, crossbowTemplate)
+        torchTemplate = FindTemplate("WPN_HUM_Torch_A_50c43f27-a12e-412c-88f0-56e15eba692a")
+        torch = GetFirstItemByTemplateInInventory(me, torchTemplate)
+    end
+
+    nodes.ToPool = Action {
+        OnEnter = function()
+            if not isCrossbowSwapped then
+                Unequip(me.Character, torch.Item)
+                Equip(me.Character, crossbow.Item)
+                isCrossbowSwapped = true
+            end
+        end,
+
+        function()
+            if IsInInventoryOf(torch, me) then
+                DropItem(torch)
+            end
+
+            if mod.moveto.MoveToPoint(poolPoint,  MovementSpeed.Run, me) then
+                Sleep(1.0)
+                LookFrom(poolPoint)
+            else
+                Sleep(1.0)
+                SteerTo(poolPoint)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(moveToPoolFlag)
+        end
+    }
+
+    nodes.Waiting = Action {
+        OnEnter = function()
+            if not isCrossbowSwapped then
+                Unequip(me.Character, torch.Item)
+                Equip(me.Character, crossbow.Item)
+                isCrossbowSwapped = true
+            end
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(waitingPoint,  MovementSpeed.Walk, me) then
+                if IsInInventoryOf(torch, me) then
+                    DropItem(torch)
+                end
+                Sleep(1.0)
+                LookFrom(waitingPoint)
+            else
+                Sleep(1.0)
+                SteerTo(waitingPoint)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(spottedPlayerFlag)
+        end
+    }
+
+
+    nodes.LookingForPlayer = Action {
+        function()
+            if mod.moveto.MoveToPoint(spottingPoint, MovementSpeed.Walk, me) then
+                Sleep(1.0)
+                LookFrom(spottingPoint)
+            else
+                Sleep(1.0)
+                SteerTo(spottingPoint)
+            end
+        end
+    }
+
+end
+}

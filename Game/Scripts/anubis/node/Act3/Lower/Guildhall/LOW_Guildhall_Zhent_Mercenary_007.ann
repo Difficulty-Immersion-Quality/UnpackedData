@@ -1,0 +1,58 @@
+game.states.LOW_Guildhall_Zhent_Mercenary_007 = State{function ()
+    
+    params.trigger = {type = EParamType.String, help = [[Trigger to stand in place]], required = true }
+
+    local canCheckBrats = true
+    local standTrigger = Entity(params.trigger)
+    local lookAtPosition = Entity([[S_LOW_Guildhall_Zhent_Mercenary_009_StartPoint_bea8e0af-5abb-4c3c-93bb-f8c935040d35]])
+    local bratsPosition = Entity([[S_LOW_Guildhall_Point_FetchersBrat_001_aee7c92e-f8b8-4092-ac5e-667a21fc274a]])
+
+
+    nodes.PreCoup = Selector {
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end,
+
+        CanEnter = function()
+            return true
+        end,
+    }
+
+    nodes.PreCoup.CheckBrats = Action {
+        function()
+            try
+                --MoveTo(bratsPosition, MovementSpeed.Walk, true, false)
+                MoveInRange(bratsPosition, 2.0, 5.0, MovementSpeed.Walk)
+                Sleep(12.0 + 6.0*math.random())
+                MoveTo(standTrigger, MovementSpeed.Walk, true, false)
+                SteerTo(lookAtPosition)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Debug : Movement failed")
+                Sleep(6.0)
+            end
+        end,
+        OnEnter = function()
+            canCheckBrats = false
+        end,
+        CanEnter = function()
+            return canCheckBrats
+        end,
+    }
+
+    nodes.PreCoup.StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.trigger
+        },
+        OnFinished = function()
+            Sleep(24.0)
+            canCheckBrats = true
+        end
+    }
+    
+    nodes.FallbackIdle = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+end}

@@ -1,0 +1,245 @@
+game.states.GOB_Festivities_Absence = State{function ()
+
+    description = [[One at-a-time regular absences of goblins: check roasted dwarf, refill drink, take a piss]]
+
+    modules = { "shared.math", "shared.params", "shared.util", "gustav.Act1.Goblins" }
+
+    params.NonAbsenceState = { type = EParamType.State, required = true,
+        help = [[Behaviour while there's no absence events]]}
+
+    params.RoastedMeatPoint = { type = EParamType.String, required = false, default = "S_GOB_RoastingDwarf_CheckPos_467dbd63-8098-4307-b300-29915e7a82d1",
+        help = [[Position to check roasted dwarf meat at fireplace/barbeku]]}
+
+    params.CheckMeatPiece = { type = EParamType.String, required = false, default = "S_GOB_RoastingMeat_Checked_00_0c5f3ccd-bb0d-4360-b211-30b42204f958",
+        help = [[Meat piece that goblin would look at from RoastedMeatPoint position and check during animation]]}
+
+    params.MeatPresenceTrigger = { type = EParamType.String, required = false, default = "S_GOB_RoastedMeat_CheckTrigger_00_fd1854e2-00f1-4d36-9298-636e4b03bbcb",
+        help = [[A box tigger that meat piece must be inside for goblins to check it. Otherwise they use different animation]] }
+
+    params.BeerPoint = { type = EParamType.String, required = false, default = "S_GOB_BeerBarrelPoint_bdf35611-7836-4d54-8da4-30284585c5c4",
+        help = [[Trigger to refill beer from the skullbarrel]] }
+
+    params.PissPoints = { type = EParamType.String, required = false, arrayRange = "1..",
+        default = { "S_GOB_Festivities_PissPoint_00_7084207d-2928-4f68-b9a9-f4d239bd4e12",
+            "S_GOB_Festivities_PissPoint_01_002cde45-c0c8-4006-aca1-9bd12b208ecd",
+            "S_GOB_Festivities_PissPoint_02_7395876b-28e7-4c1b-a234-79d076336a10" },
+        help = [[Trigger at which goblins walk to take a piss]] }
+
+    params.RefillAD = { type = EParamType.String, required = false,
+        help = [[AD that plays when a goblin refills the mug]]}
+
+
+    local fl_Absent = Flag("GOB_Festivities_Behaviour_Absent_ed2fbbf4-42b3-4845-865d-39827dedb503")
+    local fl_CheckDwarf = Flag("GOB_Festivities_Behaviour_CheckRoastedDwarf_ad79f5ab-8de3-43e3-b51c-7f52426932d5")
+    local fl_Refill = Flag("GOB_Festivities_Behaviour_Refill_b24b9209-3020-4992-9616-a3bfb405f960")
+    local fl_Piss = Flag("GOB_Festivities_Behaviour_Piss_302cb878-cc90-4a90-8ae2-04e17aef25c5")
+    local fl_StoryBusy = Flag("GOB_Festivities_Behaviour_StoryBusy_0cd6cbb4-303f-4da1-b75d-cc46beeda854")
+    local fl_NoMoreRefills = Flag("GOB_GoblinToast_Event_NoMoreRefills_5929d40e-8867-2fc6-a0d9-6ab1a7a49696")
+    local fl_BarrelPoisoned = Flag("GLO_GoblinHuntPoison_Quest_BeerPoisoned_0c261a18-68f7-4a4b-9e91-b0b5ef50f474")
+    local fl_RefilledPoison = Flag("GOB_GoblinToast_RefilledWithPoison_edc32909-4505-4b60-bf85-edf264901ee9")
+
+    local anim_Inspect = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local anim_CheckDwarf = Animation("CUST_InspectBbq_01_e59b4d48-6032-46fd-87ad-37ab43650cf5")
+    local anim_ScoopLiquid = Animation("CUST_Scoop_Liquid_01_34db9a83-fbdb-46b1-abb7-c0c59730965f")
+    local anim_Piss = Animation("CUST_Urinating_01_d7b689ac-2183-4c62-a481-eb5db76ac243")
+
+    local tr_RoastCheckPos = nil
+    local it_MeatPiece = nil
+    local tr_MeatPresence = nil
+    local tr_BeerPos = nil
+    local tr_PissPoss = {}
+    local tr_ChosenPissPos = nil
+    local tr_RefillAd = nil
+
+    local s_CannotBanter = "GOB_Festivities_Goblin.CannotBanter"
+    local s_MeatLeave = "GOB_RoastingMeat_Leave_00"
+
+
+    self.OnInit = function()
+        tr_RoastCheckPos = FindEntity(params.RoastedMeatPoint)
+        tr_MeatPresence = FindEntity(params.MeatPresenceTrigger)
+        it_MeatPiece = FindEntity(params.CheckMeatPiece)
+        tr_BeerPos = FindEntity(params.BeerPoint)
+        tr_PissPoss = mod.params.ParamArrayToEntityList(params.PissPoints)
+        tr_RefillAd = Dialog(params.RefillAD)
+    end
+
+    events.LeftTrigger = function(ev)
+        if ev.Event == s_MeatLeave and ev.Target == it_MeatPiece then
+            it_MeatPiece = nil
+        end
+    end
+
+    events.FlagSet = function(ev)
+        if ev.Flag == fl_NoMoreRefills.Guid then
+            ClearFlag(fl_Refill, me)
+        elseif ev.Flag == fl_StoryBusy.Guid and ev.Entity == me then
+            ClearFlag(fl_Refill, me)
+            ClearFlag(fl_CheckDwarf, me)
+            ClearFlag(fl_Piss, me)
+        end
+    end
+
+    nodes.NonAbsenceState = Proxy{
+        params.NonAbsenceState,
+
+        Valid = function()
+            return not GetFlag(fl_Absent, me) or IsInDialog(me)
+        end
+    }
+
+    nodes.CheckDwarf = Selector{
+        Valid = function()
+            return GetFlag(fl_CheckDwarf, me)
+        end,
+
+        OnEnter = function()
+            SetEntityEvent(me, "GOB_Festivities_AC_CheckDwarf.Confirm")
+        end,
+
+        OnLeave = function()
+            ClearFlag(fl_CheckDwarf, me)
+        end,
+
+        OnInterrupt = function()
+            ClearFlag(fl_CheckDwarf, me)
+        end
+    }
+
+    nodes.CheckDwarf.MoveTo = Action{
+        function()
+            try
+                MoveTo(tr_RoastCheckPos, MovementSpeed.Walk, true, false, 0.8, 1.3)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_RoastCheckPos)")
+            end
+        end,
+
+        CanEnter = function()
+            return GetDistanceTo(me, tr_RoastCheckPos) > 2.3
+        end
+    }
+
+    nodes.CheckDwarf.CheckMeatPiece = Action{
+        function()
+            SteerTo(it_MeatPiece)
+            PlayAnimation(anim_CheckDwarf)
+            ClearFlag(fl_CheckDwarf, me)
+        end,
+
+        CanEnter = function()
+            return it_MeatPiece ~= nil
+        end
+    }
+
+    nodes.CheckDwarf.CheckWholeRoast = Action{
+        function()
+            LookFrom(tr_RoastCheckPos)
+            PlayAnimation(anim_Inspect)
+            ClearFlag(fl_CheckDwarf, me)
+        end
+    }
+
+
+    nodes.Refill = Selector{
+        Valid = function()
+            return GetFlag(fl_Refill, me)
+        end,
+
+        OnInterrupt = function()
+            SetEntityEvent(me, "GOB_GoblinToast_RestartRefillTimer")
+            ClearFlag(fl_Refill, me)
+        end,
+
+        OnEnter = function()
+            SetEntityEvent(me, "GOB_Festivities_AC_Refill.Confirm")
+        end,
+
+        OnLeave = function()
+            ClearFlag(fl_Refill, me)
+        end
+    }
+
+    nodes.Refill.MoveTo = Action{
+        function()
+            try                            
+                if tr_RefillAd ~= nil then
+                    StartAutomatedDialog(tr_RefillAd, true, me)
+                end
+                MoveTo(tr_BeerPos)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_BeerPos)")
+            end
+        end,
+
+        CanEnter = function()
+            return GetDistanceTo(me, tr_BeerPos) > 1.0
+        end
+    }
+
+    nodes.Refill.Refill = Action{
+        function()
+            LookFrom(tr_BeerPos)
+            try
+                PlayAnimation(anim_ScoopLiquid)
+            catch ex if ls.CheckType(ex, error.PlayAnimationFailed) then
+            end
+            if GetFlag(fl_BarrelPoisoned) then
+                SetFlag(fl_RefilledPoison, me)
+            end
+            ClearFlag(fl_Refill, me)
+        end
+    }
+
+    nodes.Piss = Selector{
+        Valid = function()
+            return GetFlag(fl_Piss, me)
+        end,
+
+        OnEnter = function()
+            SetEntityEvent(me, "GOB_Festivities_AC_Piss.Confirm")
+            tr_ChosenPissPos = tr_PissPoss[math.random(#tr_PissPoss)]
+        end,
+
+        OnLeave = function()
+            ClearFlag(fl_Piss, me)
+            tr_ChosenPissPos = nil
+        end,
+
+        OnInterrupt = function()
+            ClearFlag(fl_Piss, me)
+        end
+    }
+
+    nodes.Piss.MoveTo = Action{
+        function()
+            try
+                MoveTo(tr_ChosenPissPos)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_ChosenPissPos)")
+            end
+        end,
+
+        CanEnter = function()
+            return GetDistanceTo(me, tr_ChosenPissPos) > 1.0
+        end
+    }
+
+    nodes.Piss.Piss = Action{
+        function()
+            PlayAnimation(anim_Piss)
+            ClearFlag(fl_Piss, me)
+        end
+    }
+
+    -- a hack action for anubisReload to not cause asserts
+    -- clearing of fl_CheckDwarf, fl_Refill, fl_Piss causes fl_Absent to be cleared, but it has a delay
+    nodes.Fallback = Action{
+        function()
+            DebugText(me, "Absence: [1]", GetFlag(fl_Absent, me))
+            DebugText(me, "Dwarf: [1]", GetFlag(fl_CheckDwarf, me))
+            DebugText(me, "Refill: [1]", GetFlag(fl_Refill, me))
+            DebugText(me, "Piss: [1]", GetFlag(fl_Piss, me))
+        end
+    }
+end}

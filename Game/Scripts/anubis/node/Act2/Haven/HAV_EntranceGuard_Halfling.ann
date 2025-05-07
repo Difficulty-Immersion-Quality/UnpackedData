@@ -1,0 +1,75 @@
+game.states.HAV_EntranceGuard_Halfling = State{
+    function()
+
+        modules = { "shared.dialog" }
+
+        local jaheiraReport = Dialog("HAV_HavenOutcasts_AD_JaheiraReport_36cfc136-c8b4-a737-0333-929de3ac23ea")
+        local talliReport = Dialog("HAV_HavenOutcasts_AD_QuartermasterReport_df2cbfeb-67fd-249e-fa00-3a178ba7713c")
+
+        local c_jaheira = Entity("S_Player_Jaheira_91b6b200-7d00-4d62-8dc9-99e8339dfa1a")
+        local c_talli = Entity("S_HAV_HavenOutcasts_HarperQuartermaster_f769815c-d437-4a45-9ae4-aebd53ec8f7c")
+
+        local guardspot = Entity("S_HAV_HavenOutcasts_Pos_EntranceGuards_Halfling_Melee_744feafa-89ee-49c8-b9fd-3d3d2081c54f")
+        local squarePoint = Entity("S_HAV_HavenOutcasts_Pos_FountainGuards_Melee_2_28d22cfb-97ef-49b6-8747-d003d6ce239b")
+
+
+        nodes.Default = Selector{
+            function(nodes)
+                return GetWeightedCanEnter(nodes, {
+                    [nodes.StandingGuard] = 10,
+                    [nodes.ReportToTalli] = 1,
+                    [nodes.ReportToJaheira] = 1
+                })
+            end
+        }
+
+
+        nodes.Default.StandingGuard = Action{
+            function()
+                if not IsInDangerousSurfaceFor(guardspot, me.Character) and GetDistanceTo(me, guardspot) > 0.5 then
+                    local moveResult = MoveTo(guardspot, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        Sleep(3.0)
+                    else
+                        SteerTo(squarePoint)
+                        Sleep(40.0)
+                    end
+                end
+            end
+        }
+
+        nodes.Default.ReportToTalli = Action {
+            function()
+                if not IsInDangerousSurfaceFor(c_talli, me.Character) and mod.dialog.IsSpeakerAvailable(c_talli) and GetDistanceTo(me, c_talli) > 0.5 then
+                    local moveResult = MoveTo(c_talli, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        Sleep(3.0)
+                    else
+                        if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailable(c_talli) then
+                            StartAutomatedDialog(talliReport, true, me, c_talli)
+                        end
+                    end
+                end
+            end
+        }
+
+        nodes.Default.ReportToJaheira = Action {
+            function()
+                if not IsInDangerousSurfaceFor(c_jaheira, me.Character) and mod.dialog.IsSpeakerAvailable(c_jaheira)  and GetDistanceTo(me, c_jaheira) > 0.5 then
+                    local moveResult = MoveTo(c_jaheira, MovementSpeed.Walk, false, true, 0.0, 0.5, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        Sleep(3.0)
+                    else
+                        if mod.dialog.IsSpeakerAvailable(me) and mod.dialog.IsSpeakerAvailable(c_jaheira) then
+                            StartAutomatedDialog(jaheiraReport, true, c_jaheira, me)
+                        end
+                    end
+                end
+            end
+        }
+
+    end
+}

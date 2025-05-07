@@ -1,0 +1,163 @@
+game.states.PLA_NewbornGnoll = State { function ()
+    description = [[
+        Behaviour for a small gnoll who's being born out of the sick hyena.
+    ]]
+
+    params.bloodTrailRadius = { type = EParamType.Number, required = false, default = 0.5, help = [[
+        Radius of the blood trail surface
+    ]]}
+
+    params.bloodTrialTurns = { type = EParamType.Number, required = false, default = 2, help = [[
+        For how many turns of gnoll movement blood trail will be splashing
+    ]]}
+
+    modules = { "shared.math" }
+
+    local sniffAnim = Animation("IDLE_Random_Combat_03_cacc8846-0ae5-47eb-9073-ee9166e4cb36")
+    local basePosition
+
+    local prevBloodDropPos
+    local posOnTurnStart
+    local spawnsBloodTrail = true
+    local bloodTrailStarted = false
+    local turnsOfBloodTrail = 0
+
+    helpers.StartBloodTrail = function()
+        if spawnsBloodTrail then
+            helpers.StartBloodTrailTimer()
+            prevBloodDropPos = me.Position
+            bloodTrailStarted = true
+        end
+    end
+
+    helpers.StartBloodTrailTimer = function()
+        StartRealtimeTimer(me, "PLA_NewbornGnoll_SpawnBloodTrail", 0.166, 0)
+    end
+
+    helpers.StopSpawningBloodTrail = function()
+        if spawnsBloodTrail and bloodTrailStarted then
+            spawnsBloodTrail = false
+            StopTimer(me, "PLA_NewbornGnoll_SpawnBloodTrail")
+        end
+    end
+
+    self.OnInit = function()
+        basePosition = me.Position
+    end
+
+    nodes.Action_Fallback = Action{
+        function()
+            Sleep(mod.math.random(2, 3))
+            try
+                if GetDistance2DTo(me, basePosition) < 15 then
+                    Wander(5, 3, MovementSpeed.Run, basePosition)
+                    try
+                        PlayAnimation(sniffAnim)
+                        Sleep(mod.math.random(1, 2))
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "PlayAnimationFailed (sniffAnim)")
+                    end
+                else
+                    try
+                        MoveTo(basePosition, MovementSpeed.Run)
+                    catch ex if ls.CheckType(ex, error.MovementFailed) then
+                        DebugText(me, "MovementFailed")
+                        Sleep(6)
+                    end
+                end
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Wander failed")
+            end
+        end
+    }
+
+    -----------------------------------------
+    events.TurnStarted = function(e)
+        helpers.StartBloodTrail()
+        posOnTurnStart = me.Position
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "PLA_NewbornGnoll_SpawnBloodTrail" then
+            if me.Active and not me.Character.IsDead and me.IsInCombat and me.IsInActiveTeamTurn then
+                if spawnsBloodTrail and not HasActiveStatus(me,"BURNING") then
+                    if GetDistance2DTo(me, prevBloodDropPos) > 0.01 then
+                        CreateSurfaceAt(me.Position, SurfaceType.BLOOD, params.bloodTrailRadius, -1)
+                        prevBloodDropPos = me.Position
+                    end
+                    helpers.StartBloodTrailTimer()
+                end
+            end
+        end
+    end
+
+    events.StatusApplied = function(e)
+        if me.Active and not me.Character.IsDead and e.Status.StatusID == "BURNING" then
+            helpers.StopSpawningBloodTrail()
+        end
+    end
+
+    events.TurnEnded = function(e)
+        if spawnsBloodTrail then
+            StopTimer(me, "PLA_NewbornGnoll_SpawnBloodTrail")
+            local posDif = GetDistance2DTo(me, posOnTurnStart)
+            if posDif > 1 then
+                turnsOfBloodTrail = turnsOfBloodTrail + 1
+                if turnsOfBloodTrail >= params.bloodTrialTurns then
+                    helpers.StopSpawningBloodTrail()
+                end
+            end
+        end
+    end
+
+    events.LeftCombat = function(e)
+        if e.Entity == me then
+            helpers.StopSpawningBloodTrail()
+        end
+    end
+
+    events.Dying = function(e)
+        if e.Target == me then
+            helpers.StopSpawningBloodTrail()
+        end
+    end
+end}
+
+game.states.PLA_NewbornGnoll_Combat = State { function ()
+    description = [[
+        Newborn gnoll plays AD on turn start.
+    ]]
+
+    modules = { "gustav.Act1.ZhentShipment"}
+
+    params.bornAD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play on first combat turn after being born.
+    ]]}
+
+    local bornAD = nil
+    local bornADplayed = false
+
+    self.OnInit = function()
+        bornAD = Dialog(params.bornAD)
+    end
+
+    self.Valid = function()
+        return not me.IsCombatPaused and me.CanActInCombatTeamTurn
+    end
+
+    nodes = Selector{
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.PlayBornAD = Action {
+        function()
+            mod.ZhentShipment.LookADAnim(me, nil, bornAD, nil, false, 0)
+            bornADplayed = true
+        end,
+        Valid = function()
+           return not bornADplayed
+        end
+    }
+end}

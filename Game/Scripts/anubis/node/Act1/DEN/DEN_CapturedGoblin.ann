@@ -1,0 +1,206 @@
+game.states.DEN_CapturedGoblin = State {function ()
+
+    modules = { "shared.dialog", "shared.moveto"}
+
+    description = [[Behaviour of the captured goblin whom the grieving tiefling will try to kill]]
+
+    local WithGob = false
+    local RangeFlag = Flag("DEN_CapturedGoblin_Range_1e967693-8ef9-13c6-4238-12448dc965fd")
+    local ReleasedFlag = Flag("DEN_CapturedGoblin_State_Released_63535870-e8f0-6b53-4194-0ca66bc2416e")
+    local LeftDenFlag = Flag("DEN_CapturedGoblin_State_LeftDen_2a64c50f-45b6-8bd2-e980-77fb4b11fce3")
+    local GoblinShotFlag = Flag("DEN_CapturedGoblin_Event_GoblinShot_1ccc6b3f-7255-de5f-75ee-296962b85e5c")
+    local DenAD = Dialog("DEN_CapturedGoblin_AD_b1b82bdf-7608-d578-e71d-80e1ae6e0924")
+    local GOB_CapturedGoblin_State_Executed = Flag("GOB_CapturedGoblin_State_Executed_5505345c-482d-cfc5-3a2b-987611beb4e3")
+    local SoloAD = Dialog("DEN_CapturedGoblin_AD_b1b82bdf-7608-d578-e71d-80e1ae6e0924")
+    local AD = Dialog("GOB_Checkpoint_AD_CapturedGoblinWithGuard_848b7ace-00c3-891d-6fb2-fcf4d8d16f48")
+    local Partner = Entity("S_GOB_Checkpoint_Guard_001_6d69a347-9b3f-4b64-818e-013f849c6ae4")
+    local Cage = Entity("S_DEN_GoblinCageBox_8a92511e-1ff0-4c89-af3a-02600e6087c6")
+    local FreePoint = Entity("S_DEN_GoblinFreePoint_4616e5e8-22e8-4794-a335-15c8580f6e0d")
+    local wanderBox = Entity("S_DEN_GoblinWanderBox_0f3f206a-83fb-4e4f-a53a-5402c037820e")
+    local prisonBox = Entity("")
+
+    events.EntityEvent = function(e)
+        if(e.Event == "GOB_Checkpoint_CapturedGoblinADOn") then
+            WithGob = true
+        elseif(e.Event == "GOB_Checkpoint_CapturedGoblinADOff") then
+            WithGob = false
+        end
+    end
+
+    nodes = ImmediateSelector {}
+    nodes.LeaveCage = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    DenAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 40.0
+                    },
+                    me
+            )
+            if mod.moveto.MoveTo(FreePoint,false,1.5,"Walk","DEN_CapturedGoblin_Event_LeftCage",2.5,false,true) then
+                Sleep(1.0)
+            else
+                SteerTo(FreePoint)
+            end
+            Sleep(5.0)
+        end,
+        CanEnter = function()
+            return (GetFlag(ReleasedFlag,nil) and not GetFlag(LeftDenFlag,nil) and IsInTrigger(me,Cage.Trigger))
+        end
+    }
+
+    nodes.OutOfCage = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    DenAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 40.0
+                    },
+                    me
+            )
+            Wander(4, 5, MovementSpeed.Stroll, wanderBox)
+            Sleep(5.0)
+        end,
+        CanEnter = function()
+            return (GetFlag(ReleasedFlag,nil) and not GetFlag(LeftDenFlag,nil) and IsInTrigger(me, wanderBox.Trigger))
+        end
+    }
+
+    --Left the prison area and left behind by a player and waiting
+    nodes.WaitingForPlayer = Action {
+        function()
+            Sleep(5.0)
+        end,
+        CanEnter = function()
+            return (GetFlag(ReleasedFlag,nil) and not GetFlag(LeftDenFlag,nil))
+        end
+    }
+
+    nodes.GOB_SpiderPit = Proxy{
+        game.states.DEN_CapturedGoblin_Execution,
+        CanEnter = function()
+            return GetFlag(GOB_CapturedGoblin_State_Executed)
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            Sleep(1.0)
+            if (WithGob or (not GetFlag(GoblinShotFlag,nil) and not GetFlag(ReleasedFlag,nil))) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 15.0,
+                        fallbackSoloDialog = SoloAD
+                    },
+                    me,
+                    Partner
+                )
+            end
+        end
+    }
+end}
+
+
+game.states.DEN_CapturedGoblin_Execution = State{
+    function()
+
+
+    modules = {"shared.character", "shared.items"}
+
+    description = [[State for the goblin as she is executed at the spider nest]]
+
+    local GOB_GuardPolite = Entity("S_GOB_GuardPolite_56540e3d-f1ac-441b-a690-5f9602c04b86")
+    local GOB_SpiderNest_State_Executioner_Ready = Flag("GOB_SpiderNest_State_Executioner_Ready_b9a547ef-b244-47d6-a78d-22b2c7410985")
+    local GOB_SpiderNest_State_Freed = Flag("GOB_SpiderNest_State_Freed_c3a960f6-6488-4e5a-831e-66bde4715d5c")
+    local GEN_DisappearOutOfSight = Flag("GEN_DisappearOutOfSight_5dc33889-cbfb-c3d2-9e4e-8d826bf8566f")
+    local GOB_SpiderNest_State_GoblinEscortFailed = Flag("GOB_SpiderNest_State_GoblinEscortFailed_8a05de38-c4ea-4a32-b600-bd4603afeb22")
+    local GOB_SpiderNest_State_ExecutionInProgress = Flag("GOB_SpiderNest_State_ExecutionInProgress_de1118ca-c0ed-4f2d-8257-68280aacaefc")
+    local GOB_SpiderNest_ThePit = Entity("S_GOB_SpiderNest_ThePit_0f3188b4-5cfe-4353-8bf0-d528cda0a446")
+    local GOB_GiantSpider_Tiny = Entity("S_GOB_GiantSpider_Tiny_03d2278d-f1fa-41ff-bdbe-03045725d990")
+    local GOB_GiantSpider_Small = Entity("S_GOB_GiantSpider_Small_c3184d85-1e3f-4e64-85bd-5841fef2e27a")
+    local GOB_SpiderNest_CageDoor = Entity("S_GOB_SpiderNest_CageDoor_5c819af6-4db1-459f-8f83-ce9bf2bae07b")
+    local GOB_DrowCommander = Entity("S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b")
+    local GOB_GuardVulgar = Entity("S_GOB_GuardVulgar_a063d18e-d513-4d30-80ea-40a5bffb4bd7")
+
+    local reachedExecution = false
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and
+               e.Event == "GOB_SpiderNest_Event_ReadyToExecute" then
+            reachedExecution = true
+        end
+    end
+
+        nodes.WaitForExecution = Action{
+            function()
+                if not IsInTrigger(me, GOB_SpiderNest_ThePit.Trigger) then
+                    SteerTo(GOB_GuardPolite, true)
+                end
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                if not IsInTrigger(me, GOB_SpiderNest_ThePit.Trigger) then
+                    return not GetFlag(GOB_SpiderNest_State_Executioner_Ready) or
+                           ((not mod.character.IsDefeated(GOB_GuardPolite) and
+                            CanSee(me, GOB_GuardPolite)) or
+                           (not mod.character.IsDefeated(GOB_DrowCommander) and
+                            GetDistanceTo(me, GOB_DrowCommander) < 25) or --Drow lady is very scary, I want to be well beyond sight range from scary Drow lady.
+                           ((not GetFlag(GOB_SpiderNest_State_GoblinEscortFailed) and
+                            not mod.character.IsDefeated(GOB_GuardVulgar) and
+                            CanSee(me, GOB_GuardVulgar)) or
+                            (not GetFlag(GOB_SpiderNest_State_GoblinEscortFailed) and
+                            not mod.character.IsDefeated(GOB_GuardPolite) and
+                            CanSee(me, GOB_GuardPolite))))
+                else
+                    return (not mod.character.IsDefeated(GOB_GiantSpider_Tiny) or
+                            not mod.character.IsDefeated(GOB_GiantSpider_Small)) and
+                           (GOB_SpiderNest_CageDoor.Item.IsLocked and
+                            not GOB_SpiderNest_CageDoor.Item.IsOpened and
+                            not mod.items.SafeIsDestroyed(GOB_SpiderNest_CageDoor)) and
+                            not GetFlag(GOB_SpiderNest_State_Freed, me)
+                end
+            end,
+            OnEnter = function()
+                ClearFlag(GOB_SpiderNest_State_Freed, me)
+            end
+        }
+
+        nodes.AvoidedExecution = Action{
+            function()
+                Sleep(10.0)
+                SetFlag(GEN_DisappearOutOfSight, me)
+            end,
+            CanEnter = function()
+                return reachedExecution
+            end
+        }
+
+        nodes.FreeFromExecution = Action{
+            function()
+                if GetFlag(GOB_SpiderNest_State_GoblinEscortFailed) or
+                   GetFlag(GOB_SpiderNest_State_ExecutionInProgress) then
+                    Sleep(5.0)
+                else
+                    Sleep(20.0)
+                end
+                SetFlag(GEN_DisappearOutOfSight, me)
+            end,
+            OnEnter = function()
+                SetFlag(GOB_SpiderNest_State_Freed, me)
+            end
+        }
+
+        self.OnEnter = function()
+            ApplyStatus(me, "ANIM_COWER")
+        end
+
+        self.OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+        end
+
+    end
+}

@@ -1,0 +1,69 @@
+game.states.WYR_Jungle_Alioramus_03 = State { function ()
+
+    description = [[ 
+        Patroling jungle dino behaviour. 
+    ]]
+
+    modules = { "shared.util", "shared.moveto", "shared.math" }
+
+    local eatingIntroFlag = Flag("WYR_Jungle_Event_StartFeedingIntro_e409feaa-398a-4c3a-b76b-59de927fb547")
+    local eatingAnimLoop = { Animation("CUST_Eating_01_Loop_0dae0f54-095c-489e-b611-6c42302f96d8") }
+    local eatingAnimStart = Animation("CUST_Eating_01_Start_06ea1c42-85d8-4476-a853-a5c0650189b5")
+    local eatingAnimEnd = Animation("CUST_Eating_01_End_389e4e72-4755-4b4f-a749-4334cb6f0af1")
+    local shoutAnim = Animation("CUST_Shout_01_f9335d58-e929-4838-a12f-0275d1a68ce7")
+    local eatingPos = Entity("S_WYR_Jungle_Alioramus_03_EatingPos_5d76b024-d20d-4b5e-b5cf-8ce4b3a2474f")
+    local canJump = false
+    local canShout = true
+
+    nodes.WaitingIntroStart = Action {
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not GetFlag(eatingIntroFlag)
+        end
+    }
+
+    nodes.Intro = Selector {
+        Valid = function()
+            return GetFlag(eatingIntroFlag)
+        end
+    }
+
+    nodes.Intro.SleepBeforeIntro = Action {
+        function()
+            PlayAnimation(shoutAnim)
+            canJump = true
+        end,
+        Valid = function()
+            return not canJump
+        end
+    }
+
+    nodes.Intro.Jump = Proxy {
+        game.states.WYR_Jungle_AlioramusIntro,
+        params = {
+            introSpline = "S_WYR_Jungle_Alioramus_03_PatrolSpline_IntroA_90e7dba0-ed7e-4f56-a2dc-22a75ce0351c",
+            movementSpeed = "Run"
+        }
+    }
+
+    nodes.Intro.Eating = Action {
+        function()
+            if mod.moveto.MoveToPoint(eatingPos, MovementSpeed.Walk, me) then
+                LookFrom(eatingPos)
+                if canShout then
+                    Sleep(mod.math.random(0, 1))
+                    PlayAnimation(shoutAnim)
+                    canShout = false
+                    Sleep(mod.math.random(1, 2))
+                end
+                PlayLoopingAnimation(eatingAnimStart, eatingAnimLoop, eatingAnimEnd)
+            end
+        end,
+        OnLeave = function()
+            canShout = true
+            StopAnimation(me)
+        end
+    }
+end}

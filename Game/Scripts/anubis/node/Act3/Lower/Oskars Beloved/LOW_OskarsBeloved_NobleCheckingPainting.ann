@@ -1,0 +1,62 @@
+game.states.LOW_OskarsBeloved_NobleCheckingPainting = State{
+    function()
+        modules = {"shared.dialog"}
+        local lookingAtPainting = false
+        local currentPainting = Entity("FUR_GEN_Painting_Portrait_Rectangle_H_000_892824f5-558d-489e-a5bc-ec80113ae5a7")
+        local AD = Dialog("LOW_OskarsBeloved_AD_NobleLookingAtPainting_37897c99-5aaf-4b6d-1cce-b2de588c2f09")
+        local tableOfPaintings = {
+            -- key = value - Receiving events from patrol points
+            One = Entity("S_LOW_OskarsBeloved_PaintingLookAt_001_892824f5-558d-489e-a5bc-ec80113ae5a7"),
+            Two = Entity("S_LOW_OskarsBeloved_PaintingLookAt_002_254d1b75-b74c-4085-a6de-64533fd7e543"),
+            Three = Entity("S_LOW_OskarsBeloved_PaintingLookAt_003_90cfdd75-762f-4696-91bd-49c09668d1b1"),
+            Four = Entity("S_LOW_Statue_001_5900d9d2-b815-4960-9376-9875276f21cd"),
+            Five = Entity("S_LOW_OskarsBeloved_PaintingLookAt_005_8ecbf3da-17c1-4a7a-962b-2954d3e61056")
+
+        }
+
+        nodes.PatrolSleep = Action{
+            function()
+                if currentPainting  ~= nil and GetDistanceTo(me, currentPainting) <= 5.0  then
+                    SteerTo(currentPainting)
+                    LookAtEntity(currentPainting,math.random(6,10))
+
+                    mod.dialog.StartCheckedAutomatedDialog(
+                        AD,
+                        {
+                            waitForCompletion = true,
+                        },
+                        me
+                    )
+                end
+                lookingAtPainting = false
+            end,
+            CanEnter = function()
+                return lookingAtPainting
+            end
+        }
+
+        nodes.Patrol = Proxy{
+            game.states.GEN_Patrol,
+            params = {
+                patrolSpline = "S_LOW_OskarsBeloved_NoblePatrolSpline_b193242b-5f7e-49b3-bf22-2618031bc0c4",
+                patrolSpeed = "Walk"
+            }
+        }
+    
+
+        
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+
+        for iteration,element in pairs(tableOfPaintings) do
+            if e.Event == iteration then
+                currentPainting = element
+                lookingAtPainting = true
+            end
+        end
+
+    end
+
+end
+    }

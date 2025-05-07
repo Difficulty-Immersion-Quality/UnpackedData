@@ -1,0 +1,81 @@
+game.states.MOO_TadpoleCat = State{ function()
+    --------------------------------MODULE--------------------------------
+    modules = {"shared.moveto"}
+    --------------------------------PARAMS--------------------------------
+    --------------------------------LOCAL---------------------------------
+    local tadpole = Entity("S_MOO_DeadTadpole_4410c5a1-9c3f-4fe5-8a73-8873240c2705") 
+    local playgroundBox = Entity("S_MOO_PlaygroundBox_fb14e417-6cba-4dea-a1ea-f2dcd9e5002c")
+
+    local playCount = 0
+    local tiredCount = 0
+    local isTired = false
+    local napOngoing = false
+    local catPlayingAnimation = Animation("CUST_CatPlayingWithMouse_01_661ee367-ebfe-404f-a47f-74e8c2e6c268")
+    --------------------------------NODES---------------------------------
+    nodes.Nap = Action{
+        function()
+            Wander(10, 20, MovementSpeed.Stroll, playgroundBox)
+            if not napOngoing then
+                napOngoing = true
+                StartTimer(me, "MOO_Mittens_NapTime", math.random(60.0, 120.0), 0)
+                ApplyStatus(me, "SLEEPING", false, -1)
+            end
+        end,
+        Valid = function()
+            return isTired
+        end
+    }
+
+    nodes.Play = Action{
+        CanEnter = function()
+            return not isTired and IsInTrigger(tadpole, playgroundBox.Trigger)
+        end,
+        OnEnter = function()
+            playCount = 0
+            tiredCount = math.random(2, 4)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(tadpole, MovementSpeed.Run, me) then
+                SteerTo(tadpole)
+                PlayAnimation(catPlayingAnimation,true,false)
+                Sleep(1.0 + 2.0 * math.random())
+                playCount = playCount + 1
+                if playCount == tiredCount then
+                    isTired = true
+                end
+            else
+                SteerTo(tadpole)
+                sleep(1.0)
+                return
+            end
+            
+        end,
+        Valid = function()
+            return not isTired
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Wander(10, 20, MovementSpeed.Stroll, playgroundBox)
+            isTired = true
+        end
+    }
+
+    --------------------------------EVENTS--------------------------------
+    events.TimerFinished = function(e)
+        if(e.TimerName == "MOO_Mittens_NapTime") then 
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end
+    end
+
+    events.StatusRemoved = function(e)
+        if me.Active and e.Status.StatusID == "SLEEPING" and not me.Character.IsDead then
+            StopTimer(me, "MOO_Mittens_NapTime")
+            isTired = false
+            napOngoing = false
+        end
+    end
+end}

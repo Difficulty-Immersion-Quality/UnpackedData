@@ -1,0 +1,210 @@
+game.states.UND_ElevatorGnome = State{
+    function()
+
+        modules = {"shared.items", "shared.dialog", "shared.moveto"}
+
+        local homeTrigger = Entity("S_UND_ElevatorGnome_Home_b799dd45-b354-4ffd-8ea1-e0c9892145ca")
+        local beerPoint = Entity("S_UND_ElevatorGnome_BeerPoint_a6a1528e-cd13-4bde-93f7-5d0175f594c7")
+        local canDoAD = Flag("UND_ElevatorGuards_State_CanDoAD_b5921dd9-9e1a-4d08-a59f-6ddcd1802bf7")
+        local wineAD = Dialog("UND_ElevatorGnome_AD_AtWine_0dfe10be-4457-9126-b60b-48e61106689c")
+        local didDialog = Flag("UND_ElevatorGuards_State_Did3WayDialogue_fdb6d402-df59-591d-2800-16a7df81b78d")
+        local useBarrelAnim = Animation("UTIL_Activate_01_f891c618-1706-44e0-88ee-b08c4f0e191d")
+        local giveBooze = Animation("UTIL_Activate_01_f891c618-1706-44e0-88ee-b08c4f0e191d")
+        local gotPoisonedBooze = Flag("UND_ElevatorGnome_Event_GotPoisonedBeer_33c2894c-9788-413d-b9e9-411e3052ee00")
+        local gotRegularBooze = Flag("UND_ElevatorGnome_Event_GotRegularBooze_56b05a2a-b48f-4e66-be9b-401073725304")
+        local duergarGuard001 = Entity("S_UND_ElevatorGuard_001_986cb3be-bb31-4aa8-85c0-1f9a315760af")
+        local duergarGuard002 = Entity("S_UND_ElevatorGuard_002_472eba90-f5e8-48cb-ad55-2397e0013a2d")
+        local duergarDead = Flag("UND_ElevatorGuards_Dead_5f1f5c9b-e05d-46be-aca2-4e298f8ef4bd")
+        local duergarGone = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+        local atCaveIn = Flag("UND_ElevatorGnome_State_CaveIn_3be5d4ab-7b67-4224-8e7f-207bfd7f14ab")
+        local atMyconids = Flag("UND_ElevatorGnome_State_Myconids_7c7d96f4-f1e9-4d6f-96ec-dd8c5ac8153d")
+        local isBeerPoisoned = Flag("UND_ElevatorGnome_State_BarrelPoisoned_58a8b308-5e24-4ec1-a404-7904331e7e39")
+        local boozeBarrel = Entity("S_UND_ElevatorGnome_BeerBarrel_3c1836b4-2bae-4f2d-9903-4b609639cf57")
+        local knowsBoozeBarrelDestroyed = false
+        local hasBooze = Flag("UND_ElevatorGnome_State_HasBooze_b8859744-967e-460c-8e73-9636ace4ffd8")
+        local hasPoisonedBooze = false
+
+        local giveBoozeTimelineF = Dialog("BHVR_WRLD_UND_GnomeGivesMug_F_9e09bf03-bcff-9727-f5cb-1b766c6a91ca")
+        local giveBoozeTimelineM = Dialog("BHVR_WLRD_UND_GnomeGivesMug_550f5fe0-91eb-4441-93ad-86482767a5c2")
+        local giveBoozeTrigger001 = Entity("BHVR_WRLD_UND_Elevator_StandAndDrink_TimelineSceneTrigger_000_2dc81558-af9b-454e-8e74-efe291ca93c6")
+        local giveBoozeTrigger002 = Entity("BHVR_WRLD_UND_Elevator_StandAndDrink_TimelineSceneTrigger_001_f1d34a4d-978e-4872-a233-3635fe3e1485")
+
+        nodes.State_AtMyconids = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params =
+            {
+                trigger = "S_UND_ElevatorGnome_SavedTrigger_b4cd2e76-6b72-4e02-ad20-eb9e5c3061d2"
+            },
+            CanEnter = function()
+                return GetFlag(atMyconids)
+            end
+        }
+
+        nodes.State_AtCaveIn = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params =
+            {
+                trigger = "S_UND_ElevatorGnome_CaveInTrigger_2823a172-444e-4280-a954-b69861e3dee0"
+            },
+            CanEnter = function()
+                return GetFlag(atCaveIn)
+            end
+        }
+
+        nodes.StandWithDeadDuergar = Proxy {
+            game.states.GEN_Wander,
+            params = {
+                trigger = [[S_UND_ElevatorGnomeWander_4d859dba-486c-4c1c-9a6f-0cb02dc621ce]],
+                wanderMin = 5,
+                wanderMax = 9,
+                sleepMin = 3,
+                sleepMax = 9},
+            CanEnter = function()
+                return GetFlag(duergarDead) or GetFlag(duergarGone)
+            end
+        }
+
+        nodes.BringBooze = Action{
+            function()
+                -- DebugText(me, "BOOZE")
+                if not IsInDangerousSurfaceFor(homeTrigger, me.Character) then
+                    if GetDistance2DTo(me, homeTrigger) > 2.0 then
+                        try
+                            MoveTo(homeTrigger, MovementSpeed.Walk)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            LookAtEntity(homeTrigger, 3.0)
+                            Sleep(2.0)
+                        end
+                    end
+                    LookFrom(homeTrigger)
+                     -- TODO: need to handle an edge case where one duergar is away and the second one dies from the poison. AD from the survived duergar
+                     -- and make him hostile to the gnome
+
+                    if GetDistance2DTo(me, duergarGuard001) < 4.0 and GetDistance2DTo(me, duergarGuard002) < 4.0 then
+                        if GetFlag(hasBooze, me) and not duergarGuard001.Character.IsDead then
+                            --LookAtEntity(duergarGuard001, 3.0)
+                            --PlayAnimation(giveBooze)
+                            StartBehaviorDialog(giveBoozeTimelineM, giveBoozeTrigger001.Trigger, true, me, duergarGuard001)
+                            if hasPoisonedBooze then
+                                SetFlag(gotPoisonedBooze, duergarGuard001)
+                            else
+                                SetFlag(gotRegularBooze, duergarGuard001)
+                            end
+                        end
+                        if GetFlag(hasBooze, me) and not duergarGuard002.Character.IsDead then
+                            --LookAtEntity(duergarGuard002, 1.0)
+                            --PlayAnimation(giveBooze)
+                            StartBehaviorDialog(giveBoozeTimelineF, giveBoozeTrigger002.Trigger, true, me, duergarGuard002)
+                            if hasPoisonedBooze then
+                                SetFlag(gotPoisonedBooze, duergarGuard002)
+                            else
+                                SetFlag(gotRegularBooze, duergarGuard002)
+                            end
+                        end
+                    else
+                        DebugText(me, "TOO FAR")
+                    end
+                else
+                    LookAtEntity(homeTrigger, 3.0)
+                end
+                Sleep(2.0)
+                ClearFlag(hasBooze, me)
+            end,
+            OnLeave = function()
+                ClearFlag(hasBooze, me)
+            end,
+            CanEnter = function()
+                return GetFlag(hasBooze, me)
+            end
+        }
+
+        nodes.PickLocation = Selector{
+            function(nodes)
+                return GetWeightedCanEnter(nodes, {[nodes.Duergar] = 2,
+                                                   [nodes.GetDrink] = 1}
+                                          )
+            end,
+        }
+
+        nodes.PickLocation.Duergar = Action{
+            function()
+                DebugText(me, "DUERGAR")
+                if not IsInDangerousSurfaceFor(homeTrigger, me.Character) then
+                    if GetDistanceTo(me, homeTrigger) > 2.0 then
+                        ClearFlag(canDoAD, me)
+                        try
+                            MoveTo(homeTrigger, MovementSpeed.Walk)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            LookAtEntity(homeTrigger, 3.0)
+                            Sleep(2.0)
+                        end
+                    else
+                        SetFlag(canDoAD, me)
+                        LookFrom(homeTrigger)
+                    end
+                else
+                    LookAtEntity(homeTrigger, 3.0)
+                end
+                Sleep(6.0)
+            end,
+            OnLeave = function()
+                ClearFlag(canDoAD, me)
+            end
+        }
+
+        nodes.PickLocation.GetDrink = Action{
+            function()
+                -- DebugText(me, "DRINK")
+                if not IsInDangerousSurfaceFor(beerPoint, me.Character) then
+                    ClearFlag(canDoAD, me)
+                    local moveResult = MoveTo(beerPoint, MovementSpeed.Walk)
+                    if moveResult == error.MovementError.None then
+                        LookFrom(beerPoint)
+                        if mod.items.SafeIsDestroyed(boozeBarrel) then
+                            DebugText(me, "Knows the barrel is destroyed")
+                            knowsBoozeBarrelDestroyed = true
+                        else
+                            SetFlag(hasBooze, me)
+                            if GetFlag(isBeerPoisoned) then
+                                hasPoisonedBooze = true
+                            end
+                            PlayAnimation(useBarrelAnim)
+                            if math.random(3) == 1 then
+                                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                                    wineAD,
+                                    {
+                                        waitForCompletion = true,
+                                        minDelay = 20.0,
+                                    },
+                                    me
+                                )
+                            end
+                        end
+                    else
+                        LookAtEntity(beerPoint, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookAtEntity(beerPoint, 3.0)
+                end
+                Sleep(2.0)
+            end,
+            CanEnter = function()
+                return GetFlag(didDialog, nil) and not knowsBoozeBarrelDestroyed
+            end
+        }
+
+        nodes.Fallback = Action {
+            function()
+                Sleep(6.0)
+            end
+        }
+
+        events.EntityEvent = function(e)
+            if e.TargetEntity == me and e.Event == "UND_ElevatorGnome_NewBarrel" then
+                boozeBarrel = e.Params[1]
+            end
+        end
+
+    end
+}

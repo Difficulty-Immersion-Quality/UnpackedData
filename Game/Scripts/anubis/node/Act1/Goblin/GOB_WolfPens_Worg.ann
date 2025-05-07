@@ -1,0 +1,246 @@
+-- Idle behaviour tree:
+game.states.GOB_WolfPens_Worg = State{function()
+
+    modules = { "shared.util", "shared.items", "gustav.Act1.Goblins" }
+
+    params.PositionOutsideCage = { type = EParamType.String, required = true, help = [[Position outside the cage]]}
+
+    -- Local params
+    --TODO: not in use for now as we don't have SpawnItem
+    local spawnedMeat = nil
+    -----------------------------------------------------
+    local cageTrigger = Entity("S_GOB_WolfPens_Cage_001_9aea6349-9a8f-453d-ad86-fee65a820bdf")
+    local combatFallbackPosition
+    local areaTrigger = Entity("S_GOB_WolfPens_SUB_a9a4a7c2-87c6-4031-9859-7eddb0528ff6")
+    local cageDoor = Entity("S_GOB_WolfPens_CageDoor_001_d29ec2f5-46c0-41cc-8fee-a259338f33ad")
+    local prisoner = Entity("S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323")
+    local eatingChicken = false
+    local meat = Entity("S_GOB_WolfPens_MeatPlaceholder_0c8ee3ad-4f89-49df-9ae6-1309482072ee")
+    local fl_MeatStolen = Flag("GOB_WolfPens_State_MeatStolen_f36cdfde-171b-4010-bc92-8f9a0d6ae361")
+
+    local eatingAnimation = Animation("CUST_Eating_01_e1bc92e7-6f50-463d-85a5-c66352c001b6")
+    local barkingAnimation = Animation("CUST_Barking_01_09d3116c-04f3-40ab-9c32-86aaeb06a869")
+    local howlingAnimation = Animation("CUST_Howling_01_732743b4-d857-44d3-bf77-9fa2ac57c922")
+    local restingAnimation = Animation("CUST_Resting_01_09fb6d0b-5113-4430-9ef4-5132009b1ade")    
+    local animationsWithSound = {Animation("CUST_Barking_01_09d3116c-04f3-40ab-9c32-86aaeb06a869"),
+                                    Animation("CUST_Howling_01_732743b4-d857-44d3-bf77-9fa2ac57c922")}
+
+    local prisonerIsDead = Flag("GOB_WolfPens_State_PrisonerDied_a1bd5b3f-c4fe-4fac-b3b6-52367e97b545")
+    local b_CanRest = true
+
+    helpers.CanLeaveCage = function()
+        return mod.items.SafeIsDestroyed(cageDoor)
+            or cageDoor.Item.IsOpened
+            or cageDoor.Item.IsOpening
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "GOB_WolfPens_Timer_WorgResting" then            
+            b_CanRest = false            
+        end
+    end
+
+    -- After combat the worgs bark at the prisoner / try to eat his body etc
+    nodes.Selector_AfterCombat = Selector{
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return GetFlag(prisonerIsDead)
+                and IsInTrigger(prisoner, areaTrigger.Trigger)
+                --and not IsInTrigger(me, cageTrigger.Trigger)
+        end
+    }
+
+    nodes.Selector_AfterCombat.Action_Howl = Action{
+        function()
+            if (GetDistance2DTo(me, prisoner) > 3.0) then
+                try
+                    MoveInRange(prisoner, 4.0, 5.0, MovementSpeed.Walk)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                end
+            end
+            LookAtEntity(prisoner, 3.0)
+            PlayAnimation(howlingAnimation, true)
+            mod.util.SleepRandom(6.0, 8.0)
+        end
+    }
+
+    nodes.Selector_AfterCombat.Action_Bark = Action{
+        function()
+            if (GetDistance2DTo(me, prisoner) > 3.0) then
+                try
+                    MoveInRange(prisoner, 4.0, 5.0, MovementSpeed.Walk)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                end
+            end
+            LookAtEntity(prisoner, 3.0)
+            PlayAnimation(barkingAnimation, true)
+            mod.util.SleepRandom(6.0, 8.0)
+        end
+    }
+
+    nodes.Selector_AfterCombat.Action_Eat = Action{
+        function()
+            if (GetDistance2DTo(me, prisoner) > 2.0) then
+                try
+                    MoveTo(prisoner, MovementSpeed.Walk)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                end
+            end
+            LookAtEntity(prisoner, 3.0)
+            PlayAnimation(eatingAnimation, true)
+            mod.util.SleepRandom(6.0, 8.0)
+        end
+    }
+
+    nodes.Selector_AfterCombat.Action_Wander = Action{
+        function()
+            Wander(8.0, 2.0, MovementSpeed.Walk, prisoner)
+            LookAtEntity(prisoner, 3.0)
+            mod.util.SleepRandom(3.0, 6.0)
+        end
+    }
+
+    nodes.Action_GoOutside = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {trigger = params.PositionOutsideCage},
+        Valid = function()
+            return helpers.CanLeaveCage() or not IsInTrigger(me, cageTrigger.Trigger)
+        end
+    }
+
+    nodes.Action_Eat = Action{
+        function()
+            try
+                Sleep(1.7)
+                MoveTo(meat)
+                LookAtEntity(meat, 3.0)
+                PlayAnimation(eatingAnimation, false)
+                --TODO: remove after there is an SpawnItem and destroy the item instead
+                SetOnStage(meat, false)
+                Sleep(5.0)
+                eatingChicken = false
+                -----------------------------------------------------------------------
+            catch e if ls.CheckType(e, error.MovementFailed) or ls.CheckType(e, error.UseSpellFailed) then
+                --TODO: remove after there is an SpawnItem and destroy the item instead
+                eatingChicken = false
+                SetOnStage(meat, false)
+                -----------------------------------------------------------------------
+            end
+        end,
+        Valid = function()
+            return not GetFlag(fl_MeatStolen) and not mod.items.SafeIsDestroyed(meat)
+        end,
+        CanEnter = function()
+            return eatingChicken and meat ~= nil and not mod.items.SafeIsDestroyed(meat) and meat.OnStage
+        end
+    }
+
+    nodes.Selector_Default = Selector{
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return not eatingChicken and not ( GetFlag(prisonerIsDead)
+                and IsInTrigger(prisoner, areaTrigger.Trigger)
+                and not IsInTrigger(me, cageTrigger.Trigger))
+        end
+    }
+
+    nodes.Selector_Default.Action_BarkOrHowl = Action{
+        function()
+            LookAtEntity(prisoner, 3.0)
+            local randomAnimationIndex = math.random(#animationsWithSound)            
+            PlayAnimation(animationsWithSound[randomAnimationIndex], true)
+            mod.util.SleepRandom(6.0, 12.0)
+        end
+    }    
+
+    nodes.Selector_Default.Action_Wander = Action{
+        function()
+            Wander(cageTrigger, 6.0, MovementSpeed.Walk)
+            LookAtEntity(prisoner, 3.0)
+            mod.util.SleepRandom(6.0, 12.0)
+        end
+    }
+
+    nodes.Selector_Default.Action_Idle = Action{
+        function()
+            mod.util.SleepRandom(6.0, 12.0)
+        end
+    }
+
+    nodes.Selector_Default.Action_Rest = Action{
+        function()            
+            StartTimer(me, "GOB_WolfPens_Timer_WorgResting", 12, 0)
+            PlayAnimation(restingAnimation, false, true)          
+            WaitForInterrupt()            
+        end,
+        Valid = function()
+            return b_CanRest
+        end,
+        OnLeave = function()            
+            StopAnimation(me)
+            b_CanRest = true
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            Sleep(1.0)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "GOB_WolfPens_Event_GotFood" and e.TargetEntity == me then
+            eatingChicken = true
+        end
+    end
+
+end
+}
+
+game.states.GOB_WolfPens_Worg_Combat = State{function()
+
+    modules = {"shared.items"}
+    params.combatFallbackPosition = { type = EParamType.String, required = true, help = [[Fallback position while in combat and in cage]]}
+
+    local b_CanEnter = true
+    local cageTrigger
+    local cageDoor
+    local combatFallbackPosition = Entity(params.combatFallbackPosition)
+
+    self.Valid = function()
+        cageTrigger = cageTrigger or FindEntity("S_GOB_WolfPens_Cage_001_9aea6349-9a8f-453d-ad86-fee65a820bdf")
+        cageDoor = cageDoor or FindEntity("S_GOB_WolfPens_CageDoor_001_d29ec2f5-46c0-41cc-8fee-a259338f33ad")
+
+        return
+            me.CanActInCombatTeamTurn
+            and IsInTrigger(me, cageTrigger.Trigger)
+            and not mod.items.SafeIsDestroyed(cageDoor)
+            and not cageDoor.Item.IsOpened
+            and not cageDoor.Item.IsOpening
+    end
+
+    nodes.Action_BreakDoor = Action{
+        function()
+            try
+                Sleep(0.5)
+                Attack(cageDoor)
+                if not mod.items.SafeIsDestroyed(cageDoor) then
+                    local moveResult = MoveTo(combatFallbackPosition, MovementSpeed.Run, false, false, 0.1, 0.5, false) -- freeing space for another worg
+                    SteerTo(cageDoor)
+                end
+                Sleep(1.0)
+                EndTurn(me)
+            catch e if ls.CheckType(e, error.MovementFailed)
+                or ls.CheckType(e, error.UseSpellFailed)
+                or ls.CheckType(e, error.AttackFailed) then
+                Sleep(1.0)
+                EndTurn(me)
+            end
+        end
+    }
+end
+}

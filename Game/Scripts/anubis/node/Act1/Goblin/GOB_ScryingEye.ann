@@ -1,0 +1,236 @@
+game.states.GOB_ScryingEye = State { function ()
+    description = [[Patrols, annoys the goblin chieftain, and follows, looks at, and flees from player]]
+
+    modules = { "shared.moveto" }
+--------------------------------LOCAL--------------------------------
+    --Follow, Look, & Flee
+    local offender, lastKnownPos
+    local actedHostileFlag = Flag("GLO_ScryingEyes_State_ActedHostile_44fff0f3-bae2-4576-8e4b-8bfa091a504b")
+    local isLooking = false
+    local isFollowing = false
+    local followDuration = 30
+    local hasLostSight = false
+    local isFleeing = false
+    --Patrol--
+    local withChieftain = false
+    local chieftain
+    local patrolSpline = Spline("S_GOB_EyeSpline_599673bc-b16c-4301-9e8f-7bfe6a0fc38d")
+    local targetSplineIndex = -1
+    local isAtPatrolPoint = true
+    local splineEvent = ""
+
+--------------------------------SELF STATES--------------------------------
+    self.OnInit = function()
+        chieftain = FindEntity("S_GOB_RaiderChieftain_5bac0842-c1d4-4358-a85c-24ab745d0280")
+    end
+
+--------------------------------NODES--------------------------------
+    nodes = ImmediateSelector {}
+
+    --Attacked but not killed, run away from the player for a short time (will attach actedHostileFlag to the player)
+    nodes.Flee = Action {
+       OnEnter = function()
+           ShortPatrolInterrupt()
+       end,
+
+       function()
+           Sleep(0.5)
+           try
+               FleeFromEntity(offender, 10)
+           catch e if ls.CheckType(e, error.MovementFailed) then
+               SteerTo(offender)
+               Sleep(6)
+           end
+           isFleeing = false
+       end,
+
+       Valid = function()
+           return isFleeing and offender ~= nil
+       end
+   }
+
+   --When lost sight, go to the last known player location, then if it still connot see player, wander a bit
+   --till it finds the player, or give up and return to patrol
+   nodes.LostSight = Action {
+       OnEnter = function()
+           DebugText(me, "Lost sight of player!")
+           StartTimer(me, "GOB_ScryingEye_LostSight", 12, 0)
+       end,
+
+       function()
+           if mod.moveto.MoveToPoint(lastKnownPos, MovementSpeed.Walk, me) then
+               if HasLineOfSight(me, offender) and CanSee(me, offender) then
+                   hasLostSight = false
+               else
+                   Wander(5, 2, MovementSpeed.Walk, lastKnownPos)
+                   Sleep(1)
+                   if HasLineOfSight(me, offender) and CanSee(me, offender) then
+                       hasLostSight = false
+                   end
+               end
+           else
+               SteerTo(lastKnownPos)
+           end
+       end,
+
+       Valid = function()
+           return offender ~= nil and hasLostSight and isFollowing
+       end,
+
+       OnLeave = function()
+           StopTimer(me, "GOB_ScryingEye_LostSight")
+       end
+   }
+
+   --Follow the player if they attempted to sneak, or always follow player on sight if they have been flagged by the other
+   --scrying eye for committing a violent crime
+   nodes.Follow = Action {
+       OnEnter = function()
+           ShortPatrolInterrupt()
+           hasLostSight = false
+           StopTimer(me, "GOB_ScryingEye_FollowDuration")
+           if not GetFlag(actedHostileFlag, offender) then
+               StartTimer(me, "GOB_ScryingEye_FollowDuration", followDuration, 0)
+           end
+       end,
+
+       function()
+           lastKnownPos = offender.Position
+           try
+               MoveInRange(offender, 1, 3, MovementSpeed.Walk)
+           catch e if ls.CheckType(e, error.MovementFailed) then
+           end
+           SteerTo(offender)
+       end,
+
+       Valid = function()
+           return offender ~= nil and isFollowing
+       end
+   }
+
+   --If the player is very close, steer towards them
+   nodes.Looking = Action {
+       OnEnter = function()
+           ShortPatrolInterrupt()
+       end,
+
+       function()
+           SteerTo(offender)
+       end,
+
+       Valid = function()
+           return isLooking and offender ~= nil and CanSee(me, offender) and GetDistance2DTo(me, offender) <= 3
+       end,
+
+       OnLeave = function()
+           isLooking = false
+       end
+   }
+
+    nodes.WithChieftain = Action{
+        function()
+            SteerTo(chieftain)
+        end,
+
+        Valid = function()
+            return withChieftain
+        end
+    }
+
+    nodes.AtPatrolPoint = Action{
+        function()
+            LookFrom(patrolSpline)
+            Sleep(15)
+            isAtPatrolPoint = false
+        end,
+
+        Valid = function()
+            return isAtPatrolPoint
+        end,
+
+        OnLeave = function()
+            isAtPatrolPoint = false
+        end
+    }
+
+    nodes.Patrol = Action{
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Walk, targetSplineIndex, true)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+            end
+        end
+    }
+
+--------------------------------EVENTS--------------------------------
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "GOB_RaiderChieftain_EyeLeaves" then
+                StopTimer(me, "GOB_ScryingEye_FallbackChieftainTimer")
+                withChieftain = false
+            elseif e.Event == "GOB_ScryingEye_AtChieftain" then
+                if(not chieftain.Character.IsDead and (GetDistance2DTo(me, chieftain) < 5)) then
+                    SetEntityEvent(chieftain, "GOB_RaiderChieftain_WithScrying")
+                    StartTimer(me, "GOB_ScryingEye_FallbackChieftainTimer", 140, 0)
+                    withChieftain = true
+                end
+            elseif e.Event == "GLO_ScryingEye_Event_SpottedChar" and e.Params[1] then
+                --Called by PROC_GLO_ScryingEye_LookOrFollow() when spotted and the player is not sneaking and does not have
+                --the actedHostile flag
+                if not isFollowing and not hasLostSight then
+                    offender = e.Params[1]
+                    isLooking = true
+                end
+            elseif e.Event == "GLO_ScryingEye_Event_Follow" and e.Params[1] then
+                --Sent by PROC_GLO_ScryingEye_StartFollow()
+                offender = e.Params[1]
+                isFollowing = true
+                isLooking = false
+            elseif e.Event == "GLO_ScryingEye_Event_LostSight" and e.Params[1] and isFollowing then
+                lastKnownPos = offender.Position
+                hasLostSight = true
+            elseif e.Event == "GLO_ScryingEye_Event_StopFollow" then
+                isFollowing = false
+                hasLostSight = false
+                StopTimer(me, "GOB_ScryingEye_FollowDuration")
+            elseif e.Event == "GLO_ScryingEye_Event_Flee" and e.Params[1] then
+                --Sent from AttackedBy()
+                offender = e.Params[1]
+                isFleeing = true
+                hasLostSight = false
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "GOB_ScryingEye_FallbackChieftainTimer" then
+            withChieftain = false
+        elseif e.TimerName == "GOB_ScryingEye_FollowDuration" or e.TimerName == "GOB_ScryingEye_LostSight" then
+            SetEntityEvent(me, "GLO_ScryingEye_SearchEnded")
+            offender = nil
+            --Calls PROC_GLO_ScryingEye_StopFollow(), which then sends the "GLO_ScryingEye_Event_StopFollow" event
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        isAtPatrolPoint = false
+        targetSplineIndex = e.NewIndex
+        if e.Event ~= nil then
+            splineEvent = e.Event
+            SetEntityEvent(me, e.Event)
+        else
+            splineEvent = ""
+        end
+    end
+
+    events.Died = function(e)
+        if(e.Target == chieftain) then
+            if(withChieftain) then
+                StopTimer(me, "GOB_ScryingEye_FallbackChieftainTimer")
+                withChieftain = false
+            end
+        end
+    end
+end}

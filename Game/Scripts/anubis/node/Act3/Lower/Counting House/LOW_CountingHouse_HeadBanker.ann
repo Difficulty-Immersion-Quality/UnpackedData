@@ -1,0 +1,121 @@
+game.states.LOW_CountingHouse_HeadBanker = State{function()
+    
+    modules = {"shared.dialog"}
+
+    local idleAD = Dialog("LOW_CountingHouse_AD_HeadBanker_Idle_0e5d99c0-e9f8-fc5d-459d-657f9e6ea549")
+    local sawLockpickAttemptAD = Dialog("LOW_CountingHouse_AD_HeadBanker_SawVipVaultLockpickAttempt_91d2d018-e00c-86a6-4281-76fb0fefee54")
+    local sawVaultUnlockAD = Dialog("LOW_CountingHouse_AD_HeadBanker_SawVipVaultUnlocked_0400f407-e2e0-770b-a9b6-d92dd05cd364")
+
+    local patrolSpline = "S_LOW_CountingHouse_HeadBanker_PatrolSpline_5782404a-2d85-4272-ab73-ee7585f9c3e4"
+    local patrolsPauseActive = false
+
+    local idleAnimation = Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716")
+    local vipVaultReactionAnimation = Animation("CUST_Angry_01_Loop_4b288089-9bad-477b-909b-10aa79e5a370")
+    
+    local vipVaultFailedLockpickSpotted = false
+    local vipVaultSuccessfulLockpickSpotted = false
+    local vupVaultReactionPlayer
+
+    nodes.VipVaultReaction = Action{
+        
+        function()
+
+            local reactionAD
+            if(vipVaultFailedLockpickSpotted) then
+                reactionAD = Dialog("LOW_CountingHouse_AD_HeadBanker_SawVipVaultLockpickAttempt_91d2d018-e00c-86a6-4281-76fb0fefee54")
+            elseif(vipVaultSuccessfulLockpickSpotted) then
+                reactionAD = Dialog("LOW_CountingHouse_AD_HeadBanker_SawVipVaultUnlocked_0400f407-e2e0-770b-a9b6-d92dd05cd364")
+            end
+
+            SteerTo(vupVaultReactionPlayer)
+            PlayAnimation(vipVaultReactionAnimation,false,true)
+            mod.dialog.StartCheckedAutomatedDialog(
+                reactionAD,
+                {
+                    waitForCompletion = true,
+                },
+                me
+            )
+            Sleep(math.random(8,12))
+            vipVaultFailedLockpickSpotted = false
+            vipVaultSuccessfulLockpickSpotted = false
+        end,
+
+        Valid = function()
+            return (vupVaultReactionPlayer ~= nil and (vipVaultFailedLockpickSpotted == true or vipVaultSuccessfulLockpickSpotted == true))
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Idle = Action{
+
+        function()
+            LookFrom(Spline(patrolSpline))
+            PlayAnimation(idleAnimation,false,true)
+            Sleep(math.random(3,6))
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                idleAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 60
+                },
+                me
+            )
+            Sleep(math.random(10,20))
+            patrolsPauseActive = false
+        end,
+
+        Valid = function()
+            return (patrolsPauseActive)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Patrol = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = patrolSpline,
+            patrolSpeed = "Walk"
+        }
+    }
+
+    events.SplineControlPointReached = function(e)
+        patrolsPauseActive = true
+    end
+
+    events.EntityEvent = function(e)
+        if(vipVaultFailedLockpickSpotted == false and vipVaultSuccessfulLockpickSpotted == false) then
+            if e.Event == "LOW_CountingHouse_PlayerFailedLockpickingVipVault" then
+                local player = e.Params[1]
+                DebugText(me,"Player lockpicking the vip vault: [1]",tostring(player))
+                if(CanSee(me,player)) then
+                    Interrupt()
+                    vupVaultReactionPlayer = player
+                    vipVaultFailedLockpickSpotted = true
+                end
+            elseif e.Event == "LOW_CountingHouse_PlayerLockpickedVipVault" then
+                local player = e.Params[1]
+                DebugText(me,"Player unlocking the vip vault: [1]",tostring(player))
+                if(CanSee(me,player)) then
+                    Interrupt()
+                    vupVaultReactionPlayer = player
+                    vipVaultSuccessfulLockpickSpotted = true
+                end
+            end
+        elseif(vipVaultFailedLockpickSpotted and e.Event == "LOW_CountingHouse_PlayerLockpickedVipVault") then
+            local player = e.Params[1]
+            if(CanSee(me,player)) then 
+                vipVaultFailedLockpickSpotted = false
+                Interrupt()
+                vupVaultReactionPlayer = player
+                vipVaultSuccessfulLockpickSpotted = true
+            end            
+        end
+    end
+end}

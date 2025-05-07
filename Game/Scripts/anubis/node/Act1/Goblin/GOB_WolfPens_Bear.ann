@@ -1,0 +1,141 @@
+game.states.GOB_WolfPens_Bear = State{function()
+
+    modules = {"shared.items"}
+
+    local it_cageDoor = Entity("S_GOB_WolfPens_CageDoor_002_19b032a0-e027-4524-96f9-1c0cd48d726e")
+    local tr_cage = Entity("S_GOB_WolfPens_Cage002Trigger_59104718-66ff-418a-b7ac-46696a1e2fc3")
+    local tr_waitingArea = Entity("S_GOB_WolfPens_WaitingArea_3e29895c-5b0d-4b98-80be-a0e5fe324690")
+    local tr_positionOutsideCage = Entity("S_GOB_WolfPens_PositionOfPrisonerOutsideCage_248cbc2e-afa7-4d01-bc94-4f4bd636238e")
+    local c_bearFriend = Entity("S_DEN_ZenBear_d4d4bfd2-9639-45bc-a256-2f079e53db29")
+    local fl_Enraged = Flag("GOB_WolfPens_State_BearEnraged_9b6a106b-6431-42b9-8ac1-48ba2a79e46b")
+    local fl_LeftCage = Flag("GOB_WolfPens_State_PrisonerLeftCage_4cd17a8b-7605-47c7-a13c-93821e68f177")
+    local fl_AtGrove = Flag("DEN_HalsinBear_State_AtGrove_03de5d2c-93a3-4737-b264-69ae88bdfc5f")
+    local b_Enraged = false
+
+    helpers.CanLeaveCage = function()
+        return mod.items.SafeIsDestroyed(it_cageDoor)
+            or it_cageDoor.Item.IsOpened
+            or it_cageDoor.Item.IsOpening
+    end
+
+    nodes.State_AtGrove = Selector {
+        CanEnter = function()
+            return GetFlag(fl_AtGrove)
+        end,
+    }
+
+    nodes.State_AtGrove.Action_WithFriend = Action {
+        CanEnter = function()
+            return not c_bearFriend.Character.IsDead
+        end,
+        function()
+            DebugText(me, "AT GROVE")
+            if GetDistance2DTo(me, c_bearFriend) > 6.0 then
+                try
+                    MoveTo(c_bearFriend, MovementSpeed.Walk, false, false, 3.0, 4.0)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(3.0)
+                end
+            else
+                SteerTo(c_bearFriend)
+                Sleep(5.0)
+            end
+        end,
+    }
+
+    nodes.State_AtGrove.Action_FriendDied = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_DEN_HalsinBearPoint_6830e6da-0a05-4429-a83b-f0230fa99315"
+        }
+    }
+
+    nodes.State_LeavingCage = Action{
+        function()
+
+            DebugText(me, "LEAVING CAGE")
+            try
+                MoveTo(tr_positionOutsideCage, MovementSpeed.Run)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(1.0)
+            end
+
+        end,
+        Valid = function()
+            return IsInTrigger(me, tr_cage.Trigger) and helpers.CanLeaveCage()
+        end
+    }
+
+    -- The delay to let the bear to join the combat which should activate its custom combat state
+    -- which in order will activate the combat cutscene for the bear & door
+    nodes.State_EnragedInternal = Action{
+        function()
+            DebugText(me, "State_EnragedInternal")
+            Sleep(4.0)
+            b_Enraged = true
+        end,
+        Valid = function()
+            return GetFlag(fl_Enraged) and not b_Enraged
+        end
+    }
+
+    nodes.State_WaitingInsideCage = Action{
+        function()
+
+            DebugText(me, "WAITING INSIDE")
+            Sleep(8.0)
+            -- TODO: some animation + sounds
+        end,
+        Valid = function()
+            return IsInTrigger(me, tr_cage.Trigger)
+                and not b_Enraged
+                and not helpers.CanLeaveCage()
+        end
+    }
+
+    nodes.State_Enraged = Action{
+        function()
+
+            DebugText(me, "State_Enraged")
+            Sleep(2.0)
+            Attack(it_cageDoor, true, true)
+            b_Enraged = false
+
+        end,
+        Valid = function()
+            return IsInTrigger(me, tr_cage.Trigger)
+                and b_Enraged
+                and not helpers.CanLeaveCage()
+                and not IsInDialog(me, true)
+        end
+    }
+
+    -- replace with GLO_StandAtTrigger
+    nodes.State_WaitingOutsideCage = Action{
+        function()
+            DebugText(me, "State_WaitingOutsideCage")
+            if GetDistance2DTo(me, tr_waitingArea) > 2.0 then
+                try
+                    MoveTo(tr_waitingArea, MovementSpeed.Run)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(1.0)
+                end
+            end
+
+            Sleep(8.0)
+        end,
+        Valid = function()
+            return not IsInTrigger(me, tr_cage.Trigger)
+        end
+    }
+
+    nodes.State_Fallback = Action{
+        function()
+
+            DebugText(me, "FALLBACK")
+            Sleep(8.0)
+
+        end
+    }
+end
+}

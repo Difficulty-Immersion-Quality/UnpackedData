@@ -1,0 +1,113 @@
+
+game.states.WYR_FigaroSister_Naaber = State{function ()
+
+    modules = { "shared.math", "shared.params", "shared.util" }
+
+    -----------------------------------------
+    -- Params
+
+    -----------------------------------------
+    -- Local variables
+
+    local riversideFlag = Flag("WYR_FigaroSister_State_NaaberShovedIntoRiver_3c5f936b-d777-4b35-9ae0-f8319cd40f87")
+    local playerSpottedFlag = Flag("WYR_FigaroSister_State_NaaberSawPlayer_2c7f47d6-9924-40c1-ac0b-e312e61d46c6")
+
+    local riversidePatrol = "S_WYR_FigaroSister_Patrol_Naaber_Riverside_ecaca284-b46e-4aad-b0cd-595b36e711c2"
+    local shopPatrol = "S_WYR_FigaroSister_Patrol_Naaber_Shop_ed707a44-be58-40ce-9692-e6f61502a87b"
+
+    local doSleep = false
+    local patrolSleepTimeMin = 5.0
+    local patrolSleepTimeMax = 16.0
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Sleep = Action {
+        function()
+            local patrolSleepTime = math.random(patrolSleepTimeMin,patrolSleepTimeMax)
+            local randomSteerCount = math.floor(patrolSleepTime/7.0)+1
+            -- < 7 seconds = 1 steer, > 7 < 14 = 2 steers, > 14 < 21 = 3 steers
+
+            for i=0,randomSteerCount+1,1 do
+                Sleep(patrolSleepTime/(randomSteerCount+1))
+
+                if (i < randomSteerCount) then
+                    --Random steering during sleep period
+                    local steerTarget = me.Position + (me.ForwardDirection * 3.0) --multiplied to avoid steering to own position
+                    local offset = Vector3(math.random()*2.0-1.0,0.0,math.random()*2.0-1.0) * 1.5 -- > multiplier > relative turn angle
+                    steerTarget = steerTarget + offset
+                    --DebugText(me,"Steering to [1]",steerTarget)
+                    SteerTo(steerTarget)
+                end
+            end
+            
+            doSleep = false
+        end,
+        OnLeave = function()
+            if doSleep then
+                doSleep = false
+            end
+        end,
+        CanEnter = function()
+            return doSleep
+        end
+    }
+    
+    nodes.PatrolRiverside = Proxy{
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = riversidePatrol,
+            patrolReverse = false,
+            patrolSpeed = "Stroll",
+            startSplineIndex = -1,
+        },
+        CanEnter = function()
+            return GetFlag(playerSpottedFlag) and GetFlag(riversideFlag)
+        end
+    }
+    
+    nodes.PatrolShop = Proxy{
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = shopPatrol,
+            patrolReverse = false,
+            patrolSpeed = "Stroll",
+            startSplineIndex = -1,
+        },
+        CanEnter = function()
+            return GetFlag(playerSpottedFlag)
+        end
+    }
+
+    nodes.AtRiverside = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_WYR_FigaroSister_Naaber_Riverside_Point_e8cf2752-8e2e-4318-a3cf-cf985d7b43cd"
+        },
+        CanEnter = function()
+            return GetFlag(riversideFlag)
+        end
+    }
+
+    nodes.AtShop = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_WYR_FigaroSister_Naaber_Initial_Point_8d2b8d9a-0ffc-4e3a-bca1-29a7d3bba4dd"
+        }
+    }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Sleep" then
+            doSleep = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "WYR_FigaroSister_Naaber_StopSleep" then
+            doSleep = false
+        end
+    end
+
+end}

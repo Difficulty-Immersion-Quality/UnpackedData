@@ -1,0 +1,313 @@
+game.states.WYR_WyrmRock_BarracksGuardGeneral = State{function()
+        modules = { "shared.util" }
+
+        params.canGuardRoom = {
+            type = EParamType.Bool,
+            default = false,
+            help = [[Guard that can guard the Barracks after interrogating the player]]
+        }
+
+        params.bed = {
+            type = EParamType.String,
+            required = true,
+            help = [[Default bed for the NPC]]
+        }
+
+        params.interrogatePos = {
+            type = EParamType.String,
+            required = true,
+            help = [[Position at which the guards stand during the interrogation process of the player]]
+        }
+
+        params.weapon = {
+            type = EParamType.String,
+            required = false,
+            help = [[Weapon of this NPC that it tries to pick up when waking up]]
+        }
+
+        local guardsWokeUpFlag = Flag("WYR_WyrmRock_Event_WakeUpBarracksGuards_5fbdef68-18ce-42d8-a206-572088d6a52a")
+        local guardsInterrogatedPlayer = Flag("WYR_WyrmRock_State_GuardsInterrogatedPlayer_f40b5d3b-57e6-46a7-b691-1ecefa0a5eaa")
+
+        local looking = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7")
+
+        local bed = params.bed
+        local canGuardRoom = params.canGuardRoom
+        local interrogatePos = Entity(params.interrogatePos)
+        local sleepDelayOnce = false
+
+        local weapon = Entity(params.weapon)
+        local weaponZone = Entity("S_WYR_WyrmRock_CheckWeaponsZone_b6cee22d-ddb6-4121-9f33-a78b4e699a6a")
+        local pickupFailAttempts = 0
+
+        nodes.SleepDelay = Action {
+            function()
+                --DebugText(me, "DELAY")
+                Sleep(1.5)
+                sleepDelayOnce = true
+            end,
+            Valid = function()
+                return GetFlag(guardsWokeUpFlag) and not GetFlag(guardsInterrogatedPlayer) and not sleepDelayOnce
+            end
+        }
+
+        nodes.Sleep = Proxy {
+            game.states.Sit,
+            params = {
+                seat = bed
+            },
+            Valid = function()
+                return not GetFlag(guardsWokeUpFlag)
+            end
+        }
+
+        nodes.ParticipateInInterrogation = Action {
+            function()
+                if HasAppliedStatus(me, "SLEEPING") then
+                    RemoveStatus(me, "SLEEPING")
+                end
+                if GetDistance2DTo(me, interrogatePos) > 2.0 then
+                    local moveResult = MoveTo(interrogatePos, MovementSpeed.Walk, true, false, 0.0, 0.5, false)
+
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                    else
+                        DebugText(me, "Error: MoveTo succeeded")
+                    end
+                    MoveTo(interrogatePos)
+                    SetEntityEvent(me, "WYR_WyrmRock_ArrivedAtInterrogationPos")
+                else
+                    mod.util.SleepRandom(0.5, 2.0)
+                    PlayAnimation(looking, true, false)
+                end
+            end,
+            Valid = function()
+                return GetFlag(guardsWokeUpFlag) and not GetFlag(guardsInterrogatedPlayer)
+            end
+        }
+
+        nodes.SleepAfterInterrogation = Proxy {
+            game.states.Sit,
+            params = {
+                seat = bed
+            },
+            Valid = function()
+                return GetFlag(guardsWokeUpFlag) and GetFlag(guardsInterrogatedPlayer) and not canGuardRoom
+            end
+        }
+
+        nodes.GuardRoom = Selector {
+            Valid = function()
+                return GetFlag(guardsWokeUpFlag) and GetFlag(guardsInterrogatedPlayer) and canGuardRoom
+            end
+        }
+
+        nodes.GuardRoom.PickUpWeapon = Action {
+            Valid = function()
+                return pickupFailAttempts < 5 and weapon ~= nil and not weapon.Item.IsDestroyed
+                  and GetEquippedWeapon(me.Character, WeaponHandType.Any) == nil and IsInTrigger(weapon, weaponZone.Trigger)
+            end,
+
+            function()
+                try
+                    PickUpItem(weapon)
+                    Equip(me.Character, weapon.Item)
+                catch ex if ls.CheckType(ex, error.PickUpItemFailed) then
+                    pickupFailAttempts = pickupFailAttempts + 1
+                    DebugText(me, "Failed PickUpItem(weapon)")
+                end
+                Sleep(1.0)
+            end
+        }
+
+        nodes.GuardRoom.Guard = Proxy {
+            game.states.Sit,
+            params = {
+                seat = "S_WYR_WyrmRock_BarracksGuardChair_3b181be2-5d6a-496c-a5f6-b16acbe47b67"
+            }
+        }
+
+
+        events.FlagSet = function(e)
+            if e.Flag == guardsWokeUpFlag.Guid then
+                DebugText(me, "Flag GuardsWokeUp set")
+            end
+        end
+
+    end
+}
+
+
+game.states.WYR_WyrmRock_BarracksGuard_Battlestations = State{function ()
+        description = [[Battlestations logic for battle stations in Wyrm Rock barracks guards.
+            Differs from usual: they patrol around]]
+
+        modules = { "shared.util" }
+
+        params.weapon = {
+            type = EParamType.String,
+            required = false,
+            help = [[Weapon of this NPC that it tries to pick up when waking up]]
+        }
+
+        params.guardPos = {
+            type = EParamType.String,
+            required = true,
+            help = [[Position at which the guards stand during the Battle Stations mode]]
+        }
+
+
+        params.WYRWyrmRockIdle = {
+            type = EParamType.State,
+            required = false,
+            default = nil,
+            help = [[Behaviour of this Wyrm Rock Fortress guard before getting pulled into Battlestations.]]
+        }
+
+        local battleStationsFlag = Flag("WYR_WyrmRock_Event_ToBattleStations_60b1788c-5206-4a94-bb28-783809d3bcf8")
+        local battleStationsDisabled = false
+
+        local weapon = Entity(params.weapon)
+        local weaponZone = Entity("S_WYR_WyrmRock_CheckWeaponsZone_b6cee22d-ddb6-4121-9f33-a78b4e699a6a")
+        local pickupFailAttempts = 0
+
+        local spline = Spline("S_WYR_WyrmRock_BarracksGuardsPatrol_be98c8d4-dadb-4a69-8daa-55757c04cf09")
+        local shortStop = false
+        local looking = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7")
+
+        nodes.BattleStations = Selector
+        {
+            Valid = function()
+                return GetFlag(battleStationsFlag) and not battleStationsDisabled
+            end
+        }
+
+        nodes.BattleStations.PickUpWeapon = Action {
+            Valid = function()
+                return pickupFailAttempts < 5 and weapon ~= nil and not weapon.Item.IsDestroyed
+                  and GetEquippedWeapon(me.Character, WeaponHandType.Any) == nil and IsInTrigger(weapon, weaponZone.Trigger)
+            end,
+
+            function()
+                try
+                    PickUpItem(weapon)
+                    Equip(me.Character, weapon.Item)
+                catch ex if ls.CheckType(ex, error.PickUpItemFailed) then
+                    pickupFailAttempts = pickupFailAttempts + 1
+                    DebugText(me, "Failed PickUpItem(weapon)")
+                end
+                Sleep(1.0)
+            end
+        }
+
+        nodes.BattleStations.Guard = Proxy
+        {
+            game.states.WYR_WyrmRock_BattleStations_Guarding,
+            params = {
+                guardPos = params.guardPos,
+                altGuardPos = params.guardPos,
+            }
+        }
+
+        -- Disabled. Buggy.
+        --[ ESCORT ]--
+        nodes.BattleStations.Escort = Selector{
+            Valid = function()
+                return me.Character.IsInEscort
+                  and (me.Character.IsEscortFollower or me.Character.IsEscortLeader or me.Character.IsEscortWaiting)
+            end,
+            OnEnter = function()
+                EndRepose(me)
+                SetWeaponUnsheathed(me, true, true)
+            end,
+            OnLeave = function()
+                SetWeaponUnsheathed(me, false, true)
+            end
+        }
+
+        nodes.BattleStations.Escort.ShortStop = Action{
+            Valid = function()
+                return shortStop
+            end,
+
+            function()
+                mod.util.SleepRandom(0.5, 2.0)
+                PlayAnimation(looking, true, false)
+            end
+        }
+
+        nodes.BattleStations.Escort.Follower = Action {
+            Valid = function()
+                return me.Character.IsEscortFollower
+            end,
+
+            function()
+                DoEscortFollow()
+            end
+        }
+
+        nodes.BattleStations.Escort.Leader = Action {
+            Valid = function()
+                return me.Character.IsEscortLeader
+            end,
+
+            function()
+                DoEscortPatrol(spline, false, MovementSpeed.Walk)
+            end
+        }
+
+        nodes.BattleStations.Escort.Waiting = Action {
+            Valid = function()
+                return me.Character.IsEscortWaiting
+            end,
+
+            function()
+                Sleep(1.0)
+            end
+        }
+
+        nodes.BattleStations.Escort.Fallback = Action{
+            function()
+                DebugText(me, "Fallback")
+                Sleep(0.5)
+            end
+        }
+
+        nodes.BattleStations.Fallback = Action{
+            function()
+                DebugText(me, "Fallback")
+                Sleep(0.5)
+            end
+        }
+        --[ ESCORT ]--
+
+        nodes.WyrmRockIdle = Proxy{
+            params.WYRWyrmRockIdle,
+            Valid = function()
+                return not GetFlag(battleStationsFlag) and params.WYRWyrmRockIdle~=nil
+            end
+        }
+
+        nodes.Idle = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            Valid = function()
+                return not GetFlag(battleStationsFlag) and params.WYRWyrmRockIdle == nil
+            end
+        }
+
+
+        events.SplineControlPointReached = function(ev)
+            if ev.Event == "LookAround" then
+                shortStop = true
+                StartTimer(me, "WYR_WyrmRock_BarracksPatrol_Continue", math.random(5, 10), 0)
+            end
+        end
+
+        events.TimerFinished = function(ev)
+            if ev.TimerName == "WYR_WyrmRock_BarracksPatrol_Continue" then
+                shortStop = false
+            end
+        end
+    end,
+}

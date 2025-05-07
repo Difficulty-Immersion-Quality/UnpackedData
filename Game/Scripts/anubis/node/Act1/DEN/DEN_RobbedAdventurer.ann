@@ -1,0 +1,374 @@
+game.states.DEN_RobbedAdventurer = State {function ()
+
+    -----------------------------------------
+    -- Params
+    params.Custom = {type=EParamType.State, required=false, default=nil, help=[[State for Custom Behavior]]}
+
+    description = [[Behaviour of the robbed adventurer in the druids' grove]]
+
+    modules = {"shared.util", "shared.dialog", "shared.moveto"}
+
+    -----------------------------------------
+    -- Local variables
+    --Entities
+    local gatePos = Entity("S_DEN_RaidingParty_RobbedAdventurer_OutsideGatePos_d813ef8e-5f0f-4b83-985a-de63cf6cd524")
+    local confrontPos = Entity("S_DEN_ConfrontationPos_003_109c6781-aa7e-47c5-880b-a5d9813e6f36")
+    local denPos = Entity("S_DEN_AdventurerArea_003_60606f91-d3ed-41e7-8db2-cedcf37f9915")
+    local denArea = Entity("S_DEN_AdventurerArea_003_5fdf3e6c-bb21-48e2-8768-00767edc89da")
+    local confrontArea = Entity("S_DEN_RobbedAdventurer_ConfrontArea_f00c2333-3a28-4cd1-b6d4-c8b69c3a15fb")
+    local kidArea = Entity("S_DEN_RobberKid_ConfrontArea_0326b5fd-6710-4802-ba50-07f5236c4685")
+    local groveGate = Entity("S_DEN_GateDoor_567055bf-ffeb-4236-8a61-e53877397fde")
+    local robberKid = Entity("S_DEN_RobberKid_94e865e9-790d-4633-a378-8fb50832b5e9")
+    local advLead = Entity("S_DEN_AdventurerLeader_82d1b843-9e8c-48a5-9d87-caddea5c193c")
+    local tiefLead = Entity("S_DEN_TieflingLeader_475200ee-cc3c-4dbe-84b1-1820c02ea26a")
+    local guard = Entity("S_DEN_Tiefling_008_03b6fae4-d250-4ce9-9a01-19cb427deb17")
+    local raidAdventurer = Entity("S_DEN_RaidAdventurer_4faf77a0-b883-4f7b-acbf-4500973f446d")
+    local seatPos = Entity("S_DEN_RobberKid_SeatTrigger_0da18fb6-f5d2-452e-b917-74493bc6b9df")
+
+    --Bools
+    local canAD = true
+    local chased = false
+    local atDen = true
+    local returnedToCave = false
+    local withKidDialogChanged = false
+    local arrivedAtCamp = false
+    local justWokeUp = false
+
+    --Flags
+    local raidOverFlag = Flag("DEN_RaidingParty_Quest_GoblinRaidOver_98712d90-c46b-20c4-c4df-02c0117e85a5")
+    local waitFlag = Flag("DEN_RaidingParty_Event_AdventurersToConfrontation_0b553dd3-afc8-4ab7-9046-8dd452bfc455")
+    local leaderConfrontOverFlag = Flag("DEN_RaidingParty_Quest_ConfrontationResolved_dc97da68-5ed9-ffe2-7582-2533be0efbcd")
+    local peaceFlag = Flag("DEN_RaidingParty_State_PeacefulResolution_f4529d52-b459-6545-b4bf-8b2fb2cd6f2f")
+    local withRobberKidFlag = Flag("DEN_Thieflings_State_InKidConfrontation_1b4d990d-fa82-4bb5-b2ae-b910aeccbdf7")
+    local robberKidDoneFlag = Flag("DEN_Thieflings_State_AfterRobberKidConfront_081b5119-aa6c-8b1e-b321-d622cbe162d7")
+    local knockFlag = Flag("DEN_Thieflings_Event_AdventurerKnockedOut_69529e3b-394f-9e41-8d23-9a36f09c9a46")
+    local gateOpenFlag = Flag("DEN_RaidingParty_Event_GateIsOpened_735e0e81-bd67-eb67-87ac-40da4c3e6c49")
+
+    --Dialogs
+    local outsideGateAD = Dialog("DEN_RaidingParty_AD_Adventurer1AtGate_c3872ce7-401c-b416-78bf-d754d93d8220")
+    local inDenAD = Dialog("DEN_General_AD_Adventurer02_237b09f1-e7d5-964d-9e53-3bbb491ecb7f")
+    local chasingAD = Dialog("DEN_Thieflings_AD_AdventurervsKid_b3c9e001-485e-e61f-3b16-e26c1e7052a8")
+    local wakeUpAD = Dialog("DEN_Thieflings_AD_KnockedOutAdventurer_4c420090-8557-4eb0-f57c-6af72d340f7a")
+    local corpsesAD = Dialog("DEN_AdventurersQuest_AD_RemiraBarthAtCorpses_da729cf0-ac53-002a-7ffd-77ffe4d6ce66")
+
+    --Animations
+    local combatAnim = Animation("CUST_Idle_Still_Combat_01_590ea7e8-ae43-4307-916b-b1133ef47dfa")
+    local armsCrossedAnim = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+
+    -----------------------------------------
+    -- Helper functions
+
+    helpers.HasPlayer = function()
+        local active = GetActiveCharacters(me,7.0)
+        for _,v in pairs(active) do
+            if(v.Character.IsPartyMember) then return true end
+        end
+        return false
+    end
+
+    helpers.action.TrySoloAD = function(AD)
+        if(canAD) then
+            StartAutomatedDialog(AD,false,me)
+        end
+    end
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.OnRoad = Selector {
+        OnEnter = function()
+            mod.moveto.CancelMoveTo()
+        end,
+        Valid = function()
+            return not atDen
+        end
+    }
+
+    --TODO: Add stuff to this behaviour.
+    nodes.OnRoad.AtCorpses = Action {
+        function()
+            PlayAnimation(armsCrossedAnim, false, true)
+            mod.util.SleepRandom(13,22.0)
+            if(mod.dialog.IsSpeakerAvailableAndNear(raidAdventurer, me, 5, true)) then
+                StartAutomatedDialog(corpsesAD, true, raidAdventurer, me)
+            end
+            mod.util.SleepRandom(31,48)
+        end
+    }
+
+    nodes.DEN = Selector {
+        Valid = function()
+            return atDen
+        end
+    }
+
+    nodes.DEN.AtCave = ImmediateSelector {
+        Valid = function()
+            return returnedToCave
+        end
+    }
+
+    nodes.DEN.AtCave.Accuse = Action {
+        function()
+            if(not IsInTrigger(robberKid,kidArea.Trigger)) then
+                if(not chased and not IsInDialog(robberKid,true) and not IsInDialog(me,true) and not robberKid.IsInCombat) then
+                    StartAutomatedDialogImmediate(chasingAD,me,robberKid)
+                    chased = true
+                end
+                if(chased) then
+                    mod.moveto.CancelMoveTo()
+                    mod.moveto.MoveTo(robberKid,true,2.5,"Run","")
+                end
+            elseif IsInTrigger(robberKid,kidArea.Trigger) and mod.moveto.MoveToPoint(confrontArea,MovementSpeed.Run,me) then
+                if not withKidDialogChanged then
+                    withKidDialogChanged = true
+                    SetEntityEvent(me, "DEN_SetKidConfrontationDialog")--story
+                    canAD = true
+                end
+                SteerTo(robberKid)
+                if(canAD and not IsInDialog(me,true)) then
+                    StartAutomatedDialogImmediate(chasingAD,me,robberKid)
+                end
+                Sleep(math.random(1.0,2.0))
+            end
+        end,
+        Valid = function()
+            return GetFlag(withRobberKidFlag,nil) and GetFlag(peaceFlag)
+        end
+    }
+
+    nodes.DEN.AtCave.AfterKO = Action {
+        Valid = function()
+            return GetFlag(robberKidDoneFlag,nil) and justWokeUp
+        end,
+        function()
+            WaitForInterrupt()
+        end,
+        OnLeave = function()
+            justWokeUp = false
+        end
+    }
+
+    nodes.DEN.AtCave.doAD = Action {
+        Valid = function()
+            return arrivedAtCamp and canAD
+        end,
+
+        function()
+            Sleep(4)
+            helpers.TrySoloAD(inDenAD)
+        end
+    }
+
+    nodes.DEN.AtCave.Sitting = Proxy {
+        Valid = function()
+            return GetFlag(robberKidDoneFlag,nil)
+        end,
+        game.states.Sit,
+        params = {
+            seat = "S_DEN_DrinkingStool_002_e3d6b4a5-ba42-43a2-992a-64eff0f52934",
+            seatTrigger = "S_DEN_RobberKid_SeatTrigger_0da18fb6-f5d2-452e-b917-74493bc6b9df",
+            useSeatPositionAsFallBack = false,
+            sitIdle = StateRef{game.states.DEN_RobbedAdventurer_Sitting},
+            nonSitIdle = StateRef{game.states.DEN_RobbedAdventurer_SitFailed}
+        }
+    }
+
+    nodes.DEN.AtCave.Idle = Proxy {
+        Valid = function()
+            return not GetFlag(withRobberKidFlag,nil)
+        end,
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_AdventurerArea_003_60606f91-d3ed-41e7-8db2-cedcf37f9915",
+            lookFromMoveTarget = true,
+            anim = "CUST_Aggressive_01_3d853a6b-a9c3-4019-8b88-0d7f8f7e3312",
+            waitMin = 4.0,
+            waitMax = 7.0,
+            loopingAnim = true
+        },
+    }
+
+    nodes.DEN.AtGate = Selector {
+        Valid = function()
+            return not returnedToCave
+        end
+    }
+
+    nodes.DEN.AtGate.ReturnToCave = Action {
+        function()
+            if(GetFlag(gateOpenFlag)) then
+                mod.moveto.MoveTo(denPos,true,1.5,"Walk","DEN_DenArrivalDialogSwitch")
+            end
+        end,
+        Valid = function()
+            return GetFlag(leaderConfrontOverFlag) and GetFlag(peaceFlag) and not returnedToCave
+        end
+    }
+
+    nodes.DEN.AtGate.BeforeRaid = Action {
+        OnEnter = function()
+            SetWeaponUnsheathed(me, true)
+        end,
+        function()
+            Sleep(2)
+            PlayAnimation(combatAnim, false, true)
+            helpers.TrySoloAD(outsideGateAD)
+            Sleep(math.random(2.0,3.0))
+        end,
+        OnLeave = function()
+            SetWeaponUnsheathed(me, false, false)
+        end,
+        Valid = function()
+            return (not GetFlag(raidOverFlag,nil))
+        end
+    }
+
+    nodes.DEN.AtGate.AfterRaid = Action {
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(raidOverFlag,nil) and not GetFlag(waitFlag,nil) and not GetFlag(leaderConfrontOverFlag,nil)
+        end
+    }
+
+    nodes.DEN.AtGate.Confront = Action {
+        function()
+            if mod.moveto.MoveToPoint(confrontPos,MovementSpeed.Run,me) then
+                    SteerTo(advLead)
+            end
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return (GetFlag(waitFlag) and not GetFlag(leaderConfrontOverFlag))
+        end
+    }
+
+    nodes.DEN.AtGate.Leaving = Action {
+        function()
+            Sleep(5)
+        end,
+        Valid = function()
+            return GetFlag(leaderConfrontOverFlag) and not GetFlag(peaceFlag)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_DenArrivalDialogSwitch") then
+                arrivedAtCamp = true
+                returnedToCave = true
+                if not GetFlag(robberKidDoneFlag,nil) then
+                    StartTimer(me,"DEN_Thieflings_RobberKidChaseCheckTimer",1,0)
+                end
+            elseif(e.Event == "DEN_NPC_LeftDen") then
+                atDen = false
+            elseif(e.Event == "DEN_Thieflings_AfterKnockOutAD") then
+                mod.moveto.MoveTo(seatPos,true,1.5,"Walk","DEN_DenArrivalDialogSwitch")
+            end
+        end
+    end
+
+    events.FlagSet = function(e)
+        if(e.Flag == raidOverFlag.Guid) then
+            if(advLead == nil) then
+                advLead = FindEntity("S_DEN_AdventurerLeader_82d1b843-9e8c-48a5-9d87-caddea5c193c")
+            end
+            mod.moveto.MoveTo(advLead,true,1.5,"Run","DEN_BeforeConfrontation_MoveComplete")
+        elseif(e.Flag == waitFlag.Guid) then
+            if(not advLead.Character.IsDead and not tiefLead.Character.IsDead) then
+                mod.moveto.MoveTo(confrontPos,true,1.5,"Run","DEN_GoToConfrontation_MoveComplete")
+            end
+        elseif(e.Flag == withRobberKidFlag.Guid) then
+            SetHasOsirisDialog(me,false)
+            arrivedAtCamp = false
+        elseif(e.Flag == robberKidDoneFlag.Guid and not knockFlag) then
+            mod.moveto.MoveTo(seatPos,true,1.5,"Walk","DEN_DenArrivalDialogSwitch")
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "DEN_RobbedAdventurer_ADTimer") then
+            canAD = true
+        elseif
+            (e.TimerName == "DEN_Thieflings_RobberKidChaseCheckTimer" and not GetFlag(withRobberKidFlag,nil)) then
+            if(not GetFlag(robberKidDoneFlag,nil) and IsInTrigger(me,denArea.Trigger) and not IsInDialog(robberKid,true)
+                and not IsInDialog(me,true) and helpers.HasPlayer()) then
+                SetEntityEvent(robberKid,"DEN_RunFromAdventurer")
+            else
+                StartTimer(me,"DEN_Thieflings_RobberKidChaseCheckTimer",1,0)
+            end
+        end
+    end
+
+    events.DialogStarted = function(e)
+        if(e.Instance.DialogUUID == outsideGateAD.Guid or e.Instance.DialogUUID == chasingAD.Guid or e.Instance.DialogUUID == inDenAD.Guid) then
+            canAD = false
+            StopTimer(me,"DEN_RobbedAdventurer_ADTimer")
+            StartTimer(me,"DEN_RobbedAdventurer_ADTimer", 45.0,0)
+        elseif (e.Instance.DialogUUID == wakeUpAD.Guid) then
+            justWokeUp = true
+            Interrupt()
+        end
+    end
+end}
+
+game.states.DEN_RobbedAdventurer_Sitting = State {function()
+
+    description = [[Behaviour of Barth while sitting in the adventurer's corner of the cave area in Den.]]
+
+    -----------------------------------------
+    -- Params
+    params.Custom = {type=EParamType.State, required=false, default=nil, help=[[State for Custom Behavior]]}
+
+    local drinkingAnim = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.doAD = Proxy {
+        params.Custom
+    }
+
+    nodes.Sitting = Action{
+        function()
+            Sleep(3.0)
+            PlayAnimation(drinkingAnim,true,false)
+            Sleep(math.random(3, 6))
+        end
+    }
+
+end}
+
+game.states.DEN_RobbedAdventurer_SitFailed = State {function()
+
+    description = [[Behaviour of Barth while he can't sit in the adventurer's corner of the cave area in Den.]]
+
+    -----------------------------------------
+    -- Params
+    params.Custom = {type=EParamType.State, required=false, default=nil, help=[[State for Custom Behavior]]}
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.doAD = Proxy {
+        params.Custom
+    }
+
+    nodes.Idle = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_AdventurerArea_003_60606f91-d3ed-41e7-8db2-cedcf37f9915",
+            lookFromMoveTarget = true,
+            anim = "CUST_Aggressive_01_3d853a6b-a9c3-4019-8b88-0d7f8f7e3312",
+            waitMin = 4.0,
+            waitMax = 7.0,
+            loopingAnim = true
+        },
+    }
+
+end}

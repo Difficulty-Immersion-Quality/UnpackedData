@@ -1,0 +1,91 @@
+game.states.SCE_Alfira = State{function()
+    description = [[Alfira behavior in the Act 2 Epilogue]]
+
+    --Flags
+
+    local shiningDawnAcceptedFlag = Flag("SCE_Alfira_Event_GaveShiningDawn_9d80e79d-62e2-7bdb-c647-3e3023c56a97")
+    local shiningDawnRefusedFlag = Flag("SCE_Alfira_Event_RefusedShiningDawn_7cb23f63-0f5b-9188-6616-59d07b8e5d57")
+    local requestedBard = Flag("SCE_Alfira_State_RequestedBard_94abae6c-78a4-f8be-eddb-5e45c953f264")
+
+    --Dialogues
+    local alfiraDialog = Dialog("SCE_Alfira_9c2a1239-fba7-30c1-df67-d95c45ef3b82")
+
+    --Entities
+    local standTrigger = Entity("S_SCE_AlfiraPoint_c19efaf9-20c8-428a-bace-9055f00e1a35")
+
+    --Anims
+    local randomAnims = {
+        Animation([[CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef]]),
+        Animation([[CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba]])
+    }
+    local doAnim = false
+
+    nodes.PerformingShiningDawn = Action {
+        function()
+            if not HasActiveStatus(me,"PERFORM_POSITIVE_THEPOWER") then
+                local moveResult = MoveTo(standTrigger,MovementSpeed.Walk,false,false)
+                if moveResult == error.MovementError.None then
+                    LookFrom(standTrigger)
+                    UseSpell("Shout_Bard_Perform_ThePower_Lute",me)
+                end
+            end
+                Sleep(8)
+        end,
+        OnLeave = function()
+            RemoveStatus(me,"PERFORM_POSITIVE")
+            RemoveStatus(me,"PERFORM_POSITIVE_THEPOWER")
+        end,
+        Valid = function()
+            return (GetFlag(shiningDawnAcceptedFlag) or GetFlag(requestedBard))
+        end
+    }
+
+    nodes.DoAnim = Action{
+        function()
+            Sleep(2.0)
+            --DebugText(me,"Select anim")
+
+            if not IsInDialog(me,true) then --not doing an AD
+                local randomAnim = randomAnims[math.random(#randomAnims)]
+                if randomAnim ~= nil then
+            try
+                        --DebugText(me,"Start anim")
+                        PlayAnimation(randomAnim,true,false)
+                    catch e then
+                        DebugText(me,"Error: [1]",e)
+            end
+                else
+                    DebugText(me,"Randomanim == nil")
+                end
+
+                Sleep(1.0)
+            end
+            
+            doAnim = false
+        end,
+        CanEnter = function()
+            return doAnim
+        end
+    }
+
+    nodes.StandAtTrigger = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_SCE_AlfiraPoint_c19efaf9-20c8-428a-bace-9055f00e1a35]]
+        },
+        OnEnter = function()
+            StartTimer(me,"SCE_DoRandomAnimation",math.random(5,15),0)
+        end,
+        OnLeave = function()
+            StopTimer(me,"SCE_DoRandomAnimation")
+        end
+        }
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "SCE_DoRandomAnimation" then
+            doAnim = true
+        end
+    end
+      
+end
+}

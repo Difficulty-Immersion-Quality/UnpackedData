@@ -1,0 +1,88 @@
+game.states.GLO_Yenna = State 
+{
+    function()
+    description = [[Yenna's behavior]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto" }
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------  
+
+    ------------------------------------------------
+    -- Local State variables
+    ------------------------------------------------
+    local waitingAnim = Animation("CUST_Anxious_01_8e14c535-3216-42ad-8e51-5f14a5297cc0") -- default and more worried anims are the same for now
+    local lessWorriedAnim = Animation("CUST_Worried_01_a4616816-be6d-4fa1-a65a-2da057196af4")
+    local moreWorriedAnim = Animation("CUST_Anxious_01_8e14c535-3216-42ad-8e51-5f14a5297cc0")
+
+    local lessWorriedFlag = Flag("WYR_MeetingYenna_State_LessWorried_9d0fe1b5-0ec9-421b-97e4-f7122def5875")
+    local visitCampFlag = Flag("WYR_MeetingYenna_State_VisitingCamp_0e5d9d5f-e947-4be3-aa75-b4cc9ad2e21d")
+    local invitedToCampFlag = Flag("CAMP_Yenna_State_MovedToCamp_f30c28c0-19b8-4e0a-bf67-ce4e52e00991")
+    ------------------------------------------------ 
+    -- Actions
+    ------------------------------------------------
+
+    nodes.Action_InvitedToCamp = Action
+    {
+        -- anim team are working on world behavior for Yenna when she is officially invited to hang out in camp - will implement when it's ready, for now will use lessworrried anim
+        function()
+            PlayAnimation(lessWorriedAnim, false, true)
+        end,
+
+        Valid = function()
+            return GetFlag(invitedToCampFlag)
+        end
+    }
+
+    nodes.Action_VisitingCampWorried = Action
+    {
+        function ()
+            PlayAnimation(moreWorriedAnim, false, true)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return GetFlag(visitCampFlag) and
+            not GetFlag(lessWorriedFlag)
+        end
+    }
+
+    nodes.Action_VisitingCamp = Action
+    {
+        function ()
+            PlayAnimation(lessWorriedAnim, false, true)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return GetFlag(visitCampFlag) and
+            GetFlag(lessWorriedFlag)
+        end
+    }
+
+    nodes.Action_AtWyrmsCrossing = Action
+    {
+        function()
+            PlayAnimation(waitingAnim, false, true)
+        end,
+
+        OnInterrupt = function()
+            StopAnimation(me)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return not GetFlag(visitCampFlag)
+        end
+    }
+end
+}

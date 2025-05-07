@@ -1,0 +1,169 @@
+game.states.DEN_PetWolf = State { function ()
+
+    description = [[Silver, Orran's wolf. Main action: sitting next to Orran. Sometimes gets bored and starts exploring the lair.]]
+
+    modules = { "shared.moveto", "shared.util" }
+
+    -----------------------------------------
+    -- local state section
+    local master = Entity("S_DEN_DruidOpposed_322cf8d2-32ee-453f-987e-f12b32652b5d")
+    local AD = Dialog("DEN_DruidPet_AD_002_1bd9c6c3-971f-027e-d129-1afa29306bd5")
+    local sitPoint = Entity("S_DEN_WolfSitPoint_f39b7717-50d9-4c35-9db6-b2e493ce1c0e")
+    local tiredOfSitting = true
+    local tiredTimerStarted = false
+    local doPostSnakesCourt = true
+
+    local wanderAnchors = {
+        Entity("S_DEN_WolfWanderPoint_001_6b749d77-b0f4-4423-b85d-d17e7c3646cc"),
+        Entity("S_DEN_WolfWanderPoint_002_6bf27705-cc0f-4873-bb15-2dd39b5570fc"),
+        Entity("S_DEN_WolfWanderPoint_003_635f8078-b515-4186-9f48-eceb021f7320"),
+        Entity("S_DEN_WolfWanderPoint_004_9094f242-0e43-49bc-bca3-a465d0c929f5"),
+        Entity("S_DEN_WolfWanderPoint_005_1675ff5c-a419-4b7f-833a-653f72602ca9")
+    }
+    local anchor = nil
+    local doRunToMaster = false
+    local isDistracted = false
+    local denouncingSceneFlag = Flag([[DEN_ShadowDruid_State_DenouncingSceneInProgress_a9e1b188-80a7-4432-86b2-129c7623cb16]])
+
+    -----------------------------------------
+    -- helper functions
+    helpers.GetRandomAnchorPoint = function()
+        if doPostSnakesCourt then
+            doPostSnakesCourt = false
+            return wanderAnchors[1]
+        end
+        return wanderAnchors[math.random(#wanderAnchors)]
+    end
+
+    helpers.ResetSitting = function()
+        tiredOfSitting = false
+        isDistracted = false
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.Denouncing = Action {
+        CanEnter = function()
+            return GetFlag(denouncingSceneFlag)
+        end,
+        function()
+            SteerTo(master)
+            Sleep(5)
+        end
+    }
+
+    nodes.Default = Selector {
+        function(nodes)
+            if isDistracted then
+                return nodes.Distracted
+            elseif not tiredOfSitting then
+                return nodes.Sit
+            else
+                return GetWeightedCanEnter(nodes, {
+                        [nodes.Sit] = 60,
+                        [nodes.Distracted] = 40
+                    })
+            end
+        end,
+        Valid = function()
+            return not doRunToMaster
+        end
+    }
+
+    nodes.GetBack = Action {
+        function()
+            if not IsInDialog(me, false) then
+                StartAutomatedDialog(AD, false, me)
+            end
+            try
+                MoveTo(master, MovementSpeed.Run, false, false, 3.0, 5.0, true, PathClimbingMode.Disabled, PathDroppingMode.Disabled)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                try
+                    MoveTo(master, MovementSpeed.Run, false, false, 3.0, 5.0, true, PathClimbingMode.Enabled, PathDroppingMode.Enabled)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    Sleep(2)
+                end
+            end
+            Sleep(2)
+            doRunToMaster = false
+        end,
+        OnLeave = function()
+            helpers.ResetSitting()
+        end,
+        Valid = function()
+            return doRunToMaster
+        end
+    }
+
+    nodes.Default.Sit = Proxy {
+        OnEnter = function()
+            if not tiredTimerStarted then
+                StartTimer(me, "DEN_PetWolf_SittingTimer", 35.0, 0)
+                tiredTimerStarted = true
+            end
+        end,
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_DEN_WolfSitPoint_f39b7717-50d9-4c35-9db6-b2e493ce1c0e"
+        }
+    }
+
+    nodes.Default.Distracted = Action {
+        OnEnter = function()
+            -- remain distracted until called by master
+            isDistracted = true
+            anchor = helpers.GetRandomAnchorPoint()
+        end,
+        function()
+            for i = 1, 5, 1 do
+                if (GetDistance2DTo(me, anchor) > 3.0) then
+                    if not IsInDangerousSurfaceFor(anchor, me.Character) then
+                        try
+                            MoveTo(anchor, MovementSpeed.Walk, false, false, 1.5, 2.0, true, PathClimbingMode.Disabled, PathDroppingMode.Disabled)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            try
+                                MoveTo(anchor, MovementSpeed.Walk, false, false, 1.5, 2.0, true, PathClimbingMode.Enabled, PathDroppingMode.Enabled)
+                            catch e if ls.CheckType(e, error.MovementFailed) then
+                                Sleep(2)
+                            end
+                        end
+                    else
+                        Sleep(math.random(2, 4))
+                    end
+                else
+                    try
+                        Wander(2.5, 1.5, MovementSpeed.Stroll, anchor, true, PathClimbingMode.Disabled, PathDroppingMode.Disabled)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(2.5)
+                    end
+                end
+                Sleep(math.random(5,9))
+            end
+            if math.random (1, 100) < 30 then
+                helpers.ResetSitting()
+            else
+                anchor = helpers.GetRandomAnchorPoint()
+            end
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DEN_PetWolf_CalledByMaster" then
+                doRunToMaster = true
+                isDistracted = false
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_PetWolf_SittingTimer" then
+            tiredOfSitting = true
+            tiredTimerStarted = false
+        end
+    end
+
+
+end}

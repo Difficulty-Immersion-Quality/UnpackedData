@@ -1,0 +1,71 @@
+game.states.SCL_EntryPointGoblin = State{ function ()
+    description = [[Entry point goblin behaviour]]
+
+    modules = {"shared.moveto", "shared.util"}
+
+    ----------------------------------------------------------------------------------------------------------
+    -- Local params
+    local wanderArea = Entity("S_SCL_EntryPointGoblin_WanderArea_2465c458-baa8-4a5c-aac9-90a72ff8019d")
+
+    local listeningPos = Entity("S_SCL_EntryPointGoblin_ListeningFar_f6dd969f-f6ce-4773-8624-23ac9cd30eb3")
+    local listeningAnim = Animation("CUST_LookingFar_01_5643e3dc-9631-4dba-b303-128fc29abfa7")
+
+    local lookingDownPos = Entity("S_SCL_EntryPointGoblin_ChasmLookAt_88619569-75a2-45c2-b692-1b732fe3493a")
+    local lookingDownAnim = Animation("CUST_Leaning_Forward_01_5487ae28-60dc-4eea-b60c-0c00749c8281")
+
+    local brazier = Entity("S_SCL_EntryPointGoblin_Brazier_19827f9b-d7fc-4adb-b5e1-46a0022a440f")
+    ----------------------------------------------------------------------------------------------------------
+
+    ----------------------------------------------------------------------------------------------------------
+    -- States
+    nodes.Action_LitBrazier = Action {
+        function()
+            try
+                UseItem(brazier.Item)
+                Sleep(3.0)
+            catch e if ls.CheckType(e, error.UseItemFailed) then
+                Sleep(3.0)
+            end
+        end,
+        CanEnter = function()
+            return not HasActiveStatus(brazier, "BURNING")
+        end
+    }
+
+    nodes.DefaultActions = Selector{
+        function(nodes)
+            return GetRandomCanEnterNoRepeat(nodes)
+        end
+    }
+
+    nodes.DefaultActions.Action_ListeningFar = Action {
+        function()
+            if mod.moveto.MoveToPoint(listeningPos, MovementSpeed.Walk, me, 0.5) then
+                LookFrom(listeningPos)
+                mod.util.SleepRandom(0.5, 1.5)
+                PlayAnimation(listeningAnim, true, false)
+                mod.util.SleepRandom(0.5, 1.5)
+            end
+        end
+    }
+
+    nodes.DefaultActions.Action_LookDown = Action {
+        function()
+            if mod.moveto.MoveToPoint(lookingDownPos, MovementSpeed.Walk, me, 0.5) then
+                LookFrom(lookingDownPos)
+                mod.util.SleepRandom(0.5, 1.5)
+                PlayAnimation(lookingDownAnim, true, false)
+                mod.util.SleepRandom(0.5, 1.5)
+            end
+        end
+    }
+
+    nodes.DefaultActions.Action_Wander = Action {
+        function()
+            Wander(wanderArea, math.random(3, 6), MovementSpeed.Walk)
+            mod.util.SleepRandom(3.0, 6.0)
+        end
+    }
+    ----------------------------------------------------------------------------------------------------------
+end
+}

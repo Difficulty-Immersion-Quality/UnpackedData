@@ -1,0 +1,79 @@
+game.states.LOW_Guildhall_Bursar = State{function ()
+    
+    modules = { "shared.dialog", "shared.math" }
+
+    local BursarSpokeWith9F = Flag("LOW_Guildhall_Event_BursarDoneSpeakingWith9F_a5f37c27-89df-45a7-a649-c5e951fcd393")
+    local BursarArrivedAtLocation = Flag("LOW_Guildhall_State_BursarInHisSpot_d3862c66-3331-45f3-bb52-37a6c92a5307")
+    
+    local BursarSpot = Entity("S_LOW_Guildhall_Bursar_ec728529-f2d2-47a3-831c-534e7d26a04c")
+    local BursarCounting_Trigger = Entity("S_LOW_Guildhall_TimelineScene_Bursar_Counting_e6fe79e2-158a-4348-be9b-2329f9ac54fe")
+    local BursarCounting_Behavior = Dialog("BHVR_WRLD_LOW_Guildhall_Bursar_Counting_8fa39877-177e-a5da-a053-4ad0c3273af7")
+    local BursarCounting_Chest = Entity("S_LOW_Guildhall_Bursar_Chest_486688b9-b3ae-4810-8f59-b68e2a31dfbe")
+    local BursarCounting_AD = Dialog("LOW_Guildhall_AD_BursarCounting_8c26b5d4-c78e-22bc-2686-fb4783bf2aed")
+
+    nodes.State_Post9F = Selector {
+        Valid = function(nodes)
+            return GetFlag(BursarSpokeWith9F)
+        end
+    }
+
+    nodes.State_Post9F.Action_GoToSpot = Action {
+        function()
+            local moveResult = MoveTo(BursarSpot, MovementSpeed.Walk, true, false, 1.0, 2.0)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(BursarSpot)
+                Sleep(2.0)
+            end
+            if (GetDistance2DTo(BursarSpot, me) < 3) then
+                SetFlag(BursarArrivedAtLocation)
+            end
+        end,
+        Valid = function()
+            return not GetFlag(BursarArrivedAtLocation)
+        end
+    }
+
+
+    nodes.State_Post9F.Idle = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return GetFlag(BursarArrivedAtLocation)
+        end
+    }
+
+    nodes.State_Post9F.Idle.Counting = Action {
+        function()
+            StartBehaviorDialog(BursarCounting_Behavior, BursarCounting_Trigger.Trigger, false, me, BursarCounting_Chest)
+            Sleep(4.0)
+            StartAutomatedDialog(BursarCounting_AD, true, me)
+            Sleep(17.5)
+        end
+    }
+
+    nodes.State_Post9F.Idle.Waiting = Action {
+        function()
+            local moveResult = MoveTo(BursarSpot, MovementSpeed.Walk, false, false, 0.1, 1.0, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(BursarSpot)
+                Sleep(2.0)
+            end
+            LookFrom(BursarSpot)
+            Sleep(math.random(24, 48))
+        end
+    }
+
+    nodes.State_Pre9F = Selector {
+        Valid = function(nodes)
+            return not GetFlag(BursarSpokeWith9F)
+        end
+    }
+
+    nodes.State_Pre9F.Action_StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_LOW_Guildhall_BursarInitialPos_c6e828e4-b5ac-4974-bd8b-6e6a3eae9033]]
+        }
+    }
+end}

@@ -1,0 +1,131 @@
+game.states.UND_FearfulRothe_Rothe = State{function ()
+
+    modules = { "shared.math", "shared.util", "shared.items" }
+
+    params.standAtTrigger_Cautious = {type=EParamType.State, required=false, default=nil, help=[[Trigger to stand at when is calm]]}
+    params.standAtTrigger_Panicking = {type=EParamType.State, required=false, default=nil, help=[[Trigger to stand at when is panicking]]}
+    params.runFromRubblePosition = {type = EParamType.String, help=[[]]}
+    params.calmStandPosition_001 = {type = EParamType.String, help=[[]]}
+    params.calmStandPosition_002 = {type = EParamType.String, help=[[]]}
+    params.wanderTrigger = {type = EParamType.String, help=[[]]}
+    params.attackPosition = {type = EParamType.String, help=[[]]}
+
+    local it_Rubble = Entity("S_UND_FearfulRothe_Rubble_0267bd2f-2e17-47f8-94e4-1d89c32e6846")
+
+    local tr_RunFromRubblePosition = Entity(params.runFromRubblePosition)
+    local tr_CalmStandPosition_001 = Entity(params.calmStandPosition_001)
+    local tr_CalmStandPosition_002 = Entity(params.calmStandPosition_002)
+    local tr_WanderTrigger = Entity(params.wanderTrigger)
+    local tr_AttackPosition = Entity(params.attackPosition)
+
+    
+    local anim_Panicking = Animation("CUST_Fear_01_80aec308-6fc7-4f96-a02d-c9f95153e2f1")
+    local anim_Agressive = Animation("CUST_Angry_01_5295fe1e-abec-4873-a09a-23ae6e895a63")
+    local anim_Cautious = Animation("IDLE_Random_Peace_03_1c364663-4698-4f11-a39a-85833e4d0d75")
+    local anim_ClearingDebris = Animation("IDLE_Random_Peace_02_9e02c309-46c1-43ef-b47c-ad6983058c19")
+
+    local fl_Calm = Flag("UND_FearfulRothe_State_ConvincedRotheToAttackRubble_1f26371b-dbc7-0dcc-123b-3d3b6b06cc0f")
+    local fl_Cautious = Flag("UND_FearfulRothe_State_GuardsAreDead_60c74db1-dd75-96b6-5c9e-fa1d9a83bf58")
+    local b_ranAwayFromRubble = false
+
+    nodes.RunAwayFromRubble = Action {
+        function()
+            MoveTo(tr_RunFromRubblePosition, MovementSpeed.Walk)
+            b_ranAwayFromRubble = true
+        end,
+        CanEnter = function()
+            return GetFlag(fl_Cautious) and not b_ranAwayFromRubble
+        end,
+        Valid = function()
+            return not (GetFlag(fl_Calm) and not mod.items.SafeIsDestroyed(it_Rubble))
+        end
+    }
+
+    nodes.AttackDebris = Action {
+        function()
+            if GetDistance2DTo(me, tr_AttackPosition) > 1.0 then
+                MoveTo(tr_AttackPosition, MovementSpeed.Run)
+            end
+            Attack(it_Rubble, true, false)
+            Sleep(math.random(2, 4))
+        end,
+        Valid = function()
+            return GetFlag(fl_Calm) and not mod.items.SafeIsDestroyed(it_Rubble)
+        end
+    }
+
+    nodes.Cautious = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        CanEnter = function()
+            return GetFlag(fl_Cautious)
+        end,
+        Valid = function()
+            return not (GetFlag(fl_Calm) and not mod.items.SafeIsDestroyed(it_Rubble))
+        end
+    }
+
+    nodes.Cautious.StandAtTrigger = Proxy {
+        params.standAtTrigger_Cautious
+    }
+
+    nodes.Cautious.CautiousAnimation = Action{
+        function()
+            DebugText(me, "Debug: Cautious Animation")
+            PlayAnimation(anim_Cautious, true)
+            Sleep(math.random(6, 12))
+        end
+    }
+
+    nodes.Cautious.Wander = Action {
+        function()
+            DebugText(me, "Debug: Wander")
+            Wander(tr_WanderTrigger, 8.0)
+            Sleep(4.0)
+        end
+    }
+
+    nodes.Calm = Action {
+        function()
+            Sleep(math.random(3, 6))
+        end,
+        CanEnter = function()
+            return GetFlag(fl_Calm)
+        end,
+        Valid = function()
+            return not (GetFlag(fl_Calm) and not mod.items.SafeIsDestroyed(it_Rubble))
+        end
+    }    
+
+    nodes.Panicking = Selector {
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return not GetFlag(fl_Calm)
+        end
+    }
+
+    nodes.Panicking.StandAtTrigger = Proxy {
+        params.standAtTrigger_Panicking
+    }
+
+    nodes.Panicking.PlayPanickingAnimation = Action{
+        function()
+            DebugText(me, "Debug: Panicking Animation")
+            PlayAnimation(anim_Panicking, true)
+            Sleep(math.random(6, 12))
+        end
+    }
+
+    nodes.Panicking.PlayAgressiveAnimation = Action{
+        function()
+            DebugText(me, "Debug: Agressive Animation")
+            PlayAnimation(anim_Agressive, true)
+            Sleep(math.random(6, 12))
+        end
+    }
+
+end
+}

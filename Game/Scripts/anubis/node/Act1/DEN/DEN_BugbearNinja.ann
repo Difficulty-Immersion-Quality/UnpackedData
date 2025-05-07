@@ -1,0 +1,94 @@
+game.states.DEN_BugbearNinja = State {function ()
+
+description = [[Bug Bear assassin moving to attack the StarGazer in the den]]
+
+modules = {"shared.moveto"}
+
+-----------------------------------------
+-- Local variables
+--Entities
+local ambushPos = Entity("S_DEN_BugbearNinja_SneakTarget_d7013a5a-2ded-4746-9935-465d3eba3cc9")
+local stargazer = Entity("S_GLO_Stargazer_cd442e20-a6de-4497-ac51-8466433a758e")
+local activateArea = Entity("S_DEN_BugbearNinjaActivateArea_3112588e-833d-4f11-82e5-e2ac4547560d")
+local escapeTarget = Entity("S_DEN_BugbearNinja_EscapeTarget_c656eb89-4c1e-41b8-8a51-ecef38d3ad6e")
+
+--Bools
+local enteredArea = false
+local gotSurprised = false
+
+--Int
+local jumpFailCheck = 0
+
+-----------------------------------------
+-- State nodes
+self.OnInit = function()
+    ApplyStatus(me,"DEN_BUGBEAR_FAKESNEAK",true,-1)
+end
+
+-----------------------------------------
+--Nodes
+
+nodes.WaitToApproach = Action{
+    function()
+        WaitForInterrupt()
+    end,
+    Valid = function()
+        return not enteredArea and not stargazer.Character.IsDead and stargazer.OnStage
+    end
+}
+
+nodes.SneakApproach = Action{
+    function()
+        local relation = GetRelation(me.Faction, stargazer.Faction)
+        if mod.moveto.MoveToPoint(ambushPos,MovementSpeed.Stroll,me) then
+            if not stargazer.Character.IsDead and relation == FactionRelation.Neutral then  
+                gotSurprised = true
+                SetEntityEvent(me,"DEN_BugbearNinja_TurnHostile") 
+            end
+        end
+    end,
+    Valid = function()
+        return not stargazer.Character.IsDead and stargazer.OnStage and not me.IsInCombat
+    end
+}
+
+nodes.Escape = Action{
+    function()
+        Sleep(1.0)
+        try
+            MoveTo(escapeTarget, MovementSpeed.Run, true, true)
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            SetEntityEvent(me,"DEN_BugbearNinja_Escape")
+        end
+        SetEntityEvent(me,"DEN_BugbearNinja_Escape")
+        WaitForInterrupt()
+    end
+}
+
+-----------------------------------------
+--Events
+
+events.EntityEvent = function(e)
+    if e.TargetEntity == me then
+        if e.Event == "DEN_BugbearNinja_Activate" and not enteredArea  then
+            enteredArea = true
+            Interrupt()
+        end
+    end
+end
+
+events.EnteredCombat = function(e)
+    if e.Entity == me and EntityExists(stargazer) then
+        SetUnicastEntityEvent(me, "ClearPeaceReturn")
+        RemoveStatus(me,"DEN_BUGBEAR_FAKESNEAK")
+        if not stargazer.Character.IsDead then
+            SetUnicastEntityEvent(me,"DEN_BugbearNinja_TurnHostile") 
+            if not gotSurprised then
+                gotSurprised = true
+                ApplyStatus(me, "SURPRISED", true, 6.0)
+            end
+        end
+    end
+end
+
+end}

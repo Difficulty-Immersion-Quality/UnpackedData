@@ -1,0 +1,210 @@
+game.states.GOB_DrunkGoblin_Friend = State{function()
+    modules = { "shared.dialog", "shared.math" }
+
+    params.NonStoriesState = { type = EParamType.State, required = true,
+        help = "State used after the situation with Drunk Goblin stories was resolved (goblins move away from the spot)"}
+
+    params.CryOverBodyAD = { type = EParamType.String, required = false, default = "",
+        help = "AD if this goblin would cry over Drunk Goblin's dead body" }
+
+
+    local fl_TellingStories = Flag("GOB_DrunkGoblin_State_TellingStories_f4ebead3-02c8-5681-79b7-b31b80fc9d6a")
+    local fl_ToStations = Flag("GOB_GoblinToast_Event_ToStations_0b555ee8-2b8e-3881-b35e-9811f6baf77a")
+
+    local s_GoblinState = "GOB_DrunkGoblinFriend.TellingStories"
+
+    local ch_DrunkGoblin
+
+    local dlg_OverBody = Dialog(params.CryOverBodyAD)
+    local fl_KnowsIsDead = Flag("GOB_DrunkGoblin_Knows_Dead_ed00186e-0f4e-4aeb-90e9-01ffb404b7ff")
+    local fl_DrunkGoblinFriendMourn = Flag("GOB_DrunkGoblin_Mourning_07bffc4e-cdb6-4bf6-ac5f-55ae1688d419")
+
+    local anim_Crying = Animation("CUST_Crying_01_4caea9a8-8d30-4809-b84c-c702bdc51ff4")
+
+    local anim_CheeringThinking = {}
+    local b_isTellingStory = false
+    local fl_TellingStoryFlag = Flag("GOB_DrunkGoblin_Event_IsTellingStory_9ce4a245-59eb-4df2-a85b-9717e351ebbe")
+
+    self.OnInit = function()
+        ch_DrunkGoblin = FindEntity("S_GOB_DrunkGoblin_0c3404d4-af6f-4c3c-8873-101a79cc4d86")
+        anim_CheeringThinking[1] = Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0")
+        anim_CheeringThinking[2] = Animation("CUST_Cheering_02_5e23b082-f75a-4daa-86e1-ab73ec6d30b7")
+        anim_CheeringThinking[3] = Animation("CUST_Cheering_03_34ac373e-2928-4d83-8427-13f34573c64a")
+        anim_CheeringThinking[4] = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+    end
+
+    nodes.CryOverBody = Action{
+        function()
+            if GetDistance2DTo(ch_DrunkGoblin, me) > 1.5 then
+                try
+                    MoveTo(ch_DrunkGoblin, MovementSpeed.Run, true, false, 1.0, 1.5)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "Failed MoveTo(ch_DrunkGoblin)")
+                end
+            else
+                SteerTo(ch_DrunkGoblin)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    dlg_OverBody,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 6.0,
+                    },
+                    me
+                )
+                PlayAnimation(anim_Crying, false, true)
+            end
+        end,
+
+        CanEnter = function()
+            return GetFlag(fl_DrunkGoblinFriendMourn, me)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.NonStoriesState = Proxy{
+        params.NonStoriesState,
+
+        Valid = function()
+            return not GetFlag(fl_TellingStories) or GetFlag(fl_ToStations)
+        end
+    }
+
+    nodes.Stories = Selector {
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end,
+        CanEnter = function()
+            return GetFlag(fl_TellingStories)
+        end,
+        Valid = function()
+            return GetFlag(fl_TellingStories)
+        end
+    }
+
+    nodes.Stories.HearStory = Action{
+        function()
+            SteerTo(ch_DrunkGoblin)
+            Sleep(5.0)
+        end,
+
+        Valid = function()
+            return GetFlag(fl_TellingStories) and b_isTellingStory
+        end
+    }
+
+    -- Goblins listening to drunk goblin
+    nodes.Stories.Animation = Action{
+        function()
+            Sleep(5 + 2 * math.random())
+            try
+                local rng_pick = math.floor(mod.math.random(1.0,4.99))
+                PlayAnimation(anim_CheeringThinking[rng_pick], true, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "anim_CheeringThinking in index " .. tostring(rng_pick) .. " animation failed ")
+            end
+            SteerTo(ch_DrunkGoblin)
+            Sleep(5.0)
+        end,
+        CanEnter = function()
+            return not b_isTellingStory
+        end,
+        Valid = function()
+            return not b_isTellingStory
+        end
+    }
+
+     -- Fallback just in case everything else fails
+     nodes.Stories.Fallback = Action{
+        function()
+            SteerTo(ch_DrunkGoblin)
+            Sleep(5.0)
+        end
+    }
+
+    events.FlagSet = function(ev)
+        if dlg_OverBody ~= nil and ev.Entity == me and ev.Flag == fl_KnowsIsDead.Guid then
+            SetFlag(fl_DrunkGoblinFriendMourn, me)
+        end
+        if ev.Flag == fl_TellingStoryFlag.Guid then
+            b_isTellingStory = true
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == fl_TellingStoryFlag.Guid then
+            b_isTellingStory = false
+        end
+    end
+
+
+end}
+
+
+-- In the original script, Story changed the cahracter's behaviour so it couldn't enter its cower state and handled the cheering in idle
+-- Now cheering happens during cower state
+game.states.GOB_DrunkGoblin_Friend_Cower = State{function ()
+    modules = { "shared.util" }
+
+    local ch_DrunkGoblin
+    local fl_InFight
+    local dist_Min = 6.0
+    local dist_Max = 8.0
+
+    local anim_Cheering = {}
+
+    self.OnInit = function()
+        ch_DrunkGoblin = FindEntity("S_GOB_DrunkGoblin_0c3404d4-af6f-4c3c-8873-101a79cc4d86")
+
+        -- Get cheering animations
+		anim_Cheering[1] = Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0")
+        anim_Cheering[2] = Animation("CUST_Cheering_02_5e23b082-f75a-4daa-86e1-ab73ec6d30b7")
+        anim_Cheering[3] = Animation("CUST_Cheering_03_34ac373e-2928-4d83-8427-13f34573c64a")
+    end
+
+    helpers.GetFightFlag = function()
+        if not fl_InFight then
+            fl_InFight = Flag("GOB_DrunkGoblin_Event_FistFight_c1248900-1056-45a8-aabf-2d5eb8a8d3ee")
+        end
+        return GetFlag(fl_InFight, nil)
+    end
+
+    self.CanEnter = function()
+        return helpers.GetFightFlag()
+    end
+
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+
+    -- Cheer animation during fight
+    nodes.Action_MoveInRange = Action{
+        function()
+            try
+                MoveInRange(ch_DrunkGoblin, dist_Min, dist_Max, MovementSpeed.Run)
+                Sleep(3.0)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Movement failed, trying again in 5 seconds")
+                Sleep(5.0)
+            end
+        end,
+        CanEnter = function()
+            local distanceToGoblin = GetDistance2DTo(me, ch_DrunkGoblin)
+            return distanceToGoblin > (dist_Max + 1.0)
+        end
+    }
+
+    nodes.Action_GoblinCheering = Action{
+        function()
+            SteerTo(ch_DrunkGoblin)
+            mod.util.SleepRandom(1.0, 3.0)
+            for i, v in ipairs(anim_Cheering) do
+                 PlayAnimation(v, true)
+            end
+            mod.util.SleepRandom(4.0, 6.0)
+        end
+    }
+end
+}

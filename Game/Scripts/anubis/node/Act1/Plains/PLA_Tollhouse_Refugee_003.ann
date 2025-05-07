@@ -1,0 +1,130 @@
+game.states.PLA_Tollhouse_Refugee_003_Idle = State{function()
+
+    modules = { "gustav.Act1.TollhouseRefugee" }
+
+    params.Seat = {type = EParamType.String, required=false, help=[[Item to sit or lie on]]}
+
+    local PatrollingRoomsWeight = 1
+    local InspectCabinetlWeight = 5
+    local InspectClosetWeight = 5
+    local ChairSitWeight = 1
+    local BalconyWatchWeight = 3
+
+    local targetSplineIndex = -1
+    local patrolSpline = Spline("S_PLA_TollhousePatrol_e4150f19-cc8b-40b2-835c-102c6f5525b7")
+    local CanPatrol = true
+
+    local seat
+    local stopsitting = false
+    local seatTrigger
+
+    local Closet = Entity("S_PLA_TollhouseCloset_ee81c6ff-628a-463f-80e0-ad6d5163278e")
+    local Cabinet = Entity("S_PLA_TollhouseCabinet_51e2661b-4930-46d0-a7e1-7167032160de")
+    local Balcony = Entity("S_PLA_BalconyPoint_49dba9c4-b457-42d8-9927-ed11bf5d51c0")
+
+    local BalconyDir = Entity("S_PLA_TollhouseBalconyDirection_2c84b9d2-0522-4fe0-b680-b09f40555a04")
+
+    local Inspect = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+
+    nodes.RefugeeAction = Selector{
+        function(nodes)
+            return GetWeightedCanEnter(nodes, {[nodes.PatrollingRooms] = PatrollingRoomsWeight,
+                                               [nodes.InspectCabinet] = InspectCabinetlWeight,
+                                               [nodes.InspectCloset] = InspectClosetWeight,
+                                               [nodes.ChairSit] = ChairSitWeight,
+                                               [nodes.BalconyWatch] = BalconyWatchWeight}
+                                      )
+        end
+    }
+
+    helpers.action.MoveToContainer = function(spot, animation)
+        try
+            if(not IsInDangerousSurfaceFor(spot,me.Character,3.0)) then
+                MoveTo(spot, MovementSpeed.Walk)
+                LookAtEntity(spot, 3.0)
+                PlayAnimation(animation, true, false)
+                DebugText(me, "Try Animation")
+                Sleep(4.0)
+            end
+        catch e if ls.CheckType(e, error.MovementFailed) then
+            DebugText(me,"Move Exception")
+        catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+            DebugText(me, "PlayAnimationFailed")
+        end
+    end
+
+
+    nodes.RefugeeAction.PatrollingRooms = Action{
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Walk, targetSplineIndex, false)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+            end
+        end,
+        Valid = function()
+            return CanPatrol
+        end
+    }
+
+    nodes.RefugeeAction.InspectCabinet = Action{
+        function()
+            targetSplineIndex = 1
+            ClearPatrol()
+            helpers.MoveToContainer(Cabinet, Inspect)
+        end
+    }
+
+    nodes.RefugeeAction.InspectCloset = Action{
+        function()
+            targetSplineIndex = 3
+            ClearPatrol()
+            helpers.MoveToContainer(Closet, Inspect)
+        end
+    }
+
+    nodes.RefugeeAction.ChairSit = Proxy {
+        game.states.Sit,
+        params = {
+            seat = params.Seat,
+            seatTrigger = "S_PLA_MerchantSeatArea_f40a57e4-8760-4866-8096-101ce6d49e25"
+        }
+        ,
+        OnEnter = function()
+            StartTimer(me, "PLA_Refugee003_SittingDown", 2000.0, 0)
+        end,
+        OnLeave = function()
+            targetSplineIndex = 0
+            stopsitting = false
+            StopTimer(me, "PLA_Refugee003_SittingDown")
+        end,
+        CanEnter = function()
+            return not stopsitting
+        end
+    }
+
+    nodes.RefugeeAction.BalconyWatch = Action{
+        function()
+            try
+                if(not IsInDangerousSurfaceFor(Balcony,me.Character,3.0)) then
+                    MoveTo(Balcony, MovementSpeed.Walk)
+                    SteerTo(BalconyDir)
+                    targetSplineIndex = 7
+                    ClearPatrol()
+                    Sleep(20.0)
+                end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception")
+            end
+        end
+    }
+
+    events.TimerFinished = function(ev)
+        if (ev.TimerName == "PLA_Refugee003_SittingDown") then
+            stopsitting = true
+        end
+    end
+
+end
+}

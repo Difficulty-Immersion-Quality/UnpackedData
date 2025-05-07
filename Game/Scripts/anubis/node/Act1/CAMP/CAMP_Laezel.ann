@@ -1,0 +1,570 @@
+game.states.CAMP_Laezel = State {function()
+    description = [[Behaviour of Lae'zel at Camp]]
+
+    modules = {"shared.math"}
+
+    -- Flags
+    local GLO_CAMP_NightMode = Flag("GLO_CAMP_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+    local hasGithyankiDisc1 = Flag("ORI_Laezel_State_HasOrpheusChapter1_24b4f0a1-0512-4164-8c5b-0e3bca62bfb2")
+    local hasGithyankiDisc2 = Flag("ORI_Laezel_State_HasOrpheusChapter2_94ac2b16-58e6-4ebd-ba0f-2ae7ef59e5ef")
+    local hasGithyankiDisc3 = Flag("ORI_Laezel_State_HasOrpheusChapter3_225b8f68-2134-499d-985b-cbd1d5d85624")
+    local trainingWithDummyFlag = Flag("CAMP_Laezel_State_TrainingWithDummyBehaviourActive_df5017a5-f742-4ca1-aaf4-720b6780a95b")
+    local noOffhandBehaviourFlag = Flag("CAMP_Laezel_State_NoOffhandWeaponBehaviourActive_30f13f96-d651-4f3a-a56f-9277ff2bc826")
+
+    -- State logic
+    local selectedBehaviour = nil
+    local behaviourLoops = 0
+    local ignoreReselectionUponInterrupt = false
+
+    self.OnEnter = function()
+        selectedBehaviour = nil
+        ignoreReselectionUponInterrupt = false
+    end
+
+    -- Selector
+    nodes.CAMP_Laezel = Selector {
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end,
+
+        function(nodes)
+            -- Check if the behaviour was interrupted and enter it again if still valid
+            if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                ignoreReselectionUponInterrupt = false
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+
+            -- Always clear this, in case it was interrupted but was not able to select a node
+            ignoreReselectionUponInterrupt = false
+
+            -- Reduce behaviour loops by 1
+            if behaviourLoops > 0 then
+                behaviourLoops = behaviourLoops - 1
+            end
+
+            -- If it has finished looping, or for some reason the current selectedBehaviour is nil or not selectable, pick a new node 
+            if behaviourLoops == 0 or selectedBehaviour == nil or (selectedBehaviour ~= nil and not nodes.TryGetChild(selectedBehaviour).IsSelectable()) then
+                behaviourLoops = 1
+                local selectedNode = FindWeightedRandomSelectable(nodes, {
+                    [nodes.Meditate] = 1,
+                    [nodes.StandAndDrink] = 1,
+                    [nodes.Sharpen] = 1,
+                    [nodes.Alert] = 1,
+                    [nodes.StudyGithyankiDisc] = 2,
+                    [nodes.TrainWithDummy] = 1
+                })
+
+                selectedBehaviour = selectedNode.Name
+            end
+
+            return nodes.TryGetChild(selectedBehaviour)
+        end
+    }
+
+    -- Full camp behaviours
+    nodes.CAMP_Laezel.TrainWithDummy = Proxy {
+        game.states.CAMP_Laezel_TrainWithDummy,
+
+        OnEnter = function()
+            behaviourLoops = math.random(1,3)
+            SetFlag(trainingWithDummyFlag)
+            SetFlag(noOffhandBehaviourFlag)
+        end,
+
+        OnLeave = function()
+            ClearFlag(trainingWithDummyFlag)
+            ClearFlag(noOffhandBehaviourFlag)
+        end,
+
+        OnInterrupt = function()
+            ignoreReselectionUponInterrupt = true
+        end
+    }
+
+    nodes.CAMP_Laezel.StudyGithyankiDisc = Proxy {
+        game.states.CAMP_WorldBehaviourAtIdlePos,
+        params = {  behaviourPos = "CAMPPOS",
+                    worldBehaviourDialog = "BHVR_WRLD_CAMP_Laezel_ReadingGithyankiDisc_346c58df-096c-f237-6153-93573a9087c7"},
+        Valid = function()
+            return GetFlag(hasGithyankiDisc1,me) or GetFlag(hasGithyankiDisc2,me) or GetFlag(hasGithyankiDisc3,me)
+        end
+    }
+
+    nodes.CAMP_Laezel.Meditate = Proxy {
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnim = "CUST_Meditating_01_45b1a54b-b127-46d2-bfe6-daa8963398ea",
+            idleAnimStart = "CUST_Meditating_01_Start_12c9c463-0762-4ef3-a24e-29b5254f580f",
+            idleAnimEnd = "CUST_Meditating_01_End_ad0be56c-63b4-4b24-9859-ebcd282ba9f8",
+            loopIdleAnim = false,
+            idleAnimLength = 30.9,
+            idleAnimEndLength = 13.7
+        }
+    }
+
+    nodes.CAMP_Laezel.StandAndDrink = Proxy {
+        game.states.CAMP_WorldBehaviourAtIdlePos,
+        params = {
+            behaviourPos = "CAMPPOS",
+            worldBehaviourDialog = "BHVR_WRLD_GLO_StandAndDrink_Laezel_35811480-44c9-cf22-5089-ebaaafb7abc6"
+        },
+
+        OnEnter = function()
+            behaviourLoops = math.random(1,3)
+        end
+    }
+
+    nodes.CAMP_Laezel.Sharpen = Proxy {
+        game.states.CAMP_Laezel_SharpeningSword,
+
+        Valid = function()
+            return (GetEquippedWeapon(me.Character, WeaponHandType.MainHand) ~= nil)
+                    and (IsEquipmentWithProficiency(GetEquippedWeapon(me.Character, WeaponHandType.MainHand), ProficiencyGroup.Longswords)
+                    or IsEquipmentWithProficiency(GetEquippedWeapon(me.Character, WeaponHandType.MainHand), ProficiencyGroup.Greatswords)
+                    or IsEquipmentWithProficiency(GetEquippedWeapon(me.Character, WeaponHandType.MainHand), ProficiencyGroup.Scimitars))
+                    --others blades are too short
+        end,
+
+        OnEnter = function()
+            behaviourLoops = math.random(1,3)
+            SetFlag(noOffhandBehaviourFlag)
+        end,
+
+        OnLeave = function()
+            ClearFlag(noOffhandBehaviourFlag)
+        end,
+
+        OnInterrupt = function()
+            SetWeaponUnsheathed(me, false, true)
+            ignoreReselectionUponInterrupt = true
+        end
+    }
+
+    nodes.CAMP_Laezel.Alert = Proxy {
+        game.states.CAMP_Laezel_Alert,
+
+        OnInterrupt = function()
+            ignoreReselectionUponInterrupt = true
+        end
+    }
+
+    -- Clear current behaviour on day<->night transition
+    events.FlagSet = function(e)
+        if e.Flag == GLO_CAMP_NightMode.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == GLO_CAMP_NightMode.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if e.Event == "InterruptCampBehaviour" then
+                selectedBehaviour = nil
+                Interrupt()
+            elseif e.Event == "InterruptCampBehaviour_WithoutReselection" then
+                Interrupt()
+            end
+        end
+    end
+end}
+
+game.states.CAMP_LaezelNightBehaviours = State {function()
+    description = [[Lae'zel's behaviours at camp during the night]]
+
+    modules = { "shared.util" }
+
+    -- Dialogs
+    local nightCRDs = {}
+
+    -- Flags
+    local CAMP_GLO_State_InCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+    local CAMP_Laezel_State_HasMeditated = Flag("CAMP_Laezel_State_HasMeditated_ecc15f91-5ea2-4b60-84fd-3eade92d6683")
+
+    -- Behaviours Vars
+    local inProgressCrd = nil
+
+    self.OnInit = function()
+        nightCRDs["Ceremorphosis_NightOne"] = Guid("CAMP_Night1_CRD_Laezel_b8a8e03b-d221-7b7e-3053-fb6cb6313c42")
+        nightCRDs["Monitor_PostHag"] = Guid("CAMP_MonitorPostHag_CRD_Laezel_e87b0f97-5620-5539-be59-177ff6776caa")
+    end
+
+    -- Behaviours tied to specific camp nights
+    nodes.ceremorphosis_NightOne = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7"},
+
+        Valid = function()
+            return inProgressCrd == nightCRDs["Ceremorphosis_NightOne"]
+        end
+    }
+
+    nodes.Monitor_PostHag = Proxy {
+        game.states.CAMP_Idle,
+        params = {  behaviourPos = "CAMPPOS",
+                    idleAnim = "CUST_Meditating_01_45b1a54b-b127-46d2-bfe6-daa8963398ea",
+                    idleAnimStart = "CUST_Meditating_01_Start_12c9c463-0762-4ef3-a24e-29b5254f580f",
+                    idleAnimEnd = "CUST_Meditating_01_End_ad0be56c-63b4-4b24-9859-ebcd282ba9f8"
+                },
+
+        OnEnter = function()
+            SetFlag(CAMP_Laezel_State_HasMeditated)
+        end,
+
+        Valid = function()
+            return inProgressCrd == nightCRDs["Monitor_PostHag"]
+        end
+    }
+
+    -- Default night behaviour
+    nodes.DefaultBehaviour = Proxy {
+        game.states.CAMP_Laezel,
+
+        Valid = function()
+            return inProgressCrd == nil
+        end
+    }
+
+    -- Update inProgressCrd
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "NightInProgress" and mod.util.ContainsValue(nightCRDs, e.Params[1]) then
+            inProgressCrd = e.Params[1]
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == CAMP_GLO_State_InCamp.Guid and e.Entity == me then
+            inProgressCrd = nil
+            Interrupt()
+        end
+    end
+end}
+
+game.states.CAMP_Laezel_SharpeningSword = State{function()
+
+    description = [[Lae'zel sharpens her sword-like weapon, if that's what she has equipped. Main camp only.]]
+
+    local behaviourDialog = nil
+    local whetstonePoint1HS = nil
+    local whetstonePoint2HS = nil
+    local whetstonePoint = nil
+    local whetstoneObject = nil
+
+    nodes.SharpenWeapon = Action {
+        function()
+            SetWeaponUnsheathed(me, false, true)
+
+            if GetEquippedWeapon(me.Character, WeaponHandType.MainHand) ~= nil then
+                if  (IsEquipmentWithProficiency(GetEquippedWeapon(me.Character, WeaponHandType.MainHand), ProficiencyGroup.Longswords) --ToDo: Check GUS-199635 to see if Longswords will be supported
+                    or IsEquipmentWithProficiency(GetEquippedWeapon(me.Character, WeaponHandType.MainHand), ProficiencyGroup.Scimitars))
+                    and whetstonePoint1HS ~= nil and whetstonePoint1HS ~= "" and whetstoneObject ~= nil and whetstoneObject ~= "" then
+                        --DebugText(me, "Assigning 1HS dialog")
+                        whetstonePoint  = whetstonePoint1HS
+                        behaviourDialog = Dialog("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_3d2363e5-8318-2427-b467-da5e73c61a15")
+                elseif IsEquipmentWithProficiency(GetEquippedWeapon(me.Character, WeaponHandType.MainHand), ProficiencyGroup.Greatswords) 
+                    and whetstonePoint2HS ~= nil and whetstonePoint2HS ~= "" and whetstoneObject ~= nil and whetstoneObject ~= "" then
+                        --DebugText(me, "Assigning 2HS dialog")
+                        whetstonePoint = whetstonePoint2HS
+                        behaviourDialog = Dialog("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_9795a909-9b6b-36ec-f2d8-4fb18c9ee787")
+                end
+            end
+
+            if whetstonePoint ~= nil and behaviourDialog ~= nil then
+                PopUnsheathedState(me)
+                SetWeaponUnsheathed(me, true, false)
+                Sleep(1.5)
+                --DebugText(me, "CAMP_Laezel - Starting GrindingWeapons behaviour")
+                try
+                    StartBehaviorDialog(behaviourDialog, whetstonePoint.Trigger, true, me, whetstoneObject)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    Sleep(1.0)
+                    --DebugText(me, "Behaviour failed to start")
+                end
+                --DebugText(me, "CAMP_Laezel - Finished GrindingWeapons behaviour")
+                Sleep(2.0+2.0*math.random())
+            else
+                --DebugText(me, "CAMP_Laezel - No whetstone present")
+                Sleep(2.0)
+            end
+        end,
+
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false, behaviourDialog)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    self.CanEnter = function()
+        return whetstoneObject ~= nil and whetstonePoint1HS ~= nil and whetstonePoint2HS ~= nil
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_WLDMAIN" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_0a89a00e-0b70-8955-39d0-8e151ae8e669")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_8177f8fa-3360-8d6e-1987-fdf7e6681c6c")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_d56f4cbb-8b4d-8a54-1136-1a3eebbfdb98")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_WLDCAVGRN" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_717a8805-3d7a-8e30-3006-0d0f18b1af13")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_f868d0f1-656a-8249-10bd-7ce1e431d516")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_2a0f7948-cc2b-8596-0b88-e8c2567e18a8")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_WLDCAVSND" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_e4f0dbff-303a-8c60-5c59-3ad4fbfdc731")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_6bee23eb-682a-8079-3c00-a9b6c77dfd34")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_8cbd1f5b-e291-8993-395b-a35a81f1ae58")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_WLDDUNABB" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_4479619d-d722-84be-6972-08245b8a57f9")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_cb67b989-0f12-88c7-4929-7706270a8dfc")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_f712bb57-c9e0-84c8-18c6-eebf895039e2")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_WLDDUNSHA" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_ca7206bd-1a57-8738-5c4e-0ee188788ef6")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_41605ea9-4247-8b41-3cf5-7dc354f8b4f9")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_3e916a3f-0392-83dc-0c82-fd40554985a9")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_WLDUND" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_35d6d5be-71ec-84bc-4152-bc8d410a8bf5")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_bcc42daa-a9dc-88c5-2109-2b6f1d8ab1f8")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_6f799357-1891-810b-0314-ce389b1ca20f")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_WLDBAS" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_d8104a29-f8ab-83f3-398c-6ca84dc28533")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_5f0e9215-209b-870c-1933-db8a1942bb36")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_6d71b349-73ac-86ca-07d8-bb1937195acc")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_CREMAIN" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_9b4dff7f-b4c9-86af-4f78-a1dc841d75ec")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_123b476b-ecb9-8ab8-2f2f-10be509dabef")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_77eb48c5-3a8c-81ff-1bca-982fb88a4fb2")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_CREINSIDE" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_1550c0dd-46f4-8e83-4f0c-f29a99c94e8b")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_9c4e18c9-7ee4-829c-2fb3-617c6549748e")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_c44ab06a-7f12-80e5-1f2d-eb5de40af820")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_SCLMAIN" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_46e4fd51-3a03-872f-3fb1-621b2f094e04")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_cdd2454d-62f3-8b38-1f68-d1fdfb897407")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_2c3876fe-2d74-8f78-09d5-0257d618f02e")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_HAVEN" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_01a1cc3d-a082-8f7a-54f9-aadaa4c2a022")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_889f1429-d872-8383-34a0-19bc7042d625")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_c00d9e7b-97a2-86cc-273a-6c43ad20a4d3")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_MOONRISE" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_1f101868-9b53-8f98-3251-dee1c2514146")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_960e6054-c343-83a1-1208-4dc39ed17749")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_4ad5718c-9ac0-8404-361e-317aed53e65a")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_SHARTEMPLE" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_126809a4-d6fb-834b-44a2-ee941821b1d4")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_99565190-0eeb-8754-2459-5d76e4a1e7d7")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_84b52308-2124-84c5-3cc0-a9cbd1d0908a")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_INTMAIN" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_86452abe-35dd-89e0-33d9-3d875d6aae10")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_0d3372aa-6dcd-8df9-1380-ac6929ead413")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_0871dace-347d-8d48-1db3-deffc4a592da")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_FARM" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_c8ef1d17-65f3-8888-3403-058f171308fd")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_4fdd6503-9de3-8c91-14ba-7461e3933ef0")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_35d01011-8044-847d-0fdb-ea3e48b152b0")
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_ELFSONG" then
+            whetstonePoint1HS = nil
+            whetstonePoint2HS = nil
+            whetstoneObject = nil
+        elseif e.TargetEntity == me and e.Event == "CAMP_CamperInCamp_SLUMS" then
+            whetstonePoint1HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_1HS_SceneTrigger_ec76600e-e6db-8baa-331d-63e194df02d5")
+            whetstonePoint2HS = Entity("BHVR_WRLD_CAMP_LaezelGrindingWeapon_2HS_SceneTrigger_6364b8fa-1ecb-8fb3-13c4-d2c3605f38d8")
+            whetstoneObject = Entity("S_CAMP_Laezel_WhetstoneAtTent_491c7cf2-d296-8755-0a23-b5124615164b")
+        end
+    end
+
+end}
+
+game.states.CAMP_Laezel_Alert = State{function()
+
+    description = [[Lae'zel simply idles, sometimes unsheathing her weapon, being alert and ready for battle.]]
+
+    modules = {"shared.math"}
+
+    local combatIdleLoopAnim = Animation([[CUST_Idle_Still_Combat_01_590ea7e8-ae43-4307-916b-b1133ef47dfa]])
+    local combatIdlePos = nil
+    local actionActive = false
+
+    self.Valid = function()
+        return combatIdlePos ~= nil and combatIdlePos.UUID ~= Guid("NULL_00000000-0000-0000-0000-000000000000")
+    end
+
+    nodes.GetGith = Action {
+        function()
+            if IsInDangerousSurfaceFor(combatIdlePos, me.Character) then
+                SteerTo(combatIdlePos)
+                Sleep(2.0)
+            else
+                try
+                    MoveTo(combatIdlePos, MovementSpeed.Walk, true, false, 1.5, 2.5, false)
+                catch e if e.CheckType(e, error.MovementFailed) then
+                    Sleep(2.0)
+                    return
+                end
+                LookFrom(combatIdlePos)
+                Sleep(math.random(15, 30))
+                if GetEquippedWeapon(me.Character, WeaponHandType.MainHand) then
+                    PopUnsheathedState(me)
+                    SetWeaponUnsheathed(me, true, false)
+                end
+                Sleep(2)
+                PlayAnimation(combatIdleLoopAnim, false, true)
+                Sleep(math.random(10, 20))
+                StopAnimation(me)
+                if GetEquippedWeapon(me.Character, WeaponHandType.MainHand) then
+                    SetWeaponUnsheathed(me, false, false)
+                end
+                Sleep(math.random(10, 20))
+            end
+        end,
+
+        OnEnter = function()
+            actionActive = true
+        end,
+
+        OnLeave = function()
+            actionActive = false
+            StopAnimation(me)
+            SetWeaponUnsheathed(me, false, true)
+        end,
+
+        OnInterrupt = function()
+            actionActive = false
+            StopAnimation(me)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+    events.EntityEvent = function(e)
+        -- Camp Position Changed
+        if e.TargetEntity == me and e.Event == "CampPositionChange" then
+            combatIdlePos = e.Params[1]
+            if actionActive then 
+                Interrupt()
+            end
+        end
+   end
+
+end}
+
+game.states.CAMP_Laezel_TrainWithDummy = State{function()
+
+    description = [[Lae'zel trains on a mindflayer dummy at her camp tent.]]
+
+    local behaviourDialog = Dialog("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_d04e5307-dd41-6984-9eec-dc076835c002")
+    local behaviourDialog_1HS = Dialog("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_1HS_601c0d85-4e2c-a9ad-c3bc-75e2df82227b")
+    local behaviourDialog_2HS = Dialog("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_2HS_82812866-0cc9-a1d6-9560-47729467f759")
+    local behaviourDialog_ToUse = nil
+
+    local sceneTrigger = nil
+    local trainingDummy = nil
+
+    nodes.TrainWithDummy = Action {
+        function()
+            SetWeaponUnsheathed(me, false, true)
+
+            behaviourDialog_ToUse = behaviourDialog
+
+            if GetEquippedWeapon(me.Character, WeaponHandType.MainHand) ~= nil then
+                if  (IsEquipmentWithProficiency(GetEquippedWeapon(me.Character, WeaponHandType.MainHand), ProficiencyGroup.Longswords)
+                or IsEquipmentWithProficiency(GetEquippedWeapon(me.Character, WeaponHandType.MainHand), ProficiencyGroup.Scimitars)) then
+                    --DebugText(me, "Assigning 1HS dialog")
+                    behaviourDialog_ToUse = behaviourDialog_1HS
+                elseif IsEquipmentWithProficiency(GetEquippedWeapon(me.Character, WeaponHandType.MainHand), ProficiencyGroup.Greatswords) then
+                    --DebugText(me, "Assigning 2HS dialog")
+                    behaviourDialog_ToUse = behaviourDialog_2HS
+                end
+            end
+
+            if sceneTrigger ~= nil and trainingDummy ~= nil and behaviourDialog_ToUse ~= nil then
+                PopUnsheathedState(me)
+                SetWeaponUnsheathed(me, (behaviourDialog_ToUse ~= behaviourDialog), false)
+                Sleep(1.5)
+                --DebugText(me, "CAMP_Laezel - Starting TrainWithDummy behaviour")
+                try
+                    StartBehaviorDialog(behaviourDialog_ToUse, sceneTrigger.Trigger, true, me, trainingDummy)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    Sleep(1.0)
+                    --DebugText(me, "Behaviour failed to start: [1]",e)
+                end
+                --DebugText(me, "CAMP_Laezel - Finished TrainWithDummy behaviour")
+                Sleep(1.0)
+            else
+                --DebugText(me, "CAMP_Laezel - No scene trigger present")
+                Sleep(2.0)
+            end
+        end,
+
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false, behaviourDialog_ToUse)
+            SetWeaponUnsheathed(me, false, true)
+        end
+    }
+
+
+    self.CanEnter = function()
+        return sceneTrigger ~= nil and trainingDummy ~= nil
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "CAMP_CamperInCamp_WLDMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_b7157356-d199-885b-30a3-eeca92f85df9")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_b32fdaad-b085-8bbf-35a1-2cc32fd96c62")
+            elseif e.Event == "CAMP_CamperInCamp_WLDCAVGRN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_2e065b5d-0393-8d36-37d9-6db490c116a3")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_08cf073a-f163-86f1-2ff3-fa579a98a972")
+            elseif e.Event == "CAMP_CamperInCamp_WLDCAVSND" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_918cae47-0653-8b66-532c-9a89730d3ec1")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_6a7dad4d-17d9-8afe-5dc6-b5efc51b3f22")
+            elseif e.Event == "CAMP_CamperInCamp_WLDDUNABB" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_f10534e5-ad4b-83b4-6045-68d9d39ace89")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_d5d24949-fe28-8523-3c31-f044cd7acabc")
+            elseif e.Event == "CAMP_CamperInCamp_WLDDUNSHA" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_770ed905-e070-863e-5311-6e960088f586")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_1c51f821-38da-8437-20fd-0fd599631673")
+            elseif e.Event == "CAMP_CamperInCamp_WLDUND" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_e262a806-4705-83b2-4825-1c32c91af285")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_4d392149-4dd9-8266-278f-d0cddf3633d9")
+            elseif e.Event == "CAMP_CamperInCamp_WLDBAS" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_85ac1d71-cec4-82f9-305f-cc5dc5d2fcc3")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_4b31413b-a8e4-8725-2b43-cdae7b33eb96")
+            elseif e.Event == "CAMP_CamperInCamp_CREMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_48d9c2c7-8ae2-85a5-464b-01810c2dec7c")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_55abd6b7-6fc4-825a-3f35-aab4fca4d08c")
+            elseif e.Event == "CAMP_CamperInCamp_CREINSIDE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_c2ec9325-1c1d-8d89-46df-524f11d9b51b")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_a20a4e5c-a45a-8140-3398-fde2282489fa")
+            elseif e.Event == "CAMP_CamperInCamp_SCLMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_f370c0a9-002c-8625-3684-c2c0a719b594")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_0af804e0-52bc-80d3-2d40-14ec1a3281f8")
+            elseif e.Event == "CAMP_CamperInCamp_HAVEN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_be3d9f85-76ab-8e70-5bcc-0a8f2cd217b2")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_aecd2c6d-ccea-8727-4ba5-7ed8e14a35ad")
+            elseif e.Event == "CAMP_CamperInCamp_MOONRISE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_ccacebb0-617c-8e9e-3924-3e964a61b8d6")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_28950f7e-cf08-856f-5a89-430f217d7724")
+            elseif e.Event == "CAMP_CamperInCamp_SHARTEMPLE" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_cff4dcfc-ac14-8241-4b75-4e4990312864")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_6275b1fa-566c-8520-503b-bb5015fa2154")
+            elseif e.Event == "CAMP_CamperInCamp_INTMAIN" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_33d1fd06-0bf6-88e6-3aac-9d3cd57a15a0")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_e63168b0-69b5-8ea3-312e-e08408cf23a4")
+            elseif e.Event == "CAMP_CamperInCamp_FARM" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_757be06f-3b1c-878e-3bd6-65349f237f8d")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_1390ae03-b58c-85d8-2346-fcc38cdbe38a")
+            elseif e.Event == "CAMP_CamperInCamp_SLUMS" then
+                sceneTrigger = Entity("BHVR_WRLD_CAMP_Laezel_TrainWithDummy_SceneTrigger_99023356-bcf4-8aa0-3ae0-c3961cef7965")
+                trainingDummy = Entity("S_CAMP_Laezel_MindflayerDummy_27dc0ae4-07de-88b0-2e9e-c7a78a3fa715")
+            elseif e.Event == "CAMP_CamperInCamp_ELFSONG" then
+                sceneTrigger = nil
+                trainingDummy = nil
+            end
+        end
+    end
+end}

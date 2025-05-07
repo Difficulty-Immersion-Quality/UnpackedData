@@ -1,0 +1,127 @@
+game.states.HAV_UnfortunateGnome = State{function()
+    ----------------------------------
+    -- Local variables
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    local firstPoint = Entity("S_HAV_UnfortunateGnomePos_b9b53c7f-2201-4f82-bcf0-6295f334b8c2")
+    local secondPoint = Entity("S_HAV_UnfortunateGnomePos_2_9af3fdc4-eae6-465e-b559-6995bdab3305")
+    local thirdPoint = Entity("S_HAV_UnfortunateGnomePos_003_7388f90d-e682-4488-a6bd-264c3abafc0b")
+    local fourthPoint = Entity("S_HAV_UnfortunateGnomePos_004_af854f6c-f670-4bbd-87d9-770f5c2123af")
+    local wulbren = Entity("S_GLO_Wulbren_2d70edbf-1a70-4047-8099-48f3e75d93bf")
+    local searchPoint = Entity("S_HAV_BarcusSearchPos_43963683-a349-43a8-b675-fd309f6c72ef")
+    local reunionPoint = Entity("S_HAV_BarcusToWulbrenPos_0fd72691-2c00-4287-a5c9-49917fea0444")
+
+    local craftingAnimation = Animation("UTIL_Craft_01_97efbded-da0e-407a-a2f6-7d44fffd7b40")
+    local inspectAnim = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local inspectBasketAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local inspectPotionAnim = Animation("CUST_InspectingPotion_01_b5842c3c-b6f8-4e71-8e38-7cb6a495e5c2")
+
+    local foundWulbren = false
+    local playSeekADOnce = false
+
+    local withWulbrenFlag = Flag("HAV_WrootRequest_State_WithWulbren_35bd10c9-fb1f-4670-8069-191282c0da34")
+    local goToWulbrenFlag = Flag("HAV_WrootRequest_Event_BarcusGoesToWulbren_01da3925-f97b-c096-e15b-615fc03f2934")
+    local reunionOverFlag = Flag("HAV_WrootRequest_Event_FriendTalkOver_ae967954-99fd-5e27-e083-98884ba8f9f0")
+    
+    local seekAD = Dialog("HAV_WrootRequest_AD_SeekingWulbren_c2d54f5b-707d-6130-9eb1-ed0b57859ad8")
+    local reunionAD = Dialog("HAV_WrootRequest_AD_Reunion_7d12277b-8c70-11c2-cc16-a7b54a63fbf0")
+
+    ----------------------------------
+    -- Nodes
+
+    nodes.ReunionScene = ImmediateSelector {
+        CanEnter = function()
+            return GetFlag(goToWulbrenFlag) and not GetFlag(reunionOverFlag) and not wulbren.Character.IsDead
+        end
+    }
+
+    nodes.ReunionScene.LookForWulbren = Action {
+        function()
+            if(not playSeekADOnce) then
+                StartAutomatedDialog(seekAD, false, me)
+                playSeekADOnce = true
+            end
+            mod.moveto.MoveToPoint(searchPoint, MovementSpeed.Run, me) 
+            Sleep(4.0)
+            StartAutomatedDialog(seekAD, false, me)
+            foundWulbren = true
+        end,
+        CanEnter = function()
+            return not foundWulbren
+        end
+    }
+
+    nodes.ReunionScene.WithWulbren = Action {
+        function()
+            mod.moveto.MoveToPoint(reunionPoint, MovementSpeed.Walk, me) 
+            Sleep(2)
+            if(not wulbren.Character.IsDead and GetDistance2DTo(me,wulbren) <= 3.0) then
+                SetFlag(withWulbrenFlag)
+                SteerTo(wulbren)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                reunionAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 30.0
+                },
+                me,
+                wulbren
+                )
+            else
+                Sleep(2)
+            end
+        end
+    }
+
+    nodes.Workshop = Selector {
+        function(nodes)
+            return
+                    GetWeightedCanEnter(nodes, {
+                        [nodes.FirstPosition] = 1,
+                        [nodes.SecondPosition] = 2,
+                        [nodes.ThirdPosition] = 1,
+                        [nodes.FourthPosition] = 1
+                    })
+        end
+    }
+
+    nodes.Workshop.FirstPosition = Action {
+        function()
+            mod.moveto.MoveToPoint(firstPoint, MovementSpeed.Stroll, me) 
+            LookFrom(firstPoint)
+            PlayAnimation(inspectPotionAnim)
+            Sleep(3)
+        end,        
+    }
+
+    nodes.Workshop.SecondPosition = Action {
+        function()
+            mod.moveto.MoveToPoint(secondPoint, MovementSpeed.Stroll, me) 
+            LookFrom(secondPoint)
+            Sleep(4)
+            PlayAnimation(craftingAnimation)
+            Sleep(4)
+        end
+    }
+
+    nodes.Workshop.ThirdPosition = Action {
+        function()
+            mod.moveto.MoveToPoint(thirdPoint, MovementSpeed.Stroll, me) 
+            LookFrom(thirdPoint)
+            PlayAnimation(inspectBasketAnim)
+            Sleep(3)
+        end,        
+    }
+
+    nodes.Workshop.FourthPosition = Action {
+        function()
+            mod.moveto.MoveToPoint(fourthPoint, MovementSpeed.Stroll, me) 
+            LookFrom(fourthPoint)
+            PlayAnimation(inspectAnim)
+            Sleep(6)
+        end
+    }
+
+end
+}

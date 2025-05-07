@@ -1,0 +1,201 @@
+game.states.UND_DuergarCamp_Rothe_Eating = State{
+    function()
+        description = [[Deep rothe behaviour inside the duergar camp. They'll be in a corner peacefully eating.]]
+
+        modules = {"shared.util", "shared.dialog"}
+
+        -------------------------------------------------------------------
+        -- Local params
+        params.eatPos = {type = EParamType.String, required = true, help = [[Eat position.]]}
+        params.eatAD = {type = EParamType.String, required = false, default = "", help = [[AD while eating.]]}
+        params.companion = {type = EParamType.String, required = false, default = "", help = [[Companion.]]}
+        -------------------------------------------------------------------
+
+        -------------------------------------------------------------------
+        -- Local variables
+        local dEatAD = Dialog(params.eatAD)
+        local companion = Entity(params.companion)
+        local eatPos = Entity(params.eatPos)
+        local eatAnim = Animation("CUST_EatingFromTrough_6d0eb490-d0d8-4ffb-8a57-1e1fc85b6463")
+        local eatPosFlag = Flag("UND_DuergarCamp_DeepRothe_State_InEatPosition_15a57d0f-7d5b-48fe-b798-32cd56abd1f7")
+
+        local runAwayFlag = Flag("UND_DuergarCamp_DeepRothe_State_RunningAway_a15445f0-e0cd-43c7-88ae-ffbcc28d97a0")
+        local runAwayPos = Entity("S_UND_DuergarCamp_RotheEscape_245e34c9-2de2-4e95-9b71-27285bcf694e")
+        -------------------------------------------------------------------
+
+        -------------------------------------------------------------------
+        -- State
+        self.OnLeave = function()
+            ClearFlag(eatPosFlag, me)
+        end
+        -------------------------------------------------------------------
+
+        -------------------------------------------------------------------
+        -- Nodes
+        nodes = ImmediateSelector{}
+
+        nodes.Action_Disappear = Action{
+            function()
+                if not IsInDangerousSurfaceFor(runAwayPos, me.Character) then
+                    local moveToResult = MoveTo(runAwayPos, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+                    if moveToResult ~= error.MovementError.None then
+                        Sleep(3.0)
+                    else
+                        SetOnStage(me, false)
+                    end
+                elseif GetDistance2DTo(me, runAwayPos) <= 3.0 then
+                    SetOnStage(me, false)
+                else
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(runAwayFlag)
+            end
+        }
+
+        -- Eat loop animation.
+        nodes.Action_Idle = Action{
+            function()
+                LookFrom(eatPos)
+
+                if dEatAD ~= nil and GetFlag(eatPosFlag, companion) then
+                    local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(dEatAD,
+                        { maxDistance = 10.0,
+                        checkSight = true,
+                        ignoreCower = false,
+                        waitForCompletion = false,
+                        fallbackSoloDialog = nil,
+                        minDelay = math.random(15.0, 20.0),
+                        cullingDistance = 20.0 },
+                        me, companion)
+                    if result == error.AutomatedDialogRateLimitedStartFailed then
+                        DebugText(me, "Error: StartCheckedAutomatedDialogRateLimited failed")
+                    end
+                end
+
+                mod.util.SleepRandom(0.0, 4.0)
+                -- Eat animation.
+                PlayAnimation(eatAnim)
+            end,
+            Valid = function()
+                return GetFlag(eatPosFlag, me)
+            end
+        }
+
+        -- Move close to where the food is.
+        nodes.Action_GoToEat = Action{
+            function()
+                if not IsInDangerousSurfaceFor(eatPos, me.Character, 1.0) then
+                    local moveResult = MoveTo(eatPos, MovementSpeed.Walk, true, false, 0.5, 1.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                        LookFrom(eatPos)
+                        Sleep(3.0)
+                    else
+                        LookFrom(eatPos)
+                        SetFlag(eatPosFlag, me)
+                    end
+                else
+                    LookFrom(eatPos)
+                    Sleep(3.0)
+                end
+            end
+        }
+        -------------------------------------------------------------------
+    end
+}
+
+game.states.UND_DuergarCamp_Rothe_Sleeping = State{
+    function()
+        description = [[Deep rothe behaviour inside the duergar camp. Third rothe wil be sleeping near the eating ones.]]
+
+        modules = { "shared.util" }
+
+        -------------------------------------------------------------------
+        -- Local variables
+        local sleepPos = Entity("S_UND_DuergarCamp_Rothe_SleepPos_cb5099b4-260e-49bf-a970-f93ea4b71fbb")
+        local wait = false
+
+        local runAwayFlag = Flag("UND_DuergarCamp_DeepRothe_State_RunningAway_a15445f0-e0cd-43c7-88ae-ffbcc28d97a0")
+        local runAwayPos = Entity("S_UND_DuergarCamp_RotheEscape_245e34c9-2de2-4e95-9b71-27285bcf694e")
+        -------------------------------------------------------------------
+
+        -------------------------------------------------------------------
+        -- Nodes
+        nodes = ImmediateSelector{}
+
+        nodes.Action_Disappear = Action{
+            function()
+                if not IsInDangerousSurfaceFor(runAwayPos, me.Character) then
+                    local moveToResult = MoveTo(runAwayPos, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+                    if moveToResult ~= error.MovementError.None then
+                        Sleep(3.0)
+                    else
+                        SetOnStage(me, false)
+                    end
+                elseif GetDistance2DTo(me, runAwayPos) <= 3.0 then
+                    SetOnStage(me, false)
+                else
+                    Sleep(3.0)
+                end
+            end,
+            Valid = function()
+                return GetFlag(runAwayFlag)
+            end
+        }
+
+        nodes.Action_Wait = Action{
+            function()
+                Sleep(6.0)
+            end,
+            CanEnter = function()
+                return wait
+            end
+        }
+
+        nodes.Action_GoToSleep = Action{
+            function()
+                -- If the resting pos is in a dangerous surface, wait for one turn
+                if not IsInDangerousSurfaceFor(sleepPos, me.Character, 1.0) then
+                    try
+                        MoveTo(sleepPos)
+                        LookFrom(sleepPos)
+                        ApplyStatus(me, "SLEEPING")
+                        wait = true
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        DebugText(me, "Error: MovementFailed")
+                        Sleep(3.0)
+                    end
+                else
+                    Sleep(6.0)
+                end
+            end,
+            CanEnter = function()
+                return not HasActiveStatus(me, "SLEEPING")
+            end,
+        }
+
+        nodes.Action_Sleeping = Action{
+            function()
+                WaitForInterrupt()
+            end,
+        }
+        -------------------------------------------------------------------
+
+        -------------------------------------------------------------------
+        -- Events
+        events.FlagSet = function(e)
+            if e.Flag == runAwayFlag.Guid then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end
+
+        events.StatusRemoved = function(e)
+            if e.Status == "SLEEPING" then
+                wait = false
+            end
+        end
+        -------------------------------------------------------------------
+    end
+}

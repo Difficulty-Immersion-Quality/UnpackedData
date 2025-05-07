@@ -1,0 +1,126 @@
+game.states.GOB_AttackOnDen_Victory_Sappers_Companion = State { 
+    function ()
+    
+        description = [[State for goblin raiders that AD in pairs after the victory of the DEN. This one is for second speakers, so they don't AD themselves. 
+        Namely S_GOB_AttackOnDen_Ranged_001 and RaiderHardy]]
+    
+        ---------------------------------------------------
+        -- Params
+        
+        params.lootingPosition = {type = EParamType.String, required=false, default="", help =[[Position this character will initially move to when victory has been achieved in the Den.]]}
+    
+        ---------------------------------------------------
+        -- local vars
+        
+        local talker = Entity("S_GOB_AttackOnDen_Sapper_001_392146c2-0849-4250-b907-e4fb9a13ddcf")
+        local pos = Entity(params.lootingPosition)
+        ---------------------------------------------------
+        --state nodes
+    
+        nodes.MoveTo = Action{
+            function()
+                MoveTo(pos,MovementSpeed.Walk)
+            end,
+            CanEnter = function()
+                return (pos~=nil and GetDistanceTo(me,pos) >3)
+            end
+        }
+    
+        nodes.OnPosition = Selector{
+            CanEnter = function()
+                return pos~=nil
+            end
+        }
+    
+        nodes.OnPosition.AD = Action{
+            function()
+                LookAtEntity(talker, 3.0)
+                Sleep(12)
+            end,
+            CanEnter = function()                                                                                                                                                                                                      
+                return IsInDialog(me,false)
+            end
+        }
+    
+        nodes.OnPosition.Wander = Action{
+            function()
+                Wander(3,12,MovementSpeed.Stroll,pos,false)
+                Sleep(6)
+            end,
+            Valid = function()
+                return not IsInDialog(me,false)
+            end
+        }
+    
+        nodes.FallbackSleep = Action{
+            function()
+                WaitForInterrupt()
+            end,
+            CanEnter = function()
+                return true
+            end
+        }
+    
+    end
+    }
+    
+    
+    game.states.GOB_AttackOnDen_Victory_Sappers_Main = State { 
+    function ()
+        
+            description = [[State for goblin raiders that AD in pairs after the victory of the DEN. Namely S_GOB_AttackOnDen_Melee_001 and RaiderBold]]
+        
+            modules = {"shared.util", "shared.moveto", "shared.dialog"}
+            ---------------------------------------------------
+            -- Params
+            
+            params.lootingPosition = {type = EParamType.String, required=false, default="", help =[[Position this character will initially move to when victory has been achieved in the Den.]]}
+            ---------------------------------------------------
+            -- local vars
+            
+            local pos = Entity(params.lootingPosition)
+            local AD = Dialog("DEN_AttackOnDen_AD_Sappers_df2e134d-2a4c-edb3-937e-142d7315f8a8")
+            local sapper3 = Entity("S_GOB_AttackOnDen_Sapper_003_4264ba13-c816-405c-bc55-9f91dcfd9793")
+            local sapper4 = Entity("S_GOB_AttackOnDen_Sapper_004_1b6dba51-be8b-47ac-a73b-94c29e56bbad")
+            ---------------------------------------------------
+            --state nodes
+        
+            nodes.MoveTo = Action{
+                function()
+                    MoveTo(pos,MovementSpeed.Walk)
+                end,
+                CanEnter = function()
+                    return (pos~=nil and GetDistanceTo(me,pos)>3)
+                end
+            }
+        
+            nodes.OnPosition = Selector{
+                CanEnter = function()
+                    return pos~=nil
+                end
+            }
+        
+
+            nodes.OnPosition.Wander = Action{
+                function()
+                    Wander(3,12,MovementSpeed.Stroll,pos,false)
+                    Sleep(6)
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(AD, {minDelay = 45.0, waitForCompletion = true},me, sapper3, sapper4)
+                end,
+                CanEnter = function()
+                    return true
+                end
+            }
+        
+            nodes.FallbackSleep = Action{
+                function()
+                    WaitForInterrupt()
+                end,
+                CanEnter = function()
+                    return true
+                end
+            }
+    end
+    }
+
+    

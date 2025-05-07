@@ -1,0 +1,180 @@
+game.states.GOB_PrisonEscape_Guard  = State{function()
+
+    modules = { "shared.dialog", "shared.moveto" }
+
+--------------------------------LOCAL--------------------------------
+    local playerAtDoorFlag = Flag("GOB_PrisonEscape_State_PlayerIsAtPrisonDoor_089e5b7e-d8aa-418c-9b49-e79830973d98")
+
+    local guardBench = Entity("S_GOB_PrisonGuardBench_ffec8946-fffd-4f54-9bbf-6ffd1b549f4c")
+    local prisonDoor = Entity("S_GOB_PrisonDoor_9934571f-8f27-41ab-9614-96a4d28fc042")
+    local prisonStandPoint = Entity("S_GOB_PrisonStandPoint_7d4e8443-9e5f-495b-8dab-8303de51b3a9")
+    local altarAD = Dialog("GOB_PrisonEscape_AD_Guard_bf549975-8fe5-7fce-44b0-dd4f37700dcb")
+    local prisonDoorAD= Dialog("GOB_PrisonEscape_AD_GuardAtGate_4989f498-d25a-8fef-ef5b-9e3d1b3351fb")
+    local stretchAnim = Animation("CUST_Stretching_01_9af703b0-c02f-4c17-bfee-7e11f1f80d6b")
+
+    local isAtSideRoomPoint = false
+    local isAtAltarPoint = false
+    local isAtPrisonDoor = false
+    local isLeavingPrisonDoor = false
+    local isSitting = false
+    local doPointBehaviour = false
+
+    self.Valid = function()
+        return doPointBehaviour
+    end
+
+--------------------------------NODES--------------------------------
+    nodes.Sitting = Proxy{
+        
+        OnEnter = function()
+            StartTimer(me, "GOB_PrisonEscape_GuardSittingDown", 30, 0)
+        end,
+
+        game.states.Sit,
+        params = {
+            seat = "S_GOB_PrisonGuardBench_ffec8946-fffd-4f54-9bbf-6ffd1b549f4c",
+            reactToDangerousSurface = true
+        },
+
+        Valid = function()
+            return isSitting
+        end,
+
+        OnLeave = function()
+            StopTimer(me, "GOB_PrisonEscape_GuardSittingDown")
+            isSitting = false
+        end
+    }
+
+    nodes.SideRoom = Action{
+        CanEnter = function()
+            return isAtSideRoomPoint
+        end,
+
+        OnEnter = function()
+            isAtSideRoomPoint = false
+        end,
+
+        function()
+            if not guardBench.Item.IsDestroyed then
+                isSitting = true
+            else
+                Sleep(20)
+            end
+        end
+    }
+
+    nodes.AlterPoint = Action{
+        CanEnter = function()
+            return isAtAltarPoint
+        end,
+
+        OnEnter = function()
+            isAtAltarPoint = false
+        end,
+
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                altarAD,
+                {
+                    waitForCompletion = true
+                },
+                me
+            )
+            Sleep(20)
+        end
+    }
+
+    nodes.LookAtGate = Action{
+        OnEnter = function()
+            StartTimer(me, "GOB_PrisonEscape_GuardWaitingGate", 12, 0)
+        end,
+
+        function()
+            mod.moveto.MoveToPoint(prisonStandPoint,  MovementSpeed.Walk, me)
+            SteerTo(prisonDoor)
+            if prisonDoor.Item.IsOpened then
+                Close(prisonDoor)
+                Lock(prisonDoor, "GOB_PrisonEscape_PrisonKey")
+            end
+            if GetFlag(playerAtDoorFlag) and CanSee(me, prisonDoor) then
+                Attack(prisonDoor, false, false)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    prisonDoorAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                StopTimer(me, "GOB_PrisonEscape_GuardWaitingGate")
+                isLeavingPrisonDoor = true
+            end
+        end,
+
+        Valid = function()
+            return isAtPrisonDoor and not isLeavingPrisonDoor
+        end,
+
+        OnLeave = function()
+            StopTimer(me, "GOB_PrisonEscape_GuardWaitingGate")
+            isLeavingPrisonDoor = true
+        end
+
+    }
+
+    nodes.LeavingGate = Action {
+        function()
+            mod.moveto.MoveToPoint(prisonStandPoint,  MovementSpeed.Walk, me)
+            LookFrom(prisonStandPoint)
+            PlayAnimation(stretchAnim, true, false)
+            Sleep(5)
+            isAtPrisonDoor = false
+            isLeavingPrisonDoor = false
+        end,
+
+        Valid = function()
+            return isLeavingPrisonDoor
+        end,
+
+        OnLeave = function()
+            isAtPrisonDoor = false
+            isLeavingPrisonDoor = false
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(2)
+            doPointBehaviour = false
+            WaitForInterrupt()
+        end,
+
+        OnLeave = function()
+            doPointBehaviour = false
+        end
+    }
+
+--------------------------------EVENTS--------------------------------
+    events.SplineControlPointReached = function(e)
+        if e.Event == "GOB_PrisonEscape_AltarPoint" then
+            doPointBehaviour = true
+            isAtAltarPoint = true
+        elseif e.Event == "GOB_PrisonEscape_SideRoom" then
+            doPointBehaviour = true
+            isAtSideRoomPoint = true
+        elseif e.Event == "GOB_PrisonEscape_PrisonDoor" then
+            doPointBehaviour = true
+            isAtPrisonDoor = true
+        end
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "GOB_PrisonEscape_GuardSittingDown" then 
+            isSitting = false
+        elseif ev.TimerName == "GOB_PrisonEscape_GuardWaitingGate" then 
+            isLeavingPrisonDoor = true
+        end
+    end
+
+end
+}

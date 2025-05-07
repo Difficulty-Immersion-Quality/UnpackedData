@@ -1,0 +1,56 @@
+game.states.GOB_ZhentarimGuard_Ranger = State{function()
+    description = [[Anubis behaviour for Zhentarim rangers in Goblin camp]]
+
+    params.GuardPos = { type = EParamType.String, required = true,
+        help = [[Default position trigger]]}
+
+    local tr_GuardPos = nil
+    local anim_Bored = Animation("CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef")
+    local anim_LookAround = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7")
+
+    self.OnInit = function()
+        tr_GuardPos = FindEntity(params.GuardPos)
+    end
+
+    nodes.Guard = Selector{
+        function(nodes)
+            return FindWeightedRandomSelectable(nodes, {
+                [nodes.Stand] = 25,
+                [nodes.Yawn] = 5,
+                [nodes.LookAround] = 5
+            })
+        end
+    }
+
+    nodes.Guard.Stand = Action{
+        function()
+            try
+                MoveTo(tr_GuardPos)
+                LookFrom(tr_GuardPos)
+                Sleep(5.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed tr_GuardPos")
+            end
+        end
+    }
+
+    nodes.Guard.Yawn = Action{
+        function()
+            PlayAnimation(anim_Bored)
+            Sleep(3.0)
+        end
+    }
+
+    nodes.Guard.LookAround = Action{
+        function()
+            PlayAnimation(anim_LookAround)
+            Sleep(3.0)
+        end
+    }
+
+    nodes.Default = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

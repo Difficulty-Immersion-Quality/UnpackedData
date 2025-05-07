@@ -1,0 +1,78 @@
+game.states.WYR_South_Civilian_005 = State{function()
+    description = [[Kid civilian at WYR south checkpoint.
+        - Run to a spot to look at something
+        - Run around parents
+        - Stand bored
+    ]]
+
+    modules = { "shared.util" }
+
+    local otherKid = Entity("S_WYR_South_Civilian_004_df71e11e-d3d5-4430-9416-dcaca67860c1")
+    local lookAt = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local bored = Animation("CUST_Listen_Bored_01_020103b1-f053-46e8-92c0-6e0347bcda1d")
+    local spline = Spline("S_WYR_South_KidsRunSpline_d98d8fad-a225-449b-96cc-7a2a071d2776")
+    local pos = Entity("S_WYR_South_Civilian_Pos_005_624edb9e-7a22-4d50-b617-77cff74179a0")
+    local posLookAtSmth = Entity("S_WYR_South_Civilian_Look_005_5113ec37-9e27-4454-8647-542777d94e87")
+    local action = "StandBored"
+
+
+    nodes = Selector{
+        function(nodes)
+            if action ~= nil then
+                return nodes[action]
+            end
+            return nodes.Fallback
+        end
+    }
+
+    nodes.RunAround = Action{
+        function()
+            Follow(me, otherKid)
+        end,
+        OnLeave = function()
+            StopFollow(me.Character)
+        end
+    }
+
+    nodes.StandBored = Action{
+        function()
+            local res = MoveTo(pos, MovementSpeed.Run, false, false, 1.0, 1.5, false)
+            if res ~= error.MovementError.None then
+                SteerTo(pos)
+                Sleep(1.0)
+            end
+            mod.util.SleepRandom(0.5, 1.0)
+            PlayAnimation(bored, true, false)
+        end
+    }
+
+    nodes.LookAtSomething = Action{
+        CanEnter = function()
+            return GetDistanceTo(me, posLookAtSmth) > 1.0
+        end,
+
+        function()
+            local res = MoveTo(posLookAtSmth, MovementSpeed.Run, false, false, 1.0, 1.5, false)
+            if res ~= error.MovementError.None then
+                LookFrom(posLookAtSmth)
+                Sleep(1.0)
+            end
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(0.5)
+        end
+    }
+
+
+    events.EntityEvent = function(ev)
+        if ev.TargetEntity == me then
+            DebugText(me, ev.Event .. ": " .. tostring(ev.Params[1]))
+        end
+        if ev.Event == "WYR_South_Kid_ChangeActivity" then
+            action = ev.Params[1]
+        end
+    end
+end}

@@ -1,0 +1,116 @@
+game.states.LOW_OskarsBeloved_CookStaff = State {function ()
+    modules = {"shared.dialog", "shared.util","shared.moveto","shared.character","shared.items"}
+    
+    local BehaviorDialog = Dialog("BHVR_WRLD_LOW_OskarsBeloved_CookingSousChef_10e9036b-ebf0-1cde-bcf3-0ee3070c82c6")
+    local BehaviorTrigger = Entity("BHVR_WRLD_LOW_OskarsBeloved_CookingSousChef_SceneTrigger_a168c1f6-68e0-46fa-9b21-4212a5e6f88a")
+    local pieThrowFlag = Flag("LOW_OskarsBeloved_Event_ThrowPieChef_696653f7-17be-4f6d-bdba-10f4e0a89eac")
+    local canDoADFlag = Flag("LOW_OskarsBeloved_State_SousChefCanAD_1fdf0a3e-30eb-47e3-94b6-552c12c0d759")
+    local ADingFlag = Flag("LOW_OskarsBeloved_State_ChefADing_221ebb73-82d8-4cd8-9fb5-e5e972afe914")
+    local kitchenTrigger = Entity("S_LOW_ChefsCookingTrigger_2afb5013-da53-4b21-9acf-46a79c85ac55")
+    local cupboardTrigger = Entity("S_LOW_OskarsBeloved_CupboardLocation_8f7dc7bb-e563-47d3-a6c4-ad8cc1fe9ba6")
+    local cupboardLookAt = Entity("S_LOW_OskarsBeloved_CupboardSteerTo_431adb82-c66d-4ea4-92af-8baafbf3d325")
+    local lookAtAnim = Animation("CUST_Looking_Around_Cargo_02_12d35429-72c4-42f2-b35d-29c22da74625")
+    local cupboardEntity = Entity("S_LOW_OskarsBeloved_SousChef_Cupboard_f30b9ef2-815a-4c22-832f-748eeb3e90e2")
+    local tableLocation = Entity("S_LOW_OskarsBeloved_TableLocation_b71c3a46-6bab-439a-ada7-883dd62e111d")
+    local tableLookAt = Entity("S_LOW_OskarsBeloved_TableLookAt_70bb2c4b-519b-4c73-9818-a40c16b907f7")
+    local pickupAnim = Animation("CUST_Pickup_Cargo_01_6c3edb1a-778c-47c8-beb3-f8390f01d9a6")
+
+    helpers.CheckChefsAD = function()
+        if GetFlag(ADingFlag) then
+            SetFlag(canDoADFlag)
+        end
+    end
+
+    nodes.WaitingToThrow = Action {
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not GetFlag(pieThrowFlag)
+        end
+    }
+
+    nodes.Cooking = Selector {
+        function(nodes)
+
+            return GetWeightedCanEnter(nodes, {
+                [nodes.Cutting] = 5,
+                [nodes.CheckUnderTable] = 4,
+                [nodes.Wandering]= 2,
+                [nodes.CheckSupplies]= 4
+            })
+        end
+    }
+
+    nodes.Cooking.Cutting = Action {
+        function()
+            try
+                StartBehaviorDialog(BehaviorDialog, BehaviorTrigger.Trigger, true, me, throwPie, sousChef)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    DebugText(me, "Failed to start wrld bhvr [2]: Error [1]", tostring(e), tostring(behaviorDialog.Guid))
+                end
+        end,
+        CanEnter = function()
+            return not GetFlag(ADingFlag)
+        end
+          
+    }
+
+    nodes.Cooking.CheckUnderTable = Action {
+
+        function()
+            if MoveTo(tableLocation, MovementSpeed.Walk) then
+                SteerTo(tableLookAt)                  
+                PlayAnimation(lookAtAnim,true,false)       
+            end
+        end
+    }
+
+    nodes.Cooking.Wandering = Action {
+
+        function()
+
+            if not IsInTrigger(me, kitchenTrigger.Trigger) then
+                local validPos = FindValidPosition(kitchenTrigger, 5.0, me,true)
+                if validPos ~= nil then
+                    MoveTo(validPos, MovementSpeed.Walk) 
+                end
+            end
+            Wander(kitchenTrigger,math.random(6,10),MovementSpeed.Walk)
+            Sleep(math.random(4,6))
+            helpers.CheckChefsAD()
+        end
+    }
+
+    nodes.Cooking.CheckSupplies = Action {
+
+        function()
+            local opened = false
+            if MoveTo(cupboardTrigger, MovementSpeed.Walk) then
+                if not mod.items.SafeIsDestroyed(cupboardEntity) and not cupboardEntity.Item.IsOpened  then
+                    opened = true
+                    SteerTo(cupboardLookAt)                  
+                    Open(cupboardEntity)
+                    PlayAnimation(pickupAnim,true,false)
+                    Close(cupboardEntity)
+                end
+            end
+        end,
+        CanEnter = function()
+            return IsInTrigger(me, kitchenTrigger.Trigger) and not mod.items.SafeIsDestroyed(cupboardEntity) and not GetFlag(ADingFlag)
+        end,
+        OnLeave = function()
+            if opened then
+                Close(cupboardEntity)
+            end
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(math.random(3,5))
+        end
+    }
+
+end}

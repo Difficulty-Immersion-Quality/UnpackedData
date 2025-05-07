@@ -1,0 +1,217 @@
+game.states.DEN_Tiefling_FoodTrader = State {function ()
+
+description = [[Behavior of the old tiefling chef preparing food in the grove.]]
+
+-----------------------------------------
+
+modules = { "gustav.Act1.GroveRefugee", "shared.dialog", "shared.moveto" }
+
+-----------------------------------------
+-- Local variables
+local cauldronPos
+local cauldron = Entity("S_DEN_ChefCauldron_12ecdcd7-b9bb-445f-aba0-9ac1f49448c5")
+local campfire = Entity("S_DEN_ChefFire_aba7a99e-28ac-4eab-bd77-bf1317e023b7")
+local standLookAt = Entity("S_DEN_Tiefling008_ChefStandArea_03de5d87-4fc8-444f-b1e6-7318142f13c7")
+local robberKidGuard = Entity("S_DEN_Tiefling_008_03b6fae4-d250-4ce9-9a01-19cb427deb17")
+local cauldronInvalid = Flag("DEN_RefugeeChef_State_CauldronGone_b8b622f5-85ca-325e-89ca-c868d2113e9c")
+local postDruidAttackFlag = Flag("DEN_DruidAttack_State_PrepAfterDeathOfDruids_b4754af7-07ec-433c-87d2-e78ef4c79e6e")
+local stirPos = Entity("S_DEN_ChefPoint_83a95ac8-ff32-4349-ac63-c711b771fcee")
+local stirAnimation = Animation("CUST_StirGruel_01_0cd72b7b-02be-4ce0-ba06-fab7099c9b7d")
+
+local canAD = true
+local AD = Dialog("DEN_General_AD_TieflingGuard3_07152599-a8fe-941e-9210-512dae317274")
+
+-----------------------------------------
+-- Helper functions
+helpers.CheckCauldron = function()
+    if mod.GroveRefugee.CheckItemLocation(cauldron,cauldronPos) then
+        if GetFlag(cauldronInvalid,nil) then
+            ClearFlag(cauldronInvalid)
+        end
+            return true
+    end
+    if not GetFlag(cauldronInvalid,nil) then
+        SetFlag(cauldronInvalid)
+    end
+    return false
+end
+
+-----------------------------------------
+-- State nodes
+self.OnInit = function()
+    cauldronPos = Entity("S_DEN_ChefCauldronPos_f3f62c26-8e1f-429d-9f5d-764845ea5d30").Position
+end
+
+-----------------------------------------
+-- Nodes
+
+nodes.doAD = Action {
+    CanEnter = function()
+        return canAD
+    end,
+    OnEnter = function()
+        canAD = false
+    end,
+    function()
+        mod.dialog.StartCheckedAutomatedDialog(
+            AD,
+            {
+                waitForCompletion = false,
+            },
+            me
+        )
+    end,
+    OnLeave = function()
+        StopTimer(me,"ADTimer_DEN_General_AD_TieflingGuard3")
+        StartTimer(me,"ADTimer_DEN_General_AD_TieflingGuard3", 40 + math.random(0,10),0)
+    end,
+    Valid = function()
+        return (not GetFlag(postDruidAttackFlag) or (GetFlag(postDruidAttackFlag) and robberKidGuard.Character.IsDead))
+    end
+}
+
+nodes.Default = Selector{
+    function(nodes)
+        if nodes.AtCauldron.IsSelectable() then
+            return GetWeightedCanEnter(nodes, {
+                [nodes.AtCauldron] = 2,
+                [nodes.CookingRest] = 1
+            })
+        else
+            return GetWeightedCanEnter(nodes, {
+                [nodes.Wander] = 1,
+                [nodes.WanderRest] = 2
+            })
+        end
+    end
+}
+
+nodes.Default.AtCauldron = Action {
+    CanEnter = function()
+        return helpers.CheckCauldron()
+    end,
+    function()
+        Sleep(1)
+        for i = 1, math.random(2, 3), 1 do
+            if mod.moveto.MoveToPoint(stirPos,MovementSpeed.Stroll,me) then
+                SteerTo(campfire, true)
+                if not HasActiveStatus(campfire, "BURNING") then
+                    try
+                        UseItem(campfire.Item)
+                    catch e if ls.CheckType(e, error.UseItemFailed) then
+                        Sleep(1.0)
+                    end
+                end
+                PlayAnimation(stirAnimation, true, false)
+                Sleep(math.random(2.0,4.0))
+            end
+        end
+    end
+}
+
+nodes.Default.CookingRest = Proxy {
+    CanEnter = function()
+        return helpers.CheckCauldron()
+    end,
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_ChefPoint_83a95ac8-ff32-4349-ac63-c711b771fcee",
+            lookTarget = "S_DEN_ChefCauldron_12ecdcd7-b9bb-445f-aba0-9ac1f49448c5",
+            anim = "CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba",
+        }
+}
+
+nodes.Default.Wander = Proxy {
+    game.states.DEN_GeneralGroveStates_Wander,
+    params={
+        anchor = "S_DEN_ChefPoint_83a95ac8-ff32-4349-ac63-c711b771fcee",
+        wanderMin = 2.0,
+        wanderMax = 4.0
+    }
+}
+
+nodes.Default.WanderRest = Action {
+        function()
+            Sleep(math.random(3,5))
+        end
+    }
+-----------------------------------------
+-- event section
+
+events.TimerFinished = function(e)
+    if(e.TimerName == "ADTimer_DEN_General_AD_TieflingGuard3") then 
+        canAD = true
+    end
+end
+
+end}
+
+game.states.DEN_AttackOnDen_Chef = State {function ()
+
+    description = [[Chatting with Ikaron, and Bex/Dannis if tortured adventurer is missing.]]
+
+    -----------------------------------------
+
+    modules = { "shared.moveto", "shared.dialog"}
+
+    -----------------------------------------
+    -- Local variables
+    local introSceneFlag = Flag("DEN_AttackOnDen_Event_ChefAndSonTalked_1877570b-a0f3-4d65-bbba-7db56293242a")
+
+    local afterIntroAD = Dialog("DEN_AttackOnDen_AD_Refugees_b5a6c3fe-1ecf-23ca-03bd-7716c258e61e")
+    local introSceneAD = Dialog("DEN_AttackOnDen_AD_ChefAndSon_314aadc8-7c5a-aa74-a2df-bd3c99613eef")
+    local standingAfterIntroPoint = Entity("S_DEN_AoDChefPos_78d30dfa-824b-4446-81ef-149286ef6075")
+    local standingIntroPoint = Entity("S_DEN_IntroChefPos_1942442d-4b9e-4300-a889-2e26fb11c55a")
+    local refugee1 = Entity("S_DEN_Tiefling_008_03b6fae4-d250-4ce9-9a01-19cb427deb17")
+    local refugee2 = Entity("S_GLO_YoungLover_02_dcf597c0-36c5-4c81-957a-6fe9fca50a68")
+    local refugee3 = Entity("S_GLO_YoungLover_01_dd9178e7-1e3f-43bc-8a38-666dfcac7d0c")
+
+    -----------------------------------------
+    -- Nodes
+    nodes.IntroStandingAD = Action{
+        function()
+            Sleep(2)
+             if mod.moveto.MoveToPoint(standingIntroPoint, MovementSpeed.Walk, me) then
+                 LookFrom(standingIntroPoint)
+                 mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                     introSceneAD,
+                     {
+                         waitForCompletion = false,
+                         minDelay = math.random(30, 70)
+                     },
+                     me,
+                     refugee1
+                 )
+             else
+                 LookAtEntity(standingIntroPoint, 3.0)
+             end
+         end,
+ 
+         Valid = function()
+             return not GetFlag(introSceneFlag)
+         end
+     }
+ 
+     nodes.AfterIntroStandingAD = Action{
+         function()
+            Sleep(2)
+              if mod.moveto.MoveToPoint(standingAfterIntroPoint, MovementSpeed.Walk, me) then
+                  LookFrom(standingAfterIntroPoint)
+                  mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                      afterIntroAD,
+                      {
+                          waitForCompletion = false,
+                          minDelay = math.random(30, 70)
+                      },
+                      me,
+                      refugee1,
+                      refugee2,
+                      refugee3
+                  )
+              else
+                  LookAtEntity(standingAfterIntroPoint, 3.0)
+              end
+          end
+      }
+ 
+ end}

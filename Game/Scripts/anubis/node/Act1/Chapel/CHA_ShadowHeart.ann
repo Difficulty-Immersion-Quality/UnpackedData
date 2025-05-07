@@ -1,0 +1,48 @@
+game.states.CHA_ShadowHeart = State {function ()
+    description = [[Behaviour of Shadow Heart]]
+    modules = { "shared.dialog" }
+
+    local CryptDoor, StartSphere
+
+    local ChapelFlag = Flag("GLO_Shadowheart_State_ChapelRecruitment_e16f2c82-4298-40ee-9b5d-f772b4f5c769")
+    local BashAnim = Animation("CUST_ShadowheartAttackDoor_01_2d759004-5913-4d8f-9821-80959f256983")
+    local AD = Dialog("CHA_ShadowHeartRecruitment_AD_b9b6bf22-452c-e6be-e152-fa9bc9e8d45c")
+
+    self.OnInit = function()
+        CryptDoor = FindEntity("S_CHA_OUTSIDE_Crypt_Door_d06d5638-c69a-4fcc-b996-c305acbb7ebf")
+        StartSphere = FindEntity("S_CHA_ShadowHeartStartSphere_8a65b0ae-7d7b-4685-b657-4855f0468915")
+    end
+    self.Valid = function()
+        return CheckCurrentGameLevel("WLD_Main_A") and GetFlag(ChapelFlag,nil)
+    end
+    self.OnLeave = function()
+        SetWeaponUnsheathed(me,false,false)
+        StopAnimation(me)
+    end
+
+    nodes.Attack = Action {
+        function()
+            try
+                if(GetDistance2DTo(me,StartSphere) > 1.5 and not IsInDangerousSurfaceFor(StartSphere,me.Character,1.5)) then MoveTo(StartSphere) end
+                LookFrom(StartSphere)
+                SetWeaponUnsheathed(me,true, true)
+                PlayAnimation(BashAnim,false,true)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 15.0
+                    },
+                    me
+                )
+                Sleep(1.0)
+            catch e then
+                if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Move Exception")
+                elseif ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me,"Animation Failed")
+                end
+            end
+        end
+    }
+end}

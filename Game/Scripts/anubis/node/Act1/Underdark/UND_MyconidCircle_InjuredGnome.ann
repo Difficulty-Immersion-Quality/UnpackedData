@@ -1,0 +1,149 @@
+game.states.UND_MyconidCircle_InjuredGnome = State { function ()
+
+    modules = {"shared.math", "shared.moveto", "shared.dialog" }
+
+    local AD = Dialog("UND_MyconidCircle_InjuredGnome_AD_PainGrunt_8c2b1a77-093a-43d3-cb3a-e5b1a2475a37")
+
+    local healedPosTrigger = Entity("S_UND_InjuredGnome_HealedPos_61665038-bb32-4da5-86f3-81b5d5ef6896")
+    local servantPosTrigger = Entity("S_UND_InjuredGnome_ServantPos_7e7a666c-ec92-4575-8691-d1e988a39930")
+
+    local healFlag = Flag("UND_MyconidCircle_InjuredGnome_Healed_6dd9c64e-a6b0-47d5-87f6-b1a1c49d3ab4")
+    local gnomesSavedFlag = Flag("UND_DuergarCamp_State_GnomeAtMyconids_f48d9c4e-e6eb-46dc-93a7-89326d11829b")
+    local gruntingFlag = Flag("UND_MyconidCircle_InjuredGnome_State_StartedGrunting_5f321763-24c2-40aa-97f8-613a0cc48d85")
+    local servantFlag = Flag("UND_InjuredGnome_State_SporeServant_4a1d7911-e00d-4e32-8dff-3352a0a7af63")
+
+    helpers.action.StayAtTrigger = function(pos)
+        local atTrigger = false
+        if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me) then
+            LookFrom(pos)
+            atTrigger = true
+        end
+        return atTrigger
+    end
+
+    helpers.RestartTimer = function()
+        local duration = mod.math.random(5.0, 9.0)
+        StartTimer(me, "UND_InjuredGnome_GruntingAD_Timer", duration, 0)
+    end
+
+    helpers.PlayGruntingAD = function()
+        if GetFlag(gruntingFlag) and not GetFlag(servantFlag) and not GetFlag(healFlag) then
+            if mod.dialog.IsSpeakerAvailable(me) then
+                StartAutomatedDialogRateLimitedImmediate(AD, 12.0, 10.0, me)
+            end
+            helpers.RestartTimer()
+        end
+    end
+
+    nodes.PoisonedGrunting = Action{
+        function()
+            --Her poison is now Incapacitated status, she can't use states for ADs anymore
+            --Moved to events + immediate AD start.
+            --mod.dialog.StartCheckedAutomatedDialogRateLimited(AD, {minDelay = 12.0, waitForCompletion = true},me)
+            --Sleep(3)
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(gruntingFlag) and not GetFlag(servantFlag) and not GetFlag(healFlag)
+        end
+    }
+
+    nodes.Healed = Selector {
+        CanEnter = function()
+            return GetFlag(healFlag) and not GetFlag(servantFlag)
+        end,
+    }
+
+    nodes.Healed.GnomesReturned = Selector {
+        Valid = function()
+            return GetFlag(gnomesSavedFlag)
+        end
+    }
+
+    nodes.Healed.GnomesReturned.StandingUp = Action{
+        function()
+            EndRepose(me)
+            Sleep(1)
+         end,
+        Valid = function()
+            return me.IsReposed
+        end
+    }
+
+    nodes.Healed.GnomesReturned.Idle = Action{
+        function()
+            if helpers.StayAtTrigger(healedPosTrigger) then
+                LookFrom(healedPosTrigger)
+                WaitForInterrupt()
+            else
+                Sleep(6)
+            end
+        end,
+        Valid = function()
+            return not me.IsReposed
+        end,
+    }
+
+    nodes.Healed.Alone = Selector {
+        Valid = function()
+            return not GetFlag(gnomesSavedFlag)
+        end
+    }
+
+    nodes.Healed.Alone.SitOnGround = Action{
+        function()
+            helpers.StayAtTrigger(healedPosTrigger)
+            LookFrom(healedPosTrigger)
+            SitOnGround(me)
+        end,
+        Valid = function()
+            return not me.IsReposed
+        end
+    }
+
+    nodes.Healed.Alone.Idle = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return me.IsReposed
+        end,
+        OnLeave = function()
+            if me.IsReposed then
+                EndRepose(me)
+            end
+        end
+    }
+
+    nodes.SporeServant = Action{
+        function()
+            local atTrigger = helpers.StayAtTrigger(servantPosTrigger)
+            if atTrigger then
+                WaitForInterrupt()
+            else
+                Sleep(6)
+            end
+        end,
+        CanEnter = function()
+            return GetFlag(servantFlag)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+    }
+
+    events.FlagSet = function(e)
+        if e.Flag == gruntingFlag.Guid then
+            helpers.PlayGruntingAD()
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "UND_InjuredGnome_GruntingAD_Timer" then
+            helpers.PlayGruntingAD()
+        end
+    end
+end}

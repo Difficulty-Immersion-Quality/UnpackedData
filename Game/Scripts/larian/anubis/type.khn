@@ -1,0 +1,83 @@
+local __enum = require 'larian.anubis.enum'
+local __util = require 'larian.util'
+
+local __m = {}
+
+local PROTOTYPE_MAKERS = {}
+local TYPE_BUILDERS = {}
+
+local function importTypes(name, namespace)
+    for k, v in pairs(namespace) do
+        __util.Assert(
+            type(v) == "function", "%s namespace should only contain functions (but %s is %s)",
+            name, k, type(v)
+        )
+
+        local typeName = k:match("^Make(%w+)$")
+
+        __util.Assert(
+            typeName ~= nil,
+            "%s namespace should only contain functions named Make<TypeName>, but got %s",
+            name, k
+        )
+
+        TYPE_BUILDERS[typeName] = v
+
+        PROTOTYPE_MAKERS[typeName] = function(...)
+            return {
+                type = __enum.Prototype.Type,
+                typeName = typeName,
+                args = {...}
+            }
+        end
+    end
+end
+
+importTypes("ls.anubis.type", ls.anubis.type)
+importTypes("ls.anubis.game.type", ls.anubis.game.type)
+
+__m.AddPrototypeMakers = function(env)
+    __util.MergeTableInto(env, PROTOTYPE_MAKERS)
+end
+
+__m.AddBuilders = function(env)
+    __util.MergeTableInto(env, TYPE_BUILDERS)
+end
+
+local function makeInstance(item, params)
+    __util.AssertType(item, __enum.Prototype.Type)
+
+    local builder = TYPE_BUILDERS[item.typeName]
+
+    __util.Assert(builder ~= nil, "Type %s does not exist", item.typeName)
+
+    local args = {}
+
+    for k, v in pairs(item.args) do
+        args[k] = __m.ResolveVariable(v, params)
+    end
+
+    return builder(table.unpack(args))
+end
+
+__m.ResolveVariable = function(item, params)
+    local result = item
+
+    if type(item) == "table" then
+        if item.type == __enum.Ref.Param then
+            result = params[item.name]
+        elseif item.type == __enum.Prototype.Type then
+            result = makeInstance(item, params)
+        elseif item.type == nil then
+            result = {}
+
+            for k, v in pairs(item) do
+                result[k] = __m.ResolveVariable(v, params)
+            end
+        end
+    end
+
+    return result
+end
+
+return __m

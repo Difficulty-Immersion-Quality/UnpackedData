@@ -1,0 +1,373 @@
+local __config = require 'larian.anubis.config'
+local __enum = require 'larian.anubis.enum'
+local __env = require 'larian.anubis.env'
+local __expression = require 'larian.anubis.expression'
+local __function = require 'larian.anubis.function'
+local __module = require 'larian.anubis.module'
+local __params = require 'larian.anubis.params'
+local __socket = require 'larian.anubis.socket'
+local __type = require 'larian.anubis.type'
+local __util = require 'larian.util'
+
+local function wrapWithData(func, data)
+    return function(...) return func(data, ...) end
+end
+
+local function makeNode(t, data, kwargs, self)
+    -- luacheck: globals Interrupt
+
+    local calls = {}
+    self = self or {}
+
+    calls.Valid = self.Valid or kwargs.TakeOptional("Valid")
+    calls.CanEnter = self.CanEnter or kwargs.TakeOptional("CanEnter")
+    calls.OnEnter = self.OnEnter or kwargs.TakeOptional("OnEnter")
+    calls.OnLeave = self.OnLeave or kwargs.TakeOptional("OnLeave")
+    calls.OnInterrupt = self.OnInterrupt or kwargs.TakeOptional("OnInterrupt")
+    calls.OnFinished = self.OnFinished or kwargs.TakeOptional("OnFinished")
+    calls.OnPause = self.OnPause or kwargs.TakeOptional("OnPause")
+    calls.OnResume = self.OnResume or kwargs.TakeOptional("OnResume")
+    calls.OnException = self.OnException or kwargs.TakeOptional("OnException")
+	
+    local node = {type = t}
+
+    node.priority = self.Priority or kwargs.TakeOptional("Priority") or 0
+    node.callbacks = {}
+
+    for k, v in pairs(calls) do
+        node.callbacks[k] = __function.MakePrototype(data, v)
+    end
+
+    kwargs.Validate()
+
+    return node
+end
+
+local function makeAction(data, ...)
+    local kwargs = __util.KWArgs("Action", ...)
+
+    local execute = kwargs.TakeRequired(1, "action script function")
+
+    local node = makeNode(__enum.Prototype.Action, data, kwargs)
+
+    node.execute = __function.MakePrototype(data, execute)
+
+    return node
+end
+
+local function makeSelector(data, ...)
+    local kwargs = __util.KWArgs("action", ...)
+
+	local predeclaredNodes
+
+    local selector = kwargs.TakeOptional(1, function(nodes)
+        -- luacheck: globals GetFirstCanEnter
+        return GetFirstCanEnter(nodes)
+    end)
+
+	if type(selector) ~= "function" then
+		predeclaredNodes = selector
+		__util.AssertType(predeclaredNodes, __util.OrderedMap)
+		selector = function(nodes)
+            -- luacheck: globals GetFirstCanEnter
+              return GetFirstCanEnter(nodes)
+		end
+	else
+		predeclaredNodes  = kwargs.TakeOptional(2)
+    end
+
+    local node = makeNode(__enum.Prototype.Selector, data, kwargs)
+
+    local count = 1
+    local name_to_index = {}
+    local nodes = {}
+
+    local addChildNode = function(name, value)
+        if type(value) == "function" then
+            value = makeAction(data, value)
+        end
+
+        rawset(value, "index", count)
+        rawset(value, "name", name)
+
+        name_to_index[name] = count
+
+        table.insert(nodes, count, value)
+
+        count = count + 1
+    end
+
+    node.select = __function.MakePrototype(data, selector)
+	if predeclaredNodes ~= nil then
+		for name, value in pairs(predeclaredNodes) do
+            addChildNode(name, value)
+		end
+	end
+    node.nodes = nodes
+    node.kind = __enum.Selector.Ordinary
+
+    local meta = {
+        __newindex = function(_, name, value)
+            addChildNode(name, value)
+        end,
+        __index = function(_, name)
+            local index = name_to_index[name]
+
+            return index and nodes[index]
+        end
+    }
+
+    setmetatable(node, meta)
+
+    return node
+end
+
+local function makeImmediateSelector(data, ...)
+    local node = makeSelector(data, ...)
+
+    node.kind = __enum.Selector.Immediate
+
+    return node
+end
+
+local function makeProxy(data, ...)
+    local kwargs = __util.KWArgs("Proxy", ...)
+
+    local state
+    try
+        state = kwargs.TakeRequired(1, "state reference", __enum.Ref.Param, __enum.Prototype.State, __enum.Stub.State)
+    catch e then
+        state = nil
+    end
+
+    -- state params
+    local params = kwargs.TakeOptional("params")
+    local inputs = kwargs.TakeOptional("inputs")
+    local outputs = kwargs.TakeOptional("outputs")
+
+    local node = makeNode(__enum.Prototype.Proxy, data, kwargs)
+    node.state = state
+    node.params = params
+    node.inputs = inputs
+    node.outputs = outputs
+    return node
+end
+
+local function unstubAction(stub)
+    local action = makeAction(nil, table.unpack(stub._args))
+
+    __util.MergeTableInto(stub, action)
+end
+
+local function sortNodes(nodes)
+    setmetatable(nodes, nil)
+
+    table.sort(nodes, function(a, b)
+        if a.priority == b.priority then
+            return a.index < b.index
+        else
+            return a.priority > b.priority
+        end
+    end)
+
+    for _, node in ipairs(nodes) do
+        if node.type == __enum.Prototype.Selector then
+            sortNodes(node.nodes)
+        end
+    end
+end
+
+local function mergeArgs(stub)
+    local kwargs = __util.KWArgs("State")
+
+    local classes = {}
+
+    while stub do
+        __util.Assert(stub.type == __enum.Prototype.State or stub.type == __enum.Stub.State)
+
+        local localKwargs = __util.KWArgs("State", table.unpack(stub._args))
+        local constructor = localKwargs.TakeRequired(1, "constructor function")
+        local base = localKwargs.TakeOptional("inherit")
+
+        -- First is topmost, so we never override
+        kwargs.MergeOnlyNew(localKwargs)
+
+        local info = {
+            constructor = constructor,
+            name = stub.name,
+            fqdn = stub.fqdn
+        }
+
+        table.insert(classes, info)
+
+        stub = base
+    end
+
+    return classes, kwargs
+end
+
+local function callConstructors(data, game, classes, fqdn)
+    local env = __env.MakeScriptEnv{
+        game = game,
+
+        description = "",
+
+        nodes = makeSelector(data),
+        events = {},
+        forwardedEvents = {},
+        socketEvents = {},
+        api = {},
+        self = {},
+        params = __params.PrototypeBuilder(data),
+        inputs = __socket.PrototypeBuilder(data),
+        outputs = __socket.PrototypeBuilder(data),
+        modules = {},
+        helpers = __module.Prototype(fqdn .. ".helpers", data),
+
+        StateRef = __config.MakeStateRef,
+        Action = wrapWithData(makeAction, data),
+
+        Selector = wrapWithData(makeSelector, data),
+        ImmediateSelector = wrapWithData(makeImmediateSelector, data),
+
+        Expression = __expression.MakePrototype,
+        ExpressionRef = __expression.MakeRef,
+
+        Proxy = wrapWithData(makeProxy, data)
+    }
+
+    local meta = getmetatable(env)
+    setmetatable(env, nil)
+
+    __type.AddPrototypeMakers(env)
+
+    setmetatable(env, meta)
+
+    local apis = {}
+
+    for i = #classes, 1, -1 do
+        local info = classes[i]
+
+        try
+            __util.CallWithEnv(info.constructor, env)
+        catch e then
+            __util.Rethrow(e, "While processing State's ctor")
+        end
+
+        try
+            apis[info.name] = __function.MakePrototypes(data, env.api)
+        catch e then
+            __util.Rethrow(e, "While processing State's api.* functions")
+        end
+
+        env.api = {}
+    end
+
+    env.api = apis
+
+    return env
+end
+
+local function unstubState(context, stub)
+    try
+        local classes, kwargs = mergeArgs(stub)
+
+        local data = __function.PrototypeBuilder()
+
+        local state = callConstructors(data, context.game, classes, stub.fqdn)
+
+        try
+            __util.AssertTypedTable(state.nodes, __enum.Prototype.Selector)
+        catch e then
+            __util.Rethrow(e, "While checking State's 'nodes'")
+        end
+
+        local node = makeNode(__enum.Prototype.State, data, kwargs, state.self)
+
+        node.selector = state.nodes
+
+        try
+            node.events = __function.MakePrototypes(data, state.events)
+        catch e then
+            __util.Rethrow(e, "While processing events.* callbacks")
+        end
+        
+        try
+            node.forwardedEvents = __function.MakePrototypes(data, state.forwardedEvents)
+        catch e then
+            __util.Rethrow(e, "While processing forwardedEvents.* callbacks")
+        end
+
+        try
+            node.socketEvents = __function.MakePrototypes(data, state.socketEvents)
+        catch e then
+            __util.Rethrow(e, "While processing socketEvents.* callbacks")
+        end
+
+        node.apis = state.api
+        node.helpers = state.helpers
+
+        local onInit = state.self.OnInit or kwargs.TakeOptional("OnInit")
+        local onLoaded = state.self.OnLoaded or kwargs.TakeOptional("OnLoaded")
+        local onEditorChanges = state.self.OnEditorChanges or kwargs.TakeOptional("OnEditorChanges")
+        local onCreateEditorPreviewVisual = state.self.OnCreateEditorPreviewVisual or kwargs.TakeOptional("OnCreateEditorPreviewVisual")
+        local onDestroyEditorPreviewVisual = state.self.OnDestroyEditorPreviewVisual or kwargs.TakeOptional("OnDestroyEditorPreviewVisual")
+
+        node.params = state.params.Finalize()
+        node.inputs = state.inputs.Finalize()
+        node.outputs = state.outputs.Finalize()
+        if onInit ~= nil then node.OnInit = __function.MakePrototype(data, onInit) end
+        if onLoaded ~= nil then node.OnLoaded = __function.MakePrototype(data, onLoaded) end
+        if onEditorChanges ~= nil then node.OnEditorChanges = __function.MakePrototype(data, onEditorChanges) end
+        if onCreateEditorPreviewVisual ~= nil then node.OnCreateEditorPreviewVisual = __function.MakePrototype(data, onCreateEditorPreviewVisual) end
+        if onDestroyEditorPreviewVisual ~= nil then node.OnDestroyEditorPreviewVisual = __function.MakePrototype(data, onDestroyEditorPreviewVisual) end
+        node.data = data.Finalize()
+
+        local modules = __module.Import(context.modules, state.modules)
+        node.env = __env.MakePrototype(context.env, modules)
+
+        sortNodes(state.nodes.nodes)
+
+        __util.MergeTableInto(stub, node)
+    catch e then
+        __util.Rethrow(e, "While parsing state %s", stub.fqdn)
+    end
+end
+
+local __m = {}
+
+__m.Parse = function (game, modules, env)
+    local context = {
+        game = game,
+        env = env,
+        modules = modules
+    }
+
+    if game.actions ~= nil then
+        for _, collection in pairs(game.actions) do
+            for _, stub in pairs(collection) do
+                unstubAction(stub)
+            end
+        end
+    end
+
+    for _, stub in pairs(game.states) do
+        try
+            unstubState(context, stub)
+        catch e then
+            ls.anubis.game.DebugLogCritical("Error while unstubbing game.states:\n" .. tostring(e))
+        end
+    end
+
+    for _, stub in pairs(game.roots) do
+        try
+            unstubState(context, stub)
+        catch e then
+            ls.anubis.game.DebugLogCritical("Error while unstubbing game.roots:\n" .. tostring(e))
+        end
+    end
+
+    return game
+end
+
+return __m

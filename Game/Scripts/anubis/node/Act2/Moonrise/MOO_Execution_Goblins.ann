@@ -1,0 +1,90 @@
+game.states.MOO_Execution_Goblins = State{function ()
+
+    modules = {"shared.moveto"}
+
+    params.trigger = {type = EParamType.String, help=[[
+        The trigger at which the character stands.
+    ]]}
+
+    params.prisonState = {type = EParamType.State, required=false, default=nil, help=[[
+        state to use when NPC encounter combat around them. Leave htis empty if you don't want the NPC to cower.
+    ]]}
+
+    local drowCommander = Entity("S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b")
+    local executionTrigger = Entity(params.trigger)
+    local MOO_GroundFloor_State_ExecutionOver
+    local MOO_Execution_Goblin3
+    local MOO_Execution_State_GoblinFleeADDone
+    local MOO_Execution_Event_MintharaLeave
+    local MOO_Execution_EscapedTrigger = Entity("S_MOO_ExecutionEscapePoint_EscapedTrigger_ed45cf90-6398-4d6d-835a-4427db7b91ae")
+    local MOO_Execution_State_ReleaseGoblins = Flag("MOO_Execution_Event_ReleasedGoblins_3cddb715-d7cc-d6ce-e166-bce7f242a240")
+    local cower = Animation("STAT_Fear_Combat_01_Loop_bbf65b93-0377-4f38-9bf0-2bc064f41a13")
+    local MOO_Execution_Area = Entity("S_MOO_Execution_Area_12abecc1-49d4-4253-a435-01d82d00abda")
+
+    self.OnInit = function()
+        MOO_GroundFloor_State_ExecutionOver = Flag("MOO_GroundFloor_State_ExecutionOver_1560c0ae-5fec-4e7c-a6e7-35e9c33bbbeb")
+        MOO_Execution_Event_MintharaLeave = Flag("MOO_Execution_Event_MintharaLeave_201dc61b-ed68-766b-cacf-6b5f60e9afaa")
+        MOO_Execution_Goblin3 = FindEntity("S_MOO_Execution_Goblin3_2c0816da-ad54-4813-94ce-92440223b49c")
+    end
+
+    nodes.Imprisoned = Proxy{
+        params.prisonState,
+    Valid = function()
+        return (GetFlag(MOO_GroundFloor_State_ExecutionOver) and
+            GetFlag(MOO_Execution_State_ReleaseGoblins)) or 
+            (me == drowCommander and
+            GetFlag(MOO_Execution_Event_MintharaLeave))
+    end
+    }
+
+    nodes.WaitForFlee = Action{
+        function()
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return GetFlag(MOO_GroundFloor_State_ExecutionOver) and
+                   (MOO_Execution_Goblin3.Character.IsDead or
+                    HasActiveStatus(MOO_Execution_Goblin3, "KNOCKED_OUT"))
+        end
+    }
+
+    nodes.Flee = Action{function()
+            Sleep(0.3)
+            mod.moveto.MoveTo(MOO_Execution_EscapedTrigger, true, 5.0, "Sprint", "MOO_Execution_Fled")
+        end,
+        Valid = function()
+            return (GetFlag(MOO_GroundFloor_State_ExecutionOver) and
+                    not GetFlag(MOO_Execution_State_ReleaseGoblins)) or
+                   not IsInTrigger(me, MOO_Execution_Area.Trigger)
+        end
+    }
+
+
+    nodes.WaitingForDeath = Action{
+        function()
+            if not IsInDangerousSurfaceFor(executionTrigger, me.Character) then
+                if GetDistanceTo(me, executionTrigger) > 2.0 then
+                    try
+                        MoveTo(executionTrigger)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(executionTrigger, 3.0)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(executionTrigger)
+                    PlayAnimation(cower, false, true)
+                    WaitForInterrupt()
+                end
+            else
+                LookAtEntity(executionTrigger, 3.0)
+            end
+            Sleep(2.0)
+        end,
+        Valid = function()
+            return not GetFlag(MOO_GroundFloor_State_ExecutionOver) and
+                   IsInTrigger(me, MOO_Execution_Area.Trigger)                   
+        end
+    }
+
+end
+}

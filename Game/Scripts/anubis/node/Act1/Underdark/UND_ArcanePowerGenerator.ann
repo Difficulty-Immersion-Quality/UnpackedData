@@ -1,0 +1,49 @@
+game.states.UND_ArcanePowerGenerator = State{function()
+    description = [[State for an Arcane Power Generator at Arcane Tower in the Underdark]]
+
+    local s_Drain = "UND_SUSSURTREEANTIMAGIC"
+
+    local tmpl_SussurFlower = nil
+
+    self.OnInit = function()
+        tmpl_SussurFlower = FindTemplate("UND_SussurTreeFlower_8706eab3-e05b-478d-833e-308379972dad")
+    end
+
+    helpers.IsActivated = function()
+        local b_HasFlower = false
+        try
+            b_HasFlower = TemplateIsInInventory(me, tmpl_SussurFlower)
+        catch ex if ls.CheckType(ex, error.Precondition) then
+            --DebugText(me, "NoInventory")
+        end
+        return tmpl_SussurFlower ~= nil and b_HasFlower
+    end
+
+    nodes.Activated = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        OnEnter = function()
+            SetEntityEvent(me, "UND_ArcanePowerGenerator_Activate")
+        end,
+
+        Valid = function()
+            return helpers.IsActivated()
+        end
+    }
+
+    nodes.Dectivated = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        OnEnter = function()
+            SetEntityEvent(me, "UND_ArcanePowerGenerator_Deactivate")
+        end,
+
+        Valid = function()
+            return not helpers.IsActivated()
+        end
+    }
+end}

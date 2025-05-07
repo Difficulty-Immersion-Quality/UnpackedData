@@ -1,0 +1,87 @@
+game.states.SHA_Necromancer_MessengerSkeleton = State {function()
+    description=[[Behaviour for the skeleton that leads the players to the Necromancer]]
+
+    modules = {"shared.util", "shared.dialog"}
+
+    params.waitingAnim = {type = EParamType.String, default = "", help = "Idle animation used after returning to the Necromancer"}
+    params.waitingPos = {type = EParamType.String, default = "", help = "Where the skeleton wanders around after returning to the Necromancer"}
+    params.scoutingAD = {type = EParamType.String, default = "", help = "AD played while scouting"}
+
+    local scoutingArea = Entity("S_SHA_TadpoledSkeletons_ScoutingArea_c97058b9-6253-48f1-af14-3d4f49604e06")
+
+    local wanderArea = Entity(params.waitingPos)
+    local returnDestination = Entity("S_SHA_Necromancer_ShadowquakeArea_a41b16b6-d2ae-425c-a0bf-80183a66e7e6")
+
+    local waitingAnim = Animation(params.waitingAnim)
+    local scoutingAnim = Animation("CUST_LookingForValuables_01_eab8704c-97f7-4124-bab1-55deeadff528")
+
+    local scoutingAD = Dialog(params.scoutingAD)
+
+    local isScouting = true
+
+    nodes.Wander = Action {
+        function()
+            Wander(6, 4, MovementSpeed.Stroll, wanderArea)
+            mod.util.SleepRandom(0.5, 2.0)
+            PlayAnimation(waitingAnim, true, false)
+            mod.util.SleepRandom(0.5, 2.0)
+        end,
+        Valid = function()
+            return IsInTrigger(me, returnDestination.Trigger)
+        end,
+        OnEnter = function()
+            SetWeaponUnsheathed(me, true, true)
+        end
+    }
+
+    nodes.Scouting = Action{
+        function()
+            mod.util.SleepRandom(1.0, 3.5)
+            Wander(scoutingArea, 3, MovementSpeed.Stroll)
+
+            if scoutingAD ~= nil then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    scoutingAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 20.0,
+                    },
+                    me
+                )
+            end
+
+            PlayAnimation(scoutingAnim, true, false)
+
+        end,
+
+        Valid = function()
+            return isScouting
+        end
+    }
+
+    nodes.ReturnToMaster = Action{
+        function()
+            local moveResult = MoveTo(wanderArea, MovementSpeed.Run, false, false, 1.0, 2.5, false)
+
+            if moveResult ~= error.MovementError.None then
+                Sleep(2.0)
+            end
+        end,
+
+        Valid = function()
+            return not isScouting
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "SHA_TadpoledSkeletons_FinishScouting" then
+            isScouting = false
+        end
+    end
+end}

@@ -1,0 +1,105 @@
+game.states.GLO_PlayAD = State {
+    function ()
+        description = [[ Character plays AD. If partners are defined, they will be added as speakers in the AD in order. NPC that has the behavior is always first speaker. ]]
+
+        modules = { "shared.dialog","shared.moveto","shared.util" }
+
+        params.AD = {type = EParamType.String, required = true, help=[[
+            NPCs AD to play
+        ]]}
+
+        params.partners = {type = EParamType.String, arrayRange = "0..", default = {}, help = [[
+            Other speakers in the AD that will be included in the AD starting from the second speaker
+        ]]}
+
+        params.soloADWhenNoPartners = {type = EParamType.String, required = false, help=[[
+            If other speakers are not available, start this AD instead
+        ]]}
+
+        params.minDelay = { type = EParamType.Number, required = false, default = 15.0, help = [[
+            Delay in between AD playing.
+        ]]}
+
+        params.pauseBetweenChecks = { type = EParamType.Number, required = false, default = 4.0, help = [[
+            Delay in between AD play checks, and before the first AD will be played.
+        ]]}
+
+        params.fallback = {type = EParamType.State, default=StateRef{game.states.Dummy}, required = false, help=[[
+            Action that override the idle behaviour while the character is in party (typically, following the leader)
+        ]]
+        }
+
+        local AD = Dialog(params.AD)
+        local soloAD = Dialog(params.soloADWhenNoPartners)
+        local partners = {}
+
+        helpers.initPartners = function()
+            if #partners > 0 then
+                return true --Already set up.
+            elseif params.partners then
+                for _, partner in ipairs(params.partners) do
+                    table.insert(partners, FindEntity(partner))
+                end
+                return true
+            else
+                return false
+            end
+        end
+
+        helpers.PartnersAvailable = function()
+            for _, partner in ipairs(partners) do
+                if not mod.dialog.IsSpeakerAvailableAndNear(partner, me, 6.0, false, false, false) then
+                    return false
+                end
+            end
+            return true
+        end
+
+        self.OnInit = function()
+            helpers.initPartners()
+        end
+
+        nodes.PlayAD = Action {
+            function()
+                mod.util.SleepRandom(1.0,params.pauseBetweenChecks)
+                if helpers.PartnersAvailable() then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        AD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = params.minDelay
+                        },
+                        me,
+                        table.unpack(partners)
+                    )
+                elseif soloAD ~= nil then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        soloAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = params.minDelay
+                        },
+                        me
+                    )
+                end
+            end,
+            CanEnter = function()
+                return AD ~= nil
+            end
+        }
+
+        nodes.NoADToPlay = Proxy {
+            params.fallback
+        }
+    
+
+        self.CanEnter = function()
+            return params.fallback ~= nil or
+                   (((helpers.initPartners() and
+                      helpers.PartnersAvailable()) or
+                     soloAD ~= nil) and
+                    mod.dialog.IsSpeakerAvailable(me))
+        end
+
+    end
+}

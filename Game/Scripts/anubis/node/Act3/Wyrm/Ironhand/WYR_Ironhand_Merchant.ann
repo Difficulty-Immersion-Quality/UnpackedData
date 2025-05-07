@@ -1,0 +1,196 @@
+game.states.WYR_Ironhand_Merchant = State{function()
+    description = [[Behavior of Ironhand gnome merchant. Blacksmithing in basement hideout]]
+
+    modules = { "shared.math", "shared.util" }
+
+    local atAnvil = "S_WYR_Ironhand_InitPos_Merchant_bbfe7f9d-2c11-47ec-a59d-27ff6b1a47b9"
+    local atAnvilPos = Entity("S_WYR_Ironhand_InitPos_Merchant_bbfe7f9d-2c11-47ec-a59d-27ff6b1a47b9")
+    local atFire = "S_WYR_Ironhand_Merchant_AtFire_f4a8a042-fd1b-4cc9-b4c0-c055ec93ce6e"
+    local atFirePos = Entity("S_WYR_Ironhand_Merchant_AtFire_f4a8a042-fd1b-4cc9-b4c0-c055ec93ce6e")
+    local atWater = "S_WYR_Ironhand_Merchant_AtWater_3871be69-ba28-46a1-a8b8-2e2ba2a2eb16"
+    local atWaterPos = Entity("S_WYR_Ironhand_Merchant_AtWater_3871be69-ba28-46a1-a8b8-2e2ba2a2eb16")
+    local atPile = "S_WYR_Ironhand_Merchant_AtPile_e39550f3-45c3-495b-895b-2cf6d1f93b1e"
+    local atPilePos = Entity("S_WYR_Ironhand_Merchant_AtPile_e39550f3-45c3-495b-895b-2cf6d1f93b1e")
+    local atRack = "S_WYR_Ironhand_Merchant_AtRack_a8b19520-32ce-407c-9cfe-3ee81ba8a75a"
+    local atRackPos = Entity("S_WYR_Ironhand_Merchant_AtRack_a8b19520-32ce-407c-9cfe-3ee81ba8a75a")
+    -- local atTable = "S_WYR_Ironhand_Merchant_AtTable_1_6f5518de-b5ea-4bf0-8152-2988c1e0bc27"
+    -- local atTablePos = Entity("S_WYR_Ironhand_Merchant_AtTable_1_6f5518de-b5ea-4bf0-8152-2988c1e0bc27")
+
+    local pickupDialog = Dialog("WYR_Ironhand_WB_Pickup_Pile_093aee24-e63f-8594-c08c-f28f2df20993")
+    local pickupSceneTrigger = Entity("WYR_Ironhand_WB_Pickup_SceneTrigger_AtPile_001_16c24238-f80f-46f0-9fac-988a76fc62d3")
+    --local pickup = Animation("CUST_PickUp_01_73059636-3720-4bf9-9709-772bbf9ff685")
+    local smithDialog = Dialog("WYR_Ironhand_WB_Smithing_57c22a7d-7cb7-0607-c92e-ff004a6dd5f7")
+    local smithSceneTrigger = Entity("WYR_Ironhand_WB_Smithing_SceneTrigger_3c0cf8a2-0241-4eac-9c84-54c6dfb35645")
+    local dipFireDialog = Dialog("WYR_Ironhand_WB_DipFire_8d564ad5-9dea-4aaa-68cc-fd57ee12997e")
+    local dipFireSceneTrigger = Entity("WYR_Ironhand_WB_DipFire_SceneTrigger_0e2b746b-f06a-4432-8d80-bca3dd00bf22")
+    local dipWaterDialog = Dialog("WYR_Ironhand_WB_DipWater_f186da4b-d4b3-7945-acc5-c44a841cefef")
+    local dipWaterSceneTrigger = Entity("WYR_Ironhand_WB_DipWater_SceneTrigger_45543fc5-5efb-4f5b-adbe-559d82d63749")
+    local putOnRackDialog = Dialog("WYR_Ironhand_Merchant_WB_PutOnrack_6298d9ec-7f88-b006-1a2a-1498daf6be81")
+    local putOnRackSceneTrigger = Entity("WYR_Ironhand_WB_PutOnRack_01_SceneTrigger_be13e01c-664e-45b7-be82-55479bb343e5")
+
+    local weights = {
+        anvil = 100,
+        fire = 0,
+        water = 0,
+        -- table = 0,
+        rack = 0,
+        pile = 0,
+    }
+
+    helpers.ResetTo = function(w)
+        for k,v in pairs(weights) do
+            weights[k] = 0
+        end
+        weights[w] = 100
+    end
+
+    nodes = Selector {
+        function(nodes)
+            return 
+            FindWeightedRandomSelectable(nodes,
+            {
+                [nodes.Anvil] = weights.anvil,
+                [nodes.Fire] = weights.fire,
+                [nodes.Water] = weights.water,
+                -- [nodes.Table] = weights.table,
+                [nodes.Rack] = weights.rack,
+                [nodes.Pile] = weights.pile,
+            })
+        end
+    }
+
+    nodes.Anvil = Selector {
+        OnEnter = function()
+            helpers.ResetTo("anvil")
+        end
+    }
+
+    nodes.Anvil.Smith = Action {
+        function()
+            --LookFrom(atAnvilPos)
+            StartTimer(me, "Timer_WYR_Ironhand_Merchant_StopBehaviorDialog", mod.math.random(15.0,30.0), 1)
+            StartBehaviorDialog(smithDialog, smithSceneTrigger.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_Merchant_StopBehaviorDialog")
+            weights.fire = 30
+            weights.water = 20
+            Sleep(0.5)
+            -- weights.table = weights.table + 1
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_Merchant_StopBehaviorDialog")
+        end
+    }
+
+    nodes.Fire = Selector {
+        OnEnter = function()
+            helpers.ResetTo("fire")
+        end
+    }
+
+    nodes.Fire.Heat = Action {
+        function()
+            --LookFrom(atFirePos)
+            StartBehaviorDialog(dipFireDialog, dipFireSceneTrigger.Trigger, true, me)
+            helpers.ResetTo("anvil")
+            Sleep(0.5)
+        end
+    }
+
+
+    nodes.Water = Selector {
+        OnEnter = function()
+            helpers.ResetTo("water")
+        end
+    }
+
+    nodes.Water.Dip = Action {
+        function()
+            --LookFrom(atWaterPos)
+            StartBehaviorDialog(dipWaterDialog, dipWaterSceneTrigger.Trigger, true, me)
+            weights.water = 0
+            -- weights.table = 20
+            weights.rack = 80
+            Sleep(0.5)
+        end
+    }
+
+
+    -- nodes.Table = Selector {
+    --     OnEnter = function()
+    --         helpers.ResetTo("table")
+    --     end
+    -- }
+
+    -- nodes.Table.MoveTo = Proxy {
+    --     game.states.GLO_StandAtTriggerSplit,
+    --     params = {
+    --         trigger = atTable,
+    --         speed = "Walk",
+    --         --animation = fixing animation
+    --     },
+    --     CanEnter = function()
+    --         return GetDistanceTo(me, atTablePos) > 0.5
+    --     end
+    -- }
+
+    -- nodes.Table.Work = Action {
+    --     function()
+    --         --LookFrom(atTablePos)
+    --         DebugText(me, "Working")
+    --         Sleep(1.0)
+    --         DebugText(me, "Working")
+    --         Sleep(1.0)
+    --         DebugText(me, "Working")
+    --         Sleep(1.0)
+    --         DebugText(me, "Working")
+    --         Sleep(1.0)
+    --         DebugText(me, "Working")
+    --         Sleep(1.0)
+    --         weights.table = 0
+    --         weights.anvil = 100
+    --     end
+    -- }
+
+
+    nodes.Rack = Selector {
+        OnEnter = function()
+            helpers.ResetTo("rack")
+        end
+    }
+
+    nodes.Rack.Hang = Action {
+        function()
+            --LookFrom(atRackPos)
+            StartBehaviorDialog(putOnRackDialog, putOnRackSceneTrigger.Trigger, true, me)
+            weights.rack = 0
+            weights.pile = 100
+            Sleep(0.5)
+        end
+    }
+
+
+    nodes.Pile = Selector {
+        OnEnter = function()
+            helpers.ResetTo("pile")
+        end
+    }
+
+    nodes.Pile.Pickup = Action {
+        function()
+            --LookFrom(atPilePos)
+            StartBehaviorDialog(pickupDialog, pickupSceneTrigger.Trigger, true, me)
+            weights.pile = 0
+            weights.fire = 100
+            Sleep(0.5)
+        end
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_Ironhand_Merchant_StopBehaviorDialog" then
+            DebugText(me, "Graceful Stop")
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    end
+end}

@@ -1,0 +1,117 @@
+game.states.PLA_DyingHyena_Hyena = State { function()
+    description = [[
+        Hyenas that spawn newborn gnolls when status timer is out.
+    ]]
+
+    modules = { "shared.math", "shared.dialog" }
+
+    params.sickAD = {type = EParamType.String, required = true, help=[[
+        The AD to play on first combat turn after being born.
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local sickAD = Dialog(params.sickAD)
+    local diedByStatus = false
+    local gnollTemplate = nil
+    local searchedForEntities = false
+    local canAD = true
+    local gnollSpawned = false
+    local deathEffect = nil
+
+    helpers.FindEntities = function()
+        if not searchedForEntities then
+            searchedForEntities = true
+            gnollTemplate = FindTemplate("QUEST_GnollBorn_A_4966d89a-45ee-4b8a-855f-433dbfb4736b")
+            deathEffect = PrepareEffect("VFX_Script_GnollBurst_01_71273c6a-1396-616e-713d-153fb9e77c76")
+        end
+    end
+
+    helpers.SpawnGnoll = function()
+        if gnollSpawned then
+            return
+        end
+        try
+            local newborn = CreateCharacterAt(gnollTemplate, me, false, true)
+            if newborn ~= nil then
+                gnollSpawned = true
+                if me.CombatGroupID ~= nil then
+                    SetCombatGroupID(newborn, me.CombatGroupID)
+                end
+                SetEntityEvent(newborn, "PLA_DyingHyena_Event_NewbornGnollBorn")                
+            end
+        catch e if ls.CheckType(e, error.InvalidPosition) then
+            DebugText(me, "Fail to create character (newborn gnoll)")
+        end
+    end
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()        
+        helpers.FindEntities()
+    end
+
+    self.OnLeave = function()
+        StopAnimation(me)
+    end
+
+    -----------------------------------------
+    -- node section
+
+	nodes.PlayAD = Action{
+        function()
+            Sleep(mod.math.random(1, 2))
+            if mod.dialog.IsSpeakerAvailable(me) then
+                StartAutomatedDialog(sickAD, true, me)
+                canAD = false
+            end
+        end,
+        Valid = function()
+            return canAD
+        end
+    }
+
+    nodes.Wait = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not canAD
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "DB_PLA_DyingHyena_Event_ADBlocked" then
+                canAD = false
+            elseif e.Event == "DB_PLA_DyingHyena_Event_ADAvailable" then
+                canAD = true
+            end
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me then
+            if not HasAppliedStatus(me, "PLA_YEENOGHU_HUNGER") and HasAppliedStatus(me, "PLA_DYINGHYENA_BLOATED") then
+                ApplyStatus(me, "PLA_YEENOGHU_HUNGER", true, 12.0, me)
+            end
+        end
+    end
+
+    events.StatusRemoved = function(e)
+        if me.Active and e.Status.StatusID == "PLA_YEENOGHU_HUNGER" and not me.Character.IsDead then
+            diedByStatus = true
+            Die(me, DeathType.EXPLODE, me, false)
+        end
+    end
+
+    events.Dying = function(e)
+        if e.Target == me and (diedByStatus or e.Source == me) then            
+            helpers.FindEntities()
+            PlayEffectAt(deathEffect,me)
+            helpers.SpawnGnoll()
+        end
+    end
+end}

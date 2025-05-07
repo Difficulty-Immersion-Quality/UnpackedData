@@ -1,0 +1,45 @@
+game.states.GOB_Checkpoint_Worg_002 = State{function()
+    description = [[Idle state for worgs at Goblin camp checkpoint]]
+
+    params.PatrolSpline = { type=EParamType.String, default = "",
+        help = [[Spline for worg to patrol]]}
+
+    params.SleepAtNodeDuration = { type = EParamType.Number, default = 9.0,
+        help = [[How long does the worg make a stop at nodes?]]}
+
+    local spl_PatrolRoute = Spline(params.PatrolSpline)
+    local tr_lookAtTrigger = Entity("S_GOB_Checkpoint_LookAtTrigger_53eefca2-84aa-429c-bb23-e81e48d0b301")
+    local b_Stop = false
+
+
+    events.SplineControlPointReached = function(ev)        
+        b_Stop = true
+    end
+
+    nodes.Patrol = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = params.PatrolSpline,
+            patrolSpeed = "Stroll",            
+        },
+
+        Valid = function()
+            return not b_Stop
+        end
+    }
+
+    nodes.PatrolStop = Action {
+        function()            
+            LookAtEntity(tr_lookAtTrigger, 3.0)
+            Sleep(params.SleepAtNodeDuration)
+            b_Stop = false
+        end
+    }    
+
+    nodes.Fallback = Action{
+        function()
+            SteerTo(tr_lookAtTrigger)
+            WaitForInterrupt()
+        end
+    }
+end}

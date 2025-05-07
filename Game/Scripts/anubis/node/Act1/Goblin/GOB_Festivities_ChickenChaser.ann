@@ -1,0 +1,49 @@
+game.states.GOB_Festivities_ChickenChaser = State{function ()
+    description = [[State where goblin follows the chicken before the game start]]
+
+    params.NonChaserState = { type = EParamType.State, required = true,
+        help = [[Use GOB_Festivities_Goblin here, provide parameters for it]]}
+
+    local fl_GoalScored = Flag("GOB_ChickenChase_State_GoalScored_79b6eef1-c8b6-d471-f7ca-811c5abf564f")
+    local fl_BallChanged = Flag("GOB_ChickenChase_State_OwlbearReplacedChicken_aabd6c48-57e4-12bb-8123-912f747f1f07")
+    local fl_BallIsDead = Flag("GOB_ChickenChase_State_BallIsDead_4d3be956-dcdf-3199-0e53-d76cf6f66051")
+    local fl_PlayingChase = Flag("GOB_ChickenChase_State_PlayingChase_34de58e6-ca4a-d171-c1ac-32821bb036ed")
+    local fl_OwlbearAcquired = Flag("GOB_ChickenChase_State_OwlbearAcquired_da704027-02ea-717c-4390-f538e5e5cd7a")
+
+    local ch_Ball = nil
+
+    self.OnInit = function()
+        if GetFlag(fl_BallChanged) then
+            ch_Ball = FindEntity("S_FOR_OwlBear_Cub_001_c66b2865-6613-4372-b97a-e330c1d75d09")
+        else
+            ch_Ball = FindEntity("S_GOB_ChickenBall_d17d3d8e-cf4a-48cd-a5ab-de0083110785")
+        end
+    end
+
+    events.FlagSet = function(ev)
+        if fl_BallChanged ~= nil and ev.Flag == fl_BallChanged.Guid then
+            ch_Ball = FindEntity("S_FOR_OwlBear_Cub_001_c66b2865-6613-4372-b97a-e330c1d75d09")
+        end
+    end
+
+    nodes.NonChaserState = Proxy{
+        params.NonChaserState,
+
+        Valid = function()
+            return GetFlag(fl_BallIsDead) or GetFlag(fl_GoalScored) or GetFlag(fl_PlayingChase) or GetFlag(fl_OwlbearAcquired)
+        end
+    }
+
+    nodes.FollowChicken = Action{
+        function()
+            SteerTo(ch_Ball)
+            try
+                MoveTo(ch_Ball, MovementSpeed.Run)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(ch_Ball)")
+            end
+            Sleep(0.5)
+        end
+    }
+
+end}

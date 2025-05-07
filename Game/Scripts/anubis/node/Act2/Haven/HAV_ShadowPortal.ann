@@ -1,0 +1,124 @@
+game.states.HAV_ShadowPortal = State{function ()
+    description = [[A Shadow Portal for Haven Siege situation combat. Spawns a shadow creature at certain turn after it appeared in combat]]
+
+    --modules = { "shared.math", "shared.params", "shared.util" }
+
+    params.TurnOfSpawn = { type = EParamType.Int, default = 2,
+        help = "Combat turn of creature spawn (counts every active turn of this portal in combat starting at 1)"}
+
+    params.CreatureRoot = { type = EParamType.String, required = true,
+        help = "Root template of the creatures this portal spawns"}
+
+    local i_TurnCount = 0
+    local tmpl_CreatureRoot = nil
+    local ch_Spawned = nil
+    local s_TimerSpawn = "Timer_HAV_ShadowPortal_Spawn"
+    local b_TimerRunning = false
+
+    local fx_Stub
+
+    self.OnInit = function()
+        i_TurnCount = 0
+        b_TimerRunning = false
+        tmpl_CreatureRoot = FindTemplate(params.CreatureRoot)
+        fx_Stub = PrepareEffect("VFX_Script_Stub_Poof_01_f0cf792a-0f74-d17e-ad0d-6052a6131416")
+    end
+
+    self.OnException = function(e)
+        StopTimer(me, s_TimerSpawn)
+        b_TimerRunning = false
+        DebugLogCriticalException(e, "Unhandled Anubis exception caught in DefaultItem for " .. me.Name .. "\n")
+        return true
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_TimerSpawn then
+            i_TurnCount = i_TurnCount + 1
+            DebugText(me, "Timer. TurnCount = " .. tostring(i_TurnCount))
+
+            helpers.CheckSpawn()
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me then
+            StopTimer(me, s_TimerSpawn)
+            b_TimerRunning = false
+            Interrupt()
+        end
+    end
+
+    events.TurnStarted = function(ev)
+        i_TurnCount = i_TurnCount + 1
+        DebugText(me, "Turn. TurnCount = " .. tostring(i_TurnCount))
+        helpers.CheckSpawn()
+    end
+
+    helpers.StartSpawnTimer = function()
+        StartTimer(me, s_TimerSpawn,  6.0, (params.TurnOfSpawn - i_TurnCount))
+        b_TimerRunning = true
+    end
+
+    helpers.CheckSpawn = function()
+        if i_TurnCount == params.TurnOfSpawn then
+            helpers.SpawnCreature()
+        else
+            DebugText(me, "Spawn in " .. tostring(params.TurnOfSpawn - i_TurnCount))
+        end
+    end
+
+    helpers.SpawnCreature = function()
+        DebugText(me, "Spawning")
+        PlayEffectAt(fx_Stub, me)
+        ch_Spawned = CreateCharacterAt(tmpl_CreatureRoot, me, true, true, nil)
+        SetFaction(ch_Spawned, me.Faction)
+    end
+
+
+    nodes.BeforeSpawn = Selector{
+        CanEnter = function()
+            return ch_Spawned == nil
+        end
+    }
+
+    nodes.BeforeSpawn.StartTimer = Action{
+        function()
+            helpers.StartSpawnTimer()
+        end,
+
+        CanEnter = function()
+            return not b_TimerRunning and not me.IsInCombat
+        end
+    }
+
+    nodes.BeforeSpawn.Sleeping = Action{
+        function()
+            Sleep(1.0)
+        end,
+
+        CanEnter = function()
+            return not me.IsInCombat or not me.CanActInCombatTeamTurn
+        end
+    }
+
+    nodes.BeforeSpawn.Combat = Action{
+        function()
+            Sleep(1.0)
+            EndTurn(me)
+        end,
+
+        CanEnter = function()
+            return me.IsInCombat and me.CanActInCombatTeamTurn
+        end
+    }
+
+    nodes.Despawn = Action{
+        function()
+            SetOnStage(me, false)
+        end,
+
+        CanEnter = function()
+            return ch_Spawned ~= nil
+        end
+    }
+end}

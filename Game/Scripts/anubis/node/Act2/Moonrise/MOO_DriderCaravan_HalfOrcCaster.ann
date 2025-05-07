@@ -1,0 +1,100 @@
+game.states.MOO_DriderCaravan_HalfOrcCaster = State{function()
+    --------------------------------MODULE--------------------------------
+    --------------------------------PARAMS--------------------------------
+    params.studyTriggers = {type = EParamType.String, arrayRange = "..", required = true, help = [[List of spots where Caster can look for magic books]]}
+    --------------------------------LOCAL---------------------------------
+    local studyPoints = {}
+    local searchCounter = 0
+    local hasArrived = false
+    local isLookingForBook = false
+    local checkpoint1 = Entity("S_MOO_DriderCaravan_HO_Route_92b16e88-fbcc-4dbb-b968-089131610808")
+    local checkpoint2 = Entity("S_MOO_DriderCaravan_Study003_0215df43-66a4-4b55-986c-b2267cd6fd81")
+
+    --Request pending for those animations
+    local readAnim = Dialog("BHVR_WRLD_MOO_Kansif_ReadingBook_29896d3d-ac0c-2762-9003-d2578c4dae6c")
+    local readSceneTrigger = Entity("BHVR_WRLD_MOO_Kansif_ReadingBook_SceneTrigger_1acb90cd-4965-4015-8cb5-1e2d96e792d6")
+
+    local searchAnim = Animation("CUST_StudyingShelves_01_33ab0976-2071-4b53-a2c4-c5c958acb85f")
+    --------------------------------NODES---------------------------------
+    self.OnInit = function()
+        if #params.studyTriggers > 0 then
+            for i = 1, #params.studyTriggers do
+                local trigger = Entity(params.studyTriggers[i])
+                table.insert(studyPoints, trigger)
+            end
+        end
+    end
+
+    nodes.ReadBook = Action{
+        function()
+            Wander(5.0, math.random(1.0, 2.0), MovementSpeed.Walk)
+            Sleep(math.random(1.0, 2.0))
+
+            try
+                StartBehaviorDialog(readAnim, readSceneTrigger.Trigger, true, me)
+            catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                DebugText(me, "Error: AutomatedDialogStartFailed")
+                Sleep(3.0)
+            end
+
+            isLookingForBook = true
+        end,
+        Valid = function()
+            return not isLookingForBook and hasArrived
+        end,
+        OnInterrupt = function()
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    }
+
+    nodes.GetBook = Action{
+        OnEnter = function()
+            searchCounter = math.random(1, #params.studyTriggers)
+        end,
+        function()
+            local spot = studyPoints[math.random(1, #studyPoints)]
+            if MoveTo(spot, MovementSpeed.Walk, false, false, 0.5, 1.0, false) ~= error.MovementError.None then
+                Sleep(1.0)
+                return
+            end
+            LookFrom(spot)
+            try
+                PlayAnimation(searchAnim, true, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Search Animation Failed")
+            end
+            Sleep(1.0)
+            searchCounter = searchCounter - 1
+            if searchCounter == 0 then
+                isLookingForBook = false
+            end
+        end,
+        Valid = function()
+            return isLookingForBook and hasArrived
+        end
+    }
+
+    nodes.MoveToBook = Action{
+        function()
+            SetWeaponUnsheathed(me, false)
+            if MoveTo(checkpoint1) ~= error.MovementError.None then
+                Sleep(1.0)
+                return
+            end
+            if MoveTo(checkpoint2) ~= error.MovementError.None then
+                Sleep(1.0)
+                return
+            end
+            hasArrived = true
+        end,
+        Valid = function()
+            return not hasArrived
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

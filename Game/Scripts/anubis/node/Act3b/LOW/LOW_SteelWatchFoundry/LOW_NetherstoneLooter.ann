@@ -1,0 +1,91 @@
+game.states.LOW_NetherstoneLooter_Combat= State{function()
+
+    local fleeToPoint = Entity("S_LOW_NetherstoneLooterFleePoint_a56e59b1-de31-4902-b2eb-f7ddd4bc769d")
+    local isFleeingFlag = Flag("LOW_NetherstoneLooters_State_Fleeing_f8835423-f465-4943-ab23-630f7313c104")
+    local escapedFlag = Flag("LOW_NetherstoneLooters_State_Escaped_f8c6f21a-b7b5-4b28-911a-10d31136dedc")
+
+    self.Valid = function()
+        return me.IsInCombat
+            and GetFlag(isFleeingFlag)
+    end
+
+    nodes.Fleeing = Action{
+        function()
+            Sleep(1.0)
+            if me.CanActInCombatTeamTurn then
+                if not HasActiveStatus(me, "DISENGAGE") then
+                    UseSpell("Shout_Disengage_Goblin", me, nil, nil, nil, true, true, true)
+                end
+                Sleep(1.0)
+                if not HasActiveStatus(me, "DASH") then
+                    UseSpell("Shout_Dash_NPC", me, nil, nil, nil, true, true, true)
+                end
+
+                if me.Character.CanMove then
+                    local moveResult = MoveTo(fleeToPoint, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+                    if moveResult == error.MovementError.None then
+                        DebugText(me, "MOVEMENT FINISHED")
+                        EndTurn(me)
+                    else
+                        DebugText(me, "Movement to the exit failed!")
+                        Sleep(1.0)
+                        EndTurn(me)
+                    end
+                else
+                    EndTurn(me)
+                end
+            end
+
+        end,
+        Valid = function()
+            return GetDistance2DTo(me, fleeToPoint) > 3.0
+        end
+    }
+
+    nodes.Escape = Action {
+        function()
+            Sleep(1)
+            SetFlag(escapedFlag, me)
+        end
+    }
+end}
+
+game.states.LOW_NetherstoneLooter_Idle = State{function()
+
+    modules = { "shared.moveto" }
+
+    params.IdlePoint = { type = EParamType.String, required = false, help = [[Trigger looter is hanging out at]] }
+
+    local fleeToPoint = Entity("S_LOW_NetherstoneLooterFleePoint_a56e59b1-de31-4902-b2eb-f7ddd4bc769d")
+    local isFleeingFlag = Flag("LOW_NetherstoneLooters_State_Fleeing_f8835423-f465-4943-ab23-630f7313c104")
+    local escapedFlag = Flag("LOW_NetherstoneLooters_State_Escaped_f8c6f21a-b7b5-4b28-911a-10d31136dedc")
+    local idlePoint = Entity(params.IdlePoint)
+
+    nodes.Fleeing = Action {
+        function()
+            if mod.moveto.MoveToPoint(fleeToPoint,  MovementSpeed.Run, me) then
+                Sleep(1.0)
+            else
+                if GetDistance2DTo(me, fleeToPoint) <= 3.0 then
+                    SetFlag(escapedFlag, me)
+                end
+                SteerTo(fleeToPoint)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(isFleeingFlag)
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            if mod.moveto.MoveToPoint(idlePoint,  MovementSpeed.Walk, me) then
+                Sleep(1.0)
+            else
+                SteerTo(idlePoint)
+            end
+        end
+    }
+
+end}

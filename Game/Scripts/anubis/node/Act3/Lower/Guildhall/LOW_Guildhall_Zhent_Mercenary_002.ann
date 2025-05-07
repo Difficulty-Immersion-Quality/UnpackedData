@@ -1,0 +1,97 @@
+game.states.LOW_Guildhall_Zhent_Mercenary_002 = State{function ()
+    
+    params.patrolSpline = {type=EParamType.String, help = [[Spline to be patrolled]], required = true}
+    params.preCoupPosition = {type = EParamType.String, help = [[Trigger to stand in place]], required = true }
+    params.trigger = {type=EParamType.String, help = [[Stand trigger on precoup]], required = false, default = ""}
+    params.patrolAD = {type=EParamType.String, help = [[AD to say during patrol]], required = false, default = ""}
+
+    local patrolSpline = Spline(params.patrolSpline)
+    local pause = false
+    local canPatrol = true
+    local preCoupPosition = Entity(params.preCoupPosition)
+    local patrolAD = Dialog(params.patrolAD)
+    local canAD = false
+
+    modules = {"shared.dialog"}
+
+    nodes.PreCoup = Selector {
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end
+    }
+
+    nodes.PreCoup.PatrolPause = Action{
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+        
+        function()
+            if params.patrolAD ~= nil and params.patrolAD ~= "" and canAD then
+                mod.dialog.StartCheckedAutomatedDialog(
+                patrolAD, 
+                { 
+                    waitForCompletion = false,
+                }, me
+            )
+            end
+            Sleep(12.0 + 3.0 * math.random())
+        end,
+
+        Valid = function()
+            return pause
+        end,
+
+        OnInterrupt = function()
+            pause = false
+            canAD = false
+        end,
+
+        OnFinished = function()
+            pause = false
+            canAD = false
+        end
+    }
+
+    nodes.PreCoup.Patrol = Action{
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Walk, -1)
+        end,
+        
+        CanEnter = function()
+            return patrolSpline ~= nil
+        end,
+
+        Valid = function()
+            return canPatrol
+        end
+    }
+
+    nodes.PreCoup.IdlePrecoup = Action {
+        function()
+            SteerTo(preCoupPosition)
+            Sleep(18 + 3.0 * math.random())
+        end,
+        OnLeave = function()
+            canPatrol = true
+        end
+    }
+    
+    nodes.FallbackIdle = Action {
+        function()
+            Sleep(6.0)
+        end
+    }
+
+    --------------------------------Events--------------------------------
+    events.SplineControlPointReached = function(ev)
+        if ev.Event == "PatrolFinished" then
+            canPatrol = false
+        elseif ev.Event == "PatrolPause" then
+            pause = true
+        elseif ev.Event == "PatrolPauseAD" then
+            pause = true
+            canAD = true
+        end
+    end
+    
+end}

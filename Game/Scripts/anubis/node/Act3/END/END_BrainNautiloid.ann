@@ -1,0 +1,70 @@
+game.states.END_BrainNautiloid_Combat = State{function()
+    
+    local step = 1
+    local turn = 0
+    local spawnWait = false
+    
+    self.Valid = function()
+        return me.IsInCombat
+    end
+
+    nodes.Turn = Action{
+        function()
+            if step == 1 then
+                SetEntityEvent(me, "END_BrainBattle_CameraTarget")
+                Sleep(0.5)
+                step = 2
+                SetEntityEvent(me, "END_BrainBattle_Turn")
+            elseif step == 2 then
+                SetEntityEvent(me, "END_BrainBattle_FireCannons")
+                Sleep(5)
+                step = 3
+            elseif step == 3 then
+                SetEntityEvent(me, "END_BrainBattle_CastSpell")
+                step = 4
+            elseif step == 4 then
+                Sleep(3)
+                SetEntityEvent(me, "END_BrainBattle_CameraTarget")
+                step = 5
+            elseif step == 5 then
+                Sleep(2)
+                SetEntityEvent(me, "END_BrainBattle_CastSpell2")
+                if(spawnWait) then
+                    Sleep(2)
+                end
+                step = 6
+            else
+                Sleep(2)
+                EndTurn(me)
+            end
+        end,
+        Valid = function()
+            return me.CanActInCombatTeamTurn
+        end
+    }
+
+    nodes.CombatWait = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not me.CanActInCombatTeamTurn
+        end
+    }
+
+    events.TurnEnded = function(e)
+        step = 1
+    end
+
+    events.TurnStarted = function(e)
+        if(me == Entity("S_END_NautiloidHelper_f61c2ece-f92e-4707-b6e4-eae37437990a")) then
+            turn = turn + 1
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if(e.Event == "END_BrainBattle_SpawnedDragon") then
+            spawnWait = true
+        end
+    end
+end}

@@ -1,0 +1,199 @@
+game.states.COL_Necromancer = State{
+    function()
+        local atColony = Flag("COL_State_InColony_d9869d23-bc7d-49f0-9bea-66a24f65e98a")
+        
+        local ritualAnimStart = Animation("CUST_Ritual_Combat_01_Start_f925362b-5381-4314-aa50-2fc3e564fc51")
+        local ritualAnimLoop  = Animation("CUST_Ritual_Combat_01_Loop_faf906b5-b9be-4e67-9f55-f32802924d62")
+        local ritualAnimEnd  = Animation("CUST_Ritual_Combat_01_End_b50a7a6c-a2b8-48e8-beaa-47b37e2b911d")
+
+        local ritualDialog = Dialog("COL_Necromancer_AD_AssaultRitual_cb2a752c-562c-344f-09e7-9a2519f77153")
+        local haruspicyDialog = Dialog("COL_Necromancer_AD_Haruspicy_6bd4970a-b8d8-f3d5-6992-fd69c08f51cd")
+        local performingHaruspicy = Flag("COL_NecromancerLab_State_PerformingHaruspicy_64e8563f-feb4-4c85-ac47-4a58e62bda07")
+
+        local haruspicyTrigger = Entity("S_COL_NecromancerLab_Haruspicy_Box_8e44bb99-db80-4eff-bacd-b0dd98eb5a48")
+        local haruspicyLookAt = Entity("S_COL_NecromancerLab_Ritual_Effect_b21dc15b-103f-499b-bcdd-ccd76cced1b2")
+
+        nodes.GoToHaruspicy= Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = "S_COL_NecromancerLab_Haruspicy_Box_8e44bb99-db80-4eff-bacd-b0dd98eb5a48"
+            },
+            Valid = function()
+                return not IsInTrigger(me,haruspicyTrigger.Trigger) and not IsInDialog(me,true,false)
+            end
+        }
+
+        nodes.Haruspicy = Action{
+            function()
+                SteerTo(haruspicyLookAt)
+                --try
+                    PlayLoopingAnimation(ritualAnimStart,{ritualAnimLoop},ritualAnimEnd)
+                --catch e then
+                --    DebugText(me,"failed: [1]",tostring(e))
+                --end
+                StartCheckedAutomatedDialogRateLimited(haruspicyDialog,true,me)
+                --DebugText(me,"anim")
+                Sleep(5.0)
+            end,
+            OnEnter = function()
+                SetFlag(performingHaruspicy)
+                --DebugText(me,"started")
+            end,
+            OnLeave = function()
+                ClearFlag(performingHaruspicy)
+                StopAnimation(me)
+                --DebugText(me,"left")
+            end,
+            Valid = function()
+                return not IsInDialog(me,true,false)
+            end
+        }
+
+        nodes.Fallback = Action{
+            function()
+            end
+        }
+
+        self.Valid = function()
+            return GetFlag(atColony, me)
+        end
+
+    end
+}
+
+
+
+game.states.COL_Necromancer_Combat = State{
+    function()
+        local atColony = Flag("COL_State_InColony_d9869d23-bc7d-49f0-9bea-66a24f65e98a")
+        local partyMemberInCage = Flag("COL_NecromancerLab_State_PartyMemberInCage_ef2db432-354a-4c81-8c8d-7a400473d638")
+        local alivePartyMemberInCage = Flag("COL_NecromancerLab_State_PartyMemberAliveInCage_e9ac1d5c-f4d2-4e3d-88f7-9e6d6230499f")
+        local alivePartyMemberOutOfCage = Flag("COL_NecromancerLab_State_PartyMemberOutsideOfCage_92a091f7-905c-4ee2-9b24-81bef628f103")
+        local candleLighterChosen = Flag("COL_NecromancerLab_State_CandleLighterChosen_de4d131d-72b4-4781-b077-4a7931409c89")
+        local extinguished = Flag("COL_NecromancerLab_State_CandleExtinguished_b449cb50-9e79-45a9-8663-df74b9964358")
+        local outOfZombies = Flag("COL_NecromancerLab_State_OutOfZombies_fed2eb36-1a0d-4f46-b58f-dceaa4990600")
+        local anyCandleDestroyed = Flag("COL_NecromancerLab_State_CandleDestroyed_53ec8d43-1833-4fb1-96bb-dda26c674635")
+        local performingHaruspicy = Flag("COL_NecromancerLab_State_PerformingHaruspicy_64e8563f-feb4-4c85-ac47-4a58e62bda07")
+
+        local resendZombie = Dialog("COL_Necromancer_AD_Combat_ResendZombie_748a1e72-f765-9679-2ad2-0b697c999c56")
+        local sendZombie = Dialog("COL_Necromancer_AD_Combat_SendZombie_253f26da-3cde-84a3-8d6d-4fee8425c53e")
+        local haruspicyDialog = Dialog("COL_Necromancer_AD_Haruspicy_6bd4970a-b8d8-f3d5-6992-fd69c08f51cd")
+        
+        local ritualAnimStart = Animation("CUST_Ritual_Combat_01_Start_f925362b-5381-4314-aa50-2fc3e564fc51")
+        local ritualAnimLoop  = Animation("CUST_Ritual_Combat_01_Loop_faf906b5-b9be-4e67-9f55-f32802924d62")
+        local ritualAnimEnd  = Animation("CUST_Ritual_Combat_01_End_b50a7a6c-a2b8-48e8-beaa-47b37e2b911d")
+
+        local haruspicyTrigger = Entity("S_COL_NecromancerLab_Haruspicy_Box_8e44bb99-db80-4eff-bacd-b0dd98eb5a48")
+        local haruspicyLookAt = Entity("S_COL_NecromancerLab_Ritual_Effect_b21dc15b-103f-499b-bcdd-ccd76cced1b2")
+
+        nodes.AnnounceLighter = Action{
+            function()
+                --DebugText(me, "STARTING DIALOG")
+                try
+                    StartAutomatedDialog(sendZombie, true, me)
+                end
+                EndTurn(me)
+            end,
+            CanEnter = function()
+                return not GetFlag(candleLighterChosen) and
+                    not GetFlag(outOfZombies) and
+                    GetFlag(alivePartyMemberInCage)
+            end
+        }
+
+        nodes.ReannounceLighter = Action{
+            function()
+                StartAutomatedDialog(resendZombie, true, me)
+                ClearFlag(extinguished)
+                EndTurn(me)
+            end,
+            CanEnter = function()
+                return GetFlag(extinguished) and
+                    not GetFlag(outOfZombies) and
+                    GetFlag(alivePartyMemberInCage)
+            end
+        }
+
+        nodes.GoToHaruspicy= Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = "S_COL_NecromancerLab_Haruspicy_Box_8e44bb99-db80-4eff-bacd-b0dd98eb5a48"
+            },
+            OnFinished = function()
+                EndTurn(me)
+            end,
+            OnEnter = function()
+                if GetFlag(performingHaruspicy) then
+                    ClearFlag(performingHaruspicy,me)
+                    StopAnimation(me)
+                end
+            end,
+            Valid = function()
+                return GetFlag(alivePartyMemberInCage) and
+                not GetFlag(alivePartyMemberOutOfCage) and
+                not IsInTrigger(me,haruspicyTrigger.Trigger)
+            end
+        }
+
+        nodes.Haruspicy = Action{
+            function()
+                SteerTo(haruspicyLookAt)
+                PlayLoopingAnimation(ritualAnimStart,{ritualAnimLoop},ritualAnimEnd)
+                StartAutomatedDialog(haruspicyDialog,true,me)
+                Sleep(3.0)
+                EndTurn(me)
+            end,
+            OnEnter = function()
+                if not GetFlag(performingHaruspicy) then
+                    SetFlag(performingHaruspicy)
+                end
+            end,
+            CanEnter = function()
+                return GetFlag(alivePartyMemberInCage) and
+                    not GetFlag(alivePartyMemberOutOfCage)
+            end
+        }
+
+        nodes.StopHaruspicy = Action{
+            function()
+                ClearFlag(performingHaruspicy)
+                StopAnimation(me)
+            end,
+            CanEnter = function()
+                return GetFlag(performingHaruspicy)
+            end
+        }
+
+        --Fallback
+        nodes.DefaultCombat = Proxy{
+            game.states.DefaultCombat    
+        }
+
+        events.EnteredCombat = function(e)
+            if e.Entity == me then
+                SetUnicastEntityEvent(me, "ClearPeaceReturn")
+            end
+        end
+
+        events.Died = function(e)
+            if (e.Target == me and GetFlag(performingHaruspicy)) then
+                ClearFlag(performingHaruspicy)
+            end
+        end
+
+        --So long as there's anyone in the cage (and they were supposed to be there in the first place),
+        --and there's nobody in the cage (otherwise you have more pressing problems), you can do these things.
+        self.Valid = function()
+            return ((GetFlag(atColony, me)
+                    and
+                        ((GetFlag(alivePartyMemberInCage) and not GetFlag(alivePartyMemberOutOfCage))
+                        or
+                        (GetFlag(alivePartyMemberInCage) and not GetFlag(candleLighterChosen))))
+                    or
+                    GetFlag(performingHaruspicy))
+                    and
+                   (not me.IsInCombat or me.CanActInCombatTeamTurn)
+        end
+
+    end
+}

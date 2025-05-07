@@ -1,0 +1,101 @@
+game.states.PLA_ConflictedFlind_GnollFleshGnawer = State { function ()
+    description = [[Behaviour tree for gnoll devouring dead body.]]
+
+    modules = { "shared.math", "shared.dialog"}
+
+    -----------------------------------------
+    -- params section
+    params.eatingAnim = {type = EParamType.String, required = true, help=[[
+        Animations to play at random in idle
+    ]]}
+
+    params.basePositionTrigger = { type = EParamType.String, required = true, help = [[
+        Base position trigger to look from
+    ]]}
+
+    params.deadBody = { type = EParamType.String, required = true, help = [[
+        Dead body to eat
+    ]]}
+
+    -- grunt ADs
+    params.eatingAD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play.
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local eatingAnim = nil
+    local eatingAD
+    local basePositionTrigger = nil
+    local body = nil
+    local basePos
+
+    -----------------------------------------
+    -- state node functions
+    self.OnInit = function()
+        eatingAD = Dialog(params.eatingAD)
+        eatingAnim = Animation(params.eatingAnim)
+        basePositionTrigger = FindEntity(params.basePositionTrigger)
+        body = FindEntity(params.deadBody)
+        basePos = me.Position
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.EatBody = Action {
+        function()
+            if body.OnStage and IsInTrigger(body, basePositionTrigger.Trigger) then
+                if GetDistance2DTo(me, body) > 2 then
+                    try
+                        MoveTo(body, MovementSpeed.Walk, true, false, 0.5, 0.95)
+                    catch ex if ls.CheckType(ex, error.MovementFailed) then
+                        DebugText(me, "MovementFailed")
+                        Sleep(3)
+                    end
+                else
+                    SteerTo(body)
+                    Sleep(mod.math.random(0,1))
+                    try
+                        PlayAnimation(eatingAnim, false, true)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "PlayAnimationFailed (eatingAnim)")
+                        Sleep(3)
+                    end
+                    Sleep(mod.math.random(1.5, 2.5))
+                    if math.random() > 0.8 then
+                        if mod.dialog.IsSpeakerAvailable(me) then
+                            StartAutomatedDialog(eatingAD, false, me)
+                        end
+                    end
+                end
+            else
+                try
+                    Wander(basePositionTrigger.Trigger, 2.0, MovementSpeed.Walk)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Wander failed")
+                end
+                Sleep(3)
+            end
+        end,
+        Valid = function()
+            return IsInTrigger(me, basePositionTrigger.Trigger)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.MoveToBasePosition = Action {
+        function()
+            try
+                MoveTo(basePositionTrigger, MovementSpeed.Walk, true, false, 0.1, 0.5)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo failed")
+                Sleep(2)
+            end
+        end,
+        Valid = function()
+            return not IsInTrigger(me, basePositionTrigger.Trigger)
+        end
+    }
+end}

@@ -1,0 +1,98 @@
+game.states.WYR_SentientAmulet_Zombie = State { function ()
+    
+    description = "Behaviour for the possessed/revived zombies in the Open Hand Temple crypt (Wyrm's Crossing)."
+
+    modules = { "shared.moveto", "shared.math" }  
+
+    params.gatherTrigger = { type = EParamType.String, required = true, help = "The trigger at which this zombie gathers when outside of combat."}
+    
+    local gatherTrigger = nil
+    local centerTrigger = Entity("S_WYR_SentientAmulet_DEBUG_Crypt_Point_d7e7114c-eb29-4632-a373-4aa16a0f806c")
+    local patrolSpline = "S_WYR_SentientAmulet_Patrol_PossessedZombie_ac002c22-34be-40f4-a54c-2b615071d1d2"
+    local isPossessedTag = Tag("ACT3_WYR_SENTIENTAMULET_POSSESSED_db31e8b2-fcf1-4b66-9184-1a6cde92d9ce")
+    local inCoffinFlag = Flag("WYR_SentientAmulet_State_InCoffin_5044f3aa-9901-4266-8bb4-0924d30d917f")
+
+    local turnIntervalMin = 7
+    local turnIntervalMax = 15
+    local doSleep = false
+
+    self.OnInit = function()
+        if params.gatherTrigger ~= nil then
+            gatherTrigger = Entity(params.gatherTrigger)
+        end
+    end
+
+    nodes.InCoffin = Action{
+        function()
+            
+        end,
+        CanEnter = function()
+            return GetFlag(inCoffinFlag,me)
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            --Idle behaviour - will randomly turn every few seconds
+            --Within a few degrees of the current rotation
+            local duration = math.random(turnIntervalMin,turnIntervalMax)
+            --DebugText(me,"Steer sleep [1]",duration)
+            Sleep(duration)
+            local steerTarget = me.Position + (me.ForwardDirection * 3.0) --multiplied to avoid steering to own position
+            local offset = Vector3(math.random()*2.0-1.0,0.0,math.random()*2.0-1.0) * 2.0 -- > multiplier > relative turn angle
+            steerTarget = steerTarget + offset
+            --DebugText(me,"Steering to [1]",steerTarget)
+            SteerTo(steerTarget)
+            
+            --The possessed zombie should return to patrol after the steering
+            if IsTagged(me,isPossessedTag) then
+                Sleep(2.0)
+                doSleep = false
+            end
+        end,
+        OnLeave=function()
+            doSleep = false 
+        end,
+        CanEnter = function()
+            return doSleep
+        end
+    }
+    
+    nodes.Patrol = Proxy{
+        --If this zombie is possessed by the Mad Monk, do a patrol instead of standing at the coffin
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = patrolSpline,
+            patrolReverse = false,
+            patrolSpeed = "Stroll",
+            startSplineIndex = -1,
+        },
+        CanEnter = function()
+            return IsTagged(me,isPossessedTag)
+        end
+    }
+
+    nodes.ReturnToOrigin = Action {
+        function()
+            if gatherTrigger ~= nil then
+                local moveResult = MoveTo(gatherTrigger,MovementSpeed.Walk,true,true,1.0,3.0)
+
+                if moveResult == error.MovementError.None then
+                    --Zombies return to their original position if out of combat
+                    DebugText(me,"gathered")
+                    SteerTo(centerTrigger)
+                    doSleep = true
+                end
+            end
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Sleep" then
+            doSleep = true
+        end
+    end
+
+end}

@@ -1,0 +1,269 @@
+game.states.HAV_HavenOutcasts_BarricadeRunners = State{function()
+    ----------------------------------
+    -- Local variables
+
+    modules = {"shared.moveto", "shared.dialog", "shared.math"}
+
+    local firstPoint = Entity("S_HAV_HavenOutcasts_BarricadeRunningPoint_ae09feb5-4ac5-4dc1-84eb-510e27ba49c1")
+    local secondPoint = Entity("S_HAV_HavenOutcasts_StableRunningPoint_5c4c933d-999e-4b1d-b4f7-0214c3259325")
+    local barricadeGuard = Entity("S_HAV_HavenOutcasts_BarricadeYeller_Ranger_b612ef5f-3381-4486-8959-84dd399fb1ae")
+    local barricadeRunner = Entity("S_HAV_HavenOutcasts_BarricadeRunners_Ranger_572690b6-68f5-4e7b-807b-b9376b658b65")
+    local AD = Dialog("HAV_HavenOutcasts_AD_BarricadeRunners_4f218e3e-c627-89bf-0277-2a0b0b77ec49")
+    local animation = Animation("CUST_Barricade_01_Loop_ec0d0d5b-e7fe-4fa4-9830-4224bd454eef")
+    local currentlyTinkering = false
+    local barricade = Entity("S_HAV_HavenOutcasts_BarricadeTinkeringPoint_7fdaaae4-cbbd-4ff7-9d64-2988509e1c7d")
+    local gatherAnimation = Animation("CUST_Barricade_PickupMaterial_01_2f0b5393-9999-42d5-8b7a-3b9433a53cd3")
+    local giveAnimation = Animation("CUST_Barricade_Give_01_1a30749f-a2fa-46d5-b161-eeac5472d4c6")
+    local chatterFlag = Flag("HAV_BarricadeRunners_ReadyForAD_add24f29-0180-41c8-a4e8-38f8f9bc8dd8")
+    local givingResources = false
+
+    local pickUpSceneTrigger = Entity("S_HAV_WRLD_BarricadePickUp_TimelineSceneTrigger_85638872-bf3f-42aa-aecc-d3c2e39b3402")
+    local putDownSceneTrigger = Entity("S_HAV_WRLD_BarricadePutDown_TimelineSceneTrigger_23f3a490-eebb-4f1e-92f0-1f104ef34ca8")
+    local pickUpAnim = Dialog("WRLD_SCL_BarricadePickUp_08d721b9-1f72-6d5f-c668-1e019e280f5a")
+    local putDownAnim = Dialog("WRLD_SCL_BarricadePutDown_8973a014-33e6-3475-d6b0-d1ca52c89ef6")
+
+    ----------------------------------
+    -- Nodes
+
+
+    nodes.SoloWork = Selector {
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end,
+        CanEnter = function()
+            return barricadeGuard.Character.IsDead
+        end
+
+    }
+
+    nodes.SoloWork.GetSupplies = Action{
+        function()
+            mod.moveto.MoveToPoint(secondPoint, MovementSpeed.Run, me)
+            if GetDistance2DTo(me, secondPoint) <= 1 then
+                try 
+                    StartBehaviorDialog(pickUpAnim, pickUpSceneTrigger.Trigger, true, barricadeRunner) 
+                catch e then
+                    Sleep(3.0)
+                end
+            end
+            SetFlag(chatterFlag, me)
+            SetFlag(chatterFlag, barricadeGuard)
+            currentlyTinkering = true
+        end,
+        CanEnter = function()
+            return not currentlyTinkering
+        end
+    }
+
+    nodes.SoloWork.MoveTo = Action {
+        function()
+            DebugText(me,"Move")
+            mod.moveto.MoveToPoint(secondPoint, MovementSpeed.Run, me)
+        end,
+        CanEnter = function()
+           return GetDistance2DTo(me, secondPoint) > 1
+        end
+    }
+
+    nodes.SoloWork.Tinker = Action {
+        function()
+            SteerTo(barricade)
+            if GetDistance2DTo(me, barricade) <= 1 then
+                StartBehaviorDialog(putDownAnim, putDownSceneTrigger.Trigger, true, barricadeRunner)
+            end
+            currentlyTinkering = false
+        end,
+        Valid = function()
+           return currentlyTinkering
+        end
+    }
+
+    nodes.TeamWork = Selector{
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end,
+        CanEnter = function()
+            return not barricadeGuard.Character.IsDead
+        end
+
+    }
+
+    nodes.TeamWork.RunningToBarricade = Action {
+        function()
+            SetFlag(chatterFlag, barricadeGuard)
+            if mod.moveto.MoveToPoint(firstPoint, MovementSpeed.Walk, me) then
+                DebugText(me,"AD at the barricade")
+                StartAutomatedDialog(AD, false, me, barricadeGuard)
+                currentlyTinkering = false
+                givingResources = true
+            end
+        end,
+        CanEnter = function()
+            return currentlyTinkering and not givingResources
+        end, 
+        OnLeave = function()
+            ClearFlag(chatterFlag, me)
+            ClearFlag(chatterFlag, barricadeGuard)
+        end
+    }
+
+    nodes.TeamWork.GivingResources = Action{
+        function()
+                StartBehaviorDialog(putDownAnim, putDownSceneTrigger.Trigger, true, barricadeRunner)
+            givingResources = false
+        end,
+        CanEnter = function()
+            return givingResources
+        end
+    }
+
+    nodes.TeamWork.RunningToCrates = Action{
+        function()
+                Sleep(2.0)
+                try
+                    StartBehaviorDialog(pickUpAnim, pickUpSceneTrigger.Trigger, true, barricadeRunner)
+                catch e then
+                    DebugText(me, "Behavior Failed")
+                end
+                currentlyTinkering = true
+        end,
+        CanEnter = function()
+            return not currentlyTinkering
+        end
+    }
+
+    nodes.Fallback = Action{
+        OnEnter = function()
+            givingResources = false
+            currentlyTinkering = false
+        end,
+        function()
+            DebugText(me,Fallback)
+            Sleep(6)
+        end
+    }
+
+    events.DialogStarted = function(e)
+        if e.Instance.DialogUUID == AD.Guid  then
+            givingResources = true
+        end
+    end
+
+end
+}
+
+game.states.HAV_HavenOutcasts_BarricadeYeller = State{function()
+    ----------------------------------
+    -- Local variables
+
+    modules = {"shared.moveto"}
+
+
+    local runningGuard = Entity("S_HAV_HavenOutcasts_BarricadeRunners_Ranger_572690b6-68f5-4e7b-807b-b9376b658b65")
+    local barricadePoint = Entity("S_HAV_HavenOutcasts_BarricadeTinkeringPoint_7fdaaae4-cbbd-4ff7-9d64-2988509e1c7d")
+    local supplyPoint = Entity("S_HAV_HavenOutcasts_StableRunningPoint_5c4c933d-999e-4b1d-b4f7-0214c3259325")
+    local animation = Animation("CUST_Barricade_01_Loop_ec0d0d5b-e7fe-4fa4-9830-4224bd454eef")
+    local currentlyTinkering = true
+    local gettingResources = false
+    local takeAnimation = Animation("CUST_Barricade_Receive_01_4b78e08e-3211-4365-9fc0-f4ddc5e2369e")
+    local AD = Dialog("HAV_HavenOutcasts_AD_BarricadeRunners_4f218e3e-c627-89bf-0277-2a0b0b77ec49")
+    local gatherAnimation = Animation("CUST_Barricade_PickupMaterial_01_2f0b5393-9999-42d5-8b7a-3b9433a53cd3")
+    local chatterFlag = Flag("HAV_BarricadeRunners_ReadyForAD_add24f29-0180-41c8-a4e8-38f8f9bc8dd8")
+
+    local barricadeGuard = Entity("S_HAV_HavenOutcasts_BarricadeYeller_Ranger_b612ef5f-3381-4486-8959-84dd399fb1ae")
+    local sharpeningTrigger = Entity("dc6a82f9-3c97-4330-b992-85e15d123994")
+    local sharpeningAnim = Dialog("WRLD_SCL_BarricadeSharpening_43e0efb7-3c4c-6344-828d-38bc2b51e17d")
+    local steerTarget = Entity("S_HAV_HavenOutcasts_BarricadeRunningPoint_ae09feb5-4ac5-4dc1-84eb-510e27ba49c1")
+
+    ----------------------------------
+    -- Nodes
+
+    nodes.GetSupplies = Action{
+        function()
+            mod.moveto.MoveToPoint(supplyPoint, MovementSpeed.Walk, me)
+            DebugText(me,"AD at the barricade")
+            PlayAnimation(gatherAnimation)
+            currentlyTinkering = true
+        end,
+        CanEnter = function()
+            return runningGuard.Character.IsDead and not currentlyTinkering
+        end
+    }
+
+    nodes.MoveTo = Action {
+        function()
+            mod.moveto.MoveToPoint(barricadePoint, MovementSpeed.Run, me)
+            Sleep(2)
+        end,
+        CanEnter = function()
+           return GetDistance2DTo(me, barricadePoint) > 1
+        end
+    }
+
+    nodes.Tinker = Action {
+        function()
+            --try
+                StartBehaviorDialog(sharpeningAnim, sharpeningTrigger.Trigger, true, barricadeGuard)
+            --catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                --DebugText(me, "Failed animation")
+            --end
+            if runningGuard.Character.IsDead then
+                currentlyTinkering = false
+            end
+        end,
+        Valid = function()
+           return currentlyTinkering and not GetFlag(chatterFlag, me)
+        end
+    }
+
+    nodes.ReceivingResources = Action{
+        function()
+            --SteerTo(runningGuard)
+            --try
+                --PlayAnimation(takeAnimation)
+            --catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                --DebugText(me, "Failed animation")
+            --end
+            gettingResources = false
+        end,
+        CanEnter = function()
+            return gettingResources
+        end
+    }
+    nodes.DoAD = Action{
+        function()
+            BehaviorDialogRequestGracefulStop(me, false, sharpeningAnim)
+            Sleep(6.5)
+            SteerTo(steerTarget)
+            if IsInDialog(me, true) then
+                StartBehaviorDialog(sharpeningAnim, sharpeningTrigger.Trigger, true, barricadeGuard)
+            else
+                Sleep(0.3)
+            end
+        end,
+        CanEnter = function()
+           return GetFlag(chatterFlag, me)
+        end,
+        Valid = function()
+            return GetFlag(chatterFlag, me)
+        end
+    }
+    nodes.Fallback = Action{
+        function()
+            DebugText(me,"Fallback")
+            Sleep(3)
+            currentlyTinkering = true
+        end,
+        Valid = function()
+            return not currentlyTinkering and not gettingResources
+        end
+    }
+
+    events.DialogStarted = function(e)
+        if e.Instance.DialogUUID == AD.Guid  then
+            gettingResources = true
+        end
+    end
+
+end
+}

@@ -1,0 +1,78 @@
+game.states.PLA_DyingHyena_BaseGnoll = State { function()
+    description = [[
+        Base behaviour for the caravan gnolls and hyenas.
+        Will run towards trigger where player had been spotted after being called by hyena runner.
+    ]]
+
+    modules = { "shared.math" }
+
+    params.idleBehaviour = {type = EParamType.State, required = true, help = [[
+        State for idle behaviour while gnolls in the default position
+    ]]}
+
+    local runToTrigger = nil
+    local shouldRunToPlayer = false
+
+    nodes.MoveToPlayer = Action {
+        OnEnter = function()
+            SetWeaponUnsheathed(me, true, false);
+        end,
+        function()
+            local validPos = FindValidPosition(runToTrigger, 9.0, me)
+            if validPos ~= nil then
+                try
+                    MoveTo(validPos, MovementSpeed.Run, false, false, 2.5, 5.0)
+                catch ex if ls.CheckType(ex, error.MovementFailed) then
+                    DebugText(me, "MovementFailed")
+                    Sleep(6)
+                end
+                if IsInTrigger(me, runToTrigger.Trigger) then
+                    shouldRunToPlayer = false
+                end
+            end
+        end,
+        Valid = function()
+            return shouldRunToPlayer
+        end
+    }
+
+    nodes.Wandering = Action {
+        function()
+            try
+                Wander(runToTrigger, 3.0, MovementSpeed.Walk)
+                Sleep(mod.math.random(2,5))
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Wander failed")
+                Sleep(5)
+            end
+        end,
+        Valid = function()
+            return not shouldRunToPlayer and runToTrigger ~= nil
+        end
+    }
+
+    nodes.Idle = Proxy {
+        params.idleBehaviour,
+        Valid = function()
+            return not shouldRunToPlayer and runToTrigger == nil
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_DyingHyena_Event_RushToPlayersArea" and e.Params[1] ~= nil then
+                runToTrigger = e.Params[1]
+                shouldRunToPlayer = true
+            end
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me and shouldRunToPlayer then
+            shouldRunToPlayer = false
+            runToTrigger = nil
+        end
+    end
+end}

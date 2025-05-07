@@ -1,0 +1,44 @@
+game.states.DEN_ShadowHeart = State {function ()
+    
+    description = [[Behaviour of Shadow Heart in the druids' grove]]
+
+    modules = { "shared.dialog" }
+
+    local BoxAnim = Animation("CUST_PlayingWithPuzzleBox_01_1d115a4c-2c2d-4767-813c-fb98d4985de5")
+    local DenFlag = Flag("GLO_Shadowheart_State_GroveRecruitment_1fd54cd1-9441-4746-a56b-56f2a206ba8c")
+    local BoxFlag = Flag("GLO_InfernalBox_State_CharacterHasBox_2ff44b15-a351-401b-8da9-cf42364af274")
+    local AD = Dialog("DEN_ShadowHeartRecruitment_AD_ef98c69c-ab81-e8f8-0c16-a301e125ddb2")
+
+    self.Valid = function()
+        return CheckCurrentGameLevel("WLD_Main_A") and GetFlag(DenFlag,nil)
+    end
+    self.OnLeave = function()
+        StopAnimation(me)
+        EndRepose(me)
+    end
+
+    nodes = ImmediateSelector {}
+    nodes.Box = Action {
+        function()
+            PlayAnimation(BoxAnim,false,true)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+            AD,
+            {
+                waitForCompletion = false,
+                minDelay = 20
+            },
+            me
+        )
+            Sleep(20)
+        end,
+        Valid = function()
+            return me.IsReposed and GetFlag(BoxFlag, me)
+        end
+    }
+    nodes.Sit = Proxy {
+        game.states.Sit,
+        params = {
+            seat = "S_DEN_ShadowHeartChair_90564175-b865-4721-b3c3-8eebfcd73d0e"
+        }
+    }
+end}

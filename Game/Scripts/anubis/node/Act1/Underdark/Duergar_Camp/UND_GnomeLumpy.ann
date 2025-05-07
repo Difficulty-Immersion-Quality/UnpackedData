@@ -1,0 +1,100 @@
+game.states.UND_GnomeLumpy = State{function ()
+    description = [[Behaviour for the Gnome Silly]]
+
+    modules = {"shared.dialog","shared.moveto"}
+
+    params.grymforgeState = {type = EParamType.State, required = true, help = [[
+        State for the gnome before being rescued at the Grymforge.
+    ]]}
+
+    params.atMyconidsPosition = {type = EParamType.String, help=[[
+        The home trigger to stay at Myconid Circle after being saved.
+    ]]}
+
+    params.PostMutinyPosition = {type = EParamType.String, help=[[
+        The trigger to which the character will move after the mutiny confrontation has been resovled.
+    ]]}
+
+    local tr_postMutinyPosition
+
+    local tr_atMyconidsPosition = Entity("S_UND_GnomeWorkerSilly_SavedTrigger_aed85589-355a-4c25-bdb7-f6c4c3120a86")
+    local flag_atMyconids = Flag("UND_DuergarCamp_State_GnomeAtMyconids_f48d9c4e-e6eb-46dc-93a7-89326d11829b")
+	local flag_PostMutiny = Flag("UND_DuergarCamp_State_BattleEnded_beb0173e-61e5-4a4e-a13f-6a5bf74f1582")
+    local d_mourningAD = Dialog("UND_GnomeWorkerLumpy_AD_Mourning_4de08b59-fa7f-903c-6017-e766f9e0ca90")
+    --local anim_Mourn = Animation("CUST_Crying_01_Loop_2e105276-ff57-4fcb-bb9d-21344f7c4608") Keep the old register
+
+    local animMourn_Start = Animation("CUST_KneelingCrying_01_Start_774d9b1d-8f5b-43ca-b8bf-7e39cd8c64ad")
+    local animMourn_Loop = Animation("CUST_KneelingCrying_01_Loop_9ea4a039-0c6c-4b5a-8d56-6a1bb64aa602")
+    local animMourn_End = Animation("CUST_KneelingCrying_01_End_1ac8c601-6384-4bea-b6df-4345bd25944a")
+    local isLoopinganimation = false
+    local isPostMutiny = false
+
+    self.OnInit = function()
+        tr_atMyconidsPosition = FindEntity(params.atMyconidsPosition)
+        tr_postMutinyPosition = FindEntity(params.PostMutinyPosition)
+    end
+
+    nodes.State_AtMyconids = Action {
+		function()
+			if mod.moveto.MoveToPoint(tr_atMyconidsPosition, MovementSpeed.Walk, me) then
+                LookFrom(tr_atMyconidsPosition)
+                WaitForInterrupt();
+            else
+                Sleep(5)
+			end
+		end,
+		CanEnter = function()
+			return GetFlag(flag_atMyconids)
+		end
+	}
+
+    nodes.State_PostMutiny = Action {
+        function()
+            if not IsInDangerousSurfaceFor(tr_postMutinyPosition, me.Character) then
+                if GetDistanceTo(me, tr_postMutinyPosition) > 3.0 then
+                    try
+                        MoveTo(tr_postMutinyPosition,MovementSpeed.Run)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        LookAtEntity(tr_postMutinyPosition, 3.0)
+                        Sleep(2.0)
+                    end
+                elseif not isLoopinganimation then
+                    try
+                        PlayLoopingAnimation(animMourn_Start, {animMourn_Loop}, animMourn_End, false)
+                        isLoopinganimation = true
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        LookAtEntity(tr_postMutinyPosition, 3.0)
+                    end
+                else
+                    LookFrom(tr_postMutinyPosition)
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        d_mourningAD,
+                        {
+                            waitForCompletion = false,
+                            minDelay = 15.0,
+                        },
+                        me
+                    )
+                end
+            else
+                LookAtEntity(tr_postMutinyPosition, 3.0)
+            end
+            Sleep(10 + 5 * math.random())
+        end,
+        Valid = function()
+            return GetFlag(flag_PostMutiny)
+        end,
+        OnLeave = function()
+            isLoopinganimation = false
+            StopAnimation(me)
+            DialogRequestStop(me,d_mourningAD)
+	end
+    }
+
+    nodes.State_Grymforge = Proxy {
+        params.grymforgeState,
+        Valid = function()
+            return not GetFlag(flag_atMyconids)
+        end
+    }
+end}

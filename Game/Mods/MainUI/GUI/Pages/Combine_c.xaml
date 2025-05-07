@@ -1,0 +1,585 @@
+<ls:UIWidget x:Name="Combine_c"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+             mc:Ignorable="d"
+             d:DesignHeight="2160" d:DesignWidth="3840"
+             ls:UIWidget.UseCustomDC="True"
+             ls:UIWidget.ContextName="Combine"
+             d:DataContext="{d:DesignInstance {x:Type ls:DCCombine}, IsDesignTimeCreatable=True}"
+             FocusDown="UIDown" FocusLeft="UILeft" FocusRight="UIRight" FocusUp="UIUp"
+             CanCacheFocusSurroundingElements="False">
+
+    <ls:UIWidget.Template>
+        <ControlTemplate>
+            <ControlTemplate.Resources>
+
+                <BitmapImage x:Key="TabImageSelected" UriSource="pack://application:,,,/Core;component/Assets/Shared_c/c_listItemSelected_narrow_centered.png" />
+                <BitmapImage x:Key="InventoryIconImage" UriSource="pack://application:,,,/Core;component/Assets/Shared_c/c_ico_header_inventory.png" />
+                <BitmapImage x:Key="CallToActionImage" UriSource="pack://application:,,,/Core;component/Assets/Shared_c/c_callToAction_wide_bg.png" />
+                <BitmapImage x:Key="PanelBottomImage" UriSource="pack://application:,,,/Core;component/Assets/Shared_c/c_containerFrameFooter.png" />
+                <BitmapImage x:Key="ItemFrameImage" UriSource="pack://application:,,,/Core;component/Assets/Shared_c/c_containerItemFrame.png" />
+                <BitmapImage x:Key="CharacterFrameImage" UriSource="pack://application:,,,/Core;component/Assets/Shared_c/c_containerCharacterFrame.png" />
+
+                <Style x:Key="SlotSelectorImageStyle" TargetType="Image">
+                    <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Shared_c/c_gridFrame_selected.png"/>
+                    <Setter Property="Stretch" Value="None"/>
+                    <Setter Property="HorizontalAlignment" Value="Center"/>
+                    <Setter Property="VerticalAlignment" Value="Center"/>
+                </Style>
+            </ControlTemplate.Resources>
+
+            <Grid x:Name="bgFade" Background="{DynamicResource LS_PanelBackgroundMedium}" Tag="" ls:TooltipExtender.Owner="{Binding CurrentPlayer.SelectedCharacter}">
+
+                <b:Interaction.Triggers>
+                    <b:EventTrigger EventName="Loaded">
+                        <ls:LSPlaySound Sound="UI_HUD_Combine_Open"/>
+                        <b:ChangePropertyAction TargetName="bgFade" PropertyName="Tag" Value="{Binding Data.IsCameraSplit}" />
+                        <ls:SetMoveFocusAction TargetName="Combine_c"/>
+                    </b:EventTrigger>
+
+                    <b:DataTrigger Binding="{Binding CurrentPlayer.UIData.ActiveState}" Value="Combine">
+                        <!-- Update focus on going back from sort panel -->
+                        <ls:SetMoveFocusAction TargetName="Combine_c" DeferFocusAction="True"/>
+                    </b:DataTrigger>
+
+                    <b:DataTrigger Binding="{Binding CurrentState}" Value="Success">
+                        <ls:LSPlaySound Sound="UI_HUD_Combine_Success"/>
+                    </b:DataTrigger>
+                    <b:DataTrigger Binding="{Binding CurrentState}" Value="Fail">
+                        <b:Interaction.Behaviors>
+                            <b:ConditionBehavior>
+                                <b:ConditionalExpression>
+                                    <b:ComparisonCondition LeftOperand="{Binding FailReason}" Operator="Equal" RightOperand="Invalid"/>
+                                </b:ConditionalExpression>
+                            </b:ConditionBehavior>
+                        </b:Interaction.Behaviors>
+                        <ls:LSPlaySound Sound="UI_HUD_Combine_Failure"/>
+                    </b:DataTrigger>
+                    <b:DataTrigger Binding="{Binding CurrentState}" Value="Fail">
+                        <b:Interaction.Behaviors>
+                            <b:ConditionBehavior>
+                                <b:ConditionalExpression>
+                                    <b:ComparisonCondition LeftOperand="{Binding FailReason}" Operator="NotEqual" RightOperand="Invalid"/>
+                                </b:ConditionalExpression>
+                            </b:ConditionBehavior>
+                        </b:Interaction.Behaviors>
+                        <ls:LSPlaySound Sound="UI_HUD_Combine_Error"/>
+                    </b:DataTrigger>
+                </b:Interaction.Triggers>
+
+                <Rectangle x:Name="ScreenBGSideGradient" VerticalAlignment="Stretch" Fill="{StaticResource CenteredGradientLightShadingBrush}" />
+
+                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" x:Name="panelHolder" Width="1300" Panel.ZIndex="1" Margin="0,0,0,140" >
+
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <ls:LSNineSliceImage Grid.Row="0" VerticalAlignment="Top" HorizontalAlignment="Center" Style="{StaticResource containerTopHalf_bg}">
+                            <Grid Width="1080" HorizontalAlignment="Center" >
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock x:Name="containerName" Grid.Row="0" Text="{Binding Source='h02ae15ceg643fg41cagadc2g6a4d624daaa2', Converter={StaticResource TranslatedStringConverter}}"  HorizontalAlignment="Center" Style="{StaticResource PanelTitleStyle}" TextAlignment="Center" VerticalAlignment="Top" TextWrapping="Wrap" Margin="0,20,0,20" />
+
+                                <Grid Grid.Row="1" Height="204" x:Name="ContainerHeaderList" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,-10,0,0" Panel.ZIndex="11">
+                                    <Image x:Name="ContainerIconBGFrame" Source="{StaticResource ItemFrameImage}" Stretch="None" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                    <Rectangle x:Name="object" Stretch="Fill" Fill="{Binding BaseItem.Icon}" Width="140" Height="140"  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid>
+
+                                <!-- Insert slots part -->
+                                <Grid Grid.Row="2" VerticalAlignment="Top">
+
+                                    <!-- Upper Area -->
+                                    <StackPanel x:Name="UpperArea" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,0,0,0">
+                                        <!-- Slots -->
+                                        <ls:LSNineSliceImage x:Name="SlotsBackground" Height="272" Slices="50" HorizontalAlignment="Center" VerticalAlignment="Top" MinWidth="468" ImageSource="pack://application:,,,/Core;component/Assets/Shared_c/c_insert_frame.png">
+
+                                            <!-- Allow outer slots to partially clip out of the background image -->
+                                            <Grid Margin="-60,0">
+                                                <StackPanel x:Name="InputContainer" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Visible">
+                                                    <!-- Base item -->
+                                                    <Grid>
+                                                        <Image x:Name="BG" Source="pack://application:,,,/Core;component/Assets/Shared_c/c_itemHolderAlt.png" Stretch="None" />
+
+                                                        <ContentPresenter Content="{Binding BaseItem}" Style="{StaticResource Style.GameObject}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        <Image Source="pack://application:,,,/Core;component/Assets/Combine_c/c_ico_presetItem.png" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,132"/>
+                                                    </Grid>
+
+                                                    <!-- Ingredients -->
+                                                    <ListBox ItemsSource="{Binding Ingredients}" BorderThickness="0" Padding="0" AlternationCount="{Binding Ingredients.Count}">
+                                                        <ListBox.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <StackPanel Orientation="Horizontal"/>
+                                                            </ItemsPanelTemplate>
+                                                        </ListBox.ItemsPanel>
+                                                        <ListBox.ItemContainerStyle>
+                                                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                                                <Setter Property="Template">
+                                                                    <Setter.Value>
+                                                                        <ControlTemplate>
+                                                                            <Grid x:Name="Container" Background="Transparent">
+                                                                                <Grid.ToolTip>
+                                                                                    <ls:LSTooltip Content="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                                                                </Grid.ToolTip>
+                                                                                <Image x:Name="BG" Source="pack://application:,,,/Core;component/Assets/Shared_c/c_itemHolderAlt.png" Stretch="None"/>
+                                                                                <ContentPresenter Content="{Binding .}" Style="{StaticResource Style.GameObject}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                                <!-- Negative margins to allow the + signs to overlap the other slots -->
+                                                                                <Image Source="pack://application:,,,/Core;component/Assets/Combine_c/c_ico_combinePlus.png" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"  Margin="-30,0,140,0"/>
+                                                                                <Image x:Name="Border" Style="{StaticResource SlotSelectorImageStyle}" Visibility="{Binding Path=Tag, ElementName=Border, Converter={StaticResource BoolToVisibleConverter}}">
+                                                                                    <Image.Tag>
+                                                                                        <MultiBinding Converter="{StaticResource EqualConverter}">
+                                                                                            <Binding Path="DataContext.SelectedIndex" RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}"/>
+                                                                                            <Binding Path="(ItemsControl.AlternationIndex)" RelativeSource="{RelativeSource AncestorType={x:Type ListBoxItem}}"/>
+                                                                                        </MultiBinding>
+                                                                                    </Image.Tag>
+                                                                                </Image>
+                                                                            </Grid>
+                                                                        </ControlTemplate>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                                <Setter Property="Padding" Value="0"/>
+                                                                <Setter Property="BorderThickness" Value="0"/>
+                                                            </Style>
+                                                        </ListBox.ItemContainerStyle>
+                                                        <b:Interaction.Triggers>
+                                                            <b:EventTrigger EventName="FocusChanged">
+                                                                <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=Combine_c}" CommandParameter="{Binding Path=FocusedElement, ElementName=Combine_c}"/>
+                                                            </b:EventTrigger>
+                                                        </b:Interaction.Triggers>
+                                                    </ListBox>
+                                                </StackPanel>
+
+                                                <!-- Result -->
+                                                <Grid x:Name="Result" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                                                    <Image Source="pack://application:,,,/Core;component/Assets/Shared_c/c_itemHolderAlt.png" Stretch="None"/>
+                                                    <ls:LSEntityObject Width="{StaticResource ContInvSlotSize}" Height="{StaticResource ContInvSlotSize}" EntityRef="{Binding ResultItem.EntityHandle}">
+                                                        <ContentPresenter Content="{Binding ResultItem}" Style="{StaticResource Style.GameObject}"  />
+                                                    </ls:LSEntityObject>
+                                                </Grid>
+                                            </Grid>
+
+                                        </ls:LSNineSliceImage>
+
+                                        <!-- Feedback message -->
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,10,0,0">
+                                            <Image x:Name="FailIcon" Source="pack://application:,,,/Core;component/Assets/Combine_c/c_ico_combineFail.png" Stretch="None" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,0,0,4" Visibility="Collapsed"/>
+                                            <TextBlock x:Name="FeedbackLabel" TextAlignment="Center" FontSize="{StaticResource IntermediateFontSize}" FontWeight="DemiBold" HorizontalAlignment="Center" VerticalAlignment="Bottom" Foreground="{StaticResource LS_accent75TxtColor}" ls:TextBlockFormatter.SourceText="{Binding Source='h040b1f64g325eg4b46gb957gc2347cf3fb0d', Converter={StaticResource TranslatedStringConverter}}">
+                                                <TextBlock.Resources>
+                                                    <Style TargetType="ls:LSSpan" BasedOn="{StaticResource BaseSpanStyle}">
+                                                        <Style.Triggers>
+                                                            <Trigger Property="TagType" Value="hl">
+                                                                <Setter Property="Foreground" Value="{StaticResource LS_specialTxtColor}" />
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Resources>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </Grid>
+                        </ls:LSNineSliceImage>
+                        <ls:LSNineSliceImage Grid.Row="1" VerticalAlignment="Top" HorizontalAlignment="Center" Style="{StaticResource containerInsert_bg}">
+
+                            <!-- Lower area -->
+                            <Grid x:Name="LowerArea" Grid.Row="3" Width="1300" HorizontalAlignment="Center" Margin="0,40,0,0" >
+                                <StackPanel Orientation="Vertical" Margin="0,80,0,0">
+                                    <TextBlock VerticalAlignment="Top" HorizontalAlignment="Center" FontSize="{StaticResource MediumFontSize}" Foreground="{StaticResource LS_accent75TxtColor}" FontWeight="DemiBold" TextWrapping="Wrap">
+                                        <ls:TextBlockFormatter.SourceText>
+                                            <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                                <Binding Source="h7a65a00ag12fcg4f9ega5d5g1f596d0af5b5"/>
+                                                <Binding Path="DataContext.CurrentPlayer.SelectedCharacter.Name" RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}"/>
+                                            </MultiBinding>
+                                        </ls:TextBlockFormatter.SourceText>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding FocusedElement.DataContext.Name, ElementName=Combine_c}" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,6,0,28" MaxWidth="880" TextTrimming="CharacterEllipsis" FontWeight="DemiBold" FontSize="{StaticResource LargeFontSize}" Foreground="{StaticResource LS_tint100}"/>
+
+                                    <!--Inventory-->
+                                    <Grid x:Name="InventoryRoot" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,0,40,0">
+                                        <b:Interaction.Behaviors>
+                                            <ls:CollectionSortBehavior x:Name="InventorySorted" ItemsSource="{Binding InventoriesSlots, ElementName=InventoriesMerger}" Comparer="{Binding DataContext.CurrentPlayer.InventorySortComparer, ElementName=Combine_c}"/>
+
+                                            <ls:InventoriesMergerBehavior x:Name="InventoriesMerger" Inventories="{Binding DataContext.CurrentPlayer.SelectedCharacter.Inventories, ElementName=Combine_c}"/>
+                                        </b:Interaction.Behaviors>
+
+                                        <ListBox x:Name="Inventory" ItemsSource="{Binding SortedItems, ElementName=InventorySorted}" Background="Transparent" BorderThickness="0" Height="612"  VerticalAlignment="Top" HorizontalAlignment="Center">
+                                            <ListBox.Template>
+                                                <ControlTemplate>
+                                                    <ScrollViewer Template="{StaticResource ScrollViewerTemplate}" Padding="0,0,0,0" VerticalScrollBarVisibility="Visible" HorizontalAlignment="Right" HorizontalScrollBarVisibility="Disabled">
+                                                        <ItemsPresenter/>
+                                                    </ScrollViewer>
+                                                </ControlTemplate>
+                                            </ListBox.Template>
+
+                                            <ListBox.ItemContainerStyle >
+                                                <Style TargetType="ListBoxItem" BasedOn="{StaticResource InvContainerListBoxItemStyle}">
+                                                    <Setter Property="Template" Value="{StaticResource Template.InventoryContainer}"/>
+                                                    <Setter Property="ContentTemplate">
+                                                        <Setter.Value>
+                                                            <DataTemplate DataType="{x:Type ls:VMInventorySlot}">
+                                                                <ls:LSEntityObject EntityRef="{Binding EntityHandle}"  Width="{DynamicResource ContItemIconSize}" Height="{DynamicResource ContItemIconSize}" DataContext="{Binding Object}">
+                                                                    <ContentPresenter Content="{Binding .}" Style="{StaticResource Style.GameObject}" Width="{DynamicResource ContItemIconSize}" Height="{DynamicResource ContItemIconSize}"/>
+
+                                                                    <Image x:Name="SelectedImg" Style="{StaticResource SlotSelectorImageStyle}" Visibility="Hidden">
+                                                                        <Image.Tag>
+                                                                            <MultiBinding Converter="{StaticResource EqualConverter}">
+                                                                                <Binding Path="DataContext.BaseItem" RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}"/>
+                                                                                <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType={x:Type ListBoxItem}}"/>
+                                                                            </MultiBinding>
+                                                                        </Image.Tag>
+                                                                    </Image>
+                                                                </ls:LSEntityObject>
+                                                                <DataTemplate.Triggers>
+                                                                    <DataTrigger Binding="{Binding Object.IsSelected}" Value="True">
+                                                                        <Setter TargetName="SelectedImg" Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                    <Trigger Property="Tag" Value="True">
+                                                                        <Setter TargetName="SelectedImg" Property="Visibility" Value="Visible"/>
+                                                                    </Trigger>
+                                                                </DataTemplate.Triggers>
+                                                            </DataTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                    <Setter Property="BorderThickness" Value="0"/>
+                                                    <Setter Property="Padding" Value="2"/>
+                                                    <Setter Property="ContextMenu">
+                                                        <Setter.Value>
+                                                            <ls:ContextMenu Style="{StaticResource BaseLSContextMenu}">
+                                                                <ls:ContextMenuItem x:Name="AddRemove" Command="{Binding DataContext.ToggleItemCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding Object}">
+                                                                    <ls:ContextMenuItem.Tag>
+                                                                        <MultiBinding Converter="{StaticResource EqualConverter}">
+                                                                            <Binding Path="DataContext.BaseItem" RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}"/>
+                                                                            <Binding Path="Item"/>
+                                                                        </MultiBinding>
+                                                                    </ls:ContextMenuItem.Tag>
+                                                                    <ls:ContextMenuItem.Style>
+                                                                        <Style TargetType="ls:ContextMenuItem" BasedOn="{StaticResource BaseLSContextMenuItem}">
+                                                                            <Setter Property="Header" Value="{Binding Source='h7d5baf41g4783g4677g8f91g2144a7c3c6a0', Converter={StaticResource TranslatedStringConverter}}"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                                    <Setter Property="Header" Value="{Binding Source='h66f5f06ag1874g4161g950dg86f429b26401', Converter={StaticResource TranslatedStringConverter}}"/>
+                                                                                </DataTrigger>
+                                                                                <MultiDataTrigger>
+                                                                                    <MultiDataTrigger.Conditions>
+                                                                                        <Condition Binding="{Binding IsSelected}" Value="False"/>
+                                                                                        <Condition Binding="{Binding DataContext.SelectedIndex, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="-1"/>
+                                                                                    </MultiDataTrigger.Conditions>
+                                                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                                                </MultiDataTrigger>
+                                                                                <!-- If item == base item, act like 'remove' but don't allow interaction -->
+                                                                                <DataTrigger Binding="{Binding Path=Tag, ElementName=AddRemove}" Value="True">
+                                                                                    <Setter Property="Header" Value="{Binding Source='h66f5f06ag1874g4161g950dg86f429b26401', Converter={StaticResource TranslatedStringConverter}}"/>
+                                                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding DataContext.CurrentState, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Working">
+                                                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding DataContext.CurrentState, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Success">
+                                                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </ls:ContextMenuItem.Style>
+                                                                </ls:ContextMenuItem>
+                                                                <ls:ContextMenuItem Header="{Binding Source='hc173e425geb02g4f20ga119g2cf1bd75643b', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.ExamineCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding EntityHandle}" />
+
+                                                            </ls:ContextMenu>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Style>
+                                            </ListBox.ItemContainerStyle>
+
+                                            <ListBox.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <ls:LSGrid x:Name="ContainerGrid" Columns="7" Rows="5" 
+                                                               Style="{StaticResource ContainerGridStyle}" 
+                                                               DisableScrolling="False" 
+                                                               ActionUpEvent="UIUp" ActionDownEvent="UIDown" ActionRightEvent="UIRight" ActionLeftEvent="UILeft" 
+                                                               ExtendedRows="False" 
+                                                               AutoIndex="True" 
+                                                               FocusElementVisualStyle="{StaticResource Style.FocusVisualStyle}"
+                                                               ls:MoveFocus.InternalFocusable="True" 
+                                                               UseWidgetNavigation="True" 
+                                                               WidgetChainedNavigation="True" />
+                                                </ItemsPanelTemplate>
+                                            </ListBox.ItemsPanel>
+
+                                            <b:Interaction.Triggers>
+                                                <b:EventTrigger EventName="FocusChanged">
+                                                    <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=Combine_c}" CommandParameter="{Binding Path=FocusedElement, ElementName=Combine_c}"/>
+                                                </b:EventTrigger>
+
+                                                <b:DataTrigger Binding="{Binding HasInputEnabled, ElementName=Combine_c}" Value="True">
+                                                    <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=Combine_c}" CommandParameter="{Binding Path=FocusedElement, ElementName=Combine_c}"/>
+                                                </b:DataTrigger>
+                                            </b:Interaction.Triggers>
+                                        </ListBox>
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                        </ls:LSNineSliceImage>
+                        <!-- Confirm -->
+                        <Grid Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,40,0,0">
+
+                            <Image Source="{StaticResource PanelBottomImage}" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                            <ls:LSButton x:Name="btnCombine"
+                                         Template="{StaticResource PrimaryButtonTemplate}"
+							             Command="{Binding DataContext.StartActionCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ls:UIWidget}}}"
+							             ls:LSButton.BoundEvent="UITakeAll"
+							             ContentTemplate="{StaticResource ControllerButtonHint}"
+							             Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UITakeAll'}"
+							             Tag="{Binding Source='h02ae15ceg643fg41cagadc2g6a4d624daaa2', Converter={StaticResource TranslatedStringConverter}}"
+							             VerticalAlignment="Center" Width="Auto" HorizontalAlignment="Center"
+                                         IsEnabled="False"/>
+                        </Grid>
+                    </Grid>
+
+
+                </Grid>
+                <!-- Button hints -->
+                <ls:AlignableWrapPanel x:Name="ButtonHolder" HorizontalContentAlignment="Center" Style="{StaticResource ButtonHint.Container.CenterWrap}" VerticalAlignment="Bottom">
+                    <b:Interaction.Behaviors>
+                        <ls:CollectionContainsItemBehavior x:Name="FocusIsIngredient" ItemSource="{Binding FocusedElement.DataContext, ElementName=Combine_c}" CollectionSource="{Binding Ingredients}"/>
+                    </b:Interaction.Behaviors>
+
+                    <ls:LSButton x:Name="btnAddRemove" BoundEvent="UIAccept" ContentTemplate="{StaticResource ControllerButtonHint}" Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIAccept, Converter={StaticResource FindInputEventConverter}}" Tag="{Binding Source='h7d5baf41g4783g4677g8f91g2144a7c3c6a0', Converter={StaticResource TranslatedStringConverter}}" EatInput="False" TapTime="{StaticResource DefaultButtonTapTime}" Command="{Binding ToggleItemCommand}" CommandParameter="{Binding FocusedElement.DataContext, ElementName=Combine_c}" />
+
+                    <ls:LSButton x:Name="ContextMenuBtn" BoundEvent="ContextMenu" ContentTemplate="{StaticResource ControllerButtonHint}" Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=ContextMenu, Converter={StaticResource FindInputEventConverter}}" Tag="{Binding Source='heb4b592bgc665g4e17ga685g07e2eb5e25db', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding ShowContextMenu}" CommandParameter="{Binding FocusedElement, ElementName=Combine_c}" IsEnabled="{Binding FocusedElement, ElementName=Combine_c, Converter={StaticResource NullToBoolFalseConverter}}"/>
+
+                    <ls:LSButton x:Name="TooltipBtn" BoundEvent="UIShowInfo" ContentTemplate="{StaticResource ControllerButtonHint}" Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIShowInfo, Converter={StaticResource FindInputEventConverter}}" Tag="{Binding Source='hf8dd4c2fg97e0g4ccdgac1ag3cd1fe5060ef',Converter={StaticResource TranslatedStringConverter}}" Command="ls:UIWidget.ToggleTooltipOnUIElementCommand" CommandParameter="{Binding Path=FocusedElement, ElementName=Combine_c}" IsEnabled="{Binding FocusedElement, ElementName=Combine_c, Converter={StaticResource NullToBoolFalseConverter}}" EatInput="False" TapTime="{StaticResource DelayedButtonTapTime}"/>
+
+                    <!-- Toggle Compare Tooltips-->
+                    <Control x:Name="CompareToggle" Template="{StaticResource HoldToggleTemplate}" Tag="Checked"/>
+
+                    <ls:LSButton x:Name="btnSort" BoundEvent="UISort" ContentTemplate="{StaticResource ControllerButtonHint}" Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UISort, Converter={StaticResource FindInputEventConverter}}" Tag="{Binding Source='hce314911gcae3g4345gbc5ag201bc976a594',Converter={StaticResource TranslatedStringConverter}}">
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="LSButtonReleased" SourceName="btnSort">
+                                <b:InvokeCommandAction Command="{Binding OpenSortInventory}"/>
+                                <b:InvokeCommandAction Command="{Binding HideTooltipOnUIElementCommand, ElementName=Combine_c}"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
+                    </ls:LSButton>
+
+                    <ls:LSButton x:Name="Cancel" BoundEvent="UICancel" ContentTemplate="{StaticResource ControllerButtonHint}" Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UICancel, Converter={StaticResource FindInputEventConverter}}" Tag="{Binding Source='h411fb88eg5261g437aga291g2fb260e633c6',Converter={StaticResource TranslatedStringConverter}}" Command="{Binding CustomEvent}"  CommandParameter="CloseWidget" SoundID="UI_Shared_Cancel"/>
+
+                    <ls:LSInputBinding x:Name="PinTooltipBinding" Style="{StaticResource PinTooltipBindingStyle}"/>
+                </ls:AlignableWrapPanel>
+            </Grid>
+
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding FocusedElement.DataContext, ElementName=Combine_c, Converter={StaticResource TypeConverter}}" Value="gui::DCCombine">
+                    <Setter TargetName="btnAddRemove" Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding ShowUIElementTooltip, ElementName=Combine_c}" Value="True">
+                    <Setter TargetName="TooltipBtn" Property="Tag" Value="{Binding Source='hb33ec471gd611g4ee3gbbffg699af8f79167', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding Result, ElementName=FocusIsIngredient}" Value="True">
+                    <Setter TargetName="btnAddRemove" Property="Tag" Value="{Binding Source='h66f5f06ag1874g4161g950dg86f429b26401', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <!-- If selection == base item, and it isn't a stack, act like 'remove' but don't allow interaction -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Value="True">
+                            <Condition.Binding>
+                                <MultiBinding Converter="{StaticResource EqualConverter}">
+                                    <Binding Path="BaseItem"/>
+                                    <Binding Path="FocusedElement.DataContext" ElementName="Combine_c"/>
+                                </MultiBinding>
+                            </Condition.Binding>
+                        </Condition>
+                        <Condition Binding="{Binding FocusedElement.DataContext.Count, ElementName=Combine_c}" Value="1"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="btnAddRemove" Property="Tag" Value="{Binding Source='h66f5f06ag1874g4161g950dg86f429b26401', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="btnAddRemove" Property="IsEnabled" Value="False"/>
+                </MultiDataTrigger>
+
+                <!-- No more adding when all slots are filled -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding FocusedElement.DataContext.IsSelected, ElementName=Combine_c}" Value="False"/>
+                        <Condition Binding="{Binding SelectedIndex}" Value="-1"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="btnAddRemove" Property="IsEnabled" Value="False"/>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding CurrentState}" Value="Success">
+                    <Setter TargetName="btnAddRemove" Property="Command" Value="{Binding CustomEvent}"/>
+                    <Setter TargetName="btnAddRemove" Property="CommandParameter" Value="CloseWidget"/>
+                    <Setter TargetName="btnAddRemove" Property="Tag" Value="{Binding Source='h45db0d8cg465fg4c1dg8c21gc894286fa41e', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="btnAddRemove" Property="IsEnabled" Value="True"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_tint100}"/>
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText">
+                        <Setter.Value>
+                            <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                <Binding Source="h95958a84g3e7dg4615ga30cg345d06df7cb9"/>
+                                <Binding Path="ResultItem.Name"/>
+                            </MultiBinding>
+                        </Setter.Value>
+                    </Setter>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding CurrentState}" Value="Working">
+                    <Setter TargetName="btnAddRemove" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="Cancel" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='h3ce43cb2gfecdg4a73g88feg68817006cd8d', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding CurrentState}" Value="Ready">
+                    <Setter TargetName="btnCombine" Property="IsEnabled" Value="True"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding CurrentState}" Value="Fail">
+                    <Setter TargetName="FailIcon" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="SlotsBackground" Property="ImageSource" Value="pack://application:,,,/Core;component/Assets/Shared_c/c_insert_frameFail.png"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding CurrentState}" Value="Success">
+                    <Setter TargetName="Result" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="InputContainer" Property="Visibility" Value="Hidden"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding FailReason}" Value="Invalid">
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='h47f58fa7g6e37g42fag8408gd89ae7856b9d', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FailReason}" Value="TooFar">
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='h1371c0f2g99ccg47a3g8012g9c240aec2b50', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FailReason}" Value="NotAllFilled">
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='h2a223e63g1953g4a41gb631gfe287b044889', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FailReason}" Value="Duplicate">
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='h85a8d808g354ag4709g8dbfg39437b3403e7', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FailReason}" Value="BaseNotFound">
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='h84799792gde2eg4c66g8a6bgc6ae05feaa02', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FailReason}" Value="IngredientNotFound">
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='h90ce0538g95a1g4d73gb5c5g54a4dae1c4e9', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FailReason}" Value="Interrupted">
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='he3d62e55g4ed3g49fagb679ge4d9ef4a50b8', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FailReason}" Value="NotEmptySlot">
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='he1c084aag96c0g4716gb47cge9f7e6e5b69d', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FailReason}" Value="IngredientAlreadyAdded">
+                    <Setter TargetName="FeedbackLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='h5a6c11e8gf30eg4543g8cb4ge288199d523d', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="FeedbackLabel" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                </DataTrigger>
+
+                <!-- Split Screen Triggers -->
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Layout}" Value="Left" />
+                        <Condition Binding="{Binding CurrentPlayer.UIData.InPlayerPanels}" Value="False" />
+                        <Condition Binding="{Binding Path=Tag, ElementName=bgFade}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="panelHolder" Property="HorizontalAlignment" Value="Left"/>
+                    <Setter TargetName="panelHolder" Property="Width" Value="1100"/>
+                    <Setter TargetName="panelHolder" Property="Margin" Value="60,0,0,200"/>
+                    <Setter TargetName="ButtonHolder" Property="Width" Value="1100"/>
+                    <Setter TargetName="ButtonHolder" Property="HorizontalAlignment" Value="Left"/>
+                    <Setter TargetName="ButtonHolder" Property="Margin" Value="60,0,0,56"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Fill" Value="{StaticResource LeftSideWideShadingBrush}"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="bgFade" Property="Background" Value="Transparent"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Layout}" Value="Right" />
+                        <Condition Binding="{Binding CurrentPlayer.UIData.InPlayerPanels}" Value="False" />
+                        <Condition Binding="{Binding Path=Tag, ElementName=bgFade}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="panelHolder" Property="HorizontalAlignment" Value="Right"/>
+                    <Setter TargetName="panelHolder" Property="Width" Value="1100"/>
+                    <Setter TargetName="panelHolder" Property="Margin" Value="0,0,20,200"/>
+                    <Setter TargetName="ButtonHolder" Property="Width" Value="1100"/>
+                    <Setter TargetName="ButtonHolder" Property="HorizontalAlignment" Value="Right"/>
+                    <Setter TargetName="ButtonHolder" Property="Margin" Value="0,0,20,56"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Fill" Value="{StaticResource RightSideWideShadingBrush}"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="bgFade" Property="Background" Value="Transparent"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Layout}" Value="Left" />
+                        <Condition Binding="{Binding CurrentPlayer.UIData.InPlayerPanels}" Value="False" />
+                        <Condition Binding="{Binding Path=Tag, ElementName=bgFade}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Fill" Value="{StaticResource CenteredGradientMediumShadingBrush}"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="bgFade" Property="Background" Value="Transparent"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Layout}" Value="Left" />
+                        <Condition Binding="{Binding CurrentPlayer.UIData.InPlayerPanels}" Value="False" />
+                        <Condition Binding="{Binding Data.IsCameraSplit}" Value="True"/>
+                        <Condition Binding="{Binding Path=Tag, ElementName=bgFade}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Fill" Value="{StaticResource LeftSideWideShadingBrush}"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="bgFade" Property="Background" Value="Transparent"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Layout}" Value="Right" />
+                        <Condition Binding="{Binding CurrentPlayer.UIData.InPlayerPanels}" Value="False" />
+                        <Condition Binding="{Binding Data.IsCameraSplit}" Value="False"/>
+                        <Condition Binding="{Binding Path=Tag, ElementName=bgFade}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Fill" Value="{StaticResource CenteredGradientMediumShadingBrush}"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="bgFade" Property="Background" Value="Transparent"/>
+                </MultiDataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Layout}" Value="Right" />
+                        <Condition Binding="{Binding CurrentPlayer.UIData.InPlayerPanels}" Value="False" />
+                        <Condition Binding="{Binding Data.IsCameraSplit}" Value="True"/>
+                        <Condition Binding="{Binding Path=Tag, ElementName=bgFade}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Fill" Value="{StaticResource RightSideWideShadingBrush}"/>
+                    <Setter TargetName="ScreenBGSideGradient" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="bgFade" Property="Background" Value="Transparent"/>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding Data.IsCameraSplit}" Value="true">
+                    <Setter TargetName="bgFade" Property="Background" Value="{StaticResource LS_PanelBackgroundLight}"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding CurrentPlayer.UIData.ActiveState}" Value="Book">
+                    <Setter TargetName="ButtonHolder" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+</ls:UIWidget>

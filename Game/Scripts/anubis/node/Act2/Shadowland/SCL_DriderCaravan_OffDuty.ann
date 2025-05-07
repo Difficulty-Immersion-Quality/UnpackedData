@@ -1,0 +1,95 @@
+game.states.SCL_DriderCaravan_GuardOffDuty = State{
+    function()
+
+    modules = {"shared.util", "shared.dialog"}
+
+    -------------------------
+    --Params
+    params.trStandAtTower = {type = EParamType.String, required = true, help = [[Position where character will stand after arriving at the tower]]}
+    params.towerAD = {type = EParamType.String, required = false, default = "", help = [[Optional AD after arriving to the tower.]]}
+    params.towerSpeakers = {type = EParamType.String, arrayRange = "..", default = {}, required = false, help = [[Tower AD speakers.]]}
+    params.onBreakState = {type = EParamType.State, required = false, default = StateRef{game.states.MOO_StateProxies}, help = [[State in which the NPC will go as he goes on break after arriving at tower]]}
+    params.isGoblin = {type = EParamType.Bool, required=false, default = false, help = [[Optional check wether the character is a Goblin or not e.g. goblins specific situation]]}
+
+    -- Local
+    local towerPoint = Entity(params.trStandAtTower)
+
+    local towerSpeakers = {}
+
+    local towerAD = Dialog(params.towerAD)
+
+    local hasJustArrived = true
+    -------------------------
+
+    self.OnInit = function()
+        if params.towerSpeakers ~= nil and #params.towerSpeakers > 0 then
+            for _, speaker in pairs(params.towerSpeakers) do
+                table.insert(towerSpeakers, Entity(speaker))
+            end
+        end
+    end
+
+    nodes.Proxy_GoingOnBreak = Proxy {
+        params.onBreakState,
+        CanEnter = function()
+            return not hasJustArrived
+        end
+    }
+
+    --Upon arrival at the tower, Guards will move toward their respective triggers.
+    --Goblins will proc a dialog and half-orc will simply start next state
+    nodes.Action_ArrivedToTower = Action {
+        function()
+            if not IsInDangerousSurfaceFor(towerPoint, me.Character) then
+
+                local moveToResult = MoveTo(towerPoint, MovementSpeed.Walk, false, false, 0.5, 1.0, false)
+                if moveToResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MovementFailed")
+                    Sleep(3.0)
+                    return
+                end
+
+                if params.isGoblin then
+                    LookFrom(towerPoint)
+                    Sleep(2.0)
+                    if towerAD ~= nil then
+                        if mod.dialog.AreSpeakersAvailableAndNear(me, 10.0, true, false, false, table.unpack(towerSpeakers)) then
+                            local result = StartAutomatedDialog(towerAD, true, me, table.unpack(towerSpeakers))
+                            if result == error.StartAutomatedDialogStartFailed then
+                                DebugText(me, "Error: StartAutomatedDialogWithWait failed")
+                                Sleep(2.0)
+                            end
+                        end
+                    end
+                else
+                    hasJustArrived = false
+                end
+
+            else
+                DebugText(me, "trigger on dangerous surface")
+                SteerTo(towerPoint)
+                Sleep(3.0)
+            end
+        end,
+        CanEnter = function()
+            return hasJustArrived
+        end,
+        Valid = function()
+            return hasJustArrived
+        end
+    }
+
+    nodes.Action_Idle = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.DialogEnded = function(e)
+        local goblinDialogUUID = Guid([[MOO_DriderCaravan_AD_GoingForBreak_6f77539a-79ea-a762-8c86-f2772de58f54]])
+        if(e.Instance.DialogUUID == goblinDialogUUID) then
+            hasJustArrived = false
+        end
+    end
+end
+}

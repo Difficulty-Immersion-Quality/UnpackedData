@@ -1,0 +1,312 @@
+game.states.COL_Barracks_Myrkulite = State{
+    function()
+    
+    modules = { "shared.math", "shared.params", "shared.util", "shared.dialog" }
+
+    -----------------------------------------
+    -- Params
+    params.sleepMin = {type = EParamType.Number,required = false,default = 7.0,
+        help = [[Minimum sleep duration. Sleeps happen either at certain patrol points or in between idle steers.]]}
+    params.sleepMax = {type = EParamType.Number,required = false,default = 15.0,
+        help = [[Maximum sleep duration. Sleeps happen either at certain patrol points or in between idle steers.]]}
+    params.originPoint = {type=EParamType.String, required = true,
+        help = [[Origin point to stand at during the blessing ceremony.]]}
+    params.patrolSpline = {type=EParamType.String, required = true,
+        help = [[Patrol spline after the blessing is done.]]}
+    params.blessingSteerTo = {type=EParamType.String, required = true,
+        help = [[Trigger to steer towards during the blessing.]]}
+    params.patrolActions = {type=EParamType.State, required = false, default=nil,
+        help = [[Optional slot for characters to do something while in patrol.
+            This state has higher priority than patrolling and is switched to as soon as its IsSelectable == true]]}
+    params.dispersalState = {type=EParamType.State, required = true,
+        help = [[State reference for after the Blessing is finished, when the Myrkulites are awaiting dispersal.]]}
+
+    -----------------------------------------
+    -- Locals
+    local sleepMin = 7.0
+    local sleepMax = 15.0
+    local doSleep = false
+
+    local blessingOverFlag = Flag("COL_Barracks_State_BlessingFinished_685c4b44-e9fb-4cdc-a99e-86f7db82d0e9")
+    local canDisperseFlag = Flag("COL_Barracks_State_MyrkulitesCanDisperse_731b22a3-5db8-4634-9724-496507368923")
+
+    local originPoint = Entity(params.originPoint)
+    local blessingSteerTo = Entity(params.blessingSteerTo)
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        if params.sleepMin~=nil and params.sleepMax~=nil then
+            sleepMin = params.sleepMin
+            sleepMax = params.sleepMax
+        end
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes.Blessing = Action{
+        function()
+            if (originPoint ~= nil) then
+                local moveResult = MoveTo(originPoint,MovementSpeed.Walk,true,false)
+
+                if moveResult == error.MovementError.None and blessingSteerTo ~= nil then
+                    SteerTo(blessingSteerTo)
+                end
+            end
+        end,
+        CanEnter = function()
+            return not GetFlag(blessingOverFlag)
+        end
+    }
+
+    nodes.Disperse = Proxy{
+        params.dispersalState,
+        Valid = function()
+            return not GetFlag(canDisperseFlag)
+        end
+    }
+
+    nodes.Sleep = Action{
+        function() 
+            Sleep(math.random(sleepMin,sleepMax))
+            doSleep = false
+        end,
+        CanEnter = function()
+            return doSleep
+        end
+    }
+
+    nodes.FollowPatrol = Proxy{
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = params.patrolSpline,
+            patrolActions = params.patrolActions,
+            patrolReverse = false,
+            patrolSpeed = "Stroll",
+            startSplineIndex = -1
+        }
+    }   
+
+    nodes.LookAround = Action{
+        function()
+            local duration = math.random(sleepMin,sleepMax)
+            --DebugText(me,"Steer sleep [1]",duration)
+            Sleep(duration)
+            local steerTarget = me.Position + (me.ForwardDirection * 3.0) --multiplied to avoid steering to own position
+            local offset = Vector3(math.random()*2.0-1.0,0.0,math.random()*2.0-1.0) * 1.5 -- > multiplier > relative turn angle
+            steerTarget = steerTarget + offset
+            --DebugText(me,"Steering to [1]",steerTarget)
+            SteerTo(steerTarget)
+        end
+    }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Sleep" then
+            doSleep = true
+        end
+    end
+
+    end
+}
+
+game.states.COL_Barracks_MistressOfSouls_InterruptPatrol = State{
+    function()
+    
+    local tableSteerTo = Entity("S_COL_Barracks_MistressOfSouls_TableLookAt_Point_5b5f09e2-04b4-4eca-a987-1cccd81f80b7")
+    local lookAtTable = false
+    
+    local tableAnim  = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+    local placeholderAnim = Animation("CUST_DebugAsset_CustomAnim_01_Loop_50635108-0b10-4232-820a-aac14df09a75")
+
+    nodes.InspectTable = Action{
+        function()
+            SteerTo(tableSteerTo)
+            for i = 1, math.random(2, 3), 1 do
+                PlayAnimation(tableAnim,true,false)
+                Sleep(math.random(3, 6))
+            end
+
+            lookAtTable = false
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+        end
+    }
+    
+    self.Valid = function()
+        return lookAtTable
+    end
+    
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Table" then
+            lookAtTable = true
+        end
+    end
+
+    events.DialogActorJoined = function(e)
+        if e.Actor == me and lookAtTable then
+            StopAnimation(me)
+        end
+    end
+
+    end
+}
+
+game.states.COL_Barracks_SkullLasher001_InterruptPatrol = State{
+    function()
+    
+    local shrineSteerTo = Entity("S_COL_Barracks_SkullLasher_001_PrayerLookAt_Point_0784acd3-4360-4357-97ec-8c1a074b3c35")
+    local prayerDialog = Dialog("COL_Barracks_AD_SkullLasher_001_Prayer_2a631305-2bd0-158a-30fd-ec6b1dc73561")
+    local doPrayer = false
+    
+    local prayerAnimStart = Animation("CUST_Praying_01_Start_e5488b36-2aa0-40be-b6e3-2165a9d38f02")
+    local prayerAnimLoop  = Animation("CUST_Praying_01_Loop_b45ab827-aebd-49ed-9ac7-07a1489a5490")
+    local prayerAnimEnd  = Animation("CUST_Praying_01_End_a1c0b0da-ea50-48a0-aba8-d2986c8b2737")
+    local placeholderAnim = Animation("CUST_DebugAsset_CustomAnim_01_Loop_50635108-0b10-4232-820a-aac14df09a75")
+
+    nodes.Pray = Action{
+        function()
+            SteerTo(shrineSteerTo)
+            --StartAutomatedDialog(prayerDialog,true,me)
+            try
+                PlayLoopingAnimation(prayerAnimStart,{prayerAnimLoop},prayerAnimEnd)
+            catch e then
+                DebugText(me,tostring(e))
+            end
+            Sleep(3.0)
+            StartAutomatedDialogRateLimitedImmediate(prayerDialog,2.0,12.0,me)
+            Sleep(20.0) --TODO: hard-coded animation sleep fix
+            StopAnimation(me)
+            Sleep(6.0)
+
+            doPrayer = false
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+    
+    self.Valid = function()
+        return doPrayer
+    end
+    
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Pray" then
+            doPrayer = true
+        end
+    end
+
+    events.DialogActorJoined = function(e)
+        if e.Actor == me and doPrayer then
+            StopAnimation(me)
+        end
+    end
+
+    end
+}
+
+game.states.COL_Barracks_SkullLasher002_InterruptPatrol = State{
+    function()
+    
+    local attackDummy = Entity("DEC_GEN_Training_Dummy_A_000_098a5b3e-63b1-4f49-8d18-aa13f2e92e17")
+    local attackDummyDialog = Dialog("COL_Barracks_AD_SkullLasher_002_AttackDummy_3d9dfc8a-06cf-94d5-989d-1281ee5164a3")
+    local doAttack = false
+
+    nodes.AttackDummy = Action{
+        function()
+            Sleep(0.5)
+
+            StartAutomatedDialogRateLimitedImmediate(attackDummyDialog,2.0,12.0,me)
+
+            local numAttacks = math.random(5,9)
+
+            for i = 0, numAttacks, 1 do
+                Attack(attackDummy,true,false)
+                Sleep(math.random(1,3))
+            end
+
+            Sleep(2.0)
+
+            doAttack = false
+        end
+    }
+    
+    self.Valid = function()
+        return doAttack
+    end
+    
+    events.SplineControlPointReached = function(e)
+        if e.Event == "AttackDummy" then
+            doAttack = true
+        end
+    end
+
+    end
+}
+
+game.states.COL_Barracks_Disperse_Default = State{
+    function()
+
+    modules = {"shared.util"}
+
+    local canDisperseFlag = Flag("COL_Barracks_State_MyrkulitesCanDisperse_731b22a3-5db8-4634-9724-496507368923")
+    local krustineDefeatedFlag = Flag("COL_Barracks_State_KrustineDefeated_7250b59d-7ac7-44a7-a8d0-a47be8fa1a90")
+
+    nodes.ProcessDisperse = Action{
+        function()
+            Sleep(6.0)
+            if GetFlag(krustineDefeatedFlag) and
+            not GetFlag(canDisperseFlag) then
+                SetFlag(canDisperseFlag)
+                DebugText(me,"set disperse flag")
+            end
+        end
+    }
+
+    end
+}
+
+game.states.COL_Barracks_Disperse_Krustine = State{
+    function()
+    
+    modules = { "shared.math", "shared.dialog" , "shared.util"}
+
+    local canDisperseFlag = Flag("COL_Barracks_State_MyrkulitesCanDisperse_731b22a3-5db8-4634-9724-496507368923")
+    local disperseADTries = 0
+    local standTrigger = Entity("S_COL_Barracks_MistressOfSouls_Point_6a407e2a-485f-4a39-bd73-a31b1ef09f86")
+    local steerTarget = Entity("S_COL_Barracks_SkullLasher_002_Point_e88720d7-a6a3-480c-a55b-e139952f71a3")
+    local lashersDefeatedFlag = Flag("COL_Barracks_State_AllSkullLashersDefeated_dab0ac75-a862-434e-951b-60d1379a0463")
+
+    nodes.ProcessDisperse = Action{
+        function()
+            DebugText(me,"trying AD")
+            MoveTo(standTrigger,MovementSpeed.Walk,true)
+            SteerTo(steerTarget)
+
+            Sleep(3.0)
+            if GetFlag(lashersDefeatedFlag) then
+                SetFlag(canDisperseFlag)
+            elseif (mod.dialog.IsSpeakerAvailable(me)) then
+                StartAutomatedDialogImmediate(Dialog("COL_Barracks_AD_MistressOfSouls_GoForth_a676cc12-b01e-950e-cd22-c703f0a2922c"),me)
+                Sleep(4.0)
+                SetFlag(canDisperseFlag)
+                Sleep(2.0)
+            else
+                -- try playing the AD but just set the flag if Krustine is not available for long enough
+                if disperseADTries < 8 then
+                    disperseADTries = disperseADTries + 1
+                else
+                    SetFlag(canDisperseFlag)
+                    Sleep(2.0)
+                end
+            end
+        end
+    }
+
+    end
+}

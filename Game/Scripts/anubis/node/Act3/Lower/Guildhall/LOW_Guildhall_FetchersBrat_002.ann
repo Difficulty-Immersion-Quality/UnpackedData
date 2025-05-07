@@ -1,0 +1,92 @@
+game.states.LOW_Guildhall_FetchersBrat_002 = State { function ()
+    description = [[ A kid who acts as the merchant for the Fetchers in the Guildhall. ]]
+
+    modules = { "shared.math"}
+    local trigger = Entity([[S_LOW_Guildhall_Point_FetchersBrat_002_25bb0fc5-1ce7-4c34-b99a-94fe445e89e2]])
+    local ignoreDangerousSurfacesTag = Tag("IGNORE_DANGEROUS_SURFACES_bbf62461-4af4-4631-807a-eb0bd988d9a6")
+    local myChair = [[FUR_GEN_Stool_Wood_Poor_A_001_6809a8d4-7c4e-4b52-9a67-e354d7015a5b]]
+    local isSitting = false
+
+    nodes.Idling = Selector {
+        function(nodes)
+            local node = FindFirstSelectable(nodes)
+            if node ~= nil then
+                return node
+            else
+                return nodes.Fallback
+            end
+        end
+    }
+
+    nodes.Idling.LookAtDestination = Action{
+        CanEnter = function()
+            return IsInDangerousSurfaceFor(trigger, me.Character)
+                and not IsTagged(me, ignoreDangerousSurfacesTag)
+        end,
+        function()
+            SteerTo(trigger)
+            Sleep(2.0)
+        end
+    }
+
+    nodes.Idling.WalkToTrigger = Action{
+        CanEnter = function()
+            return (GetDistanceTo(me, trigger) > 15.0) and not isSitting
+        end,
+        function()
+            local moveResult = MoveTo(trigger, MovementSpeed.Stroll, false, false, 0.1, 1.0, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(trigger)
+                Sleep(2.0)
+            end
+            LookFrom(trigger)
+        end
+    }
+
+    nodes.Idling.Sit = Proxy {
+        CanEnter = function()
+            return isSitting
+        end,
+        
+        game.states.Sit,
+        params = {
+            seat = myChair,
+        },
+        OnEnter = function()
+            StartTimer(me, "SittingDown", 6.0 + 3.0 * math.random(), 0)
+        end,
+    }
+
+    nodes.Idling.StateAtTrigger = Proxy {
+        game.states.GLO_PlayAD,   
+        params = {
+            AD = [[LOW_Guildhall_AD_FetchersBrat_002_SalesPitch_63be400c-aa8d-c2dc-e304-554eeb9e5cc3]]
+        },
+        
+        OnEnter = function()
+            StartTimer(me, "SittingDown", 24.0 + 6.0 * math.random(), 0) 
+        end
+    }
+
+    --------------------------------Fallback--------------------------------
+    nodes.Fallback = Action {
+        function()
+            Sleep(3.0)
+        end
+    }
+
+    --------------------------------Events--------------------------------
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "SittingDown" then 
+            if isSitting then
+                isSitting = false
+            else
+                StartTimer(me, "SittingDownCD", 12.0 + 6.0 * math.random(), 0)
+            end
+        elseif ev.TimerName == "SittingDownCD" then 
+            isSitting = true
+        end
+    end
+end
+}

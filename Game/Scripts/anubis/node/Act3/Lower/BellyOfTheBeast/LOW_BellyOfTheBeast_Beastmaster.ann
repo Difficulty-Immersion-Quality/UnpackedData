@@ -1,0 +1,127 @@
+game.states.LOW_BellyOfTheBeast_Beastmaster = State 
+{
+    function()
+    description = [[Beastmaster behaviour in the basement]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local visitedIronThroneFlag = Flag("IRN_IronThrone_State_Visited_5b3fb5a7-61e8-44a9-a0a1-b6b45b59a23c")
+    local exitedSubFlag = Flag("LOW_BellyOfTheBeast_Event_BeastmasterExitedSubmersible_ce7ebb28-57cf-42d2-a4ed-bf0138b29c15")
+
+    local beforeIRNpos = Entity("S_LOW_WarehouseBasementBeastmasterNearSubPos_4d077950-4e58-47d8-9eff-e6df2d978bd8")
+    local afterIRNpos = {
+        -- key = value
+        Entity("S_LOW_DockWarehouse_BeastmasterAfterIRNPos_01_607f431f-cd33-44dd-ad03-2050f9b98e36"),
+        Entity("S_LOW_DockWarehouse_BeastmasterAfterIRNPos_02_df9ae55b-a6c3-4698-b4e0-7594f8e0aa7e"),
+        Entity("S_LOW_DockWarehouse_BeastmasterAfterIRNPos_002_86bb69fb-e9a8-4b3b-829b-1876284b505c")
+    }    
+
+    local hatchTrigger = Entity("S_LOW_Beastmaster_LookAtHatch_1c8e6bae-9ebd-4fd8-b6b1-f8c8b0a7d363")
+    local beforeIRNwander = Entity("S_LOW_Beastmaster_WanderBeforeIRN_def870af-8d6e-4264-bbdf-3eafbed0df6f")
+
+    local beforeIRNanim = Animation("CUST_InspectWork_01_c3ade1d7-2469-4f1f-b8c4-4848e40c9ffc")
+    local afterIRNanim = Animation("CUST_Thinking_01_97588786-d9bf-4d18-879b-1bd3dcaa62ba")
+
+    local animationTime = true
+    local currentIndex = 0
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    
+    -- Before going to the Iron Throne
+
+
+    nodes.Action_InspectBeforeIRN = Action {
+        function()
+            SteerTo(hatchTrigger)
+            PlayAnimation(beforeIRNanim, true, false)
+            StartTimer(me, "LOW_Beastmaster_Wander", 5, 0)
+            animationTime = false
+        end,
+
+        Valid = function()
+            return not GetFlag(visitedIronThroneFlag) and animationTime
+        end
+    }
+
+
+
+    nodes.Action_InBasementBeforeIRN = Proxy {game.states.GEN_Wander,
+    params = {
+        trigger = [[S_LOW_Beastmaster_WanderBeforeIRN_def870af-8d6e-4264-bbdf-3eafbed0df6f]],
+        wanderMin = 5,
+        wanderMax = 5,
+        sleepMin = 0,
+        sleepMax = 0},
+
+        Valid = function()
+            return not GetFlag(visitedIronThroneFlag) and not animationTime
+        end
+    }
+   
+
+
+    -- After coming back from the Iron Throne
+    nodes.Action_InSubmersibleAfterIRN = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_LOW_HostageReturn_Beastmaster_501d9a0b-2c5c-43ca-ab17-ebfd7335ec85]]
+        },
+        Valid = function()
+            return not GetFlag(exitedSubFlag)
+        end
+    }
+    
+    -- After coming back from the Iron Throne
+    nodes.Action_InBasementAfterIRN = Action {
+        function ()
+            local index = currentIndex
+            while currentIndex == index do
+                index = math.random(1,#afterIRNpos)
+            end            
+            currentIndex = index
+            if mod.moveto.MoveToPoint(afterIRNpos[index], MovementSpeed.Walk, me) then 
+                LookFrom(afterIRNpos[index])
+                PlayAnimation(afterIRNanim, true, false)
+            else
+                SteerTo(afterIRNpos[index])      
+                Sleep(10)
+            end       
+        end,
+        Valid = function()
+            return GetFlag(visitedIronThroneFlag)
+               and GetFlag(exitedSubFlag)
+        end
+    }
+    
+    nodes.Action_Fallback = Proxy {
+        game.states.Dummy,
+        Valid = function()
+            return true
+        end
+    }
+     --------------------------------Events--------------------------------
+     events.TimerFinished = function(ev)
+        if ev.TimerName == "LOW_Beastmaster_Wander" then
+            animationTime = true
+        end
+    end
+
+end
+}

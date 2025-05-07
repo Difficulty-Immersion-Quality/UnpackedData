@@ -1,0 +1,383 @@
+game.states.PLA_DyingHyena_HyenaRunner_Idle = State { function ()
+    description = [[
+        Sime idle for the hyenas near the caravan and Dying Hyena situation. Just patroling,
+        giggling, yapping, eating, etc.
+    ]]
+
+    modules = { "shared.math", "gustav.Act1.ZhentShipment" }
+
+    params.patrolSpline = { type = EParamType.String, required = true, help = [[
+        Patrol spline to use.
+    ]]}
+
+    params.giggleAnim = { type = EParamType.String, required = false, help = [[
+        Giggle animation
+    ]]}
+
+    params.eatingAnim = { type = EParamType.String, required = false, help = [[
+        Eating animation
+    ]]}
+
+    params.howlingAnim = { type = EParamType.String, required = false, help = [[
+        Howling animation
+    ]]}
+
+    params.reactionAD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play after moving to gnolls.
+    ]]}
+
+    -----------------------------------------
+    -- local state section
+    local giggleAnim = Animation(params.giggleAnim)
+    local eatingAnim = Animation(params.eatingAnim)
+    local howlingAnim = Animation(params.howlingAnim)
+    local patrolSpline = nil
+    local canWalkOnSpline = true
+    local splineEvent = ""
+
+    -- running
+    local shouldRunCallGnolls = false
+    local stopButPlayReaction = false
+    local runToTrigger = nil
+    local reactionAD = nil
+
+    self.OnInit = function()
+        if params.patrolSpline ~= nil then
+            patrolSpline = Spline(params.patrolSpline)
+        end
+        if params.reactionAD ~= nil then
+            reactionAD = Dialog(params.reactionAD)
+        end
+    end
+
+    self.OnLeave = function()
+        canWalkOnSpline = true
+    end
+
+    -----------------------------------------
+    -- node section
+    nodes.CallingGnolls = Selector
+    {
+        Valid = function()
+            return shouldRunCallGnolls or stopButPlayReaction
+        end
+    }
+
+    nodes.CallingGnolls.RunToGnolls = Action {
+        function()
+            local validPos = FindValidPosition(runToTrigger, 6.0, me)
+            if validPos ~= nil then
+                try
+                    MoveTo(validPos, MovementSpeed.Run)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "MovementFailed")
+                end
+                if IsInTrigger(me, runToTrigger.Trigger) then
+                    stopButPlayReaction = true
+                    shouldRunCallGnolls = false
+                    runToTrigger = nil
+                else
+                    Sleep(3)
+                end
+            else
+                shouldRunCallGnolls = false
+            end
+        end,
+        CanEnter = function()
+            return runToTrigger ~= nil
+        end,
+        Valid = function()
+            return not stopButPlayReaction and shouldRunCallGnolls
+        end
+    }
+
+    nodes.CallingGnolls.HowlToCallGnolls = Action {
+        function()
+            Sleep(0.5)
+            mod.ZhentShipment.LookADAnim(me, runToTrigger, reactionAD, howlingAnim, true)
+            Sleep(0.5)
+            stopButPlayReaction = false
+        end,
+        Valid = function()
+            return stopButPlayReaction
+        end
+    }
+
+    nodes.Patroling = Selector
+    {
+        Valid = function()
+            return not shouldRunCallGnolls
+        end
+    }
+
+    nodes.Patroling.PatrolInit = Proxy{
+        game.states.PLA_ConflictedFlind_Patrol,
+        params = {
+            patrolSpline = params.patrolSpline,
+            movementSpeed = "Stroll"
+        },
+        Valid = function()
+            return canWalkOnSpline
+        end,
+        OnException = function(e)
+            if ls.CheckType(e, error.StartPatrolFailed) then
+                canWalkOnSpline = false
+                return true
+            end
+            return false
+        end
+    }
+
+    nodes.Patroling.PatrolPointIdle = Selector{
+        function(nodes)
+            if splineEvent == "PLA_DyingHyena_SplineEvent_Eating" then
+                return nodes.Eating
+            elseif splineEvent == "PLA_DyingHyena_SplineEvent_Giggling" then
+                return nodes.Giggle
+            else
+                return nodes.Giggle
+            end
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnLeave = function()
+            splineEvent = ""
+            canWalkOnSpline = true
+        end
+    }
+
+    nodes.Patroling.PatrolPointIdle.Giggle = Action {
+        function()
+            LookFrom(patrolSpline)
+            Sleep(mod.math.random(0,1))
+            try
+                if giggleAnim ~= nil then
+                    PlayAnimation(giggleAnim)
+                end
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (giggleAnim)")
+                Sleep(3)
+            end
+            Sleep(mod.math.random(2,4))
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end
+    }
+
+    nodes.Patroling.PatrolPointIdle.Eating = Action {
+        function()
+            LookFrom(patrolSpline)
+            try
+                if eatingAnim ~= nil then
+                    PlayAnimation(eatingAnim)
+                end
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "PlayAnimationFailed (eatingAnim)")
+                Sleep(3)
+            end
+            Sleep(mod.math.random(2,3))
+            canWalkOnSpline = true
+        end,
+        Valid = function()
+            return not canWalkOnSpline
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.SplineControlPointReached = function(e)
+        if e.Event ~= nil then
+            canWalkOnSpline = false
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_DyingHyena_Event_RunToPack" and e.Params[1] ~= nil then
+                runToTrigger = e.Params[1]
+                shouldRunCallGnolls = true
+            elseif e.Event == "PLA_DyingHyena_Event_StopRunning" and shouldRunCallGnolls then
+                runToTrigger = nil
+                shouldRunCallGnolls = false
+                stopButPlayReaction = true
+            end
+        end
+    end
+end}
+
+game.states.PLA_DyingHyena_HyenaRunner_Combat = State { function()
+    description = [[
+        Custom combat behaviour for the running hyenas - at the start of their turn
+        they will try to run towards the pack of gnolls and call them.
+    ]]
+
+    modules = { "shared.math", "gustav.Act1.ZhentShipment"}
+
+    params.reactionAD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play after moving to gnolls.
+    ]]}
+
+    params.alarmingYapAD = {type = EParamType.String, required = false, default = nil, help=[[
+        The AD to play before moving to gnolls, during 1st turn in combat.
+    ]]}
+
+    params.giggleAnim = { type = EParamType.String, required = false, help = [[
+        Giggle animation during skipping first combat's turn
+    ]]}
+
+    params.howlingAnim = { type = EParamType.String, required = false, help = [[
+        Howling animation
+    ]]}
+
+    params.firstTriggerToRun = { type = EParamType.String, required = false, help = [[
+        Trigger to runto during first turn.
+    ]]}
+
+    local runToTrigger = nil
+    local firstTriggerToRun = nil
+    local shouldRunInCombat = false
+    local stopButPlayReaction = false
+    local isDone = false
+    local reactionAD = nil
+    local alarmingYapAD = nil
+    local skippedFirstTurn = false
+    local playedYapAD = false
+    local giggleAnim = Animation(params.giggleAnim)
+    local howlingAnim = Animation(params.howlingAnim)
+
+    self.OnInit = function()
+        if params.reactionAD ~= nil then
+            reactionAD = Dialog(params.reactionAD)
+        end
+        if params.alarmingYapAD ~= nil then
+            alarmingYapAD = Dialog(params.alarmingYapAD)
+        end
+        if params.firstTriggerToRun ~= nil then
+            firstTriggerToRun = FindEntity(params.firstTriggerToRun)
+        end
+    end
+
+    self.CanEnter = function()
+        return not isDone
+    end
+
+    self.Valid = function()
+        return not me.IsCombatPaused and me.CanActInCombatTeamTurn
+    end
+
+    nodes = Selector{
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.PlayYappingAD = Action {
+        function()
+            Sleep(0.3)
+            if alarmingYapAD ~= nil then
+                mod.ZhentShipment.LookADAnim(me, nil, alarmingYapAD, giggleAnim, true)
+            end
+            Sleep(0.3)
+            playedYapAD = true
+        end,
+        CanEnter = function()
+            return not playedYapAD
+        end,
+        Valid = function()
+            return not stopButPlayReaction and shouldRunInCombat
+        end
+    }
+
+    nodes.RunToFirstTrigger = Action {
+        function()
+            local validPos = FindValidPosition(firstTriggerToRun, 6.0, me)
+            if validPos ~= nil then
+                try
+                    MoveTo(validPos, MovementSpeed.Run)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"MovementFailed")
+                end
+            end
+            EndTurn(me)
+            skippedFirstTurn = true
+        end,
+        CanEnter = function()
+            return not skippedFirstTurn and playedYapAD
+        end,
+        Valid = function()
+            return not stopButPlayReaction and shouldRunInCombat and runToTrigger ~= nil
+        end
+    }
+
+    nodes.RunToGnolls = Action {
+        function()
+            local validPos = FindValidPosition(runToTrigger, 6.0, me)
+            if validPos ~= nil then
+                local moveResult = MoveTo(validPos, MovementSpeed.Run, false, true, 2, 3, false)
+                if moveResult == error.MovementError.NoResources or moveResult == error.MovementError.None then
+                    if IsInTrigger(me, runToTrigger.Trigger) then
+                        stopButPlayReaction = true
+                        shouldRunInCombat = false
+                        runToTrigger = nil
+                    else
+                        EndTurn(me)
+                    end
+                else
+                    DebugText(me,"MoveTo Error: "..tostring(moveResult))
+                    EndTurn(me)
+                end
+            else
+                DebugText(me,"FindValidPosition Failed")
+                shouldRunInCombat = false
+                EndTurn(me)
+            end
+        end,
+        CanEnter = function()
+            return skippedFirstTurn and playedYapAD and runToTrigger ~= nil
+        end,
+        Valid = function()
+            return not stopButPlayReaction and shouldRunInCombat
+        end
+    }
+
+    nodes.HowlToCallGnolls = Action {
+        function()
+            Sleep(1)
+            mod.ZhentShipment.LookADAnim(me, runToTrigger, reactionAD, howlingAnim, true)
+            Sleep(1)
+            stopButPlayReaction = false
+            isDone = true
+            EndTurn(me)
+        end,
+        Valid = function()
+            return stopButPlayReaction
+        end
+    }
+
+    -----------------------------------------
+    -- event section
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "PLA_DyingHyena_Event_RunToPack" and e.Params[1] ~= nil then
+                runToTrigger = e.Params[1]
+                shouldRunInCombat = true
+                if not me.IsInCombat then
+                    skippedFirstTurn = true
+                end
+            elseif e.Event == "PLA_DyingHyena_Event_StopRunning" and shouldRunInCombat then
+                runToTrigger = nil
+                shouldRunInCombat = false
+                stopButPlayReaction = true
+            end
+        end
+    end
+end}

@@ -1,0 +1,180 @@
+game.states.LOW_Elfsong_Patrons = State{function ()
+
+    --------------------------------Description--------------------------------
+
+    description = [[Behaviour for Patrons at Elfsong Tavern. Thinking to be used with the Sit state, if characters should be sit, or alone if characters should be on feet.]]
+
+    --------------------------------Params and modules--------------------------------
+    params.StateAnimation = {type = EParamType.String, help = "[[Animation the character will use as state animation]]", required = false }
+    params.drinkTimeline = {type = EParamType.String, help = "[[Magic pockets Sit And Drink anim for this character]]", required = false }
+    params.sceneTrigger = {type = EParamType.String, help = "[[Scene trigger for this character]]", required = false }
+    params.CharacterAD =  {type = EParamType.String, help = "[[Ad for this character]]", required = false }
+    params.mySeat = {type = EParamType.String, help = "[[Seat for this character]]", required = false }
+    modules = {"shared.dialog", "shared.math", "shared.util"}
+
+    --------------------------------Variables--------------------------------
+
+    --local isSit = false
+    local drinkTimeline = Dialog(params.drinkTimeline)
+    local localAnimation = Animation(params.StateAnimation)
+    local localAD = Dialog(params.CharacterAD)
+    local localTrigger = Entity(params.sceneTrigger)
+    local numberOfFlags = nil
+    local lastFlag = nil
+    local mySeat = Entity(params.mySeat)
+
+    local patronFlags = {
+        Flag("LOW_Elfsong_Event_RandomPatronAD_BaldursMouthBoost_a3fc4e80-fece-4c08-b418-97709a9b325d"),
+        Flag("LOW_Elfsong_Event_RandomPatronAD_BaldursMouthDrop_18f99bf9-9a94-4156-adc5-60e525281874"),
+        Flag("LOW_Elfsong_Event_RandomPatronAD_ControlCentreDestroyed_3f139d2d-0da2-419c-ac2a-e3481a71e178"),
+        Flag("LOW_Elfsong_Event_RandomPatronAD_DolorDefeated_cf8b7525-4724-4196-ad3c-708dea6f8482"),
+        Flag("LOW_Elfsong_Event_RandomPatronAD_GortashCoronation_ac92f7b5-0b5f-45db-b8ff-42ecb626471c"),
+        Flag("LOW_Elfsong_Event_RandomPatronAD_GortashDeath_ac4e1f8a-d7c4-42b9-a327-7465537af590"),
+        Flag("LOW_Elfsong_Event_RandomPatronAD_HighberrysRitual_bd585a63-c9c5-4b48-a922-a16a9f07a438"),
+        Flag("LOW_Elfsong_Event_RandomPatronAD_IronThroneDestroyed_4374ea2c-6ad8-4ab1-877b-7721ed9ac444"),
+        Flag("LOW_Elfsong_Event_RandomPatronAD_LorroakanDefeated_4e1f6876-2c46-43e1-a174-f27ca9d4517f"),
+        Flag("LOW_Elfsong_Event_RandomPatronAD_PlayersPaidElfsong_b70878d4-9db6-407a-87c2-cf07cf0dbcdb"),
+        Flag("LOW_Elfsong_Event_RandomPatronAD_RolandIncharge_daac4655-b3cf-4bee-a26e-d5be89205b03")
+    }
+    local globalRumourFlags = {
+        Flag("LOW_BaldursMouth_State_PositiveArticlePublished_14071582-0c75-40e5-9121-251d6a9524e4"),
+        Flag("LOW_BaldursMouth_State_NegativeArticlePublished_baa834bc-8237-4081-8699-297743dc54d2"),
+        Flag("GLO_Foundry_State_ControlCentreDestroyed_456906c5-40a6-429e-8e1c-7120a2ef631b"),
+        Flag("LOW_SerialKiller_State_DolorIsDefeated_fa48e3fe-dc3c-b5c5-09f1-039a5b6974cf"),
+        Flag("WYR_KillDirectorGortash_State_CeremonyEnded_9aeab401-c087-4f2e-9894-859df23680dc"),
+        Flag("GLO_Gortash_State_PermaDefeated_74dd56ff-7e00-42a6-a0f3-0d122f364769"),
+        Flag("LOW_SerialKiller_State_HighberrysRitualPerformed_00c1e2ab-8752-47f1-b847-51aedc0fb189"),
+        Flag("IRN_IronThrone_State_Destroyed_91795368-af06-4b56-9ac1-b78995aa9ea9"),
+        Flag("LOW_Lorroakan_State_IsPermadefeated_2c446081-2f24-49c4-84d9-b8f64a3d3098"),
+        Flag("CAMP_Elfsong_PaymentDone_fd063151-f443-4b87-80bf-6a9441b2b4d7"),
+        Flag("LOW_Rolan_State_RolanInChargeOfShop_d76ad357-97d9-49cc-bdb5-620e9a8242a5")
+
+    }
+    local finalCandidateFlags = {Flag("LOW_Elfsong_Event_RandomPatronAD_Default_dc4b98d6-e7f8-4ba4-98ca-9fdfc43f2f26")}
+    local forceRestart = false
+
+    --------------------------------Init--------------------------------
+    self.OnInit = function()
+        if (#patronFlags ~= #globalRumourFlags) then
+            DebugLogCritical("Size of patronFlags table is " .. tostring(#patronflags) .. " and size for globalRumourFlags is " .. tostring(#globalRumourFlags) .. ", should be the same to work")
+        end
+        helpers.FillFlags()
+        numberOfFlags = #finalCandidateFlags
+        -- Sitting characters if they have a chair
+
+    end
+
+    --------------------------------Helpers--------------------------------
+
+    helpers.PickRandomFlag = function()
+       lastFlag = finalCandidateFlags[math.random(1, numberOfFlags)]
+    end
+
+    helpers.FillFlags = function()
+        for iteration, flag in pairs(globalRumourFlags) do
+           if  GetFlag(flag) then
+                table.insert(finalCandidateFlags, patronFlags[iteration])
+           end
+        end
+        numberOfFlags = #finalCandidateFlags
+    end
+
+    --------------------------------Events--------------------------------
+
+    --Receive the event of one of the flags and add it to the list of flag candidates
+     events.FlagSet = function(e)
+        if (globalRumourFlags[e.Flag]) then
+            table.insert(finalCandidateFlags, patronFlags[getIndexOf(globalRumourFlags, e.Flag)])
+            numberOfFlags = #finalCandidateFlags
+        end
+    end
+
+    --------------------------------Nodes--------------------------------
+
+    nodes.Chatter = Selector {
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Chatter.Drink = Action {
+        function()
+            try
+                StartBehaviorDialog(drinkTimeline, localTrigger.Trigger, true, me, mySeat)
+                Sleep(20 + 15 * math.random())
+                BehaviorDialogRequestGracefulStop(me, false)
+            catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                DebugText(me, "Failed to start Magic Pockets drink and sit")
+                Sleep(5.0)
+            end
+        end,
+        CanEnter = function()
+            return drinkTimeline ~= nil
+        end,
+        Valid = function()
+            return not forceRestart
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end
+    }
+
+    nodes.Chatter.PlayAnimation = Action {
+        function()
+            try
+                PlayAnimation(localAnimation)
+                Sleep(20 + 15 * math.random())
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Failed to play sit drink animation. Final animation TBD")
+                Sleep(5.0)
+            end
+        end,
+        CanEnter = function()
+            return localAnimation ~= nil
+        end
+    }
+
+    nodes.Chatter.AD = Action {
+        function()
+
+            helpers.PickRandomFlag()
+            SetFlag(lastFlag, me)
+            mod.dialog.StartCheckedAutomatedDialog(
+                localAD,
+                {
+                    waitForCompletion = true
+                },
+                me
+            )
+            ClearFlag(lastFlag,me)
+        end,
+        CanEnter = function()
+            return localAD ~= nil
+        end
+    }
+    nodes.Chatter.IdleDefault = Action {
+        function()
+            Sleep(math.random(3,8))
+        end
+    }
+
+    nodes.Chatter.RestartingOnSavegameLoad = Action {
+        function()
+            BehaviorDialogRequestGracefulStop(me, false)
+            forceRestart = false
+        end,
+        CanEnter = function()
+            return forceRestart
+        end,
+    }
+
+    nodes.IdleFallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+    events.SavegameLoaded = function(ev)
+        forceRestart = true
+    end
+end
+}

@@ -1,0 +1,91 @@
+game.states.SHA_TravelRat = State{function()
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    local patrolSpline = Spline("S_SHA_RatTrail_3c9b2f37-04a8-42f4-82d7-e77907285467")
+    local targetSplineIndex = -1
+    local CanPatrol = true
+
+    local hole0 = Entity("S_SHA_LastJusticiar_RatTravelTunnel_000_8cb77d4a-2971-45f4-8df8-fc7e2c4af0ab")
+    local hole1 = Entity("S_SHA_LastJusticiar_RatTravelTunnel_001_284592a5-9cb4-4640-9d00-be5c9f06ce7e")
+    local hole2 = Entity("S_SHA_LastJusticiar_RatTravelTunnel_002_4d0488b9-6b14-4f32-ba98-83bdc53883d2")
+    local hole3 = Entity("S_SHA_LastJusticiar_RatTravelTunnel_003_db7d66c6-ed18-4a58-b5a7-fedebe5b660a")
+    local hole4 = Entity("S_SHA_LastJusticiar_RatTravelTunnel_004_f4284b73-92c7-4900-b8fa-4c896022286c")
+
+    local ratNoise = Dialog("SHA_LastJusticiar_AD_GrabAttention_de3c3537-7e1a-6518-29ed-c8bfd278e4f8")
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "SHA_LastJusticiar_RatSpawned" then
+            if e.Params[1] == hole0 then
+                CanPatrol = false
+                ClearPatrol()
+                targetSplineIndex = 16
+                CanPatrol = true
+            end
+
+            if e.Params[1] == hole1 then
+                CanPatrol = false
+                ClearPatrol()
+                targetSplineIndex = 13
+                CanPatrol = true
+            end
+
+            if e.Params[1] == hole2 then
+                CanPatrol = false
+                ClearPatrol()
+                targetSplineIndex = 8
+                CanPatrol = true
+            end
+
+            if e.Params[1] == hole3 then
+                CanPatrol = false
+                ClearPatrol()
+                targetSplineIndex = 4
+                CanPatrol = true
+            end
+
+            if e.Params[1] == hole4 then
+                CanPatrol = false
+                ClearPatrol()
+                targetSplineIndex = 0
+                CanPatrol = true
+            end
+        end
+    end
+
+
+    nodes.Action_MoveToPit = Action{
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Run, targetSplineIndex, false)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                Sleep(3.0)
+            end
+        end,
+        Valid = function()
+            return CanPatrol
+        end
+    }
+
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not CanPatrol
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if e.Index == 22 then
+            SetEntityEvent(me, "SHA_LastJusticiar_RatLeft")
+        end
+
+        if e.Index ~= 22 and mod.dialog.IsSpeakerAvailable(me) then
+            SetEntityEvent(me, "SHA_LastJusticiar_RatSquee")
+        end
+    end
+
+
+end}

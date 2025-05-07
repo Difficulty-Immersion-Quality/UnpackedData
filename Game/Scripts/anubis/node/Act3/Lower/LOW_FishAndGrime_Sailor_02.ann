@@ -1,0 +1,47 @@
+game.states.LOW_FishAndGrime_Sailor_02 = State { function () 
+    
+    local posTrigger = [[S_BHVR_WRLD_LOW_FishCleaning_Dwarf_39296fb7-3576-4f0d-a160-82b1be9a4683]]   
+    local bhvrDialog = Dialog([[BHVR_WRLD_LOW_FishCleaning_DWF_M_81e0c291-f214-006f-5f44-cb77790ac2a5]])
+    local bhvrTrigger = Entity([[S_BHVR_WRLD_LOW_FishCleaning_Dwarf_39296fb7-3576-4f0d-a160-82b1be9a4683]])
+    local partner = Entity([[S_LOW_FishAndGrime_Sailor_01_b783dae8-e3d5-45ba-8937-1d7edcde5150]])
+    local barrelsMovedFlag = Flag([[(FLAG)LOW_FishAndGrime_BarrelsMoved_992d3547-2dcd-4692-bd4e-4e31ce856f8e]])
+    --------------------------------NODES--------------------------------
+
+    nodes.FishTriage = Action {
+        function() 
+            Sleep(math.random(2.0,5.0))
+            try
+                StartBehaviorDialog(bhvrDialog, bhvrTrigger.Trigger, true, me)
+            catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                DebugText(me, "Error [1] on wlrd bhvr: [2]", tostring(e), tostring(bhvrDialog.Guid))
+                Sleep((6.0))
+            end
+        end,
+
+        CanEnter = function()
+            return not GetFlag(barrelsMovedFlag) and (GetDistanceTo(me, bhvrTrigger) < 2.0)
+        end
+    }
+
+    nodes.Fallback = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = posTrigger
+        }
+    }
+
+--------------------------------EVENTS--------------------------------
+    events.EntityEvent = function(e)
+
+        if e.Event == "LOW_FishAndGrime_Barrels_Moved" then
+            
+            if IsPerformingWorldBehaviour(me) then
+                BehaviorDialogRequestGracefulStop(me, true, bhvrDialog)
+            end
+            
+            Interrupt()
+        end
+
+    end
+    
+end}

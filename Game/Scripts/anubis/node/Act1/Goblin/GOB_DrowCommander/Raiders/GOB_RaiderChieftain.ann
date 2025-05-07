@@ -1,0 +1,174 @@
+game.states.GOB_RaiderChieftain_BeforeRaid = State { function()
+
+    description = [[State for when the raider chieftain is at the goblin camp.]]
+
+    modules = {"shared.dialog"}
+
+    local chieftainAD = Dialog("GOB_WarchiefGrumpy_AD_WithChieftain_efd62620-3ebf-ce9e-e172-c2976f6489cb")
+    local scryingAD = Dialog("GOB_RaiderChieftain_AD_WithEye_4acd31a2-cd92-2374-7fb4-34e443d2130f")
+    local grumpy
+    local lookAt
+    local withScrying = false
+    local grumpyPassingBy = false
+    local berateGrumpy = false
+    local canAD = false
+    local scryingEye
+    local scryingFlag = Flag("GOB_RaiderChieftain_State_TalkingWithEye_eff7c529-1b56-93ef-c6d2-f4242298809d")
+
+    local GOB_RaiderChieftain_ChasmPoint = Entity("S_GOB_RaiderChieftain_ChasmPoint_cbac3b6e-e991-4f09-8c70-6291746e38a6")
+    local GOB_RaiderChieftain_ChasmTarget = Entity("S_GOB_RaiderChieftain_ChasmTarget_215344fe-e44f-4c1c-9e52-76924f25794b")
+    local GOB_RaiderChieftain_BoredPoints = {Entity("S_GOB_RaiderChieftain_BoredPoint1_af1dfd4f-ce6a-4af3-be11-b53093fac5e3"),
+                                             Entity("S_GOB_RaiderChieftain_BoredPoint2_522b89d5-6b80-4117-8b6b-a34e2510449a"),
+                                             Entity("S_GOB_RaiderChieftain_BoredPoint3_c5ee2416-1366-48b0-85da-9c01b815d033")}
+    local CUST_Bored_01 = Animation("CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef")
+
+    helpers.ResetADDelay = function(delay)
+        StopTimer(me, "GOB_RaiderChieftain_ADTimer")
+        StartTimer(me, "GOB_RaiderChieftain_ADTimer", delay, 0)
+        canAD = false
+    end
+
+    self.OnInit = function()
+        grumpy = FindEntity("S_GOB_WarchiefGrumpy_126e39d1-7c38-453c-888b-4cddce7f3e41")
+        scryingEye = FindEntity("S_GOB_Eye_7e80dd2a-19f6-4411-8a52-35c3878ef4c8")
+        lookAt = FindEntity("S_GOB_LeavingRaiderPos_b180c27b-346e-4b79-b39a-b04001f07165")
+    end
+
+    nodes.WithoutScrying = Selector{
+        function(nodes)
+            if not grumpyPassingBy then
+                return FindWeightedRandomSelectable(nodes, {[nodes.Bored] = 3,
+                                                       [nodes.Pebble] = 2})
+            else
+                return nodes.BerateGrumpy
+            end
+        end,
+        Valid = function()
+            return not withScrying
+        end
+    }
+
+    nodes.WithoutScrying.Bored = Action{
+        function()
+            Sleep(1.0)
+            local boredPoint = GOB_RaiderChieftain_BoredPoints[math.random(#GOB_RaiderChieftain_BoredPoints)]
+            if not IsInDangerousSurface(boredPoint, me) then
+                local moveSuccess = MoveTo(boredPoint, MovementSpeed.Stroll, true, false, 1.0, 2.0, false)
+                if moveSuccess == error.MovementError.None then
+                    if math.random() < 0.6 then
+                        PlayAnimation(CUST_Bored_01, true, false)
+                    else
+                        Sleep(1.5)
+                    end
+                end
+            end
+        end,
+        Valid = function()
+            return not grumpyPassingBy
+        end
+    }
+
+    nodes.WithoutScrying.Pebble = Action{
+        function()
+            Sleep(1.0)
+            if not IsInDangerousSurface(GOB_RaiderChieftain_ChasmPoint, me) then
+                local moveSuccess = MoveTo(GOB_RaiderChieftain_ChasmPoint, MovementSpeed.Stroll, true, false, 1.0, 2.0, false)
+                if moveSuccess == error.MovementError.None then
+                    LookFrom(GOB_RaiderChieftain_ChasmPoint)
+                    Sleep(1.5)
+                    local pos = GOB_RaiderChieftain_ChasmTarget.Position
+                    UseSpell("Projectile_FOR_GnomeGoblin_ThrowRock", pos, nil, nil, nil, true, true)
+                    Sleep(2.0)
+                end
+            end
+        end,
+        Valid = function()
+            return not grumpyPassingBy
+        end
+    }
+
+    nodes.WithoutScrying.BerateGrumpy = Action{
+        OnEnter = function()
+            berateGrumpy = true
+        end,
+        function()
+            if(berateGrumpy) then
+                berateGrumpy = false
+                if (mod.dialog.IsSpeakerAvailableAndNear(grumpy, me, 10, true)) then
+                    StartAutomatedDialog(chieftainAD, false, grumpy, me)
+                else 
+                    grumpyPassingBy = false
+                end
+            end
+            LookAtEntity(grumpy, 3.0)
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return grumpyPassingBy
+        end
+    }
+
+    nodes.WithScrying = Selector{
+        Valid = function()
+            return withScrying
+        end
+    }
+
+    nodes.WithScrying.AD = Action{
+        function()
+            SteerTo(scryingEye)
+            StartAutomatedDialog(scryingAD, true, me)
+            helpers.ResetADDelay(25)
+        end,
+        Valid = function()
+            return canAD
+        end
+    }
+
+    nodes.WithScrying.Waiting = Action{
+        function()
+            SteerTo(lookAt)
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not canAD
+        end
+    }
+
+    events.DialogEnded = function(e)
+        if(e.Instance.DialogUUID == chieftainAD.Guid) then
+            grumpyPassingBy = false
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "GOB_RaiderChieftain_ADTimer") then
+            canAD = true
+        elseif(e.TimerName == "GOB_ScryingEye_EyeLeaves") then
+            if(withScrying) then
+                withScrying = false
+                SetEntityEvent(scryingEye, "GOB_RaiderChieftain_EyeLeaves")
+            end
+        elseif(e.TimerName == "GOB_ScryingEye_FallbackChieftainTimer") then
+            if(withScrying) then
+                withScrying = false
+            end
+        end
+        
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == grumpy and e.Event == "GOB_Grumpy_AtChieftain" then
+            grumpyPassingBy = true
+        elseif e.TargetEntity == me and e.Event == "GOB_RaiderChieftain_WithScrying" then
+            withScrying = true
+            canAD = true
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == scryingFlag.Guid then
+            StartTimer(me, "GOB_ScryingEye_EyeLeaves", 4, 0)
+        end
+    end
+end}

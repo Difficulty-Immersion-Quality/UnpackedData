@@ -1,0 +1,150 @@
+game.states.DEN_TieflingRefugee_004 = State {function ()
+    description = [[The behavior of Toron, a worried refugee who is tending to the oxen.]]
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    -----------------------------------------
+    -- Local variables
+
+    local moveHayPos = Entity("S_DEN_TieflingRefugee004_HayArea_2a8c7b78-5a14-458e-a453-fe9b10dc60d1")
+    local moveHayLookAt = Entity("S_DEN_TieflingRefugee004_Hay_a7c96f0a-dfc0-4c4f-a762-af09ae2bff24")
+    local restPos = Entity("S_DEN_TieflingRefugee004_FenceArea_7bbb76d1-eb97-47c3-a938-6b85b8c12623")
+    local ox1 = Entity("S_DEN_Mule_001_06ed1274-9d16-4320-b5ad-162fca5fb85d")
+    local ox2 = Entity("S_DEN_Mule_002_ac37baa6-624a-418d-a6ca-52ed9a77f00c")
+    local pitchforkAnim = Animation("CUST_HayRaking_01_d9104c76-da1b-40ab-b892-498aa6479f02")
+    local restAnim = Animation("CUST_LookingAround_63bcacef-5631-4ab3-9400-81b23cb18ca7")
+    local sweated = false
+    local AD = Dialog("DEN_General_AD_Refugee4_3a5c3a76-c3e4-fae0-c790-a59eee182755")
+    local canAD = true
+    -----------------------------------------
+    -- Nodes
+
+    nodes.Working = Selector{
+        function(nodes)
+            if nodes.doAD.IsSelectable() then
+                return nodes.doAD
+            elseif not ox1.Character.IsDead or not ox2.Character.IsDead then
+                return FindDifferentRandomSelectable(nodes)
+            else
+                return FindWeightedRandomSelectable(nodes, {
+                    [nodes.HayBreak] = 1,
+                    [nodes.Wander] = 1
+                })
+            end
+        end
+    }
+
+    nodes.Working.doAD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = false
+                },
+                me
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_General_AD_Refugee4")
+            StartTimer(me,"ADTimer_DEN_General_AD_Refugee4", 40 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return canAD
+        end
+    }
+
+    nodes.Working.MoveHay = Action{
+        function()
+            if mod.moveto.MoveToPoint(moveHayPos,MovementSpeed.Stroll,me) then
+                SteerTo(moveHayLookAt)
+                SetWeaponUnsheathed(me, true)
+                Sleep(1.0)
+                PlayAnimation(pitchforkAnim,true,false)
+            end
+        end
+    }
+
+    nodes.Working.HayBreak = Action {
+        function()
+            SetWeaponUnsheathed(me, false)
+            if mod.moveto.MoveToPoint(restPos,MovementSpeed.Stroll,me) then
+                LookFrom(restPos)
+                Sleep(1.0)
+                PlayAnimation(restAnim,true,false)
+            end
+        end
+    }
+
+    nodes.Working.Wander = Proxy {
+        game.states.DEN_GeneralGroveStates_Wander,
+        params={
+            anchor = "S_DEN_TieflingRefugee004_FenceArea_7bbb76d1-eb97-47c3-a938-6b85b8c12623",
+            wanderMin = 2.0,
+            wanderMax = 3.0
+        }
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_General_AD_Refugee4") then 
+            canAD = true
+        end
+    end
+
+end}
+
+game.states.DEN_TieflingRefugee_004_AfterDruidAttack = State { function ()
+
+    description = [[The behavior of Toron, a worried refugee who has taken to drink after the druid attack.]]
+    -----------------------------------------
+    -- Nodes
+    nodes.Default = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Default.Drink1 = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_TieflingRefugee004_AfterAttackPos1_12eaebde-01ab-487c-bf27-9bae7c8f601f",
+            lookFromMoveTarget = true,
+            anim = "CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636",
+            waitMin = 1.0,
+            waitMax = 2.0
+        }
+    }
+
+    nodes.Default.Drink2 = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_TieflingRefugee004_AfterAttackPos2_26bd9c17-f32a-4264-ae93-25c32cfb78e6",
+            lookFromMoveTarget = true,
+            anim = "CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636",
+            waitMin = 1.0,
+            waitMax = 2.0
+        }
+    }
+
+    nodes.Default.Impatient = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_TieflingRefugee004_AfterAttackPos2_26bd9c17-f32a-4264-ae93-25c32cfb78e6",
+            lookFromMoveTarget = true,
+            anim = "CUST_Impatient_01_add51c8e-ef5b-11e9-81b4-2a2ae2dbcce4",
+            waitMin = 1.0,
+            waitMax = 2.0
+        }
+    }
+
+    nodes.Default.Wander = Proxy {
+        game.states.DEN_GeneralGroveStates_Wander,
+        params={
+            anchor = "S_DEN_TieflingRefugee004_AfterAttackPos2_26bd9c17-f32a-4264-ae93-25c32cfb78e6",
+            wanderMin = 2.0,
+            wanderMax = 5.0
+        }
+    }
+
+end}

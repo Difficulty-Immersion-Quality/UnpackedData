@@ -1,0 +1,124 @@
+game.states.LOW_ZhentLeader = State{function()
+    modules = { "shared.util" }
+
+    description = [[Anubis behaviour for Zhent leader in Abandoned Cistern]]
+
+    params.DuringCoupAD = {type = EParamType.String, required = true, 
+        help = [[AD the character will periodically use while waiting for combat in Guildhall in DuringCoup State]]}
+    params.AfterCoupAD = {type = EParamType.String, required = true, 
+        help = [[AD the character will use once after combat in Guildhall]]}
+    params.DashSpell = {type = EParamType.String, default = "Shout_Dash_NPC", 
+        help = [[Exact spell that will be used to dash away during Abandoned Cistern fight]]}
+
+    local escapeObject = Entity([[S_LOW_MinscHideout_SecretExit_8a513e19-26eb-4b5a-b861-654d4d08a80f]])
+    local escapingFlag = Flag([[LOW_MinscHideout_State_ZhentLeaderEscaping_4333a451-024f-4c41-aea1-7046afdf0b4a]])
+    local escapedFlag = Flag([[LOW_MinscHideout_State_ZhentLeaderEscaped_0a08b808-b6e2-4923-936c-c12f2774ce61]])
+    -- use local variable for now to bypass error where passing a param directly in a nested proxy state does not work
+    local duringCoupAD = [[LOW_Guildhall_AD_Roah_DuringCoup_fd92afbe-46e8-07e2-2588-db3a33b10da0]]
+
+    local canEscape = true
+
+    self.OnInit = function()
+        duringCoupAD = params.DuringCoupAD
+    end
+
+    events.TurnStarted = function(e)
+        canEscape = true
+    end
+
+    nodes.EscapingCistern = ImmediateSelector{
+        Valid = function(nodes)
+            return GetFlag(escapingFlag) and not GetFlag(escapedFlag) 
+        end
+    }
+
+    nodes.EscapingCistern.RunToExitCombat = Action{
+        function()
+            local moveResult = error.MovementError.None
+            if me.Character.CanMove then
+                UseSpell(params.DashSpell, me)
+                moveResult = MoveTo(escapeObject, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+                if moveResult == error.MovementError.None then
+                    if (GetDistance2DTo(me, escapeObject) <= 2.0) then
+                        SetFlag(escapedFlag)
+                    end
+                else 
+                    DebugText(me, "Movement to the exit failed!")
+                    Sleep(1.0)
+                    canEscape = false -- waterfall to default combat
+                end
+            else
+                DebugText(me, "Can't move!")
+                Sleep(1.0)
+                canEscape = false -- waterfall to default combat
+            end
+        end,
+
+        Valid = function()
+            return me.IsInCombat and me.CanActInCombatTeamTurn and canEscape
+        end
+    }
+
+    nodes.EscapingCistern.DefaultCombat = Proxy{
+        game.states.DefaultCombat,
+        Valid = function()
+            return me.IsInCombat
+        end
+    }
+
+    nodes.EscapingCistern.RunToExit = Action{
+        function()
+            local moveResult = MoveTo(escapeObject, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+            if moveResult == error.MovementError.None then
+                if (GetDistance2DTo(me, escapeObject) <= 2.0) then
+                    SetFlag(escapedFlag)
+                end
+            else 
+                DebugText(me, "Movement to the exit failed!")
+                Sleep(1.0)
+            end
+        end,
+        Valid = function()
+            return not me.IsInCombat and canEscape
+        end
+    }
+    nodes.EscapingCistern.Idle = Proxy{
+        game.states.Dummy,
+        Valid = function()
+            return not me.IsInCombat
+        end
+    }
+
+    nodes.Default = ImmediateSelector{
+    }
+
+    nodes.Default.DefaultCombat = Proxy {
+        game.states.DefaultCombat,
+        Valid = function()
+            return me.IsInCombat
+        end
+    }
+    
+    nodes.Default.Idle = Proxy {
+        game.states.LOW_Guildhall_Combatant,
+        params = {
+            PreCoup_State = StateRef {game.states.GLO_StateInTrigger,
+                Trigger = "S_LOW_MinscHideout_RoahMeetingPoint_faa1fd32-afa3-46af-87c4-400b366a1c32"
+            },
+            DuringCoup_State = StateRef {game.states.GLO_StateInTrigger,
+                Trigger = "S_LOW_Guildhall_ZhentLeader_CombatStartPoint_9431524b-e12d-4b91-a976-743021cf59a4",
+                InTriggerState = StateRef {game.states.GLO_PlayAD,
+                    AD = duringCoupAD
+                }
+            },
+            PostCoup_State = StateRef {game.states.GLO_StateInTrigger,
+                Trigger = "S_LOW_Guildhall_Leader_29de84e5-b1c0-44a1-8531-f45f5461ca1b",
+            },
+            PostCoup_VictoryAD = params.AfterCoupAD
+        },
+        Valid = function()
+            return not me.IsInCombat
+        end
+    }
+
+end}

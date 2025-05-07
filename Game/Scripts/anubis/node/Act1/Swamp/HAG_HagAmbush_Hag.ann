@@ -1,0 +1,45 @@
+game.states.HAG_HagAmbush_Hag = State{function ()
+
+    local HAG_HagAmbush_Quest_Confrontation_PlayerSidedHag = Flag("HAG_HagAmbush_Quest_Confrontation_PlayerSidedHag_e2d74cb8-45e7-e7b6-638e-5d3d27060a78")
+    local targetchar = nil
+
+    nodes.Arguing = Proxy{
+        game.states.Dummy,
+        CanEnter = function()
+            return not GetFlag(HAG_HagAmbush_Quest_Confrontation_PlayerSidedHag)
+        end
+        }
+
+    nodes.AfterArgument = Action{
+        function()
+            Sleep(1.5)
+            local previousDistance = 8.0
+            if targetchar ~= nil then
+                previousDistance = GetDistanceTo(me, targetchar)
+            end
+            local actives = GetActiveCharacters(me,  8)
+            for _,char in pairs(actives) do
+                if char.Character.IsPlayer and
+                   CanSee(me, char) then
+                    if targetchar == nil then
+                        targetchar = char
+                    else                        
+                        if GetDistanceTo(me, targetchar) <= GetDistanceTo(me, char) and
+                           GetDistanceTo(me, targetchar) <= previousDistance + 2.0 then --To avoid pingponging.
+                            targetchar = char
+                        end
+                    end
+                end
+            end
+            if targetchar then
+                SteerTo(targetchar, false, 20)
+                LookAtEntity(targetchar)
+            end
+        end,
+        }
+
+
+    end
+}
+
+

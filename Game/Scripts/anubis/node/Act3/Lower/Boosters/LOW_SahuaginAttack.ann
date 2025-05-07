@@ -1,0 +1,228 @@
+game.states.LOW_SahuaginAttack_Fishmonger = State{
+    function()
+    
+    modules = { "shared.math", "shared.params", "shared.util" }
+
+    local standTrigger = Entity("S_LOW_BeachSahuagin_Civilian_Fishmonger_Point_e14f5b17-7a16-4cbe-a95c-6646b47eaba4")
+    local steerTargetArray = {
+        Entity("S_LOW_BeachSahuagin_Civilian_Fishmonger_SteerTo_Point_001_ff9cdf87-8726-4735-84b6-ae2b67580fbe"),
+        Entity("S_LOW_BeachSahuagin_Civilian_Fishmonger_SteerTo_Point_002_7420a215-1409-48bc-9875-a219f4a9e864"),
+        Entity("S_LOW_BeachSahuagin_Civilian_Fishmonger_SteerTo_Point_003_c7723ebf-1b79-448f-bd62-90abccfbfbe7"),
+        Entity("S_LOW_BeachSahuagin_Civilian_Fishmonger_SteerTo_Point_004_1384245a-f702-45ea-a60d-b429717ba040")
+    }
+    
+    local idleAD = Dialog("LOW_SahuaginAttack_AD_Fishmonger_Idle_95394d36-e28d-acb6-6942-5c99fe94bf68")
+    local sahuaginAttackedFlag = Flag("LOW_SahuaginAttack_State_SahuaginAttacked_0b56687e-e5b1-4e26-b546-5cf95418423a")
+    local sahuaginCleanedFlag = Flag("LOW_SahuaginAttack_State_SahuaginCleanedUp_7ec16628-193e-4b47-aa3a-0ef2e6a4ef51")
+    local steerTargetIndex = 0
+    local doTurn = false
+
+    -----------------------------------------
+    -- Locals
+    local sleepMin = 22
+    local sleepMax = 32
+
+    -----------------------------------------
+    -- Nodes
+    nodes.IdleTurn = Action{
+        function()
+            if steerTargetIndex < #steerTargetArray then
+                local target = steerTargetArray[steerTargetIndex]
+                if target ~= nil then
+                    SteerTo(target)
+                end
+            end
+
+            if not GetFlag(sahuaginAttackedFlag) or GetFlag(sahuaginCleanedFlag) then
+                StartAutomatedDialogRateLimitedImmediate(idleAD,0.5,12.0,me)
+            end
+
+            steerTargetIndex = (steerTargetIndex + 1) % #steerTargetArray
+            doTurn = false
+        end,
+        CanEnter = function()
+            return doTurn
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            MoveTo(standTrigger,MovementSpeed.Stroll,true,false)
+        end,
+        OnEnter = function()
+            StartTimer(me,"LOW_SahuaginAttack_Fishmonger_Turn",math.random(sleepMin,sleepMax),0)
+        end,
+        OnLeave = function()
+            StopTimer(me,"LOW_SahuaginAttack_Fishmonger_Turn")
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "LOW_SahuaginAttack_Fishmonger_Turn" then
+            doTurn = true
+        end
+    end
+
+    end
+}
+
+game.states.LOW_SahuaginAttack_SahuaginIdle = State{
+    function()
+    
+    modules = { "shared.math", "shared.params", "shared.util" }
+
+    local targetCorpse = nil
+    local civiliansArray = {
+        Entity("S_LOW_BeachSahuagin_Civilian_001_912002e8-480d-4039-a75d-fb2e2796976d"),
+        Entity("S_LOW_BeachSahuagin_Civilian_002_da3dafe4-f014-41e1-8dfe-56670ac9fd0a"),
+        Entity("S_LOW_BeachSahuagin_Civilian_003_7d8d9cb0-eb53-402b-a5a7-e8878da2427f"),
+        Entity("S_LOW_BeachSahuagin_Civilian_004_9f40425a-aa24-4051-8b22-5ccb15a3dfba"),
+        Entity("S_LOW_BeachSahuagin_Civilian_Boat_f699d950-c10b-424d-98d2-cdce112a3313"),
+        Entity("S_LOW_BeachSahuagin_Civilian_Fishmonger_ecba853d-f96a-4252-912e-3bf030b10482"),
+        Entity("S_LOW_BeachSahuagin_Civilian_FishCustomer_d861fb4a-f98c-416a-88a5-a07525b62554")
+    }
+    --local eatAnimation = nil --Animation("CUST_DebugAsset_CustomAnim_01_95ff9541-9c09-4356-8f50-da327d7a64bc")
+
+    local eatAnimStart = Animation("CUST_EatingCorpse_01_Start_a044c83d-ca4d-4b01-b7e2-f87c8693627b")
+    local eatAnimLoop  = Animation("CUST_EatingCorpse_01_ea42da9e-15b5-4404-8fe2-9c0080b019c9")
+    local eatAnimEnd  = Animation("CUST_EatingCorpse_01_End_866fc762-95db-41cd-92e1-681115d3f724")
+
+    -----------------------------------------
+    -- Locals
+    local sleepMin = 4
+    local sleepMax = 12
+
+    -----------------------------------------
+    -- Nodes
+    nodes.EatCorpse = Action{
+        function()
+            local moveResult = MoveTo(targetCorpse,MovementSpeed.Run,true,false)
+
+            if moveResult == error.MovementError.None and targetCorpse ~= nil then
+                local factor = 3.0
+                local steerTarget = targetCorpse.Position + me.RightDirection*(math.random()*factor-factor*0.5)
+                --DebugText(me,"Steering to [1]",steerTarget)
+                SteerTo(steerTarget)
+                try
+                    PlayLoopingAnimation(eatAnimStart,{eatAnimLoop},eatAnimEnd)
+                end
+                Sleep(math.random(sleepMin,sleepMax))
+
+                if math.random(100) < 3 then
+                    targetCorpse = nil --small chance that the sahuagin will select a different corpse
+                end
+            end
+        end,
+        CanEnter = function()
+            return targetCorpse ~= nil
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            --need to make a better random selection algorithm in the future
+            --should check whether the character is actually dead,
+            --ideally randomize to prefer "unoccupied" corpses
+            --should probably happen through Osiris
+            targetCorpse = civiliansArray[math.random(#civiliansArray)]
+
+            if targetCorpse == nil then
+                DebugText(me,"No corpse found")
+                Sleep(8.0)
+            else
+                DebugText(me,"Moving to corpse")
+            end
+        end
+    }
+
+    end
+}
+
+game.states.LOW_SahuaginAttack_Sailor = State{function ()
+    modules = { "shared.util" }
+
+    -----------------------------------------
+    -- Local variables
+    local doSleep = false
+    local doAnim = false
+    local doAD = false
+    local sailorLeaningDialog = Dialog("BHVR_WRLD_LOW_SailorLeaning_1c74cabb-6ac6-0941-a108-b9958d90ad38")
+    local animPoint = nil
+    local ADDialog = Dialog("LOW_SahuaginAttack_AD_Sailor_AfterCombat_3bba33da-d43d-bb49-c559-512444c76d97")
+    
+
+    -----------------------------------------
+    -- State nodes
+    self.OnInit = function()
+        animPoint = Entity("BHVR_WRLD_LOW_SailorLeaning_SceneTrigger_ef3f79d7-f870-4490-ae5a-6bef0bd59d06")
+    end
+
+    -----------------------------------------
+    -- Nodes   
+
+    nodes.DoAD = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_LOW_BeachSahuagin_Civilian_Sailor_AD_Point_4b94fe9b-46d9-406f-8ba7-42ddec592446]],
+            moveSpeed = [[Run]]
+        },
+        CanEnter = function()
+            return doAD
+        end
+    }  
+
+    nodes.DoAnim = Action {
+        function()
+            if animPoint == nil or sailorLeaningDialog == nil then
+                doAnim = false
+                return nil
+            end
+
+            local moveResult = MoveTo(animPoint, MovementSpeed.Stroll, false)
+            if moveResult == error.MovementError.None then
+                Sleep(0.5)
+                StartBehaviorDialog(sailorLeaningDialog,animPoint.Trigger,true,me)
+            end
+            Sleep(0.5)
+            doAnim = false
+        end,
+        CanEnter = function()
+            return doAnim
+        end
+    }        
+
+    nodes.Sleep = Action {
+        function()
+            Sleep(math.random(4,9))
+            doSleep = false
+        end
+    }        
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Sleep" then
+            doSleep = true
+        elseif e.Event == "Animation" then
+            doAnim = true
+        end
+    end
+
+    events.DialogActorJoined = function(e)
+        if e.Actor == me and e.Instance.DialogUUID == ADDialog.Guid then
+            doAD = true
+            doAnim = false
+            doSleep = false
+        end
+    end
+
+    events.DialogActorLeft = function(e)
+        if e.Actor == me and e.Instance.DialogUUID == ADDialog.Guid then
+            doAD = false
+        end
+    end
+
+    self.Valid = function()
+        return doSleep or doAnim or doAD
+    end
+end}

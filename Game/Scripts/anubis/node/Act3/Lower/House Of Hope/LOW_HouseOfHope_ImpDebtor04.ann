@@ -1,0 +1,92 @@
+game.states.LOW_HouseOfHope_ImpDebtor04 = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Flags and variables--------------------------------
+
+    local points = {
+        -- key = value
+        Entity("S_LOW_HouseOfHope_ImpDebtor04_Point1_acc5e3f9-c2cf-420f-98d4-29915cd9b94a"),
+        Entity("S_LOW_HouseOfHope_ImpDebtor04_Point2_31068604-f3f7-4164-b8d6-541f3196326d"),
+        Entity("S_LOW_HouseOfHope_ImpDebtor04_Point3_65d04772-7851-4630-bd87-4f0bddad7085"),
+        Entity("S_LOW_HouseOfHope_ImpDebtor04_Point4_6e36fbd7-c87f-4bfc-b4a1-32c25e218edc"),
+    }
+    
+    local ratsInThroat = Animation("CUST_RatDebtor_RatsInThroat_01_e10eb30b-9e65-4509-86e6-dcaa93be63f3")
+
+    local ad = Dialog("LOW_HouseOfHope_AD_ImpDebtor04_Idle_ceef8ef4-d919-2db9-d5dc-21f1ce5bb322")
+
+    local alarmFlag = Flag("LOW_HouseOfHope_State_RaphaelAlerted_f83c3d6b-d6cf-41a1-a03d-c31df5ea44fe")
+
+    local currentIndex = 0
+
+    local timeToRat = true
+    --------------------------------Nodes--------------------------------
+    
+
+    nodes.Act = Action {
+        function()
+            -- local index = currentIndex
+            -- while currentIndex == index do
+            --     index = math.random(1,#points)
+            -- end
+            -- currentIndex = index
+            -- if IsInDangerousSurfaceFor(points[index], me.Character) then
+            --     StartAutomatedDialog(ad, true, me)
+            --     Sleep(math.random(10,15))
+            --     return
+            -- end
+            -- local moveResult = MoveTo(points[index], MovementSpeed.Stroll)
+            -- if moveResult ~= error.MovementError.None then
+            --     SteerTo(points[index])
+            -- end
+            Sleep(3)
+            StartAutomatedDialog(ad, false, me)
+            PlayAnimation(ratsInThroat, true, false)
+            timeToRat = false
+            StartTimer(me, "LOW_HOH_ImpDebtor04_Wander", 15, 0)
+        end,
+        CanEnter = function()
+            return not GetFlag(alarmFlag) and timeToRat
+        end
+    }
+    
+    nodes.Wander = Proxy {game.states.GEN_Wander,
+    params = {
+        trigger = [[ S_LOW_HouseOfHope_ImpDebtor04_Wander_f97a52e9-e7e1-43bd-ae42-2dcde8fe0f0c]],
+        wanderMin = 2,
+        wanderMax = 6,
+        sleepMin = 7,
+        sleepMax = 15},
+    CanEnter = function()
+        return not GetFlag(alarmFlag) and not timeToRat
+    end,
+    }
+
+    nodes.StayingInAmbush = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return not GetFlag(alarmFlag) 
+        end
+    }   
+
+
+    nodes.IdleFallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+    --------------------------------Events--------------------------------
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "LOW_HOH_ImpDebtor04_Wander" then
+            timeToRat = true
+        end
+    end
+   
+end}

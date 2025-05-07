@@ -1,0 +1,231 @@
+game.states.GOB_SecludedSpot_Goblin = State{function ()
+    modules = { "shared.dialog", "shared.math", "shared.util" }
+
+    local tr_DefaultPos = Entity("S_GOB_SecludedSpot_DefaultPosition_4146a79d-9c43-4dbd-97de-d4ff7fdee661")
+    local tr_PukePos = Entity("S_GOB_SecludedSpot_PukingTrigger_904a76f3-085a-44fb-bf7a-680247a6cea7")
+    local tr_UrinatePos = Entity("S_GOB_SecludedSpot_UrinateTrigger_676345d0-a2b0-410a-9ea8-1e97033b5b93")
+
+    local anim_Drinking = Animation("CUST_Drinking_01_fab141d9-e068-4f2e-ba44-699b6d9b3636")        -- 5.9 sec
+    local anim_Puking = Animation("CUST_Puking_01_bde32f33-6c74-4834-a77a-17366cf5d0ca")            -- 10.2 sec
+    local anim_Stretching = Animation("CUST_Stretching_01_9af703b0-c02f-4c17-bfee-7e11f1f80d6b")    -- 6.7 sec
+    local anim_Urinating = Animation("CUST_Urinating_01_d7b689ac-2183-4c62-a481-eb5db76ac243")      -- 7.6 sec
+
+    local b_CanPuke = false
+    local s_CanPukeTimer = "GOB_Festivities_Goblin.AD.CanPuke"
+
+    local fl_KidsFighting = Flag("GOB_Festivities_State_KidsFighting_fdc4b841-296b-4f3a-88df-a70c30cd838b")
+    local tr_KidsArea = Entity("S_GOB_Festivities_KidsArea_0ebcc246-af8b-4305-b5c6-b01d19e5a6fd")
+    local tr_LookAtKidsPos = Entity("S_GOB_SecludedSpot_LookAtKidsTrigger_5f10e940-1262-4849-bc87-fcca4f408b72")
+    local bl_GotToKidsFightPos = false
+    local anim_Cheers = { Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0"),
+                          Animation("CUST_Cheering_02_5e23b082-f75a-4daa-86e1-ab73ec6d30b7"),
+                          Animation("CUST_Cheering_03_34ac373e-2928-4d83-8427-13f34573c64a") }
+
+    helpers.CanPukeReset = function()
+        b_CanPuke = false
+        StartTimer(me, s_CanPukeTimer, mod.math.random(18.0, 24.0), 0)
+    end
+
+    local dlg_AD = Dialog("GOB_SecludedSpot_AD_Goblin_562b7faa-6a67-7ade-a9a6-ec81e28e98f0")
+    local b_CanDoAD = false
+    local s_CanDoADTimer = "GOB_Festivities_Goblin.AD.CanDoAD"
+
+    helpers.CanDoADReset = function()
+        b_CanDoAD = false
+        if dlg_AD ~= nil then
+            StartTimer(me, s_CanDoADTimer, mod.math.random(15.0, 20.0), 0)
+        end
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_CanDoADTimer then
+            b_CanDoAD = true
+        elseif ev.TimerName == s_CanPukeTimer then
+            b_CanPuke = true
+        end
+    end
+
+    self.OnInit = function()
+        helpers.CanDoADReset()
+        helpers.CanPukeReset()
+    end
+
+    nodes.KidsFighting = Selector{
+        CanEnter = function()
+            return GetFlag(fl_KidsFighting)
+        end
+    }
+
+    nodes.KidsFighting.MoveTo = Action{
+        function()
+            try
+                MoveTo(tr_LookAtKidsPos)
+                SteerTo(tr_KidsArea)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "Failed MoveTo(tr_LookAtKidsPos)")
+                LookTo(tr_KidsArea)
+            end
+            bl_GotToKidsFightPos = true
+        end,
+        Valid = function()
+            return not bl_GotToKidsFightPos
+        end
+    }
+
+    nodes.KidsFighting.Cheer = Action{
+        function()
+            SteerTo(tr_KidsArea)
+            PlayAnimation(anim_Cheers[math.random(#anim_Cheers)])
+            mod.util.SleepRandom(3.0, 6.0)
+        end
+    }
+
+    nodes.Peace = Selector{
+        CanEnter = function()
+            return not GetFlag(fl_KidsFighting)
+        end
+    }
+
+    nodes.Peace.Talk = Action{
+        function()
+            StartAutomatedDialog(dlg_AD, true, me)
+            helpers.CanDoADReset()
+        end,
+
+        CanEnter = function()
+            return b_CanDoAD and not IsInDialog(me, false)
+        end
+    }
+
+    nodes.Peace.Puke = Action{
+        function()
+            try
+                MoveTo(tr_PukePos)
+                LookFrom(tr_PukePos)
+                PlayAnimation(anim_Puking, true)
+                Sleep(6.0) -- an additional turn for the players
+                helpers.CanPukeReset()
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_PukePos failed")
+            end
+        end,
+
+        CanEnter = function()
+            return b_CanPuke
+        end
+    }
+
+    nodes.Peace.Default = Selector{
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Peace.Default.Drink = Action{
+        function()
+            try
+                MoveTo(tr_DefaultPos)
+                LookFrom(tr_DefaultPos)
+                PlayAnimation(anim_Drinking, true, false)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_DefaultPos failed")
+            end
+        end
+    }
+
+    nodes.Peace.Default.Stretch = Action{
+        function()
+            try
+                MoveTo(tr_DefaultPos)
+                LookFrom(tr_DefaultPos)
+                PlayAnimation(anim_Stretching, true, false)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_DefaultPos failed")
+            end
+        end
+    }
+
+    nodes.Peace.Default.Urinate = Action{
+        function()
+            try
+                MoveTo(tr_UrinatePos)
+                LookFrom(tr_UrinatePos)
+                PlayAnimation(anim_Urinating, true, false)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_UrinatePos failed")
+            end
+        end
+    }
+
+    nodes.Peace.Default.Idle = Action{
+        function()
+            try
+                MoveTo(tr_DefaultPos)
+                LookFrom(tr_DefaultPos)
+                Sleep(6.0)
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                DebugText(me, "MoveTo tr_DefaultPos failed")
+            end
+        end
+    }
+
+    nodes.State_Fallback = Action{
+        function()
+            Sleep(6.0)
+        end
+    }
+end}
+
+game.states.GOB_SecludedSpot_Goblin_Combat = State { function()
+
+    local fl_NeedToWarnCamp = Flag("GOB_SecludedSpot_State_NeedToWarnCamp_7a2c87d3-e736-4a17-bb95-ae5c202a4688")
+    local tr_WarningPosition = Entity("S_GOB_SecludedSpot_WarningPosition_457189aa-743a-4f1c-841e-aec910d53642")
+    local dlg_WarningAD = Dialog("GOB_SecludedSpot_AD_Warning_460a58a5-0ae9-0953-74d1-32efccd56ff6")
+
+    -- the goblin could be shoved off his cliff
+    -- if the ladder is destroyed he won't be able to get to the warning spot
+    -- in that case we must use the default combat state
+    local tr_DefaultArea = Entity("S_GOB_SecludedSpot_DefaultArea_4dc5eb1f-971a-402b-8728-8385bfd2e316")
+    local tr_BingeArea = Entity("S_GOB_Festivities_BingeArea_f4a4031d-7e0c-45b8-970b-47c62d4908d8")
+
+    local i_TurnsPassed = 0
+    local i_TurnToWarnCamp = 2
+
+    self.Valid = function()
+        return me.CanActInCombatTeamTurn
+            and GetFlag(fl_NeedToWarnCamp, me)
+            and (IsInTrigger(me, tr_DefaultArea.Trigger) or IsInTrigger(me, tr_BingeArea.Trigger))
+    end
+
+    nodes.Action_WarnCamp = Action{
+        function()
+            try
+                if GetDistance2DTo(me, tr_WarningPosition) > 3.0 then
+                    local moveResult = MoveTo(tr_WarningPosition, MovementSpeed.Run, false, false, 0.5, 1.0, false)
+                    if moveResult == error.MovementError.None then
+                        EndTurn(me)
+                    else
+                        DebugText(me, "Movement to the warning position failed!")
+                        Sleep(1.0)
+                        EndTurn(me)
+                    end
+                else
+                    StartAutomatedDialogImmediate(dlg_WarningAD, me)
+                    Sleep(6.0) -- making sure that the camera focuses on the guy
+                end
+            catch ex if ls.CheckType(ex, error.MovementFailed) then
+                EndTurn(me)
+            end
+        end
+    }
+
+    events.TurnStarted = function()
+        if i_TurnsPassed < i_TurnToWarnCamp then
+            i_TurnsPassed = i_TurnsPassed + 1
+            if i_TurnsPassed == i_TurnToWarnCamp then
+                SetFlag(fl_NeedToWarnCamp, me)
+            end
+        end
+    end
+end
+}

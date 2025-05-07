@@ -1,0 +1,429 @@
+game.states.DEN_TieflingKid_004 = State {function ()
+    description = [[A thiefling kid in the druid cove. Acts as Mol's right hand and recognizes Lae'zel when she enters the grove.]]
+
+    modules = {"shared.dialog","shared.moveto"}
+
+    params.FollowDistance = { type = EParamType.Number, required = false, default = 20.0,
+        help = [[While closer then this distance to the eye, player will be followed by it]]}
+
+    -- Local variables
+
+    local playerDetected = nil
+    local States = {None = 0, Look = 1, Follow = 2}
+    local currState = 0
+
+    --Entities
+    local path1Pos = Entity("S_DEN_TieflingKid004_Path1Area_7f081b53-17dc-4f89-9a0f-20706cb6ffe0")
+    local path2Pos = Entity("S_DEN_TieflingKid004_Path2Area_877d6ab8-22ed-4424-9b90-f1b580583469")
+    local chosenPos = Entity("S_DEN_TieflingKid004_Path1Area_7f081b53-17dc-4f89-9a0f-20706cb6ffe0")
+    local hideoutPos = Entity("S_DEN_TieflingKid004_InHideout_a634edd5-8f48-4589-8ead-2e34c7832405")
+    local abandonPos = Entity("S_DEN_Thieflings_Kid004AbandonArea_47c46255-851e-40a4-bca7-58e749b0b946")
+    local hideoutLeader = Entity("S_DEN_ThiefHideoutLeader_c8ab1ca6-96bb-467e-91c9-af87bc4d3925")
+    local harpyKid = Entity("S_DEN_CharmedKid_3b92c689-6024-4446-a6c9-584e9e8d77ca")
+    local caveArea = Entity("S_DEN_Cave_SUB_adecafa4-27c6-4b2f-bf9e-6ffd7c81a766")
+    local nearGith
+
+    --Bools
+    local saidIntroAD = false
+    local adFinished = false
+    local adStarted = false
+    local canAD = false
+    local interruptedFollow = false
+
+    --Dialogs
+    local foundGithAD = Dialog("DEN_ThingLikeMe_AD_TieflingKid004_5b8540e0-69a0-55e8-22ee-f54da5acfb71")
+    local hideoutAD = Dialog("DEN_Thieflings_AD_HideoutGuards_817cb43a-88c4-f8dc-df52-88543e32dd0f")
+
+    --Animations
+    local flexAnim = Animation("CUST_ActingTough_02_e6c64011-c095-4312-99c8-8b1b973ff09a")
+    local angryAnimStart = Animation("CUST_Aggressive_02_Start_8fb45025-990a-4f4d-9ec2-c9fc9803a7b7")
+    local angryAnimLoop = Animation("CUST_Aggressive_02_f7f92745-6da2-4762-9a22-a35ae8d78dab")
+    local angryAnimEnd = Animation("CUST_Aggressive_02_End_7b4a2948-26c4-4c99-8f2a-2a18ec540056")
+
+    --Flags
+    local hostileFlag = Flag("DEN_Hideout_Event_TurnedKidsHostile_17cfabeb-f1d7-9432-0e29-5aecfcef1a18")
+    local seekingFlag = Flag("DEN_Thieflings_State_LeaderSeeking_0df3b75f-9df9-4cc1-8795-48bb6b575945")
+    local abandonFlag = Flag("DEN_Thieflings_Event_HideoutAbandoned_f3808740-25b9-4393-a947-7a1f7a88ebda")
+    local inHideout = Flag("DEN_Thieflings_State_AtHideoutPoint_5f768dc1-8294-49ee-b2d2-964fcb22f5ff")
+    local atAbandon = Flag("DEN_Thieflings_State_AtAbandonPoint_d76525c1-b7e4-46b0-9847-73a1fdad245e")
+    local startAbandon = Flag("DEN_Thieflings_Event_Abandoning_883a6c02-9091-4b29-8bc3-99e070e3648b")
+    local emptyingStash = Flag("DEN_Thieflings_State_EmptyingStash_2203ac44-6623-40e6-967e-1b95a7c9dfb2")
+
+    -----------------------------------------
+    -- Helper functions
+
+    --Preemptively move to position closest to approaching party depending on how they're moving through the grove
+    helpers.GetPlayer = function()
+        local newdist = 0.0
+        local olddist = 100000.0
+        local path1Dist = 0.0
+        local path2Dist = 0.0
+        local chosenPlayer
+        local active = GetActiveCharacters(me,30.0)
+        for _,v in pairs(active) do
+            if v.Character.IsPlayer and not chosenPlayer then
+                chosenPlayer = v
+            elseif(v.Character.IsPlayer) 
+            and not IsTagged(v, Tag("REALLY_LAEZEL_b5682d1d-c395-489c-9675-1f9b0c328ea5"))
+            and not IsTagged(chosenPlayer, Tag("REALLY_LAEZEL_b5682d1d-c395-489c-9675-1f9b0c328ea5")) then 
+                newdist = GetDistance2DTo(me, v)
+                if newdist <= olddist then
+                    olddist = newdist
+                    chosenPlayer = v
+                end
+            elseif(v.Character.IsPlayer) 
+            and IsTagged(v, Tag("REALLY_LAEZEL_b5682d1d-c395-489c-9675-1f9b0c328ea5")) then 
+                chosenPlayer = v
+            end
+        end
+        if chosenPlayer then
+            path1Dist = GetDistance2DTo(chosenPlayer, path1Pos)
+            path2Dist = GetDistance2DTo(chosenPlayer, path2Pos)
+            if path1Dist < path2Dist then
+                return path1Pos
+            else
+                return path2Pos
+            end
+        end
+        return path1Pos
+    end
+
+    --Locate Lae'zel in the party
+    helpers.GetGith = function()
+        local active = GetActiveCharacters(me,15.0)
+        for _,gith in pairs(active) do
+            if(gith.Character.IsPlayer) and IsTagged(gith, Tag("REALLY_LAEZEL_b5682d1d-c395-489c-9675-1f9b0c328ea5")) and CanSee(me, gith) then
+                return gith
+            end
+        end       
+        return nil
+    end 
+
+    --Nodes
+    -----------------------------------------
+
+    nodes.WaitToApproach = Action{
+        function()
+            chosenPos = helpers.GetPlayer()
+            if mod.moveto.MoveToPoint(chosenPos,MovementSpeed.Run,me) then
+                LookFrom(chosenPos,true)
+                nearGith = helpers.GetGith()
+                    if nearGith ~= nil then
+                        SetHasOsirisDialog(me,false)
+                        if mod.moveto.MoveToPoint(nearGith,MovementSpeed.Run,me) then
+                            saidIntroAD = true
+                        end
+                    else
+                        Sleep(2.0)
+                    end
+            end
+        end,
+        Valid = function()
+            return not saidIntroAD
+        end
+    }
+
+    nodes.Approached = Action{
+        function()
+            if not adStarted then
+                adStarted = true
+                StartAutomatedDialogImmediate(foundGithAD,me)
+            end
+            if nearGith ~= nil and IsInTrigger(nearGith,caveArea.Trigger) then
+                MoveTo(nearGith,MovementSpeed.Run,false,false)
+            end
+        end,
+        Valid = function()
+            return saidIntroAD and not adFinished
+        end
+    }
+
+    nodes.doAD = Action {
+        CanEnter = function()
+            return mod.dialog.IsSpeakerAvailable(hideoutLeader) and mod.dialog.IsSpeakerAvailable(harpyKid) and not GetFlag(seekingFlag,hideoutLeader) and canAD
+        end,
+    
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                hideoutAD,
+                {
+                    waitForCompletion = true,
+                    checkSight = false,
+                    maxDistance = 20.0
+                },
+                me,
+                harpyKid,
+                hideoutLeader
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_Thieflings_AD_HideoutGuards")
+            StartTimer(me,"ADTimer_DEN_Thieflings_AD_HideoutGuards", 60 + math.random(0,10),0)
+        end,
+
+        Valid = function()
+            return (GetFlag(atAbandon,me) 
+            or (GetFlag(inHideout,me) and not GetFlag(startAbandon,me) and not GetFlag(hostileFlag) and not GetFlag(emptyingStash,me)))
+        end
+    }
+
+    --Extended successive operations via story
+    nodes.EmptyingStash= Action {
+        function()
+            Sleep(1)
+        end,
+        Valid = function()
+            return GetFlag(emptyingStash,me)
+        end
+    }
+
+    nodes.HideoutFollowing = Selector {
+        function(nodes)
+            return GetFirstCanEnter(nodes)
+        end,
+        Valid = function(node)
+            return CheckAnySelectable(node) and currState ~= 0
+        end
+    }
+
+    nodes.HideoutFollowing.FollowPlayer = Action{
+        function()
+            DebugText(me, "In Follow")
+            if GetDistance2DTo(me, playerDetected) < 4.0 then
+                LookAtEntity(playerDetected)
+            else
+                try
+                    MoveTo(playerDetected, MovementSpeed.Run)
+                catch ex if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Failed MoveTo(playerDetected)")
+                end
+            end
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return playerDetected ~= nil and not playerDetected.Character.IsDead and CanSee(me, playerDetected) and GetDistance2DTo(me, playerDetected) < params.FollowDistance and not interruptedFollow and currState == 2
+        end
+    }
+
+    nodes.HideoutFollowing.LookAtPlayer = Action{
+        function()
+            DebugText(me, "In Look")
+            LookAtEntity(playerDetected)
+            Sleep(0.5)
+            interruptedFollow = false
+        end,
+        Valid = function()
+            return playerDetected ~= nil and not playerDetected.Character.IsDead and CanSee(me, playerDetected) and currState == 1
+        end
+    }
+
+    nodes.InHideout = Action {
+        Valid = function()
+            return not (GetFlag(startAbandon,me) or GetFlag(abandonFlag))
+        end,
+        function()
+            if mod.moveto.MoveToPoint(hideoutPos,MovementSpeed.Walk,me) then
+                DebugText(me, "In Default")
+                LookFrom(hideoutPos)
+                Sleep(math.random (2, 4))
+                
+                if math.random(0,1) == 0 then 
+                    PlayAnimation(flexAnim,true,false)
+                    Sleep(2.0)
+                else 
+                    PlayLoopingAnimation(angryAnimStart,{angryAnimLoop},angryAnimEnd,false)
+                    Sleep(21.0)
+                    StopAnimation(me)
+                    Sleep(3.0) --TODO: hard-coded animation sleep fix
+                end
+            end
+        end
+    }
+
+    nodes.Abandoned = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Abandoned.Weapons = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_Thieflings_Kid004AbandonArea_47c46255-851e-40a4-bca7-58e749b0b946",
+            lookFromMoveTarget = true,
+            anim = "CUST_Listen_Bored_01_020103b1-f053-46e8-92c0-6e0347bcda1d",
+            waitMin = 1.0,
+            waitMax = 3.0
+        }
+    }
+
+    nodes.Abandoned.Smith = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_Thieflings_Kid004AbandonArea2_ab5839d3-becd-4923-9711-ed0bc7a39fbb",
+            lookFromMoveTarget = true,
+            anim = "CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17",
+            waitMin = 1.0,
+            waitMax = 3.0
+        }
+    }
+
+    -----------------------------------------
+    -- event section
+
+    events.EntityEvent = function(e)
+        if(e.Event == "DEN_TieflingKid_004_NoAvatar") then
+            if not saidIntroAD then
+                saidIntroAD = true
+                adFinished = true
+                SetHasOsirisDialog(me,true)
+                mod.moveto.MoveTo(hideoutPos,true,1.5,"Run","DEN_Thieflings_ArriveAtHideout",2.5,true,false)
+            end
+        elseif(e.TargetEntity == me) then
+            if(e.Event == "DEN_Thieflings_AbandonedHideout") then
+                SetFlag(startAbandon,me)
+                mod.moveto.MoveTo(abandonPos,true,1.5,"Run","DEN_Thieflings_ArriveAtAbandon",2.5,true,false)
+            elseif (e.Event == "DEN_Thieflings_ArriveAtHideout") then
+                SetFlag(inHideout,me)
+                canAD = true
+            elseif(e.Event == "DEN_Thieflings_ArriveAtAbandon") then
+                SetFlag(atAbandon,me)
+            end
+        end
+        if e.Event == "DEN_Thieflings_Event_SpottedPlayer" then
+            currState = 1
+            playerDetected = e.Params[1]
+        elseif e.Event == "DEN_thieflings_Event_Follow" then
+            currState = 2
+            playerDetected = e.Params[1]
+        elseif e.Event == "DEN_Thielfings_Event_StopFollow" then
+            currState = 0
+            playerDetected = nil
+        end
+    end
+
+    events.DialogEnded = function(e)
+        if(e.Instance.DialogUUID == foundGithAD.Guid) then
+            adFinished = true
+            if nearGith ~= nil then
+                SetEntityEvent(nearGith,"DEN_TieflingKid_004_FinishedAD")
+            end
+            SetHasOsirisDialog(me,true)
+            mod.moveto.MoveTo(hideoutPos,true,1.5,"Run","DEN_Thieflings_ArriveAtHideout",2.5,true,false)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_Thieflings_AD_HideoutGuards") then 
+            canAD = true
+        end
+    end
+
+end}
+
+game.states.DEN_TieflingKid_004_AfterDruidAttack = State {function ()
+
+    description = [[The tiefling kid goofs off in the hideout after the druid attack is complete and occasionally chats with the bard.]]
+
+    modules = {"shared.dialog","shared.moveto"}
+
+    -----------------------------------------
+
+    local bard = Entity("S_DEN_Bard_4a405fba-3000-4c63-97e5-a8001ebb883c")
+    local canAD = false
+    local canTryAD = false
+    local flexAnim = Animation("CUST_ActingTough_02_e6c64011-c095-4312-99c8-8b1b973ff09a")
+    local angryAnimStart = Animation("CUST_Aggressive_02_Start_8fb45025-990a-4f4d-9ec2-c9fc9803a7b7")
+    local angryAnimLoop = Animation("CUST_Aggressive_02_f7f92745-6da2-4762-9a22-a35ae8d78dab")
+    local angryAnimEnd = Animation("CUST_Aggressive_02_End_7b4a2948-26c4-4c99-8f2a-2a18ec540056")
+    local hideoutPos = Entity("S_DEN_TieflingKid004_InHideout_a634edd5-8f48-4589-8ead-2e34c7832405")
+    local AD = Entity("DEN_DruidAttack_AD_BardAndKidAfterAttack_7279d31c-d781-4a37-2d46-ea4ddb12c4e6")
+    local blockedAD = false
+    -----------------------------------------
+    -- State nodes
+
+    nodes.Default = Selector{
+        function(nodes)
+            if ((canTryAD and canAD and mod.dialog.IsSpeakerAvailableAndNear(bard, me, 5.0, true)) or not mod.dialog.IsSpeakerAvailable(bard)) and nodes.doAD.IsSelectable() then
+                return nodes.doAD
+            elseif canTryAD and nodes.doAD.IsSelectable() then
+                return nodes.moveToAndTalk
+            else
+                return nodes.Flex
+            end
+        end
+    }
+
+    nodes.Default.moveToAndTalk  = Proxy {
+        game.states.DEN_GeneralGroveStates_MoveToAndTalk,
+            params={
+                moveTarget = "S_DEN_Bard_4a405fba-3000-4c63-97e5-a8001ebb883c",
+                lookTarget = "S_DEN_Bard_4a405fba-3000-4c63-97e5-a8001ebb883c"
+            }
+    }
+
+    nodes.Default.doAD = Action {
+        OnEnter = function()
+            canAD = false
+            canTryAD = false
+        end,
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = true
+                },
+                me,
+                bard
+            )
+            blockedAD = true
+        end,
+        OnLeave = function()
+            blockedAD = true
+            StopTimer(me,"ADTimer_DEN_DruidAttack_AD_BardAndKidAfterAttack")
+            StartTimer(me,"ADTimer_DEN_DruidAttack_AD_BardAndKidAfterAttack", 60 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return not blockedAD
+        end
+    }
+
+    nodes.Default.Flex = Action {
+        function()
+            if mod.moveto.MoveToPoint(hideoutPos,MovementSpeed.Walk,me) then
+                LookFrom(hideoutPos)
+                Sleep(math.random (2, 4))
+                if math.random(0,1) == 0 then 
+                    PlayAnimation(flexAnim,true,false)
+                else 
+                    PlayLoopingAnimation(angryAnimStart,{angryAnimLoop},angryAnimEnd,false)
+                    Sleep(21.0)
+                    StopAnimation(me)
+                    Sleep(3.0)
+                end
+            end
+        end,
+        OnLeave = function()
+            if (mod.dialog.IsSpeakerAvailable(bard)) and not canAD then
+                canTryAD = true
+            end
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "DEN_MovedToTalk") then
+                canAD = true
+            end
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_DruidAttack_AD_BardAndKidAfterAttack") then 
+            blockedAD = false
+        end
+    end
+
+end}

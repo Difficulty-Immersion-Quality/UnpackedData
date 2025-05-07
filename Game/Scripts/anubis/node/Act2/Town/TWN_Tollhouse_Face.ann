@@ -1,0 +1,120 @@
+game.states.TWN_Tollhouse_Face = State{
+    function()
+
+        modules = { "shared.math", "shared.util" }
+
+        params.AD = {type=EParamType.String, required=false, default=nil, help=[[
+            Default AD
+        ]]}
+
+        params.StandAtTriggerCombat = {type = EParamType.String, help=[[
+            The trigger at which the character stands while watching.
+        ]]}
+
+        params.StandAtTrigger = {type = EParamType.String, help=[[
+            The trigger at which the character stands while watching.
+        ]]}
+
+        params.RegionBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+            Blocks the ADs for the entire group of characters (prevents overlap)
+        ]]}
+
+        params.DialogBlockFlag = {type = EParamType.String,  required=false, default=nil, help=[[
+            Blocks this specific AD from happening (prevents repetition)
+        ]]}
+
+        params.TimerName = {type = EParamType.String,  required=false, default=nil, help=[[
+            Timer for AD)
+        ]]}
+
+        local dlg_AD
+        local b_CanAD = false
+        local b_DoInitialDelay = true
+        local s_TimerName
+        local tr_StandAtTriggerCombat = Entity(params.StandAtTriggerCombat)
+        local tr_StandAtTrigger = Entity(params.StandAtTrigger)
+        local wasAttacked = Flag("TWN_Tollhouse_State_WasAttacked_924d925d-5fe2-4e59-8c2f-8c21bd9bab5e")
+
+        self.OnInit = function()           
+            dlg_AD = Dialog(params.AD)   
+            s_TimerName = params.TimerName         
+        end
+
+        nodes.StandAtTriggerReadyToFight = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = params.StandAtTriggerCombat
+            },            
+            CanEnter = function()
+                return GetFlag(wasAttacked, me)
+            end,
+        }        
+
+        nodes.StandAtTrigger = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = params.StandAtTrigger
+            },            
+            CanEnter = function()
+                return GetDistance2DTo(me, tr_StandAtTrigger) > 2.0
+            end,
+        }
+        
+        nodes.Selector_Default = Selector{
+            function(nodes)
+                return FindRandomSelectable(nodes)
+            end,        
+        }
+
+        nodes.Selector_Default.Selector_AD = Selector{
+            
+        }
+
+        nodes.Selector_Default.Selector_AD.AllowAD = Action{
+            function()
+                --DebugText(me, "Allow AD")
+                Sleep(math.random(3, 6))
+                b_CanAD = true                
+            end,
+            CanEnter = function()
+                return not b_CanAD
+            end
+        }
+
+        nodes.Selector_Default.Selector_AD.PlayAD = Proxy{
+            game.states.GLO_ADManager,
+            params={
+                AD = params.AD,
+                regionBlockFlag = params.RegionBlockFlag,
+                dialogBlockFlag = params.DialogBlockFlag,
+                },
+            CanEnter = function()
+                return b_CanAD
+            end,
+        }
+
+        nodes.Selector_Default.Selector_AD.ForbidAD = Action{
+            function()                                
+                --DebugText(me, "Forbid AD")
+                Sleep(math.random(3, 6))
+                b_CanAD = false
+            end,
+            CanEnter = function()
+                return b_CanAD
+            end
+        }
+
+        nodes.Selector_Default.Action_Wait = Action{
+            function()
+                math.random(3, 9)
+            end,            
+        }
+
+        nodes.Fallback = Action{
+            function()                
+                Sleep(6.0)
+            end
+        }
+
+    end
+}

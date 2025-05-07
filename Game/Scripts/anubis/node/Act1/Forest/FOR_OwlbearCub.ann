@@ -1,0 +1,111 @@
+game.states.FOR_OwlbearCub = State {function()
+    description = [[Behaviour of the Owlbear Cub at the cave]]
+    modules = { "gustav.Act1.Underdark" }
+    local Distract,CaveArea,Mother,Fled,Egg
+    local GobFlag = Flag("FOR_OwlBear_LastCubResolution_ToGoblinCamp_f804d502-80bb-ce09-3e34-735573a5ffa1")
+    local GriefFlag = Flag("FOR_OwlBear_LastCubResolution_IsGrieving_f8bcda43-9f8e-4a41-a3a7-8e15136d53bc")
+    local PetTag = Tag("PETPAL_dc860a81-f3c2-4c1a-ab90-e7583324845c")
+
+    local anim_eat = Animation("CUST_EatingCorpse_01_ea42da9e-15b5-4404-8fe2-9c0080b019c9")
+
+    helpers.ClearDistract = function(item)
+        if(item == Distract and item ~= Egg and item.Item.IsMovable) then Distract = nil end
+    end
+
+    self.OnInit = function()
+        CaveArea = FindEntity("S_FOR_OwlbearCub_WanderTrigger_889db7ef-5cd5-4761-a061-69759892c4f5")
+        Mother = FindEntity("S_FOR_OwlBear_e903a41f-8ef7-46dc-a847-7d0ec2804d08")
+        Egg = FindEntity("S_FOR_OwlBear_Egg_cac64420-e7d7-4ac2-aac9-5ed22cbe4272")
+    end
+    self.Valid = function()
+        return not GetFlag(GobFlag,me)
+    end
+    events.EnteredTrigger = function(e)
+        if (e.Trigger.Trigger.IsEventTrigger and
+                e.Trigger.Trigger.EnterEvent == "FOR_OwlBear_Distraction" and e.Target.IsItem and CanSee(me,e.Target) and not me.IsInCombat and not IsInDialog(me)) then
+            Distract = e.Target
+        end
+    end
+    events.LeftTrigger = function(e)
+        if (e.Event == "FOR_OwlBear_Distraction_Clear") then
+            helpers.ClearDistract(e.Target) end
+    end
+    events.Destroyed = function(e)
+        helpers.ClearDistract(e.Entity)
+    end
+    events.AddedTo = function(e)
+        helpers.ClearDistract(e.Item)
+    end
+
+    nodes = ImmediateSelector {}
+    nodes.AnimalRunAway = Action {
+        function()
+            Fled = mod.Underdark.FindClosestActiveCharacter(me.Position,10.0,true)
+            LookAtEntity(Fled, 3.0)
+            Sleep(0.2)
+            FleeFrom(RelationType.Player,10)
+            LookAtEntity(Fled, 3.0)
+            Sleep(5.0)
+            Fled = nil
+        end,
+        Valid = function()
+            return not GetFlag(GriefFlag,me)
+        end,
+        OnLeave = function()
+            Fled = nil
+        end,
+        CanEnter = function()
+            return (Fled ~= nil or (mod.Underdark.FindClosestActiveCharacter(me.Position,5.0,true) ~= nil and
+                mod.Underdark.FindClosestActiveCharacter(me.Position,10.0,true,PetTag) == nil))
+        end
+    }
+
+    nodes.Eating = Action {
+        function()
+            try
+                if(GetDistance2DTo(me,Mother) > 3.0) then MoveTo(Mother) end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception")
+            end
+            SteerTo(Mother)
+            LookAtEntity(Mother, 1.0)
+            if GetDistanceTo(me, Mother) < 3.0 then
+                try
+                    PlayAnimation(anim_eat,true,false)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "Failed PlayAnimation anim_eat")
+                end
+            end
+            Sleep(math.random(1.0,3.0))
+        end,
+        Valid = function()
+            return GetFlag(GriefFlag,me)
+        end
+    }
+
+    nodes.Investigate = Action {
+        function()
+            Sleep(0.5)
+            LookAtEntity(Distract, 3.0)
+            Sleep(1.0)
+            try
+                if(GetDistance2DTo(me,Distract) > 3.0) then MoveTo(Distract) end
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception")
+                return
+            end
+            Sleep(8.0)
+            Distract = nil
+        end,
+        Valid = function()
+            return Distract ~= nil and not GetFlag(GriefFlag,me)
+        end
+    }
+    nodes.Wander = Action {
+        function()
+            Sleep(math.random(5,8))
+            Wander(CaveArea,2.0)
+            SteerTo(Mother)
+        end
+    }
+end}

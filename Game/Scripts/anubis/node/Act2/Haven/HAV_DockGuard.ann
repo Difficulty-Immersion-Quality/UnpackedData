@@ -1,0 +1,48 @@
+game.states.HAV_DockGuard = State{
+    function()
+
+        modules = {"shared.dialog"}
+
+
+        params.patrolSpline = {type = EParamType.String, required = true, help = [[Patrol spline.]]}
+        params.spookedDialog= {type = EParamType.String, required = false, help = [[Spooked dialog]]}
+
+
+        local bWait = false
+        local spPatrol = Spline(params.patrolSpline)
+        local spookedDialog = Dialog(params.spookedDialog)
+
+
+        self.OnInit = function()
+            SetWeaponUnsheathed(me,false)
+        end
+
+        self.Valid = function()
+            return bWait
+        end
+
+        self.OnLeave = function()
+            bWait = false
+        end
+
+        nodes.Action_Wait = Action{
+            function()
+                LookFrom(spPatrol)
+                if queuedAnim ~= nil then
+                    Sleep(0.5)
+                    if mod.dialog.IsSpeakerAvailable(me) then
+                        StartAutomatedDialog(spookedDialog, true, me)
+                    end
+                end
+                    Sleep(5.0)
+                    bWait = false
+            end
+        }
+
+        events.SplineControlPointReached = function(e)
+            if e.Event == "Wait" then 
+                bWait = true
+            end
+        end
+    end
+}

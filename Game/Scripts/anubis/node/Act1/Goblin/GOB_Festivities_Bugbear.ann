@@ -1,0 +1,72 @@
+game.states.GOB_Festivities_Bugbear = State{function()
+
+    description = [[Behaviour for a walking Bugbear in Goblin festivities area near Drunk Goblin]]
+
+    modules = { "shared.math" }
+
+    params.PatrolSpline = { type = EParamType.String, required = true,
+        help = [[Spline for patrolling]]}
+
+    local spl_Patrol = Spline(params.PatrolSpline)
+    local i_LastPoint = 0
+    local b_StandStill = false
+    local animation = Animation("CUST_Cheering_01_bb17118b-9bdc-4003-b9ad-26eda135e1a0")
+
+    local s_StandStillTimer = "GOB_Festivities_Bugbear.StandStill"
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_StandStillTimer then
+            b_StandStill = false
+        end
+    end
+    helpers.StartStandStill = function()
+        b_StandStill = true
+        StartTimer(me, s_StandStillTimer, mod.math.random(10.0, 15.0), 0)
+    end
+
+
+    self.OnInit = function()
+        i_LastPoint = 4
+    end
+
+    events.SplineControlPointReached = function(ev)
+        if ev.Index == i_LastPoint then
+            i_LastPoint = ev.Index + 1
+            if i_LastPoint >= 6 then -- TODO: put this back when code fixes the bug spl_Patrol.NodeCount then
+                i_LastPoint = 0
+            end
+            helpers.StartStandStill()
+        end
+    end
+
+    nodes.StandStill = Action{
+        function()
+            LookFrom(spl_Patrol)
+            try
+                PlayAnimation(animation, true, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Cannot play animation")
+            end
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return b_StandStill
+        end
+    }
+
+    nodes.Patrol = Action{
+        function()
+            DoPatrol(spl_Patrol, false, MovementSpeed.Stroll, i_LastPoint)
+        end,
+
+        Valid = function()
+            return not b_StandStill
+        end
+    }
+
+    nodes.Default = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

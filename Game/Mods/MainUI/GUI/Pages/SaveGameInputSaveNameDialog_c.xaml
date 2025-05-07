@@ -1,0 +1,99 @@
+<ls:UIWidget x:Name="SaveGamePopup"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             mc:Ignorable="d"
+             ls:UIWidget.ContextName="NewSavegamePopup" d:DataContext="{d:DesignInstance {x:Type ls:DCNewSavegamePopup}, IsDesignTimeCreatable=True}"
+             d:DesignWidth="3840" d:DesignHeight="2160">
+
+    <ls:UIWidget.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Core;component/Library/SaveLoad_c.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </ls:UIWidget.Resources>
+
+    <ls:UIWidget.Template>
+        <ControlTemplate>
+            <ControlTemplate.Resources>
+                <BitmapImage x:Key="InputTitleImage" UriSource="pack://application:,,,/Core;component/Assets/SaveLoad/input_title.png"/>
+                <BitmapImage x:Key="BottomButtonsFade" UriSource="pack://application:,,,/Core;component/Assets/SaveLoad_c/prompts_overlay.png"/>
+            </ControlTemplate.Resources>
+            <Grid Background="{StaticResource LS_PopUpBackgroundColorMedium}">
+                <Image Source="{StaticResource BottomButtonsFade}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Stretch="None"/>
+
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Vertical">
+                    <TextBlock x:Name="TitleContainer" TextAlignment="Center" Text="{Binding Source='h6828f003g6e86g4dbdgbed3g2db4813e25ee', Converter={StaticResource TranslatedStringConverter}}" Foreground="{StaticResource LS_tint100}" FontSize="{StaticResource ScaledTitleFontSize}"/>
+                    <TextBlock x:Name="SubtitleContainer" TextAlignment="Center" Text="{Binding Source='h7bfb7a51gc2c5g404agaa75gf65935e30216', Converter={StaticResource TranslatedStringConverter}}" Foreground="{StaticResource LS_accent75TxtColor}" FontSize="{StaticResource ScaledDefaultFontSize}"/>
+
+                    <Grid x:Name="ScreenshotHolder" HorizontalAlignment="Center" Margin="0,40,0,0">
+                        <Rectangle Fill="{Binding NewScreenshot}" Margin="20"/>
+                        <Image Source="{StaticResource ScreenshotHolder}" Stretch="None"/>
+                    </Grid>
+
+                    <Grid x:Name="SavefileNameContainer" HorizontalAlignment="Center" Margin="0,60,0,0">
+                        <Image Source="{StaticResource InputTitleImage}" Stretch="None"/>
+                        <ls:LSTextBox x:Name="SaveName" Width="880" Height="72" Text="{Binding SavegameNameInput}" Mask="Filename" Background="Transparent" BorderBrush="{x:Null}" VerticalAlignment="Center" Margin="10,0" MaxLength="40" PlayerId="{Binding CurrentPlayer.PlayerId}"/>
+                    </Grid>
+                    <TextBlock x:Name="FeedbackContainer" HorizontalAlignment="Center" Margin="0,20,0,0" Foreground="{StaticResource LS_alertTxtColor}"/>
+                </StackPanel>
+
+                <StackPanel x:Name="ButtonContainer" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,80">
+                    <ls:LSButton x:Name="AcceptBtn"
+                                 Tag="{Binding Source='h29f67a0eg1656g46a4g95c8g182da70d16db', Converter={StaticResource TranslatedStringConverter}}"
+                                 SoundID="UI_Shared_Accept"
+                                 Command="{Binding DoSaveWithName}" CommandParameter="{Binding Text, ElementName=SaveName}" 
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIAccept, Converter={StaticResource FindInputEventConverter}}"
+                                 BoundEvent="UIAccept"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"/>
+
+                    <ls:LSButton x:Name="ChangeNameBtn" 
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Content = "{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIMessageBoxY'}" 
+                                 BoundEvent="UIMessageBoxY"
+                                 Tag="{Binding Source='h3e86cbedg1814g4052gb29fg51ae4e1e9f05',Converter={StaticResource TranslatedStringConverter}}"
+                                 SoundID="UI_Shared_Accept">
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="Click">
+                                <ls:SetMoveFocusAction TargetName="SaveGamePopup" Reset="True"/>
+                                <noesis:SetFocusAction TargetName="SaveName"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
+                    </ls:LSButton>
+
+                    <ls:LSButton x:Name="CloseBtn"
+                                 Tag="{Binding Source='h2656214agb9f4g4a2fgaf07g3d646e405ef6', Converter={StaticResource TranslatedStringConverter}}"
+                                 SoundID="UI_Shared_Cancel"
+                                 Command="{Binding CustomEvent}" 
+                                 CommandParameter="CloseMessageBox" 
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UICancel, Converter={StaticResource FindInputEventConverter}}"
+                                 BoundEvent="UICancel"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"/>
+                </StackPanel>
+
+            </Grid>
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding TakingScreenshot}" Value="True">
+                    <Setter TargetName="ButtonContainer" Property="IsEnabled" Value="False" />
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding FeedbackState}" Value="FilenameExists">
+                    <Setter TargetName="FeedbackContainer" Property="Text" Value="{Binding Source='hddaf4452g80a7g4d29gad20gcfe0975afa9c', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding FeedbackState}" Value="StorageFull">
+                    <Setter TargetName="FeedbackContainer" Property="Text" Value="{Binding Source='h3c0c860agb3a9g4040g9573gdd38051e89c1', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                
+                <DataTrigger Binding="{Binding FeedbackState}" Value="Error">
+                    <Setter TargetName="FeedbackContainer" Property="Text" Value="{Binding Source='h64cf4a8ag48fcg4534gbc2ag187cc08cd8a3', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+</ls:UIWidget>

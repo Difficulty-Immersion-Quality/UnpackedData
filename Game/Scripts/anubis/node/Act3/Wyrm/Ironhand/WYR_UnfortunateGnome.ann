@@ -1,0 +1,112 @@
+game.states.WYR_UnfortunateGnome = State{function()
+    description = [[]]
+
+    modules = { "shared.dialog", "shared.math", "shared.util" }
+
+    local atTable = "S_WYR_Unfortunate_AtTable_4e074e30-ced6-45b6-81d2-0c79c72f767e"
+    local atTablePos = Entity("S_WYR_Unfortunate_AtTable_4e074e30-ced6-45b6-81d2-0c79c72f767e")
+    local atShelf1 = "S_WYR_Ironhand_InitPos_Unfortunate_8a9604a3-8937-4ce2-ad94-d06aaf8af704"
+    local atShelf1Pos = Entity("S_WYR_Ironhand_InitPos_Unfortunate_8a9604a3-8937-4ce2-ad94-d06aaf8af704")
+    local atShelf2 = "S_WYR_Unfortunate_AtShelf_5eafcf4f-4349-4c39-8d58-0c6d17a87a1b"
+    local atShelf2Pos = Entity("S_WYR_Unfortunate_AtShelf_5eafcf4f-4349-4c39-8d58-0c6d17a87a1b")
+
+    local writeDialog = Dialog("WYR_Ironhand_WB_Write_02_f6b2e4ab-b7ad-0698-120c-754e74de3575")
+    local writeSceneTrigger = Entity("WYR_Ironhand_WB_Write_02_SceneTrigger_83fb9d61-05cd-4b71-92fa-2e7c21e2fcdc")
+    local booksDialog = Dialog("WYR_Ironhand_WB_SearchBooks_01_0c6fbfdb-a999-36c5-d441-d209f673f8e2")
+    local booksSceneTrigger1 = Entity("WYR_Ironhand_WB_SearchBooks_01_SceneTrigger_a84cb98e-9627-4328-9525-8de17a4622f8")
+    local booksSceneTrigger2 = Entity("WYR_Ironhand_WB_SearchBooks_02_SceneTrigger_67bc867d-cb1e-4fac-b744-941f92cded4e")
+
+    local choice = {
+        write = 1,
+        book1 = 2,
+        book2 = 3,
+    }
+    local currentChoice = 1
+
+
+    nodes = Selector{
+        function(node)
+            if currentChoice == choice.write then
+                return node.Writing
+            elseif currentChoice == choice.book1 then
+                return node.Book1
+            elseif currentChoice == choice.book2 then
+                return node.Book2
+            end
+            return GetRandomCanEnterNoRepeat(node)
+        end
+    }
+
+    nodes.Writing = Selector {
+        OnEnter = function()
+            currentChoice = choice.write
+        end
+    }
+
+    nodes.Writing.Write = Action {
+        function()
+            --LookFrom(atTablePos)
+            StartTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog", mod.math.random(15.0,25.0), 1)
+            StartBehaviorDialog(writeDialog, writeSceneTrigger.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+            Sleep(0.5)
+            currentChoice = nil
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+        end
+    }
+
+    nodes.Book1 = Selector {
+        OnEnter = function()
+            currentChoice = choice.book1
+        end
+    }
+
+
+    nodes.Book1.Look = Action {
+        function()
+            --LookFrom(atShelf1Pos)
+            StartTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog", mod.math.random(15.0,25.0), 1)
+            StartBehaviorDialog(booksDialog, booksSceneTrigger1.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+            Sleep(0.5)
+            currentChoice = nil
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+        end
+    }
+
+    nodes.Book2 = Selector {
+        OnEnter = function()
+            currentChoice = choice.book2
+        end
+    }
+
+    nodes.Book2.Look = Action {
+        function()
+            --LookFrom(atShelf2Pos)
+            StartTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog", mod.math.random(15.0,25.0), 1)
+            StartBehaviorDialog(booksDialog, booksSceneTrigger2.Trigger, true, me)
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+            Sleep(0.5)
+            currentChoice = nil
+        end,
+
+        OnInterrupt = function()
+            StopTimer(me, "Timer_WYR_Ironhand_StopBehaviorDialog")
+        end
+    }
+
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == "Timer_WYR_Ironhand_StopBehaviorDialog" then
+            DebugText(me, "Graceful Stop")
+            BehaviorDialogRequestGracefulStop(me, true)
+            currentChoice = nil
+        end
+    end
+end}

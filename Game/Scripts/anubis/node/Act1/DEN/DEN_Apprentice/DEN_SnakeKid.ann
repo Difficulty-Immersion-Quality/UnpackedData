@@ -1,0 +1,59 @@
+game.states.DEN_SnakeKid_CourtScene = State { function ()
+
+    description = [[Snake Kid during the Court of Snakes scene.]]
+
+    self.OnEnter = function()
+        if not HasActiveStatus(me, "ANIM_COWER") then
+            ApplyStatus(me, "ANIM_COWER", true, -1)
+        end
+    end
+
+    self.OnLeave = function()
+        if HasActiveStatus(me, "ANIM_COWER") then
+            RemoveStatus(me, "ANIM_COWER")
+        end
+    end
+
+    nodes.Idle = Action {
+        function()
+            WaitForInterrupt()
+        end,
+    }
+end}
+
+game.states.DEN_SnakeKid_PostCourtScene = State { function ()
+
+    description = [[Snake Kid after the Court of Snakes scene.]]
+
+    local wanderBox = Entity([[S_DEN_KidBackWanderBox_feb8adc3-fbb5-463b-801c-c83621e1ca08]])
+    local parentAD = Dialog("DEN_GuardedEntrance_AD_ParentsWithKid_ae04ffe3-fbfb-236e-5d05-e4cb9aca3a64")
+    local denVictoryFlag = Flag("DEN_AttackOnDen_State_DenVictory_71c7f23e-3ff1-c9b8-3ef5-d75fa1b42c8d")
+    local doKidBack = true
+
+    self.Valid = function()
+        return not GetFlag(denVictoryFlag)
+    end
+
+    nodes.Idle = Action {
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return doKidBack
+        end
+    }
+    nodes.Wander = Action {
+        function()
+            Wander(wanderBox, math.random() + math.random(3, 4), MovementSpeed.Walk)
+            if math.random(1, 2) == 1 then
+                Sleep(math.random() + math.random(2, 4))
+            end
+        end
+    }
+
+    events.DialogEnded = function(e)
+        if (doKidBack and e.Instance.DialogUUID == parentAD.Guid) then
+            doKidBack = false
+        end
+    end
+end}

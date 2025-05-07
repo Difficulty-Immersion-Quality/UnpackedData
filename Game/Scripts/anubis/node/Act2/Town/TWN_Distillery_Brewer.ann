@@ -1,0 +1,68 @@
+game.states.TWN_Distillery_Brewer = State {
+
+    function ()
+
+        modules = {"shared.dialog"}
+
+        helpers.ClosestPlayer = function()
+            local characters = GetActiveCharacters(me, 30)
+            if #characters > 0 then
+                for i, character in ipairs(characters) do
+                    if character.OnStage and character.Character.IsPartyMember and not character.Character.IsDead then
+
+                        local canSee = CanSee(me, character)
+                        if canSee then
+                            return character
+                        end
+                    end
+                end
+            end
+            return nil
+        end
+
+        local AD = Dialog("TWN_Distillery_AD_Brewer_2e558475-ec98-3342-35b4-55866f7d9822")
+        local ADCanSee = Dialog("TWN_Distillery_AD_Brewer_CanSeePlayer_2ea8ee90-3cde-c090-6982-443ff792097c")
+        local sawAtLeastOnce = false
+        local player = nil
+
+        nodes.SearchForPlayer = Action {
+            function()
+                Sleep(1.0)
+                player = helpers.ClosestPlayer()
+                if sawAtLeastOnce then
+                    local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(AD,
+                        {
+                        waitForCompletion = true,
+                        minDelay = 12.0 },
+                    me)
+                    if result == error.AutomatedDialogRateLimitedStartFailed then
+                        DebugText(me, "Error: StartCheckedAutomatedDialogRateLimited failed")
+                    end
+                end
+            end,
+            Valid = function()
+                return player == nil
+            end,
+        }
+
+        nodes.AttractPlayer = Action {
+            function()
+                sawAtLeastOnce = true
+                SteerTo(player)
+                local result = mod.dialog.StartCheckedAutomatedDialogRateLimited(ADCanSee,
+                    {
+                    waitForCompletion = true,
+                    minDelay = 12.0 },
+                me)
+                if result == error.AutomatedDialogRateLimitedStartFailed then
+                    DebugText(me, "Error: StartCheckedAutomatedDialogRateLimited failed")
+                end
+                player = nil
+            end,
+            Valid = function()
+                return player ~= nil
+            end,
+        }
+
+    end
+}

@@ -1,0 +1,76 @@
+game.states.MOO_InfernalVendor = State{ function()
+    modules = { "shared.moveto", "shared.dialog" }
+
+    local idlePoint1 = Entity("S_MOO_BloodMerchantTablePoint_001_c9aa10a3-4934-44e9-8552-5bdfaa94683d")
+    local idlePoint2 = Entity("S_MOO_BloodMerchantTablePoint_002_e058cec9-9de7-4663-82c2-13c988da2882")
+
+    local AD = Dialog("MOO_InfernalVendor_AD_Idling_f180d664-ddda-6731-ed15-fdfc8fcdd09f")
+    local inspectAnim = Animation("CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0")
+
+    local canLookAtTable = false
+    local rollOutput = 0
+    local lookAtTableVal = 7
+    local minRoll = 0
+
+    nodes.LookAtTable = Action{
+        CanEnter = function()
+            return canLookAtTable
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(idlePoint2, MovementSpeed.Stroll, me) then
+                LookFrom(idlePoint2)
+                PlayAnimation(inspectAnim)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    AD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                canLookAtTable = false
+                Sleep(4 + 4 * math.random())
+            else
+                SteerTo(idlePoint2)
+                canLookAtTable = false
+            end
+
+        end,
+
+        OnLeave = function()
+            canLookAtTable = false
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            if mod.moveto.MoveToPoint(idlePoint1, MovementSpeed.Stroll, me) then
+                LookFrom(idlePoint1)
+                PlayAnimation(inspectAnim)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    AD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+            else
+                SteerTo(idlePoint1)
+            end
+            Sleep(10 + 4 * math.random())
+            rollOutput = math.random(minRoll, 10)
+            if rollOutput >= lookAtTableVal then
+                canLookAtTable = true
+            else
+                minRoll = minRoll + 1
+            end
+        end,
+
+        OnLeave = function()
+            minRoll = 0.0
+            rollOutput = 0.0
+        end
+    }
+
+end
+}

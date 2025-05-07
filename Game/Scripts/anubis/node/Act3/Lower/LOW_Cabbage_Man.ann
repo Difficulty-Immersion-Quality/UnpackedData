@@ -1,0 +1,53 @@
+game.states.LOW_Cabbage_Man = State { function () 
+
+    modules = {"shared.dialog", "shared.moveto"}
+    
+    local AD = Dialog([[LOW_MyCabbages_AD_Vendor_e943486e-fa32-777f-4326-5f2ffa9fee70]])
+    local standTrigger = Entity([[S_LOW_MyCabbages_Vendor_Trigger_923858c0-6f97-4ab1-89cc-13a02b96f880]])
+    local wanderTrigger = Entity([[S_LOW_MyCabbages_Vendor_WanderTrigger_4199e779-4779-45c8-b46f-40e0f6f2c6ab]])
+    local angryStartAnimation = Animation("CUST_Angry_01_Start_ebe25dce-800f-4662-ac29-ba2adc5b36b6")
+    local angryLoopAnimation = Animation("CUST_Angry_01_Loop_4b288089-9bad-477b-909b-10aa79e5a370")
+    local angryEndAnimation = Animation("CUST_Angry_01_End_ee31d4d8-00bd-4ff7-8c21-c1698022c4e2")
+    
+    local canAD = true
+    
+    nodes.CabbageAD = Action {
+        function()
+            Sleep(2.0)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                AD,
+                { 
+                    waitForCompletion = true,
+                    minDelay = 15.0,
+                },
+                me
+            )
+            Sleep(2.0)
+            canAD = false
+        end,
+        CanEnter = function()
+            return canAD and GetDistanceTo(me, standTrigger) < 5.0
+        end,
+    }
+
+    nodes.StandAtPos = Action {
+        function()
+            if mod.moveto.MoveToPoint(standTrigger,MovementSpeed.Stroll,me) then
+                PlayLoopingAnimation(angryStartAnimation,{angryLoopAnimation},angryEndAnimation, false)
+                Wander(wanderTrigger,20.0,MovementSpeed.Stroll)
+            else
+                Sleep(6.0)
+            end
+            if mod.moveto.MoveToPoint(standTrigger,MovementSpeed.Stroll,me) then
+                LookFrom(standTrigger)
+            end
+            canAD = true
+            Sleep(1.0)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+end}
+
+

@@ -1,0 +1,82 @@
+game.states.LOW_DevilsFee_Helsik = State{function ()
+
+    --------------------------------Modules--------------------------------
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Variables--------------------------------
+    --Remember to check with Julio about the better way to add this kind of variables in a script to spend less memory
+    local readingAnimation = Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716")
+    local sellingPosition = Entity("S_LOW_DevilsFee_SellingPoint_d0d30c94-d932-458c-a0ec-749443cac9e4")
+    local wanderBehindDesk = Entity("S_LOW_DevilsFee_WanderBox_c5dfe394-2c14-4d6f-97cf-c81f37fbdff6")
+    local steerPoint = Entity("S_LOW_DevilsFee_SteerPoint_a0e7788e-64fc-4876-ab5c-453fd1411fb4")
+    local patrolOkDialog = Dialog("LOW_DevilsFee_AD_PatrolInOrder_43cc6f09-6131-740b-4961-53b0f55efab7")
+    local patrolStolen = Dialog("LOW_DevilsFee_AD_PatrolNotInOrder_bec780dc-c08b-9106-fb5a-736af29d14f5")
+    local stealFlag = Flag("LOW_DevilsFee_State_DiamonsStolen_1c2ad267-7636-419d-83fa-e60d15390ff4")
+    local checkDiamondsPoint = Entity("S_LOW_DevilsFee_CheckDiamonds_e4e37416-17ae-4b90-b478-001ee54b86dd")
+    --------------------------------Nodes--------------------------------
+
+    nodes = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    --[[nodes.CheckStolenItems = Action {
+        function()
+            if mod.moveto.MoveToPoint(checkDiamondsPoint, MovementSpeed.Walk, me) then
+                if GetFlag(stealFlag) then
+                    mod.dialog.StartCheckedAutomatedDialog(
+                        patrolStolen,
+                        {
+                            waitForCompletion = true
+                        },
+                        me
+                    )
+                else
+                    mod.dialog.StartCheckedAutomatedDialog(
+                        patrolOkDialog,
+                        {
+                            waitForCompletion = true
+                        },
+                        me
+                    )
+                end
+            end
+            Sleep(10 + 10 * math.random())
+        end,
+    }--]]
+
+    nodes.WaitingClients = Action {
+        function()
+            if sellingPosition ~= nil then
+                if mod.moveto.MoveToPoint(sellingPosition, MovementSpeed.Walk, me) then
+                    SteerTo(steerPoint)
+                    Sleep(5 + 12 * math.random())
+                    if (readingAnimation ~= nil) then
+                        try
+                            PlayAnimation(readingAnimation)
+                            Sleep(5 + 8 * math.random())
+                        catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                            DebugText(me, "Reading animation requested to retarget")
+                            Sleep(10 + 15 * math.random())
+                        end
+                    end
+
+                end
+            end
+        end
+    }
+
+    -- Wander a litle in the store behind the desk
+    nodes.Wander = Action {
+        function()
+            Wander(5.0, 4.0, MovementSpeed.Walk, wanderBehindDesk)
+            SteerTo(steerPoint)
+            Sleep(4 + 9 * math.random())
+        end,
+        CanEnter = function()
+            return wanderBehindDesk ~= nil and steerPoint ~= nil
+        end,
+    }
+end
+}

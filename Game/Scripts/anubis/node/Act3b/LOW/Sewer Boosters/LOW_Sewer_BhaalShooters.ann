@@ -1,0 +1,48 @@
+game.states.LOW_Sewer_BhaalShooters = State{
+    function()
+
+    params.targets = {type = EParamType.String, arrayRange = "1..", required = false, default = nil, help=[[
+        Targets at which to shoot.
+    ]]}
+    params.AD = {type = EParamType.String, required = false, default = nil, help = [[AD that may be played after shooting]]}
+
+
+    modules = {"shared.math", "shared.dialog", "shared.util"}
+    description = [[Behaviour of the Bhaal cultists shooting at Refugess in the Sewers.]]
+
+    local refugeesDead = Flag("LOW_Sewer_State_RefugeesDefeated_1fa74fb8-2da7-43bd-8724-72e774a5e809")
+    local playerFightingRefugees = Flag("LOW_Sewers_State_AttackedRefugees_ea81f059-3f1c-ca27-04e4-c472ce5fd592")
+    local targets = {}
+    local shouldSpeak = Flag("LOW_Sewer_State_ShootingPracticeAD_ShouldSpeak_c7b48cbd-77a9-4a42-818b-bd1db1ee44fe")
+    local AD = Dialog(params.AD)
+
+    self.OnInit = function()
+        for i, target in ipairs(params.targets) do
+            targets[i] = FindEntity(target)
+        end
+    end
+
+    nodes.Shooting = Action{
+        function()
+            local target = targets[math.random(#targets)]
+            UseSpell("Projectile_LOW_Sewers_CultistsShootingContest_MainHandAttack",target, nil, nil, nil, true, true, true)
+            if GetFlag(shouldSpeak, me) and AD ~= nil then
+                StartAutomatedDialog(AD, true, me)
+            end
+            ClearFlag(shouldSpeak, me)
+
+            mod.util.SleepRandom(1.5,4.0)
+        end,
+        Valid = function()
+            return (not GetFlag(refugeesDead)) and (not GetFlag(playerFightingRefugees))
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+end}

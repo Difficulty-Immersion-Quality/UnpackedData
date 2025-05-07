@@ -1,0 +1,239 @@
+game.states.DEN_GruntingKid = State { function ()
+
+    description = [[One of the thieflings who guards their secret hideout entrance]]
+
+    modules = {"shared.dialog"}
+
+    -----------------------------------------
+    -- Local variables
+    local playerDetected = nil
+    local States = {None = 0, Look = 1, Follow = 2}
+    local currState = 0
+
+    local inHideoutFlag = Flag("DEN_GruntingKid_State_InHideout_f90cdb76-bb4f-bf03-e1f1-4a228799ce85")
+    local abandonFlag = Flag("DEN_Thieflings_Event_HideoutCallForHelp_d653abaf-f717-344e-5b04-cc7853ee3ba8")
+    local AD = Dialog("DEN_General_AD_GruntingKid_8d781518-a48e-1db2-4149-0d9635b409f2")
+    local canAD = true
+
+    -----------------------------------------
+    -- Nodes
+
+    nodes.doAD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                AD,
+                {
+                    waitForCompletion = false,
+                },
+                me
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_General_AD_GruntingKid")
+            StartTimer(me,"ADTimer_DEN_General_AD_GruntingKid", 40 + math.random(0,10),0)
+        end,
+        Valid = function()
+            return canAD
+        end
+    }
+
+    nodes.OutsideHideout = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return not GetFlag(inHideoutFlag, me) or (GetFlag(abandonFlag) and GetFlag(inHideoutFlag, me))
+        end
+    }
+
+    nodes.HideoutFollowing = Selector {
+        function(nodes)
+            return GetFirstCanEnter(nodes)
+        end,
+        Valid = function(node)
+            return CheckAnySelectable(node) and currState ~= 0
+        end
+    }
+
+    nodes.InsideHideout = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.OutsideHideout.Guard = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_GruntingKid_Position01_0fe87edb-66a4-4725-b6a5-2193bdd0654e",
+            lookFromMoveTarget = true,
+            anim = "CUST_Curious_01_09ae2a3e-b6e5-42c3-9299-7e569fb44084",
+            waitMin = 2.0,
+            waitMax = 4.0
+        },
+        Valid = function()
+            return not GetFlag(inHideoutFlag, me) or (GetFlag(abandonFlag) and GetFlag(inHideoutFlag, me))
+        end
+    }
+
+    nodes.OutsideHideout.LookAtEntrance = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_GruntingKidHatch_Target_d4a35eb8-4205-4235-8379-8c027cb97394",
+            lookFromMoveTarget = true,
+            anim = "CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17",
+            waitMin = 2.0,
+            waitMax = 4.0
+        },
+        Valid = function()
+            return not GetFlag(inHideoutFlag, me) or (GetFlag(abandonFlag) and GetFlag(inHideoutFlag, me))
+        end
+    }
+
+    nodes.HideoutFollowing.FollowPlayer = Action{
+        function()
+            DebugText(me, "In Follow")
+            if GetDistance2DTo(me, playerDetected) < 4.0 then
+                LookAtEntity(playerDetected)
+            else
+                try
+                    MoveTo(playerDetected, MovementSpeed.Run)
+                catch ex if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me, "Failed MoveTo(playerDetected)")
+                end
+            end
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return playerDetected ~= nil and not playerDetected.Character.IsDead and CanSee(me, playerDetected) and GetDistance2DTo(me, playerDetected) < params.FollowDistance and not interruptedFollow and currState == 2
+        end
+    }
+
+    nodes.HideoutFollowing.LookAtPlayer = Action{
+        function()
+            DebugText(me, "In Look")
+            LookAtEntity(playerDetected)
+            Sleep(0.5)
+            interruptedFollow = false
+        end,
+        Valid = function()
+            return playerDetected ~= nil and not playerDetected.Character.IsDead and CanSee(me, playerDetected) and currState == 1
+        end
+    }
+
+    nodes.InsideHideout.WatchHideout = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_GruntingKid_Position02_67423ba4-7199-45f8-9bf2-c742bbe952dd",
+            lookFromMoveTarget = true,
+            anim = "CUST_Curious_01_09ae2a3e-b6e5-42c3-9299-7e569fb44084",
+            waitMin = 2.0,
+            waitMax = 4.0
+        }
+    }
+
+    nodes.InsideHideout.LookAtTreasure = Proxy {
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params={
+            moveTarget = "S_DEN_GruntingKid_Position03_671dc368-ea6c-4386-929f-aeb5444cd8eb",
+            lookFromMoveTarget = true,
+            anim = "CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17",
+            waitMin = 2.0,
+            waitMax = 4.0
+        }
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_General_AD_GruntingKid") then 
+            canAD = true
+        end
+    end
+
+end}
+
+game.states.DEN_AttackOnDen_GruntingKid = State {function ()
+    description = [[Grunting kid stands by the entrance of the lair, then moves to the hideout.]]
+
+    local canAD = true
+    local lairDoorAD = Dialog("DEN_AttackOnDen_AD_LairDoor_f1df9248-8651-cfbd-5a7b-9562aa2add26")
+    local lairDoor = Entity("S_DEN_LairMainOutDoor_1f76e748-d0d5-4cb5-8d0f-7fd96f14285b")
+    local lairDoorPoint = Entity("S_DEN_AttackGruntingPos_62faff58-dd14-443c-bcbf-5e9efe623d7a")
+    local notInHideout = true
+    local atHideoutEntrance = false
+
+    nodes.AtLairEntrance = Action{
+        function()
+            if not IsInDangerousSurfaceFor(lairDoorPoint, me.Character)
+                and (GetDistanceTo(me, lairDoorPoint) > 2.0) then
+                    try
+                        MoveTo(lairDoorPoint, MovementSpeed.Walk, false, false, 0.5, 1.5)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        Sleep(6.0)
+                    end
+            else
+                Sleep(6.0)
+            end
+            SteerTo(lairDoor, false, 5)
+            Sleep(3)
+            if canAD and not IsInDialog(me, false) and not IsInDialog(lairDoor, false)then
+                canAD = false
+                StartAutomatedDialog(lairDoorAD,true, lairDoor, me)
+            end
+        end, 
+        Valid = function()
+            return notInHideout
+        end
+    }
+    
+    nodes.AtHideoutEntrance = Proxy{
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params = {
+            lookFromMoveTarget = true,
+            moveTarget = [[S_DEN_GruntingMovePos_0487027c-cac2-45fb-b435-19c8036276db]],
+        },
+        Valid = function()
+            return atHideoutEntrance
+        end
+    }
+
+    nodes.AtHideout = Proxy{
+        game.states.DEN_GeneralGroveStates_AnimateAtPoint,
+        params = {
+            lookFromMoveTarget = true,
+            moveTarget = [[S_DEN_AttackKidPos_011_653cf07f-e6ac-46eb-bb02-041ed278498e]],
+        },
+    }
+    
+    events.DialogEnded = function(e)
+        if (e.Instance.DialogUUID == lairDoorAD.Guid)then
+            StopTimer(me, "DEN_AttackOnDen_LairDoorAD")
+            StartTimer(me, "DEN_AttackOnDen_LairDoorAD", math.random(50,70), 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "DEN_AttackOnDen_LairDoorAD" then
+            canAD = true
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me and e.Event == "DEN_AttackOnDen_GruntingAtDoor") then
+            notInHideout = false
+            atHideoutEntrance = true
+        elseif (e.TargetEntity == me and e.Event == "DEN_AttackOnDen_GruntingInHideout") then
+            atHideoutEntrance = false
+        end
+        if e.Event == "DEN_Thieflings_Event_SpottedPlayer" then
+            currState = 1
+            playerDetected = e.Params[1]
+        elseif e.Event == "DEN_thieflings_Event_Follow" then
+            currState = 2
+            playerDetected = e.Params[1]
+        elseif e.Event == "DEN_Thielfings_Event_StopFollow" then
+            currState = 0
+            playerDetected = nil
+        end
+    end
+end}

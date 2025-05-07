@@ -1,0 +1,90 @@
+game.states.HAG_MurderousFrog_Frog = State{
+function()
+    description = [[Frog behaviour, it will be wandering near a small pond and after killing the hag ite will lead the player to a small stash where a bag is hidden. ]]
+
+    modules = {"shared.util", "shared.math", "shared.dialog"}
+
+    ----------------------------------------------------------------
+    -- Local variables
+    -- AD variables
+    local AD = Dialog("HAG_MurderousFrog_AD_Frog_aba51418-734a-33e6-8562-67fc567fe6d4")
+    local minADWaitTime = 10.0
+    local maxADWaitTime = 14.0
+
+    -- Wander variables
+    local wanderArea = Entity("S_HAG_MurderousFrog_Wander_8b752de2-2e45-47a7-a97f-626c49b61f3a")
+
+    -- Move to stash variables
+    local moveToStashFlag = Flag("HAG_MurderousFrog_Event_MoveToStash_f249294b-793b-4f6d-883a-acb356676954")
+    local arrivedToStashFlag = Flag("HAG_MurderousFrog_State_FrogAtStash_9ad6aa27-c882-4e78-b2f6-86b9d21e5d10")
+    local frogStash = Entity("S_HAG_FrogStash_43c6dc9c-a04b-419e-8193-a8f4a806f646")
+    local bag = Entity("S_HAG_FrogBag_da3d4785-dd78-41c5-b623-1915f4b24d7e")
+    ----------------------------------------------------------------
+
+    ----------------------------------------------------------------
+    -- Nodes
+    nodes = ImmediateSelector{}
+
+    nodes.Action_MoveToBag = Action{
+        function()
+            if not IsInDangerousSurfaceFor(frogStash, me.Character) then
+                local moveResult = MoveTo(frogStash, MovementSpeed.Walk, true, false, 0.0, 0.6, false)
+
+                if moveResult ~= error.MovementError.None then
+                    Wander(4.0, 2.5)
+                    SteerTo(bag)
+                    DebugText(me, "Error: movement failed.")
+                    Sleep(2.0)
+                else
+                    LookFrom(frogStash)
+                    SetFlag(arrivedToStashFlag)
+                    WaitForInterrupt()
+                end
+            end
+        end,
+        Valid = function()
+            return  GetFlag(moveToStashFlag)
+        end
+    }
+
+    nodes.Action_Wander = Action{
+        function()
+            Wander(wanderArea, mod.math.random(3.0, 5.0))
+            mod.util.SleepRandom(3.0, 5.0)
+        end
+    }
+    ----------------------------------------------------------------
+
+    ----------------------------------------------------------------
+    -- Events
+    events.Activated = function(e)
+        StartTimer(me, "HAG_MurderousFrog_AD", mod.math.random(minADWaitTime, maxADWaitTime), 0)
+    end
+
+    events.Deactivated = function(e)
+        StopTimer(me, "HAG_MurderousFrog_AD")
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me then
+            StopTimer(me, "HAG_MurderousFrog_AD")
+        end
+    end
+
+    events.LeftCombat = function(e)
+        if e.Entity == me then
+            StartTimer(me, "HAG_MurderousFrog_AD", mod.math.random(minADWaitTime, maxADWaitTime), 0)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "HAG_MurderousFrog_AD" then
+            if mod.dialog.IsSpeakerAvailable(me) then
+                StartAutomatedDialogImmediate(AD, me)
+            end
+            StartTimer(me, "HAG_MurderousFrog_AD", mod.math.random(minADWaitTime, maxADWaitTime), 0)
+        end
+    end
+    ----------------------------------------------------------------
+end
+}

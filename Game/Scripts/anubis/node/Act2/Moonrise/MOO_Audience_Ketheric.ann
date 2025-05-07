@@ -1,0 +1,87 @@
+game.states.MOO_Audience_Ketheric = State { function ()
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    local roofPoint = Entity([[S_MOO_RoofPrayPoint_a880e823-08de-41cd-8cff-1a563db7f05e]])
+    local soloAD = Dialog([[MOO_Audience_AD_Ketheric_e0eea422-fa9b-e23e-91dc-5ff83ea96711]])
+    local isobelAtMoonriseFlag = Flag("MOO_Isobel_State_AtMoonrise_a95b7f8f-1454-433f-a496-71c9306683ce")
+    local isobelDeadFlag = Flag("HAV_Isobel_State_IsDead_af8b23d8-d04d-4e42-8a56-be909226e706")
+    local sulAvailableFlag = Flag("MOO_Audience_State_SulAvailable_5d070fc1-5ec6-4fbe-8694-fe37d3295002")
+    local lookAtSulFlag = Flag("MOO_Audience_Event_LookAtSul_999c4771-21ee-45fd-80b8-9a0c6e274e3e")
+    local sul = Entity("S_MOO_BazaarStander_003_efcf317a-dc82-4776-80ef-0f463b09fefe")
+
+
+    nodes.Audience_IsobelDead = Action {
+        function()
+            if mod.moveto.MoveToPoint(roofPoint, MovementSpeed.Stroll) then
+                Sleep(1)
+                if GetFlag(lookAtSulFlag) then
+                    ClearFlag(lookAtSulFlag)
+                    SteerTo(sul)
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(soloAD, {
+                        waitForCompletion = true,
+                        minDelay = 15.0
+                    }, me)
+                end
+                LookFrom(roofPoint)
+            else
+                SteerTo(roofPoint)
+                Sleep(3)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(isobelDeadFlag) and GetFlag(sulAvailableFlag)
+        end
+    }
+
+
+    nodes.Audience_IsobelNotAtMoonrise = Action {
+        CanEnter = function()
+            return not GetFlag(isobelAtMoonriseFlag) and not GetFlag(isobelDeadFlag)
+        end,
+
+        OnEnter = function()
+            SetDoNotFace(me, true)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(roofPoint, MovementSpeed.Stroll) then
+                LookFrom(roofPoint)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(soloAD, {
+                    waitForCompletion = true,
+                    minDelay = 15.0
+                }, me)
+                Sleep(30 + 30 * math.random())
+            else
+                SteerTo(roofPoint)
+                Sleep(3)
+            end
+        end,
+
+        OnLeave = function()
+            SetDoNotFace(me, false)
+        end
+    }
+
+    nodes.Audience_Fallback = Action {
+        OnEnter = function()
+            SetDoNotFace(me, true)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(roofPoint, MovementSpeed.Stroll) then
+                LookFrom(roofPoint)
+                Sleep(2)
+            else
+                SteerTo(roofPoint)
+                Sleep(2)
+            end
+        end,
+
+        OnLeave = function()
+            SetDoNotFace(me, false)
+        end
+    }
+
+end}
