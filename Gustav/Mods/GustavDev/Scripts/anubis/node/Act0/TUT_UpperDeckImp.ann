@@ -1,0 +1,74 @@
+game.states.TUT_UpperDeckImp = State{function()
+
+modules = {"shared.util", "shared.dialog"}
+
+params.Anchor = { type = EParamType.String, required = true, help = [[Imp Origin point]] }
+
+local AD = Dialog("TUT_UpperDeck_AD_ImpsThrall_13823dee-fe43-d4aa-030a-03fe8bf4b931")
+local partner = Entity("S_TUT_UpperDeck_InjuredThrall_001_2b4a4356-229c-4ecf-a6e2-6eb68ca303a9")
+local partner2 = Entity("S_TUT_UpperDeck_Imp_001_fd686d12-8814-4e2e-b5aa-e6e5ff184f12")
+
+local Victim = Entity("S_TUT_UpperDeck_InjuredThrall_001_2b4a4356-229c-4ecf-a6e2-6eb68ca303a9")
+local SpeakingImp = Entity("S_TUT_UpperDeck_Imp_000_96cbfc1f-3d39-4570-9823-1b9be4c3e5bb")
+local ThrallDefeat = Flag("TUT_UpperDeck_State_ThrallDefeated_2b65782f-e6a8-4516-8ecf-387987ce6368")
+local CannonDefeat = Flag("TUT_UpperDeck_State_DeckDefeated_24be4ab4-b586-4b2c-9b3e-dc8d7fe238ad")
+local Tr_Origin = Entity(params.Anchor)
+local TrDeck = Entity("S_TUT_UpperDeck_ImpAttack_08adc03b-3d83-42d6-8ecb-0594081dc912")
+
+nodes = ImmediateSelector{}
+
+nodes.Action_BullyThrall = Action{
+    function()
+        if math.random() < 0.7 then
+            if not IsInDangerousSurfaceFor(Tr_Origin, me.Character, 1.0) then
+                local moveResult = MoveTo(Tr_Origin, MovementSpeed.Walk, true, false, 0.5, 4.0, false)
+                    if moveResult ~= error.MovementError.None then
+                        DebugText(me, "Error: MoveTo failed")
+                    else 
+                    LookAtEntity(Victim, 3.0)
+                        if mod.dialog.AreSpeakersAvailableAndNear(me, 10.0, false, false, false, { partner, partner2 }) and  me == SpeakingImp then 
+                            StartAutomatedDialogImmediate(AD, me, partner, partner2)
+                        end
+                    mod.util.SleepRandom(1.0, 4.0)
+                    end
+                end
+        else
+            Wander(2.0, 1.0, MovementSpeed.Walk, Tr_Origin)
+        end
+            Sleep(3.0)
+    end,
+    Valid = function()
+        return not GetFlag(ThrallDefeat)
+    end
+
+}
+
+
+nodes.Action_AttackCannons = Action{
+    function()
+        if not IsInDangerousSurfaceFor(TrDeck, me.Character, 1.0) then
+            local moveResult = MoveTo(TrDeck, MovementSpeed.Walk, true, false, 0.5, 4.0, false)
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: MoveTo failed")
+                end
+        end
+    end,
+    Valid = function()
+        return GetFlag(ThrallDefeat) and not GetFlag(CannonDefeat)
+    end
+
+}
+
+nodes.Action_Fallback = Action{
+    function()
+        Wander(6.0, 4.0, MovementSpeed.Walk, Tr_Origin)
+        Sleep(3.0)
+    end,
+    Valid = function()
+        return GetFlag(ThrallDefeat) and GetFlag(CannonDefeat)
+    end
+
+}
+
+
+end}

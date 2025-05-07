@@ -1,0 +1,55 @@
+game.states.LOW_DockWarehouse_Fisher = State{function()
+
+    modules = {"shared.moveto"}
+
+    local fisherBrother = Entity("S_LOW_FisherBrother_092b641b-7cac-4fc5-81e2-ef9f21186e67")
+    local fisherSister = Entity("S_LOW_FisherSister_78b65473-f053-4eea-9501-90958df96f82")
+
+    local scrubFloorTrigger
+    
+    local oilRemovedFlag = Flag("LOW_DockWarehouse_Fishers_State_OilRemoved_708209b0-2e50-448e-8058-46a532f8484b")
+
+    self.OnInit = function()
+        if (me == fisherBrother) then
+            scrubFloorTrigger = Entity("S_LOW_FisherBrother_OilScrub_Trigger_c78a8c76-3582-4917-9613-cbd8c211aca6")
+        elseif (me == fisherSister) then
+            scrubFloorTrigger = Entity("S_LOW_FisherSister_OilScrub_Trigger_b01d6d9f-023b-462a-bd32-4868cd6f6535")
+        end
+    end
+
+    nodes.MoveToScrubPosition = Action{
+        function()
+            Sleep(math.random(1.0,3.0))
+            mod.moveto.MoveToPoint(scrubFloorTrigger, MovementSpeed.Walk, me, 0.1)
+        end,
+
+        Valid = function()
+            return scrubFloorTrigger ~= nil and GetDistanceTo(me, scrubFloorTrigger) >= 0.5
+        end
+    }
+
+    nodes.ScrubFloor = Action {
+        OnEnter = function()
+            ApplyStatus(me, "ANIM_OVERRIDE_HAR_SCRUBFLOOR_01")
+        end,
+        
+        function()
+            LookFrom(scrubFloorTrigger)
+            Sleep(2.0)
+        end,
+
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_OVERRIDE_HAR_SCRUBFLOOR_01")
+        end,
+
+        Valid = function()
+            return not GetFlag(oilRemovedFlag)
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

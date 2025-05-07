@@ -1,0 +1,103 @@
+game.roots.PUZ_LOW_KoboldHole = State{ function()
+
+    params.NumSpellsToCast = {type = EParamType.Int, default = 5, help = "Number of spells they cast before self destructing."}
+    params.Spells = { type = EParamType.String, arrayRange = "1.."
+    , help = "Spells they will randomly cast from"
+    , default = {
+        "Shout_LOW_KoboldHole_SpawnKobold_Melee",
+        "Shout_LOW_KoboldHole_SpawnKobold_Melee",
+        "Shout_LOW_KoboldHole_SpawnKobold_Inventor",
+        "Shout_LOW_KoboldHole_SpawnKobold_Inventor",
+        "Shout_LOW_KoboldHole_SpawnKobold_Inventor",
+        "Shout_LOW_KoboldHole_SpawnKobold_Ranged",
+        "Shout_LOW_KoboldHole_SpawnKobold_Ranged"
+        },
+    }
+
+    params.BlockingStatus = { type = EParamType.String
+    , help = [[Status for hole being blocked]]
+    , default = "LOW_KOBOLDHOLE_SPAWNKOBOLD_TECHNICAL"
+    }
+
+    helpers.Init = function()
+        if not me.Blackboard.GetFact("Cnst.PUZ_LOW_KoboldHole.RemainingTurns") then
+            me.Blackboard.SetFact("Cnst.PUZ_LOW_KoboldHole.RemainingTurns", params.NumSpellsToCast)
+        end
+    end
+
+    params.EndTurnDelay = {type = EParamType.Number, default = 1.5, help = "Delay after casting before ending the turn."}
+
+    helpers.HasBlockingStatus = function()
+        return HasActiveStatus(me, params.BlockingStatus)
+    end
+
+    helpers.GetSpellToCast = function()
+        --early out if we only have 1 spell to cast
+        if #params.Spells == 1 then 
+           return params.Spells[1]
+        end
+
+        local previousSpell = me.Blackboard.GetFact("Cnst.PUZ_CTY_KoboldHole.LastUsedSpell")
+        local spellList = {}
+        for _, spell in ipairs(params.Spells) do
+            if spell ~= previousSpell then
+                table.insert(spellList, spell)
+            end
+        end
+
+        local spell = spellList[math.random(1,#spellList)]
+        me.Blackboard.SetFact("Cnst.PUZ_LOW_KoboldHole.LastUsedSpell", spell)
+        return spell
+    end
+
+    self.OnEditorChanges = function()
+        me.Blackboard.ClearFact("Cnst.PUZ_LOW_KoboldHole.RemainingTurns")
+        me.Blackboard.ClearFact("Cnst.PUZ_LOW_KoboldHole.LastUsedSpell")
+        helpers.Init()
+    end
+
+    self.OnInit = function()
+        helpers.Init()
+    end
+
+    events.TurnStarted = function()
+        local hasBlockingStatus =  helpers.HasBlockingStatus()
+        if not hasBlockingStatus then
+            local spellToCast = helpers.GetSpellToCast()
+            local castTarget = me. Position
+            if castTarget then 
+                try 
+                    UseSpellImmediate(me, spellToCast, castTarget)
+                catch e if ls.CheckType(e, error.Precondition) then
+                    -- silently ignore this one
+                    --wait 1.0 seconds before ending turn
+                    StartRealtimeTimer(me,"Cnst.PUZ_LOW_KoboldHole.EndTurn",params.EndTurnDelay,0)
+                end 
+            end
+        else
+            --wait 1.0 seconds before ending turn
+            StartRealtimeTimer(me,"Cnst.PUZ_LOW_KoboldHole.EndTurn",params.EndTurnDelay,0)
+        end
+    end
+
+    events.SpellCastResult = function(ev)
+        if ev.Success then 
+            local turnCount = me.Blackboard.GetFact("Cnst.PUZ_LOW_KoboldHole.RemainingTurns")
+            turnCount = turnCount - 1
+            me.Blackboard.SetFact("Cnst.PUZ_LOW_KoboldHole.RemainingTurns", turnCount)
+        end
+        --wait 1.0 seconds before ending turn
+        StartRealtimeTimer(me,"Cnst.PUZ_LOW_KoboldHole.EndTurn",params.EndTurnDelay,0)
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "Cnst.PUZ_LOW_KoboldHole.EndTurn" then
+            local turnCount = me.Blackboard.GetFact("Cnst.PUZ_LOW_KoboldHole.RemainingTurns")
+            if turnCount <= 0 then 
+                SetEntityEvent(me, "PUZ_LOW_KoboldHole_Poof")
+            else  
+                EndTurn(me)
+            end
+        end
+    end
+end}

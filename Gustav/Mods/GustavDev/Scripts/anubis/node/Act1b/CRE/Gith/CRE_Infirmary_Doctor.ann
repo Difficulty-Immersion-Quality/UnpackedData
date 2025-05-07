@@ -1,0 +1,144 @@
+game.states.CRE_Infirmary_Doctor = State
+{
+    function()
+    description = [[Doctor's behaviour]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local door = Entity("S_CRE_InfirmaryDoor_6a8f4d72-dcf4-47c9-abf0-5c6106b727ea")
+
+    local microscopeWB = Dialog("BHVR_WRLD_CRE_Infirmary_DoctorWorksWithMicroscopeAtBench_87a28294-c4ad-b9ef-7515-1fd038c581be")
+    local microscopeWBTrigger = Entity("BHVR_CRE_Infirmary_DoctorWorksWithMicroscopeAtBench_Trigger_cfbb29d4-b720-4156-8580-8f62204dcf37")
+    -- Triggers
+    local deskPos = Entity("S_CRE_DoctorAtDeskPos_ada306c8-7850-4acb-971a-34bcf47dc705")
+    local lockDoorPos = Entity("S_CRE_DoctorAmbushLockDoorPos_80a26aa0-0c61-413c-b16e-d776808355c6")
+    local devicePos = Entity("S_CRE_DoctorAtDevicePos_fad426e5-7a91-4d6c-9672-8e6f16911273")
+    local fetchGuardsPos = Entity("S_CRE_DoctorAmbushPos_e8715139-d172-4f42-b3a1-36382bc72adc")
+    local ambushPos = Entity("S_CRE_DoctorAmbushPos_e8715139-d172-4f42-b3a1-36382bc72adc")
+    local callingGuardsPosCache = Entity("S_CRE_DoctorAmbushLockDoorPos_80a26aa0-0c61-413c-b16e-d776808355c6")
+    local atDoorInside = Entity("S_CRE_TadpoleDoorPos_9e0a035f-f9fb-46b1-8e2b-77bbed01a626")
+    -- Flags
+    local fetchingGuards = Flag("CRE_GithInfirmary_State_DoctorTriesToCallGuards_b3ba07b1-b9c4-4919-a7c9-dd28ffe5f83e")
+    local doctorAtDevice = Flag("CRE_GithInfirmary_State_DoctorWaitsAtDevice_2b20d248-1378-432b-88c6-f5b052107afd")
+    local hasKey01 = Flag("CRE_Githinfirmary_State_HasKey01_71cc0ee0-642b-4187-836d-8bb5ac630116")
+    local hasKey02 = Flag("CRE_Githinfirmary_State_HasKey02_7a55c966-f880-415e-b36f-a26daa5490f4")
+    -- Internal
+        
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Doctor works at lab desk until the players approach her for dialogue.
+    nodes.Action_AtLabDesk = Action{
+        function()
+
+           --[[  if (GetDistanceTo(me.Position, deskPos) > 0.2) then
+                local moveResult = MoveTo(deskPos, MovementSpeed.Stroll, true, false, 0, 0.2, false)
+                if moveResult ~= error.MovementError.None then
+                    Sleep(2.0)
+                    return false 
+                else
+                    SteerTo(deskPos)
+                end                
+            end ]]
+            StartBehaviorDialog(microscopeWB, microscopeWBTrigger.Trigger, true, me)
+        end,
+
+        Valid = function()
+            return not GetFlag(doctorAtDevice) and not GetFlag(fetchingGuards)
+        end
+    }
+
+    nodes.Action_WalkToDevice = Action{
+        function()
+
+            if (GetDistanceTo(me.Position, devicePos) > 0.2) then
+               
+                local moveResult = MoveTo(devicePos, MovementSpeed.Stroll, true, false, 0, 0.2, false)
+               
+                if moveResult ~= error.MovementError.None then
+                    Sleep(2.0)
+                    return false 
+                else
+                    SteerTo(devicePos)
+                end
+            end
+
+        end,
+
+        Valid = function()
+            return not GetFlag(fetchingGuards) and GetFlag(doctorAtDevice)
+        end
+    }
+
+    nodes.Action_CallingGuards = Action
+    {
+        function()
+           
+            --First, Doctor goes to position to lock the door
+            if (GetDistanceTo(me.Position, callingGuardsPosCache) > 0.2) then
+              
+                local moveResult = MoveTo(callingGuardsPosCache, MovementSpeed.Run, false, false, 0, 0.2, false)
+              
+                    if moveResult ~= error.MovementError.None then
+                        --IF can't go outside, go to the door inside
+                        local moveResult = MoveTo(callingGuardsPosCache, MovementSpeed.Run, false, false, 0, 0.2, false)
+              
+                        if moveResult ~= error.MovementError.None then
+                            --IF she can't go to the door either, just turn hostile
+                            SetEntityEvent(me,"CRE_GithInfirmary_DoctorHostile")
+                        else
+                            --look at the door for 2 seconds, then turn hostile
+                            SteerTo(door)
+                            Sleep(2.0)
+                            SetEntityEvent(me,"CRE_GithInfirmary_DoctorHostile")
+                        end
+                    else
+                        if GetFlag(hasKey01,me) or GetFlag(hasKey02, me) then
+                            SetEntityEvent(me, "CRE_GithInfirmary_DoctorLocksDoor")
+                        else
+                            SetEntityEvent(me,"CRE_GithInfirmary_DoctorClosesDoor")
+                        end
+                        Sleep(5.0)
+                        SetEntityEvent(me,"CRE_GithInfirmary_AmbushReady")
+                    end
+
+            
+        end
+        end,
+
+        Valid = function()
+            return GetFlag(fetchingGuards)
+        end
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ------------------------------------
+
+    events.EntityEvent = function(e)
+        if e.Event == "CRE_GithInfirmary_DoctorLocksDoor" 
+        then
+            callingGuardsPosCache = ambushPos
+        end
+    end------------------------------------------------
+
+end
+}

@@ -1,0 +1,121 @@
+game.states.CRE_UpperGuards_MainGuard_Patrolling = State{function()
+    description = [[Main guards behaviour]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.PatrolSpline = {
+        type = EParamType.String,
+        required = true,
+        help=[[GUID for patrol spline the guard will walk along]]
+    }
+
+    params.PatrolStartIndex = {
+        type = EParamType.Int,
+        required = true,
+        help = [[Point on the spline that the guard will begin their patrol]]
+    }
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    
+    local patrolSpline = Spline(params.PatrolSpline)
+    local patrolSplineIndex = 0
+    local talkingToGuardPos = Entity("S_CRE_PatrolGuardChattingPos_6c401948-0939-48b3-a2b1-e084a1c81bd4")
+    local talkingToGuardFlag = Flag("CRE_GithInfirmary_State_UsedDevice_a56d58c6-2a81-4a80-a4f6-4f73f254b40c")
+    local returnToPatrolFlag = Flag("CRE_ChainOfCommand_State_StartedCaptain_234209eb-5e38-4bf3-97e3-fdec61c1677d")
+    local neededNPC = Entity("S_CRE_PatrollingGuard01_d55e65a4-0663-46e5-8213-4ae5dd410e06")
+    local isInTalkingToGuardPos = false
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    -- Talking to CaptainGuard
+    nodes.Action_GoToTalkToGuardPos = Action{
+        
+        function()
+
+            mod.util.SleepRandom (1.0,2.0)
+            if IsInDangerousSurfaceFor(talkingToGuardPos, me.Character) then
+                SteerTo(talkingToGuardPos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(talkingToGuardPos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(talkingToGuardPos)
+                Sleep(2.0)
+                return false
+            end
+
+            isInTalkingToGuardPos = true
+        end,
+
+        Valid = function()
+            return (me == neededNPC) and 
+                   GetFlag(talkingToGuardFlag) and 
+                   not GetFlag(returnToPatrolFlag) and not isInTalkingToGuardPos
+        end
+    }
+
+    nodes.Action_TalkToGuard = Action{
+        
+        function()
+
+            WaitForInterrupt()  
+        end,
+
+        Valid = function()
+            return (me == neededNPC) and 
+                   GetFlag(talkingToGuardFlag) and 
+                   not GetFlag(returnToPatrolFlag) and isInTalkingToGuardPos
+        end
+    }
+
+
+    -- Simple patrol
+    nodes.Action_Patrol = Action{
+        
+        function()
+
+            DoPatrol(patrolSpline, false, MovementSpeed.Stroll, patrolSplineIndex, false)
+
+        end,
+
+        OnEnter = function()
+            patrolSplineIndex = params.PatrolStartIndex
+        end,
+
+        Valid = function()
+            if (me == neededNPC) then
+                return not GetFlag(talkingToGuardFlag) or 
+                       GetFlag(returnToPatrolFlag)
+            else
+                return true
+            end
+        end
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

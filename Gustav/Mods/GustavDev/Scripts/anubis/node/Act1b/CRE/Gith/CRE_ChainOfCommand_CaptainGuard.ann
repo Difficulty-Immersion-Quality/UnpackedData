@@ -1,0 +1,119 @@
+game.states.CRE_ChainOfCommand_CaptainGuard = State 
+{
+    function()
+    description = [[Captain's guard stationed outside her door]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local repeatedAD = Dialog("CRE_General_AD_CaptainGuardChatter_e6542c8a-d758-17fe-bb4a-fa79625b8ff2")
+    local distractedFlag = Flag("CRE_GithInfirmary_State_UsedDevice_a56d58c6-2a81-4a80-a4f6-4f73f254b40c")
+    local startedCaptainFlag = Flag("CRE_ChainOfCommand_State_StartedCaptain_234209eb-5e38-4bf3-97e3-fdec61c1677d")
+    local doorPos = Entity("S_CRE_CaptainGuardDoorPos_8e8e29ee-87a6-4178-9fa1-3f7bf8f87d64")
+    local distractedPos = Entity("S_CRE_CaptainGuardChattingPos_fb158341-cea3-481d-897e-62e3d225770f")
+    local awayFromDoorPos = Entity("S_CRE_CaptainGuardAwayFromDoorPos_a64776af-137e-4bb9-98f4-860d23ea3f17")
+    local secondNPC = Entity("S_CRE_PatrollingGuard01_d55e65a4-0663-46e5-8213-4ae5dd410e06")
+    local targetPos = Entity("S_CRE_CaptainGuardDoorPos_8e8e29ee-87a6-4178-9fa1-3f7bf8f87d64")
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    nodes.Action_BackToPosition = Action 
+    {
+        function ()        
+            mod.util.SleepRandom (1.0,2.0)
+            if IsInDangerousSurfaceFor(targetPos, me.Character) then
+                SteerTo(targetPos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(targetPos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(targetPos)
+                Sleep(2.0)
+                return false
+            end
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, targetPos) > 1.0
+        end
+    }
+
+    nodes.Action_AwayFromDoor = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(startedCaptainFlag) and 
+                   GetDistanceTo(me, awayFromDoorPos) <= 1.0
+        end
+    }
+
+    nodes.Action_Distracted = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                repeatedAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 8.0,
+                },
+                me,
+                secondNPC
+            )
+        end,
+ 
+        Valid = function()
+            return GetFlag(distractedFlag) and 
+                   GetDistanceTo(me, distractedPos) <= 1.0
+        end
+    }
+
+    nodes.Action_GuardDoor = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not GetFlag(startedCaptainFlag) and 
+                   not GetFlag(distractedFlag) and 
+                   GetDistanceTo(me, doorPos) <= 1.0
+        end
+    }
+
+    ------------------------------------------------
+    -- Events
+
+    events.FlagSet = function(e)
+        if e.Flag == distractedFlag.Guid then
+            targetPos = distractedPos
+        end
+        
+        if e.Flag == startedCaptainFlag.Guid then
+            targetPos = awayFromDoorPos
+        end 
+    end------------------------------------
+    
+end
+}

@@ -1,0 +1,133 @@
+game.states.LOW_ElfsongCardTimeline = State{function()
+    modules = {"shared.dialog"}
+
+    description = [[implementation of four characters playing cards at a table]]
+
+    params.timelineDialog = {type = EParamType.String, required=true, help=[[
+        The timeline to play.
+    ]]}
+
+    params.sceneTrigger = {type = EParamType.String, required=true, help=[[
+        The scene trigger to use. Character will automatically walk here
+    ]]}
+
+    params.extraSpeaker1 = {type = EParamType.String, required=true, help=[[
+        Optional other speaker/object in the timeline. If this is a sitting World Behavior, the seat goes here.
+    ]]}
+
+    params.extraSpeaker2 = {type = EParamType.String, required=true, help=[[
+        Optional other speaker/object in the timeline.
+    ]]}
+
+    params.extraSpeaker3 = {type = EParamType.String, required=true, help=[[
+        Optional other speaker/object in the timeline.
+    ]]}
+
+
+    local sceneTrigger = Entity(params.sceneTrigger)
+    local timelineDialog = Dialog(params.timelineDialog)
+    local drinkingDialog = Dialog("BHVR_GLO_SitAndDrink_HUM_M_4dccd32b-b087-e286-0b49-9d1ba4c827d6")
+    local extraSpeaker1 = Entity(params.extraSpeaker1)
+    local extraSpeaker2 = Entity(params.extraSpeaker2)
+    local extraSpeaker3 = Entity(params.extraSpeaker3)
+    local drinkingFlag = Flag("LOW_Elfsong_CardPlayer_Ready_33753cda-28d5-418e-8de7-e32aa9a34b9f")
+    local chair = Entity("S_Elfsong_Chair_001_4d52f3ed-cfa2-4a12-a6dd-a0f253a3af22")
+    local mug = Entity("S_LOW_Elfsong_CardPlayers_Mug_003_ad122355-9b4d-47ba-be28-5a11edf1cba3")
+    local syncAttempt = 0;
+
+    self.Valid = function()
+            return timelineDialog ~= nil
+    end
+
+    self.OnInit = function()
+        SetFlag(drinkingFlag)
+    end
+
+    nodes.DoTimeline = Action
+    {
+        function()
+            if(not GetFlag(drinkingFlag)) then
+                if (extraSpeaker3 ~= nil and extraSpeaker2 ~= nil and extraSpeaker1 ~= nil) then
+                    if (mod.dialog.IsSpeakerAvailable(extraSpeaker1) and mod.dialog.IsSpeakerAvailable(extraSpeaker2) and mod.dialog.IsSpeakerAvailable(extraSpeaker3)) then
+                        try
+                            StartBehaviorDialog(timelineDialog, sceneTrigger.Trigger, true, me, extraSpeaker1, extraSpeaker2, extraSpeaker3)
+                            Sleep(25 + 15 * math.random())
+                            BehaviorDialogRequestGracefulStop(me, false)
+                            SetFlag(drinkingFlag)
+                            syncAttempt = 0
+                            DebugText(me, "Drinking Flag Set")
+                        catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                            syncAttempt = syncAttempt + 1
+                            DebugText(me, "Failed card match. Attempt " .. tostring(syncAttempt))
+                            Sleep(10 + 5 * math.random())
+                        end
+
+                    else
+                        syncAttempt = syncAttempt + 1
+                        DebugText(me, "Failed card match, speaker not available. Attempt " .. tostring(syncAttempt))
+                        Sleep(10 + 5 * math.random())
+                    end
+
+                    if (syncAttempt > 10) then
+                        SetFlag(drinkingFlag);
+                        syncAttempt = 0
+                    end
+                else
+                    SetFlag(drinkingFlag)
+                    Sleep(1.0)
+                end
+            elseif GetFlag(drinkingFlag) then
+                try
+                    StartBehaviorDialog(drinkingDialog, sceneTrigger.Trigger, true, me, chair, mug)
+                    Sleep(25 + 15 * math.random())
+                    BehaviorDialogRequestGracefulStop(me, false)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    Sleep(10 + 5 * math.random())
+                end
+                if extraSpeaker3 ~= nil and extraSpeaker2 ~= nil and extraSpeaker1 ~= nil then
+                    ClearFlag(drinkingFlag)
+                    DebugText(me, "DrinkingFlag Cleared")
+                end
+            else
+                Sleep(1.0)
+            end
+        end
+    }
+end}
+
+game.states.LOW_ElfsongCardPlayers = State{function()
+
+    params.TimelineState = {type=EParamType.State, required = false, default = nil, help=[[Playing Timeline State.]]}
+    params.JustSitState = {type=EParamType.State, required = false, default = nil, help=[[Fallback Just Sit State.]]}
+
+
+    nodes.TimelineState = Action {
+        function()
+        --params.TimelineState
+        Sleep(3.0)
+        end,
+        CanEnter = function()
+            return TimelineState ~= nil
+        end,
+    }
+
+
+
+    nodes.JustSitState = Action{
+        function()
+            --params.JustSitState
+            Sleep(3.0)
+            end,
+            CanEnter = function()
+                return TimelineState ~= nil
+            end,
+    }
+
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(3.0)
+        end
+    }
+
+end}

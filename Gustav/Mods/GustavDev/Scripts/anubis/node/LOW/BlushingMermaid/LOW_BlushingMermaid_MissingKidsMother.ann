@@ -1,0 +1,101 @@
+game.states.LOW_BlushingMermaid_MissingKidsMother = State{function()
+    
+    modules = {"shared.dialog"}
+
+    local commanderConvoAD = Dialog("LOW_BasiliskGate_AD_MotherBegsCommander_f50a17e4-d118-28ef-fac4-5da9c6944ca9")
+    local commanderPortyr = Entity("S_LOW_BasiliskGate_Commander_915d074c-8f6f-4f5a-ae18-fb333ce6dc29")
+
+    local vanraConvoNoHag = Dialog("LOW_BlushingMermaid_AD_Lora_Vanra_NoHag_da4a84a1-341f-3810-34a6-52afb0506e7f")
+    local vanraConvoPostHag = Dialog("LOW_BlushingMermaid_AD_Lora_Vanra_PostHag_ae8fad97-8014-241e-8ade-ead502a7d0db")
+    local vanra = Entity("S_LOW_BlushingMermaid_Vanra_bfeac6a6-678e-46da-b873-cf7e4c7a1e4c")
+
+    local worriedSoloAD = Dialog("LOW_BlushingMermaid_AD_MissingKidsMother_Worried_cd0768ff-05da-5499-bfc6-3c27b33aea35")
+
+    local wentHomeFlag = Flag("LOW_BasiliskGate_State_MissingKidsMother_WentHome_afe097ca-04a3-43f5-82d5-80ac5de0ea4a")
+    local hagDefeatedFlag = Flag("HAG_Hag_State_HagDefeated_7a1acad0-589f-ae02-f712-f0d24080d720")
+    local savedVanraReturnedFlag = Flag("LOW_BlushingMermaid_State_MotherSawSavedChild_cb5678e1-298c-4c25-b5af-9ee34463d048")
+
+    local homeWanderTrigger = "S_LOW_BlushingMermaid_LoraVanraHomeWander_Trigger_73e6258b-594c-4e12-890c-6e27c2c41f0c"
+    local wanderActive = true
+
+    nodes.BasiliskGateIdle = Action{        
+        function()
+            Sleep(math.random(2.0,4.0))
+            if(mod.dialog.IsSpeakerAvailable(commanderPortyr)) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        commanderConvoAD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 5
+                        },
+                        me,
+                        commanderPortyr
+                    )
+            end
+        end,
+        
+        Valid = function()
+            return GetFlag(hagDefeatedFlag) and not GetFlag(wentHomeFlag)
+        end
+    }
+
+    nodes.Wandering = Proxy {
+        OnEnter = function()
+            StartTimer(me,"LOW_MissingKidsMotherWander_Timer",math.random(10.0,15.0),0)
+        end,
+
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 6,
+            sleepMin = 3,
+            trigger = homeWanderTrigger,
+            wanderMax = 10,
+            wanderMin = 5
+        },
+        
+        Valid = function()
+            return wanderActive and (GetFlag(wentHomeFlag) or not GetFlag(hagDefeatedFlag))
+        end
+    }
+
+    nodes.HomeIdle = Action{        
+        function()
+            local AD
+            local vanraSpeaker
+            if(vanra.Character.IsDead ~= nil) then
+                if(not GetFlag(hagDefeatedFlag)) then
+                    AD = vanraConvoNoHag
+                    vanraSpeaker = vanra
+                elseif(GetFlag(hagDefeatedFlag) and GetFlag(savedVanraReturnedFlag)) then
+                    AD = vanraConvoPostHag
+                    vanraSpeaker = vanra
+                end
+            end
+            if(GetFlag(hagDefeatedFlag) and not GetFlag(savedVanraReturnedFlag)) then
+                AD = worriedSoloAD
+            end
+
+            Sleep(1.0)
+            if(AD ~= nil) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                        AD,
+                        {
+                            maxDistance = 50.0,
+                            checkSight = false,
+                            waitForCompletion = true,
+                            allowNilSpeakers = true
+                        },
+                        me,
+                        mod.dialog.IsSpeakerAvailable(vanraSpeaker) and vanraSpeaker or nil
+                    )
+            end
+            wanderActive = true
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_MissingKidsMotherWander_Timer") then
+            wanderActive = false
+        end
+    end
+end}

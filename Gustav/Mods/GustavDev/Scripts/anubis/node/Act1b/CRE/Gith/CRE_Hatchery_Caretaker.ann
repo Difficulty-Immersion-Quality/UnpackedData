@@ -1,0 +1,108 @@
+game.states.CRE_Hatchery_Caretaker = State{function()
+    description = [[Caretaker's behaviour]]
+    modules = {"shared.dialog"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+
+    local originPos = Entity("S_CRE_CaretakerOriginPos_5cab62c0-99d4-4b0a-8d13-3f38a1bd2657")
+    local lookoutAnim = Animation("CUST_Observing_Hatchery_01_4792c608-d073-4ac2-b1a8-43d2f454b510")
+    local repeatedAD = Dialog("CRE_Hatchery_AD_CaretakerChatter_44ca354a-bef7-4d6b-9815-ed5278963acd")
+    local egg = Entity("S_CRE_GithyankiEgg_999b6dd7-2901-4604-8280-1931a5217a94")
+    local eggSpot = Entity("S_CRE_CaretakerReturnEggPos_2c60d40a-e34e-4df7-a7c4-b6ffed5d84d7")
+    local eggLostSpot = Entity("S_CRE_Hatchery_EggLostPoint_e61e8b75-0ff2-4853-a795-9ad4a6333ed5")
+
+    local movingEgg = false    
+    local eggLastPosition = nil
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    nodes.Action_StandingGuard = Action{
+        function()
+            DebugText(me, tostring(GetDistanceTo(egg, eggSpot)))            
+            eggLastPosition = egg.Position
+            if (GetDistanceTo(me.Position, originPos) > 1) then
+                local moveResult = MoveTo(originPos, MovementSpeed.Stroll, true, false, 0, 1, false)
+                if moveResult ~= error.MovementError.None then
+                    Sleep(2.0)
+                    return false 
+                else
+                    SteerTo(originPos)
+                end
+            end
+       
+            SteerTo(Entity("S_CRE_HatcherySpottingArea_36e17642-92ad-4c4a-8e63-2544370f0e36"))
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                repeatedAD,
+                {
+                    waitForCompletion = true,
+                    minDelay = 15
+                },
+                me
+            )
+            Sleep(5)
+            DebugText(me, tostring(GetDistanceTo(egg, eggSpot)))
+            PlayAnimation(lookoutAnim, true, false)
+            Sleep(15)
+        end,
+
+        Valid = function()
+            return CanSee(me, egg) 
+        end
+    }
+
+
+    -- nodes.Action_MoveEgg = Action {
+    --     function()
+    --         movingEgg = true
+    --         if CanSee(me, egg) then eggLastPosition = egg.Position end
+    --         local moveResult = MoveTo(eggLastPosition, MovementSpeed.Walk, true, false, 0, 1, false)
+    --         if moveResult == error.MovementError.None then
+    --             if CanSee(me, egg) then MoveItem(egg, eggSpot) end
+    --             movingEgg = false
+    --             DebugText(me, tostring(GetDistanceTo(egg, eggSpot)))
+    --         end
+    --     end,
+
+    --     Valid = function()
+    --         return (CanSee(me, egg) or movingEgg) and GetDistanceTo(egg, eggSpot) > 0.5
+    --     end
+    -- }
+
+    nodes.Action_GuardEgg = Action {
+        function()
+            local moveResult = MoveTo(originPos, MovementSpeed.Walk, true, false, 0, 1, false)
+            if moveResult ~= error.MovementError.None then               
+                SetWeaponUnsheathed(me, true, false)
+                WaitForInterrupt()
+            end
+        end,
+
+        Valid = function()
+            return not CanSee(me, egg)
+        end
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

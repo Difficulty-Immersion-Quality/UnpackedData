@@ -1,0 +1,77 @@
+game.states.LOW_BasiliskGate_Sentinel = State{function ()
+    description = [[Swicthes between random patrol and some AD with other NPC at random intervals]] 
+
+    modules = { "shared.dialog","shared.moveto","shared.util" }
+
+    params.randomPatrol = {type = EParamType.State, required=false, default = StateRef{game.states.LOW_Prison_RandomPatrol}, help=[[...]]}
+    params.breakChance = {type = EParamType.Number, required=false, default = 0.05, help=[[chance to take a break from patrol]]}
+
+    local currentAction
+    local breakChance
+    local AD = Dialog("LOW_BasiliskGate_Sentinel_AD_WithGateGuard_95e58c0c-ee24-599d-259c-2d706531f08d")
+    local dialogWithGateGuardActive = "none"
+
+    events.DialogEnded = function(e)
+        if e.Instance.DialogUUID == AD.Guid then
+            currentAction = "patrolling"
+        end
+    end
+
+    self.OnInit = function()
+        currentAction = "patrolling"
+        breakChance = params.breakChance
+    end
+
+    nodes.randomPatrol = Proxy{
+        params.randomPatrol,
+        Valid = function(node)
+            return currentAction == "patrolling"
+        end,
+        OnFinished = function()
+            if math.random() < breakChance then
+                currentAction = "ADing"
+            end
+
+            if breakChance == 0.0 then  --sets chance to actual chance after first patrol round
+                breakChance = params.breakChance
+            end
+        end,
+        OnEnter =  function() --prevents 2 breaks in a row
+            breakChance = 0.0
+        end
+    }
+    
+    nodes.StartADFromTrigger = Action {
+        function()
+            local receiver = Entity("S_LOW_BasiliskGate_GateGuard_b5479421-003e-4b14-bc19-569cb8be1abb")
+            local dest = Entity("S_LOW_BasiliskGate_Sentinel_PatrolPoint_06_2b1b63c7-e65f-4672-a0f3-ac12b2679881")
+            local checkArea = Entity("S_LOW_BasiliskGate_Sentinel_PatrolPoint_06_PresenceCheck_28a6bfa1-b9c8-4b10-bd8b-3a5126e574ba")
+            if mod.moveto.MoveToPoint(dest, MovementSpeed.Walk, me, nil, nil) then
+                Sleep (2.0)
+                if IsInTrigger(receiver, checkArea.Trigger) and not receiver.Character.IsDead and receiver.CanSpeak and mod.dialog.StartCheckedAutomatedDialog(AD, {waitForCompletion = false}, me, receiver) then
+                    currentAction = "playingDialog"
+                end
+            end
+        end, 
+        Valid = function()
+            return currentAction == "ADing"
+        end,
+        OnFinished = function()
+            if currentAction ~= "playingDialog" then
+                currentAction = "patrolling"
+            end
+        end
+    }
+
+    nodes.PlayingAD = Action {
+        function()
+            WaitForInterrupt()
+        end, 
+        Valid = function()
+            return currentAction == "playingDialog"
+        end,
+        OnLeave = function()
+            currentAction = "patrolling"
+        end
+    }
+end}

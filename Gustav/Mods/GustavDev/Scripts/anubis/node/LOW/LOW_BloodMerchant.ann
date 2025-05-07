@@ -1,0 +1,98 @@
+game.states.LOW_BloodMerchant = State{function ()
+
+    --------------------------------Modules--------------------------------
+    modules = {"shared.moveto", "shared.dialog"}
+    --------------------------------Parameters--------------------------------
+
+    --------------------------------Variables--------------------------------
+    local inHouse = false
+    local playerWithPotion = nil
+    local hasPotionFlag = Flag("LOW_BloodMerchant_HasItem_ExplosivePotion_0b172550-1bb3-42ec-8943-8322b239d18d")
+    local automatedDialog = Dialog("LOW_BloodMerchant_AD_ArajBehaviour_ae00556a-0983-6419-295d-9d493b43b679")
+    local wanderPoint = Entity("S_LOW_BloodMerchant_Wander_efa9c6d6-a968-4281-a81c-6aa38db83441")
+    --------------------------------Nodes--------------------------------
+
+    nodes.WaitingForFire = Action {
+        function()
+            if not me.Character.IsInteractionDisabled then
+                -- ignore cast checks/has spell
+                UseSpell("Shout_RegainHP_Peace_NPC", me, nil, nil, nil, true, true, false, false, true)
+            else
+                DebugText(me, "Can't heal because can't act")
+            end
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return not inHouse
+        end,
+    }
+
+    nodes.InsideHouse = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        CanEnter = function()
+            return not playerWithPotion
+        end,
+    }
+
+    nodes.InsideHouse.Wander = Action {
+        function()
+            Wander(10, 20, MovementSpeed.Walk, wanderPoint)
+        end
+    }
+
+    nodes.InsideHouse.AD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                automatedDialog,
+                {
+                    waitForCompletion = true
+                },
+                me
+            )
+
+        end
+    }
+
+    nodes.Steer = Action {
+        function()
+            LookAtEntity(playerWithPotion, 5.0 + math.random() * 5)
+            if not IsInDangerousSurfaceFor(me.Position, me.Character) then
+                if CanSee(me, playerWithPotion) then
+                    if (math.random() < 0.2) then
+                        MoveInRange(playerWithPotion, 0.0, 6.0, MovementSpeed.Walk, nil, false, false)
+                    end
+                    LookAtEntity(playerWithPotion, 5.0 + math.random() * 5)
+                end
+                Sleep(1.0)
+            else
+                Sleep(1.0)
+            end
+        end,
+        CanEnter = function()
+            return playerWithPotion ~= nil
+        end,
+        Valid = function()
+            return playerWithPotion ~= nil
+        end
+    }
+    --------------------------------Events--------------------------------
+
+    events.EntityEvent = function(e)
+        if e.Event == "LOW_BloodMerchant_GoInHouse" then
+            inHouse = true
+            Interrupt()
+        elseif e.Event == "LOW_BloodMerchant_HasPotion" then
+            playerWithPotion = e.Params[1]
+        elseif (e.Event == "LOW_BloodMerchant_LostPotion") and
+               (playerWithPotion == e.Params[1]) then
+            playerWithPotion = nil
+        end
+    end
+
+
+    --------------------------------Helpers--------------------------------
+
+end
+}

@@ -1,0 +1,138 @@
+game.states.CRE_ChainOfCommand_SecurityOfficer = State 
+{
+    function()
+    description = [[Behaviour for the captain's guards stationed in the Security Office]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.DefaultPos = {
+        type = EParamType.String,
+        required = true,
+        help=[[Default pos for the guard]]
+    }
+
+    params.WarningCaptainPos = {
+        type = EParamType.String,
+        required = true,
+        help=[[Pos the guard goes to if they are sent to warn the captain]]
+    }
+
+    params.DismissedPos = {
+        type = EParamType.String,
+        required = true,
+        help=[[Pos the guard goes if they are dismissed by the templar]]
+    }
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local warningCaptainFlag = Flag("CRE_ChainOfCommand_State_OfficersWarningCaptain_d9e7a070-75e0-480f-aa97-4400105a1adc")
+    local dismissedFlag = Flag("CRE_ChainOfCommand_Event_OfficersLeave_23e1ccb8-12fd-44f2-bc20-f1ffa1bb6563")
+
+    local defaultPos = Entity(params.DefaultPos)
+    local targetPos = Entity(params.DefaultPos)
+    local warningCaptainPos = Entity(params.WarningCaptainPos)
+    local dismissedPos = Entity(params.DismissedPos)
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    nodes.Action_BackToPosition = Action 
+    {
+        function ()        
+            mod.util.SleepRandom (1.0,2.0)
+            if IsInDangerousSurfaceFor(targetPos, me.Character) then
+                SteerTo(targetPos)
+                Sleep(2.0)
+                return
+            end
+
+            if targetPos == warningCaptainPos then
+                local moveResult = MoveTo(targetPos, MovementSpeed.Run, true, false, 2, 3.5, false)
+            else
+                local moveResult = MoveTo(targetPos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            end 
+
+            if moveResult ~= error.MovementError.None then
+                SteerTo(targetPos)
+                Sleep(2.0)
+                return false
+            end
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, targetPos) > 1.0
+        end
+    }
+
+    -- Action
+    -- Guards are standing guard in the captain's office
+    nodes.Action_StandingAtWarningPos = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(warningCaptainFlag) and 
+                   GetDistanceTo(me, warningCaptainPos) <= 1.0
+        end
+    }
+
+    -- Action
+    -- Guards are standing somewhere, idly after being dismissed
+    nodes.Action_Dismissed = Action{
+        function()
+            WaitForInterrupt()
+        end,
+ 
+        Valid = function()
+            return GetFlag(dismissedFlag) and 
+                   GetDistanceTo(me, dismissedPos) <= 1.0
+        end
+    }
+
+    -- Action
+    -- Guards are working in the Security Office
+    nodes.Action_WorkingInSecurityOffice = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not GetFlag(warningCaptainFlag) and 
+                   not GetFlag(dismissedFlag) and 
+                   GetDistanceTo(me, defaultPos) <= 1.0
+        end
+    }
+
+    ------------------------------------------------
+    -- Events
+
+    events.FlagSet = function(e)
+        if e.Flag == dismissedFlag.Guid then
+            targetPos = dismissedPos
+        end
+        
+        if e.Flag == warningCaptainFlag.Guid then
+            targetPos = warningCaptainPos
+        end 
+    end------------------------------------
+    
+end
+}

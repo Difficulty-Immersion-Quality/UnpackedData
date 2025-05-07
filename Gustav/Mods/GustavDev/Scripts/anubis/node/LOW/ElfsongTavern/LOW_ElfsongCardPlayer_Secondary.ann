@@ -1,0 +1,104 @@
+game.states.LOW_ElfsongCardTimeline_Secondary = State{function()
+    modules = {"shared.dialog", "shared.util"}
+
+    description = [[simple anubis controlling 3 secondary characters playing cards and drinking at a table]]
+
+    params.timelineDialog = {type = EParamType.String, required=true, help=[[
+        The timeline to play.
+    ]]}
+
+    params.sceneTrigger = {type = EParamType.String, required=true, help=[[
+        The scene trigger to use. Character will automatically walk here
+    ]]}
+
+    params.chair = {type = EParamType.String, required=true, help=[[
+        For a sitting World Behavior, the seat goes here.
+    ]]}
+
+    params.mug = {type = EParamType.String, required=true, help=[[
+        Mug object for this character.
+    ]]}
+
+    params.JustSitState = {type=EParamType.State, required = false, default = nil, help=[[Fallback Just Sit State.]]}
+
+
+    local sceneTrigger = Entity(params.sceneTrigger)
+    local timelineDialog = Dialog(params.timelineDialog)
+    local mug = Entity(params.mug)
+    local chair = Entity(params.chair)
+    local drinkingFlag = Flag("LOW_Elfsong_CardPlayer_Ready_33753cda-28d5-418e-8de7-e32aa9a34b9f")
+    local forceRestart = false
+
+    self.Valid = function()
+            return timelineDialog ~= nil
+    end
+
+    nodes.DoTimeline = Action
+    {
+        function()
+            if GetFlag(drinkingFlag) then
+                mod.util.SleepRandom(0.1, 2.5)
+                try
+                    StartBehaviorDialog(timelineDialog, sceneTrigger.Trigger, false, me, chair, mug)
+                    Sleep(20 + 5 * math.random())
+                    BehaviorDialogRequestGracefulStop(me, false)
+                    DebugText(me, "Should stop")
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    Sleep(10 + 5 * math.random())
+                end
+
+                mod.util.SleepRandom(0.1, 2.5)
+            end
+        end,
+        Valid = function()
+            return not forceRestart and GetFlag(drinkingFlag)
+        end,
+        CanEnter = function()
+            return not forceRestart and GetFlag(drinkingFlag)
+        end,
+        OnLeave = function()
+            --This is for sync reasons. When the main player clear the flag, this characters should stop the behaviour and wait.
+            BehaviorDialogRequestGracefulStop(me, false)
+        end
+    }
+    nodes.JustSitState = Action {
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not GetFlag(drinkingFlag) and not forceRestart
+        end, CanEnter = function()
+            return not GetFlag(drinkingFlag) and not forceRestart
+        end,
+    }
+
+    nodes.RestartingOnSavegameLoad = Action {
+        function()
+            BehaviorDialogRequestGracefulStop(me, false)
+            forceRestart = false
+        end,
+        CanEnter = function()
+            return forceRestart
+        end,
+    }
+    events.SavegameLoaded = function(ev)
+        forceRestart = true
+    end
+end}
+
+game.states.LOW_ElfsongCardPlayers = State{function()
+
+    params.TimelineState = {type=EParamType.State, required = false, default = nil, help=[[Playing Timeline State.]]}
+
+
+    nodes.TimelineState = Proxy{
+        params.TimelineState
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(3.0)
+        end
+    }
+
+end}

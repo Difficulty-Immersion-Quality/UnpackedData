@@ -1,0 +1,718 @@
+game.states.EPI_Astarion = State{
+    function ()
+        modules = {"shared.moveto", "shared.util", "shared.items", "shared.math", "shared.dialog"}
+    
+        description = [[Astarion's behaviour for Act 3 EPI.]]
+    
+        --------------------------------------------------------------------------------------------------------------------
+        -- Local params
+        local ascendedAstarion = Flag("ORI_Astarion_State_BecameVampireLord_c446ce94-efd8-45d5-b407-284177b6b57e")
+        local cazadorIsDead = Flag("ORI_Astarion_State_CazadorPermaDefeated_5258c8d8-09a3-4343-bb6e-13ff5b8e3438")
+        local cazadorWasHunted = Flag("ORI_Astarion_State_HuntingCazador_d55b5a40-6f70-877b-7fff-110c1036903f")
+
+        local astarionChair = Entity("S_EPI_AstarionChair_c76b8e31-6308-4c62-b11b-7c333fe39905")
+        local astarionTableSpot = Entity("S_EPI_AstarionTableSpot_90dcdaf4-3276-4075-be72-1e45daa45e39")
+        local astarionChairSpot = Entity("S_EPI_AstarionChairSpot_22316977-46a8-4527-b76c-cfb6bad9806d")
+        local astarionCampSpot = Entity("S_EPI_StartPointAstarion_9376b48c-5f8f-4ac9-b89c-65609d9f8478")
+        local astarionTable = Entity("FUR_GEN_Table_Wood_Poor_A_Indestructible_000_b6fd70f2-cf3a-4f1a-9ef8-b1de5c9de56f")
+        local astarionFireSpot = Entity("S_EPI_AstarionFireSpot_b487531f-8142-406a-8feb-053afd89cc22")
+        local astarionBottlesSpot = Entity("S_EPI_AstarionBottlesSpot_8628a328-1af6-4fe1-8484-51e60df19911")
+        local astarionDaggerSpot = Entity("S_EPI_AstarionDaggerSpot_d38d12d6-d124-478a-a815-39a459a9d214")
+
+        local currentState = 0
+        local maxState = 2
+
+        local wineAD = Dialog("EPI_Epilogue_AD_AstarionWineTesting_a0f0673a-3e7f-b37e-172f-eaf1cb4109e7")
+        local batAD = Dialog("EPI_Epilogue_AD_AstarionTurningInBat_e924ce0e-9cb4-8b1c-b2d0-8a3a1d9fdb91")
+        local idleAD = Dialog("EPI_Epilogue_AD_IdleAstarion_58c47c0f-c8ee-29a4-2578-bd83544d493c")
+        local reflectionAD = Dialog("EPI_Epilogue_AD_AstarionRelfection_4483bd7f-1fe4-7b23-21d9-2151e25b6e1a")
+
+        local knifeGameBehaviour = Dialog("BHVR_WRLD_EPI_Astarion_KnifeGame_b893eb42-f180-b34a-1f21-b1fd116261bb")
+        local knifeGameTrigger = Entity("BHVR_WRLD_EPI_Astarion_KnifeGame_SceneTrigger_b2d9dc98-3dd7-4665-877b-4f23239b81c6")
+
+        local patrolSpline = Spline("S_EPI_Astarion_PatrolSpline_03ea7c53-84c0-45ff-853e-74b92e1f4ecb")
+        local transformedFromBat = Flag("EPI_Epilogue_Astarion_State_TransformedFromBat_b3cecb3b-e817-3261-fa50-f5a9e42f6ec3")
+        
+        local smellingWineAnim = Animation("CUST_EPI_Astarion_SmellingWine_01_ec88fca2-2977-429a-918a-9becb4db5bf2") 
+        local examineBottlesAnim = Animation("CUST_EPI_Astarion_ExamineBottles_01_6279b255-6ede-4fdf-bd64-748647bd21e3") 
+        local drinkWineAnim = Animation("CUST_EPI_LordAstarion_DrinkWine_01_061ddf0c-efbf-44df-b21d-4b0dab1b54a2")
+        local pacingAnim = Animation("CUST_EPI_CazAstarion_Pacing_01_3c5d3520-c03c-409c-8163-0a813c7476cb") 
+        local sharpeningAnim = Animation("CUST_EPI_CazAstarion_SharpensDagger_01_8642de6d-1377-4ba8-a32d-e90c236b5ef5")
+        local daggerThrowAnim = Animation("CUST_EPI_CazAstarion_DaggerThrow_01_13475c87-29df-4e84-87e7-e5c115e81b92")
+        local admireSelfAnim = Animation("CUST_EPI_LordAstarion_AdmireSelf_01_63a53475-7e81-48a5-af90-5d6f2f4c5149") 
+        local knifeTricksAnim = Animation("CUST_EPI_Astarion_KnifeTricks_01_3946137b-d703-492b-a916-09912d3bf867") 
+        local dustSelfAnim = Animation("CUST_EPI_Astarion_DustSelf_01_9b8f3897-bb74-4a83-ac5e-d95bd0b0e9f4") 
+        local combHairAnim = Animation("CUST_EPI_Astarion_CombHair_01_b9a9cc36-4159-441e-bc9c-a85b3ae09873") 
+
+        local sittingStartAnim = Animation("CUST_EPI_SpawnAstarion_SittingDown_01_Start_d1b722de-ff6e-46ab-ba2d-22f7ec794ba6")
+        local sittingLoopAnim = Animation("CUST_EPI_SpawnAstarion_SittingDown_01_Loop_7dced1aa-b12d-49ba-9963-be6c8b8e8e1b")
+        local sittingEndAnim = Animation("CUST_EPI_SpawnAstarion_SittingDown_01_End_58191e05-9274-4f0b-bb60-0b0fde37b48c")
+
+        local bottle01 = Entity("S_EPI_Astarion_Bottle01_0403a7c1-8c52-47a2-a0d5-7a5d3de3a107")
+        local bottle02 = Entity("S_EPI_Astarion_Bottle02_5eb2ae12-44a9-4283-85b2-60a8ff1ad960")
+        local bottle03 = Entity("S_EPI_Astarion_Bottle03_abbfb1b3-8f8b-460b-92a8-1acd0431e184")
+        local astarionGlass = Entity("S_EPI_Astarion_Glass_31035329-7e90-41b6-ba41-5650df060077")
+
+        local bottle01pos = Entity("S_EPI_Astarion_Bottle01Spot_fbb6b66a-b4f9-42a2-bc84-6772dc6295fa")
+        local bottle02pos = Entity("S_EPI_Astarion_Bottle02Spot_4406fc3d-a4ab-4c4c-9105-2c43c4a08f17")
+        local bottle03pos = Entity("S_EPI_Astarion_Bottle03Spot_861b86f4-a3e7-4735-bcd3-2889a54d613c")
+
+        local drinkWineBehaviour = Dialog("BHVR_WRLD_EPI_Astarion_DrinkWine_2cc150f3-a20c-b8e2-74bf-daa6c053dd12")
+        local smellingWineBehaviour = Dialog("BHVR_WRLD_EPI_Astarion_SmellingWine_379dea3d-c725-c016-bf1e-707f0449ec46")
+        local wineTrigger = Entity("BHVR_WRLD_EPI_Astarion_Wine_SceneTrigger_2a7b18a5-e6a8-41d4-8e33-ed8954d21ca0")
+        local examineBottlesBehaviour = Dialog("BHVR_WRLD_EPI_Astarion_ExamineBottles_40581d5b-08bc-ba71-eee3-666004ddc256")
+        local examineBottlesTrigger = Entity("BHVR_WRLD_EPI_Astarion_ExamineBottles_SceneTrigger_40c4f5db-bea7-4f1c-a7fc-53d3e76eafdf")
+        local examineBottlesFlag = Flag("EPI_Epilogue_Astarion_State_ExaminingBottles_c31bb649-5fe6-49dd-a1f1-d8e619a53c8c")
+
+        local tableSpotIsBusy = Flag("EPI_Origins_State_MiddleTableSpotOccupied_f9f7fcd9-a602-49e0-b940-5b8acc6b110a")
+        local bottlesSpotIsBusy = Flag("EPI_Origins_State_OppositeMiddleTableSpotOccupied_6b3996d9-2db1-4200-9018-05b33122c4df")
+
+        local shouldPlayAD = nil
+
+        -- Variables for Bat Rumours
+
+        local gatheringRumourSpots = {Entity("S_EPI_Astarion_Rumors_WithersSpot_f677a613-8c14-4c73-956f-fb8a4dceb6f8"), 
+                                        Entity("S_EPI_Astarion_Rumors_BeachSpot_a87fc199-632b-47eb-8986-29c978655516"), 
+                                        Entity("S_EPI_Astarion_Rumors_CampfireSpot_4b56b124-d9ed-4d4c-81db-db79a6a9d99b"),
+                                        Entity("S_EPI_Astarion_Rumors_FoodSpot_794c8d52-dcb1-46a7-9897-f9ac4cd2dc03"),
+                                        Entity("S_EPI_Astarion_Rumors_SecludedSpot_5f40e75f-9d9c-4814-81dd-50a53fa250de"),
+                                        Entity("S_EPI_Astarion_Rumors_TentSpot_e666cfc0-5b2f-4521-823a-bb6f5317dafc")}
+
+        local charactersChecked = {}
+        local spotsToCheck = {}
+
+        local patrolIsActive = false
+        local listenedTo = 0
+        local dismissBat = false
+       
+        --------------------------------------------------------------------------------------------------------------------
+    
+        --------------------------------------------------------------------------------------------------------------------
+        -- Helpers
+        helpers.SeatAvailable = function(seat, pos)           
+            return  mod.items.ItemIsValid(seat) and
+                    not mod.items.SafeIsDestroyed(seat)
+        end
+    
+        helpers.ItemAtPosition = function(item, pos)
+            local distance = GetDistanceTo(item, pos)
+            local angle = math.abs(mod.math.VectorAngle(item.ForwardDirection, pos.ForwardDirection))
+            return distance < 0.1 and (angle < 5 or tostring(angle)=="nan")
+        end
+
+        helpers.action.GetSeatReady = function(seat, pos, distance, standingPos)
+            if not helpers.SeatAvailable(astarionChair, astarionChairSpot) then return end
+            if not mod.moveto.MoveToPoint(standingPos, MovementSpeed.Stroll, me, 1, false) then return end
+            if (helpers.ItemAtPosition(seat, pos)) then
+                DebugText(me,"Chair is here")
+            else         
+                DebugText(me,"Chair is not here")
+                if (GetDistanceTo(seat, pos) < distance) then
+                    if mod.moveto.MoveToPoint(seat, MovementSpeed.Walk, me, 1, false) then    
+                        if CanCharacterMoveItem(me.Character, seat.Item) then     
+                            MoveItem(seat, pos)
+                        else
+                            return
+                        end
+                        TeleportTo(seat, pos, true, false, false, false, false, true)
+                        Sleep(1)
+                        helpers.GetSeatReady(seat, pos, distance, standingPos)
+                    end 
+                else
+                    return
+                end
+            end
+        end
+    
+        helpers.action.PlayAnimationAt = function(pos, distance, animation, pauseBeforeAnim)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, distance, false) then
+                LookFrom(pos)
+                Sleep(pauseBeforeAnim)
+                DebugText(me, "Playing Animation: [1]", tostring(animation))
+                PlayAnimation(animation, true, false)
+                Sleep(1.0)
+            else
+                DebugText(me, "Error: can't move to [1]", pos.Name)
+                Sleep(3.0)
+            end
+        end
+
+        helpers.action.PlayAnimationAtAndPlayAD = function(pos, distance, animation, pauseBeforeAnim, dialog, pauseBeforeDialog)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, distance, false) then
+                LookFrom(pos)
+                Sleep(pauseBeforeAnim)
+                DebugText(me, "Playing Animation: [1]", tostring(animation))
+                StartTimer(me,"ADTimer_Astarion", pauseBeforeDialog,0)
+                shouldPlayAD = dialog
+                PlayAnimation(animation, true, false)
+                Sleep(1.0)
+            else
+                DebugText(me, "Error: can't move to [1]", pos.Name)
+                Sleep(3.0)
+            end
+        end
+    
+        helpers.action.PlayLoopingAnimationAtAndPlayAD = function(pos, distance, animationStart, animationLoop, animationEnd, animationLength, dialog, pauseBeforeDialog)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 0.1, false) then
+                LookFrom(pos)
+                DebugText(me, "Playing Animation: [1]", tostring(animationLoop))
+                PlayLoopingAnimation(animationStart, {animationLoop}, animationEnd)
+                Sleep(pauseBeforeDialog)
+                mod.dialog.StartCheckedAutomatedDialog(dialog,{ waitForCompletion = false }, me)
+                Sleep(animationLength)
+                StopAnimation(me)
+            else
+                DebugText(me, "Error: can't move to [1]", pos.Name)
+                Sleep(3.0)
+            end
+        end     
+          
+    
+        helpers.action.PlayAD = function(probability, dialog, waitForADCompletion)            
+            local rand = mod.math.random(0.0, 100.0)
+    
+            if rand < probability then                
+                DebugText(me, "Should play AD")
+                mod.dialog.StartCheckedAutomatedDialog(dialog,{ waitForCompletion = waitForADCompletion }, me)
+            end
+        end
+
+        helpers.action.ChangeState = function()
+            currentState = currentState + 1
+            if (currentState > maxState) then currentState = 0 end
+        end
+
+        local characterToSnoop = nil
+
+        helpers.GetClosestRumourSpot = function()
+            characterToSnoop = nil
+            local characters = GetActiveCharacters(me, 100)
+            local chosenCharacter = nil
+            if #characters == 0 then return nil end
+            while chosenCharacter == nil and #characters > 0 do
+                local randomIndex = math.random(1, #characters)
+                chosenCharacter = characters[randomIndex]
+                table.remove(characters, randomIndex)
+                for _, checkedCharacter in ipairs(charactersChecked) do
+                    if chosenCharacter == checkedCharacter or chosenCharacter.Character.IsPartyMember then
+                        chosenCharacter = nil
+                        break
+                    end
+                end
+            end
+            
+            if chosenCharacter == nil then return nil end
+            characterToSnoop = chosenCharacter
+            DebugText(me, "I'm going to listen to [1]", chosenCharacter.Name)
+            table.insert(charactersChecked,chosenCharacter)
+            local closestDistance = 999
+            local closestSpot = nil
+            local closestSpotIndex = 0
+            for k, spot in ipairs(spotsToCheck) do
+                local distance = GetDistanceTo(spot, chosenCharacter)
+                if distance <= 15 and distance <= closestDistance then
+                    closestDistance = distance
+                    closestSpot = spot
+                    closestSpotIndex = k
+                end
+            end
+            if (closestSpot ~= nil) then table.remove(spotsToCheck, closestSpotIndex) end
+            return closestSpot
+        end
+        --------------------------------------------------------------------------------------------------------------------
+        --- Events     
+        
+        local poofVFX = nil
+
+        self.OnInit = function()
+            --poofVFX = PrepareEffect("VFX_Script_HoH_Poof_01_13d0523c-610c-7d1d-54d8-b78832d69458")
+            poofVFX = PrepareEffect("VFX_Script_FieryPoof_01_90e5c093-038c-34c7-3eb4-255c968f0932")
+        end
+
+        events.TimerFinished = function(e)
+            if(e.TimerName == "ADTimer_Astarion") then 
+                StartAutomatedDialogImmediate(shouldPlayAD, me)
+            end
+            if(e.TimerName == "Astarion_HideBottle02") then 
+                SetOnStage(bottle02, false)
+            end
+            if(e.TimerName == "Astarion_ShowBottle02") then 
+                if (not bottle02.OnStage) then
+                    PlayEffectAt(poofVFX, bottle02pos)
+                end
+                SetOnStage(bottle02, true)
+            end   
+        end
+
+        events.DialogStarted = function(e)
+            if(e.Instance.DialogUUID == smellingWineBehaviour.Guid) then 
+                DebugText(me, "Starting smelling wine")
+                StartTimer(me, "ADTimer_Astarion", 6, 0)
+                shouldPlayAD = wineAD
+            end
+            if(e.Instance.DialogUUID == examineBottlesBehaviour.Guid) then
+                DebugText(me,"Started examining bottles")
+                StartTimer(me, "Astarion_HideBottle02", 9, 0)
+                StartTimer(me, "Astarion_ShowBottle02", 30, 0)
+            end
+        end
+
+        events.StatusRemoved = function(e)
+            if e.Status.StatusID == "EPI_ASTARION_WILDSHAPE_BAT" then
+                DebugText(me, "TimeToRoll")
+                patrolIsActive = false
+                dismissBat = false
+            end
+
+
+        end
+
+        --------------------------------------------------------------------------------------------------------------------
+        
+        -- Bat handling
+        nodes.BatPatrol = Action{            
+            function() 
+                local newSpot = helpers.GetClosestRumourSpot()
+                if (newSpot == nil) then 
+                    mod.moveto.MoveToPoint(astarionCampSpot, MovementSpeed.Run, me, 1, false)
+                    LookFrom(astarionCampSpot)
+                    SetFlag(transformedFromBat, me)
+                    dismissBat = true
+                    patrolIsActive = false
+                    return               
+                end
+
+                mod.moveto.MoveToPoint(newSpot, MovementSpeed.Run, me, 1, false)
+                SteerTo(characterToSnoop)
+                Sleep(math.random(3,5))
+                listenedTo = listenedTo + 1
+                
+                if (listenedTo >= 3) then
+                    mod.moveto.MoveToPoint(astarionCampSpot, MovementSpeed.Run, me, 1, false)
+                    LookFrom(astarionCampSpot)
+                    SetFlag(transformedFromBat, me)
+                    dismissBat = true
+                    patrolIsActive = false
+                end
+            end,
+
+            Valid = function()
+                return patrolIsActive
+            end,
+        }
+
+        nodes.BatDismiss = Action{            
+            function()                    
+                try     
+                    UseSpell("Shout_EPI_Astarion_TurnIntoBat_Dismiss", me, nil, nil, nil, true, true, true)
+                catch e if ls.CheckType(e, error.UseSpellFailed) then
+                    DebugLog(me.Name.." UseSpellFailed: "..tostring(e))
+                    Sleep(2.0)
+                end  
+                dismissBat = false  
+            end,
+
+            Valid = function()
+                return not patrolIsActive and GetFlag(transformedFromBat, me) and dismissBat
+            end
+        }
+
+        nodes.EndBatPatrol = Action{
+            function()      
+                Sleep(5) 
+                helpers.PlayAD(100, batAD, true)
+                helpers.ChangeState()
+                listenedTo = 0
+                ClearFlag(transformedFromBat, me)
+            end,
+
+            Valid = function()
+                return not patrolIsActive and GetFlag(transformedFromBat, me)
+            end,
+            OnLeave = function()                
+                ClearFlag(transformedFromBat, me)
+            end,            
+            OnInterrupt = function()                
+                ClearFlag(transformedFromBat, me)
+            end,
+        }
+        -----------------------------
+        -- Testing zone
+        ----------------------------------
+        -- Time to Wine
+
+        nodes.WineTasting = Selector{
+            function(nodes)                
+                return FindRandomSelectable(nodes)
+            end,
+            Valid = function()
+                return currentState == 0 and not GetFlag(ascendedAstarion)
+            end
+        }
+
+        nodes.WineTasting.SmellingWine = Action{
+            function()
+                DebugText(me,"Smelling Wine interaction")
+                SetFlag(tableSpotIsBusy)
+                try                        
+                    StartBehaviorDialog(smellingWineBehaviour, wineTrigger.Trigger, true, me, astarionGlass)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    StopTimer(me, "ADTimer_Astarion")           
+                end    
+                Sleep(5)         
+                helpers.ChangeState()
+            end,
+            CanEnter = function()
+                return not GetFlag(tableSpotIsBusy)
+            end,
+            OnInterrupt = function()
+                ClearFlag(tableSpotIsBusy)
+            end,
+            OnLeave = function()
+                ClearFlag(tableSpotIsBusy)
+                StopTimer(me, "ADTimer_Astarion")
+            end
+        }
+
+        nodes.WineTasting.ExamineBottles = Action{            
+            CanEnter = function()
+                return not GetFlag(bottlesSpotIsBusy)
+            end,
+            function()
+                DebugText(me,"Examine Bottles interaction")                
+                SetFlag(bottlesSpotIsBusy)
+                try     
+                    StartBehaviorDialog(examineBottlesBehaviour, examineBottlesTrigger.Trigger, true, me, bottle01)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    StopTimer(me, "Astarion_HideBottle02")   
+                end          
+                helpers.ChangeState()
+            end,
+            Valid = function()
+                return helpers.ItemAtPosition(bottle01, bottle01pos) and not mod.items.SafeIsDestroyed(bottle01) 
+                and helpers.ItemAtPosition(bottle02, bottle02pos) and not mod.items.SafeIsDestroyed(bottle02)
+            end,
+            OnInterrupt = function()
+                ClearFlag(bottlesSpotIsBusy)
+                SetOnStage(bottle02, true)           
+                StopTimer(me, "Astarion_HideBottle02")
+                StopTimer(me, "Astarion_ShowBottle02")   
+            end,
+            OnLeave = function()
+                ClearFlag(bottlesSpotIsBusy)
+                StopTimer(me, "Astarion_HideBottle02")
+            end
+        }        
+        
+        nodes.AscendedWineTasting = Selector{
+            function(nodes)
+                return FindRandomSelectable(nodes)
+            end,
+            Valid = function()
+                return currentState == 0 and GetFlag(ascendedAstarion)
+            end
+        }
+
+        nodes.AscendedWineTasting.DrinkWine = Action{
+            function()
+                DebugText(me,"Drink Wine interaction")
+                SetFlag(tableSpotIsBusy)
+                try                        
+                    StartBehaviorDialog(drinkWineBehaviour, wineTrigger.Trigger, true, me, bottle03, astarionGlass)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    StopTimer(me, "ADTimer_Astarion")           
+                end    
+                Sleep(5)         
+                helpers.ChangeState()
+            end,
+            CanEnter = function()
+                return not GetFlag(tableSpotIsBusy)
+            end,
+            OnInterrupt = function()
+                ClearFlag(tableSpotIsBusy)
+            end,                        
+            Valid = function()
+                return helpers.ItemAtPosition(bottle03, bottle03pos)and not mod.items.SafeIsDestroyed(bottle03) 
+            end,
+            OnLeave = function()
+                ClearFlag(tableSpotIsBusy)
+                StopTimer(me, "ADTimer_Astarion")
+            end
+        }
+
+        nodes.AscendedWineTasting.SmellingWine = Action{
+            function()
+                DebugText(me,"Smelling Wine interaction")
+                SetFlag(tableSpotIsBusy)
+                try                        
+                    StartBehaviorDialog(smellingWineBehaviour, wineTrigger.Trigger, true, me, astarionGlass)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    StopTimer(me, "ADTimer_Astarion")           
+                end    
+                Sleep(5)         
+                helpers.ChangeState()
+            end,
+            CanEnter = function()
+                return not GetFlag(tableSpotIsBusy)
+            end,
+            OnInterrupt = function()
+                ClearFlag(tableSpotIsBusy)
+            end,
+            OnLeave = function()
+                ClearFlag(tableSpotIsBusy)
+            end
+        }
+
+        nodes.AscendedWineTasting.Fallback = Action{
+            function()
+                helpers.ChangeState()
+            end,
+            Valid = function()
+                return GetFlag(tableSpotIsBusy)
+            end,
+        }
+
+        -- Time to Act
+
+        nodes.SpawnActing = Selector{
+            function(nodes)
+                return FindRandomSelectable(nodes)
+            end,
+            Valid = function()
+                return currentState == 2 and (GetFlag(cazadorIsDead) or GetFlag(cazadorWasHunted)) and not GetFlag(ascendedAstarion)
+            end
+        }
+
+        nodes.SpawnActing.Sitting = Action{
+            function()
+                DebugText(me,"Sitting interaction")
+                helpers.PlayLoopingAnimationAtAndPlayAD(astarionFireSpot, 1, sittingStartAnim, sittingLoopAnim, sittingEndAnim, 20, idleAD, 6)
+                Sleep(math.random(3,5))
+                helpers.ChangeState()
+            end,
+            OnInterrupt = function()
+                StopAnimation(me, true)
+            end
+        }
+
+        nodes.SpawnActing.KnifeGame = Action{
+            function()
+                DebugText(me,"Knife Game interaction")
+                helpers.GetSeatReady(astarionChair, astarionChairSpot, 10, knifeGameTrigger)
+                try
+                    StartBehaviorDialog(knifeGameBehaviour, knifeGameTrigger.Trigger, true, me, astarionChair, astarionTable)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    UseItem(astarionChair.Item)
+                    SetCanInteract(astarionChair, false)
+                    Sleep(math.random(8, 15))
+                    SetCanInteract(astarionChair, true)
+                end
+                if mod.moveto.MoveToPoint(astarionCampSpot, MovementSpeed.Stroll, me, 1, false) then
+                    LookFrom(astarionCampSpot)
+                    Sleep(math.random(2,5))
+                end               
+                helpers.ChangeState()
+            end,            
+            Valid = function()
+                return helpers.SeatAvailable(astarionChair, astarionChairSpot) or (GetDistanceTo(astarionChair, astarionChairSpot) > 10)
+            end
+        }
+
+        nodes.SpawnActing.DaggerThrow = Action{
+            function()
+                DebugText(me,"Dagger Throw interaction")
+                if mod.moveto.MoveToPoint(astarionCampSpot, MovementSpeed.Stroll, me, 1, false) then
+                    LookFrom(astarionCampSpot)
+                    Sleep(5)                    
+                    LookFrom(astarionDaggerSpot)
+                    Sleep(2)
+                    PlayAnimation(daggerThrowAnim, true, false)
+                    Sleep(1)
+                    LookFrom(astarionCampSpot)
+                else
+                    DebugText(me, "Error: can't move to [1]", pos.Name)
+                    Sleep(3.0)
+                end
+                Sleep(math.random(8, 15))
+                helpers.ChangeState()
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.HiddenFromCazadorActing = Selector{
+            function(nodes)
+                return FindRandomSelectable(nodes)
+            end,
+            Valid = function()
+                return currentState == 2 and not GetFlag(cazadorIsDead) and not GetFlag(cazadorWasHunted)
+            end
+        }
+
+        nodes.HiddenFromCazadorActing.Pacing = Action{
+            function()
+                DebugText(me,"Pacing in spot interaction")
+                helpers.PlayAnimationAt(astarionFireSpot, 1, pacingAnim, 7)
+                helpers.PlayAD(80, idleAD, true)
+                Sleep(math.random(8, 15))
+                helpers.ChangeState()
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.HiddenFromCazadorActing.SharpeningDagger = Action{
+            function()
+                DebugText(me,"Sharpening Dagger interaction")
+                helpers.PlayAnimationAt(astarionFireSpot, 1, sharpeningAnim, 7)
+                Sleep(math.random(8, 15))
+                helpers.ChangeState()
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.HiddenFromCazadorActing.DaggerThrow = Action{
+            function()
+                DebugText(me,"Dagger Throw interaction")
+                if mod.moveto.MoveToPoint(astarionCampSpot, MovementSpeed.Stroll, me, 1, false) then
+                    LookFrom(astarionCampSpot)
+                    Sleep(5)                    
+                    LookFrom(astarionDaggerSpot)
+                    Sleep(2)
+                    PlayAnimation(daggerThrowAnim, true, false)
+                    Sleep(1)
+                    LookFrom(astarionCampSpot)
+                else
+                    DebugText(me, "Error: can't move to [1]", pos.Name)
+                    Sleep(3.0)
+                end
+                Sleep(math.random(8, 15))
+                helpers.ChangeState()
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.AscendedActing = Selector{
+            function(nodes)
+                return FindRandomSelectable(nodes)
+            end,
+            Valid = function()
+                return currentState == 2 and GetFlag(ascendedAstarion)
+            end
+        }
+
+        nodes.AscendedActing.TurnIntoBat = Action{
+            function()
+                DebugText(me,"Turn Into Bat interaction")
+                mod.moveto.MoveToPoint(astarionCampSpot, MovementSpeed.Stroll, me, 1, false)  
+                LookFrom(astarionCampSpot)
+                helpers.PlayAD(100, batAD, true)
+                -- --Spell to spawn into the bat
+                try
+                    UseSpell("Shout_EPI_Astarion_TurnIntoBat", me, nil, nil, nil, true, true, true)
+                catch e if ls.CheckType(e, error.UseSpellFailed) then
+                    DebugLog(me.Name.." UseSpellFailed: "..tostring(e))
+                    Sleep(2.0)
+                end   
+
+                -- --Starting the patrol
+                for k, _ in pairs(spotsToCheck) do spotsToCheck[k]=nil end
+                for k, _ in pairs(charactersChecked) do charactersChecked[k]=nil end
+                table.insert(charactersChecked, me)
+                for _, spot in ipairs(gatheringRumourSpots) do
+                    table.insert(spotsToCheck, spot)
+                end
+
+                patrolIsActive = true     
+            end
+        }
+
+        nodes.AscendedActing.JustAD = Action{
+            function()
+                DebugText(me,"AD interaction")
+                if not mod.moveto.MoveToPoint(astarionFireSpot, MovementSpeed.Stroll, me, 1, false) then 
+                    Sleep(5)
+                    return 
+                end
+                LookFrom(astarionFireSpot)
+                helpers.PlayAD(100, idleAD, true)
+                Sleep(math.random(8, 15))
+                helpers.ChangeState()
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.AscendedActing.AdmireSelf = Action{
+            function()
+                DebugText(me,"Admire Self interaction")
+                helpers.PlayAnimationAtAndPlayAD(astarionFireSpot, 1, admireSelfAnim, 7, reflectionAD, 4)
+                Sleep(math.random(8, 15))
+                helpers.ChangeState()
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        -- Time to Idle
+
+        nodes.IdleAction = Selector{
+            function(nodes)
+                return FindRandomSelectable(nodes)
+            end,
+            Valid = function()
+                return currentState == 1
+            end
+        }
+
+        nodes.IdleAction.KnifeTricks = Action{
+            function()
+                DebugText(me,"Knife Tricks interaction")
+                helpers.PlayAnimationAt(astarionCampSpot, 1, knifeTricksAnim, 7)
+                Sleep(math.random(8, 15))
+                helpers.ChangeState()
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.IdleAction.CombHair = Action{
+            function()
+                DebugText(me,"Comb Hair interaction")
+                helpers.PlayAnimationAt(astarionCampSpot, 1, combHairAnim, 7)
+                Sleep(math.random(8, 15))
+                helpers.ChangeState()
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.IdleAction.DustSelf = Action{
+            function()
+                DebugText(me,"Dust Self interaction")
+                helpers.PlayAnimationAt(astarionCampSpot, 1, dustSelfAnim, 7)
+                Sleep(math.random(8, 15))
+                helpers.ChangeState()
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+    
+        --------------------------------------------------------------------------------------------------------------------
+    
+
+    end
+    }
+    

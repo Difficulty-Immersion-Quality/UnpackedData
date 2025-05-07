@@ -1,0 +1,229 @@
+game.states.EPI_Scratch = State {function()
+    description = [[Behaviour of the Courier Dog at the campsite]]
+
+    modules = {"shared.util","shared.math", "shared.moveto"}
+
+    local campPoint = Entity("S_EPI_StartPointScratch_e291d47d-b809-4004-96b5-aa9ca519c32e")
+    local owlbearCubFlag = Flag("GOB_ChickenChase_State_OwlbearAcquired_da704027-02ea-717c-4390-f538e5e5cd7a")
+    local owlbearCub = Entity("S_FOR_OwlBear_Cub_001_c66b2865-6613-4372-b97a-e330c1d75d09")
+    local owlbearSleeping = Flag("EPI_OwlbearCub_State_PettingAvailable_90327c1a-537f-4df1-b31f-d03a00d029ba")
+    local dogChaseFlag = Flag("CAMP_Courier_Dog_Event_ChaseOwlbearCub_a52a966c-e387-42c6-85a8-ced6dd9d4a74")
+    local facingPoint = Entity("S_OwlbearCubCourierDog_FacingPoint_001_0f8cdb3e-9f5a-424c-bac6-944fead4ceef")
+    local scratchIsFocusedOnThrowFlag = Flag("FOR_CourierDog_State_FocusedOnThrowingPlayer_35d81592-1643-4618-8308-fa0fd8cbb43b")
+    local scratchIsPlayingFetchFlag = Flag("FOR_CourierDog_State_IsPlayingFetch_55ca1e39-8b83-4f9d-b720-a66e97abbb4e")
+    local inertPrism = Entity("S_EPI_InertArtefact_c4a6e98b-3707-4111-833f-26c8cd45580e")
+    local foodTable1 = Entity("S_EPI_Scratch_FoodTable_001_92db91d7-f47b-45d5-b7d3-1808e17e3028")
+    local foodTable2 = Entity("S_EPI_Scratch_FoodTable_002_8e6957c9-a8f9-4d5a-a35e-0c24c7bb82aa")
+    
+
+    local scratchSleepSpot = Entity("S_EPI_Scratch_SleepSpot_c7fee1bf-631b-41a6-9021-272d763f5af7")
+    local scratchSleepStart = Animation("CUST_EPI_Scratch_Sleeping_01_Start_bdd9dff3-a829-470e-8145-990f974ab98c")
+    local scratchSleepLoop = Animation("CUST_EPI_Scratch_Sleeping_01_Loop_f4b455e2-49dd-489c-acb6-d720540c9fb2")
+    local scratchSleepEnd = Animation("CUST_EPI_Scratch_Sleeping_01_End_9a68e76c-6daa-4086-b6b5-13e625422bc8")
+    local scratchSmellFood = Animation("CUST_EPI_Scratch_SniffTable_01_eeacce31-efb1-4791-b6fd-f96038e9237a")
+    local doSleep = nil
+
+    --------------------HELPERS---------------------
+
+    helpers.action.PlayLoopingAnimationAt = function(pos, animationStart, animationLoop, animationEnd)
+        if pos ~= nil then
+            if animationStart ~= nil and animationLoop ~= nil and animationEnd ~= nil then
+                if mod.moveto.MoveToPoint(pos, MovementSpeed.Run, me, 0.5, false) then
+                    LookFrom(pos)
+                    PlayLoopingAnimation(animationStart, {animationLoop}, animationEnd)
+                end
+            end
+        end
+    end
+
+    helpers.action.PlayAnimationAt = function(pos, animation, animationLength)
+        if pos ~= nil then
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Walk, me, 0.5, false) then
+                LookFrom(pos)
+                PlayAnimation(animation)
+                Sleep(animationLength)
+                StopAnimation(me)
+                mod.util.SleepRandom(1.0,2.0)
+            end
+        end
+    end
+    --------------------NODES---------------------
+    nodes.PlayFetch = Proxy {
+        game.states.CourierDog_PlayingFetch_Epilogue,
+        Valid = function()
+            return GetFlag(scratchIsPlayingFetchFlag)
+        end
+    }
+
+    nodes.WaitForFetch = Proxy {
+        game.states.CourierDog_WaitForFetch,
+        Valid = function()
+            return GetFlag(scratchIsFocusedOnThrowFlag)
+            and not GetFlag(scratchIsPlayingFetchFlag)
+        end
+    }
+
+    nodes.DoSleep = Action {
+        function()
+            Sleep(doSleep)
+            doSleep = nil
+        end,
+        Valid = function()
+            return doSleep ~= nil
+        end
+    }
+
+    nodes.GoNap = Action {
+        function()
+            helpers.PlayLoopingAnimationAt(scratchSleepSpot, scratchSleepStart, scratchSleepLoop, scratchSleepEnd)
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+            doSleep = 3.99993
+        end,
+        Valid = function()
+            return GetFlag(owlbearSleeping)
+        end
+    }
+
+    nodes.Wander = Action {
+        function()       
+            Wander(20.0,5.0, MovementSpeed.Walk, campPoint)
+            if foodTable1 ~= nil and foodTable2 ~= nil then  
+                if math.min(GetDistanceTo(me, foodTable1),GetDistanceTo(me, foodTable2)) < 5.0 then
+                PlayAnimation(scratchSmellFood)
+                else
+                Sleep(math.random(5,8))
+                end
+            end
+        end,
+        Valid = function()
+            return not GetFlag(scratchIsFocusedOnThrowFlag)
+                and not GetFlag(scratchIsPlayingFetchFlag)
+        end
+    }
+end}
+
+game.states.CourierDog_PlayingFetch_Epilogue = State {function()
+
+    description = [[Scratch is playing fetch]]
+
+    local thrownObject, objectThrower, changeFetch
+    local lootAnimation = Animation("UTIL_Loot_01_ab7b2bab-e9be-4462-9771-aa17f93a14ac")
+    local hasArtefact = Flag("EPI_Epilogue_State_HasInertArtefact_855ec61c-4c00-4e3f-8802-ba7b2d6a3958")
+    local scratchIsPlayingFetchFlag = Flag("FOR_CourierDog_State_IsPlayingFetch_55ca1e39-8b83-4f9d-b720-a66e97abbb4e")
+    local anim_ScratchGnaw_Start = Animation("CUST_EPI_Scratch_PrismPlay_01_Start_372f0dd7-fa4d-4e6e-9966-71c0d7190c16")
+    local anim_ScratchGnaw_Loop1 = Animation("CUST_EPI_Scratch_PrismPlay_01_Loop_01_576aca09-c47d-43d3-b2d8-a693d4f9f37a")
+    local anim_ScratchGnaw_Loop2 = Animation("CUST_EPI_Scratch_PrismPlay_01_Loop_02_bd3d8cb0-6599-462d-a35c-7fb8d5ba1604")
+    local anim_ScratchGnaw_Loop3 = Animation("CUST_EPI_Scratch_PrismPlay_01_Loop_03_934485f2-b4b2-4af2-a9b0-7e0ec61d66a7")
+    local anim_ScratchGnaw_End = Animation("CUST_EPI_Scratch_PrismPlay_01_End_2ae67e6f-d240-4e75-82f9-59b93f2946f5")
+    local canGnaw = false
+
+    nodes.ChangeFetch = Action {
+        function()
+            if GetFlag(hasArtefact, me) then           
+                canGnaw = true
+            end
+            changeFetch = nil
+        end,
+        Valid = function()
+            return changeFetch ~= nil
+        end
+    }
+    
+    nodes.GnawIfHaveArtefact = Action {
+    function()
+        PlayLoopingAnimation(anim_ScratchGnaw_Start, {anim_ScratchGnaw_Loop1, anim_ScratchGnaw_Loop2, anim_ScratchGnaw_Loop3}, anim_ScratchGnaw_End)
+        Sleep(16.50)
+        StopAnimation(me)
+        Sleep(2.60)
+        canGnaw = false
+    end,
+    OnInterrupt = function()
+        StopAnimation(me)
+        Sleep(2.60)
+        canGnaw = false
+    end,
+    Valid = function()
+        return GetFlag(hasArtefact, me) and canGnaw == true
+    end
+    }
+
+    nodes.RunToThrowerWithObject = Action {
+        function()
+            local thrower = Entity(objectThrower)
+            local moveToResult = MoveTo(thrower, MovementSpeed.Run, false, false, 0.5, 1.5)
+            if moveToResult == error.MovementError.None then
+            PlayAnimation(lootAnimation, false, false)
+            SetEntityEvent(me, "FOR_CourierDog_Fetch_ArrivedAtThrower", thrower)
+            Sleep(3.0)
+            end
+            moveToResult = MoveInRange(thrower, 3.0, 10.0, MovementSpeed.Run, nil, false, false)
+            if moveToResult ~= error.MovementError.None then
+                -- can fail silently
+            end
+            -- failed move
+            SteerTo(thrower)
+            Sleep(3.0) -- make Scratch bark
+            ClearFlag(scratchIsPlayingFetchFlag)
+            Sleep(1.0)
+
+            
+        end,
+        Valid = function()
+            return objectThrower ~= nil
+        end
+    }
+
+    nodes.RunToThrownObject = Action {
+        function()
+            local object = Entity(thrownObject)
+            local moveToResult = MoveTo(object, MovementSpeed.Sprint, false, false, 0.5, 1.5, false)
+            if moveToResult == error.MovementError.None then
+                PlayAnimation(lootAnimation, true, false)
+                SetEntityEvent(me, "FOR_CourierDog_Fetch_ArrivedAtObject", object)
+                Sleep(3.0)
+                return
+            end
+            moveToResult = MoveInRange(object, 3.0, 10.0, MovementSpeed.Run, nil, false, false)
+            if moveToResult ~= error.MovementError.None then
+                -- can fail silently
+            end
+            -- failed move
+            SteerTo(object)
+            Sleep(3.0) -- make Scratch bark
+            ClearFlag(scratchIsPlayingFetchFlag)
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return thrownObject ~= nil and objectThrower == nil
+        end
+    }
+
+    nodes.ClearFetch = Action {
+        function()
+            ClearFlag(scratchIsPlayingFetchFlag)
+            Sleep(1.0)
+        end,
+        Valid = function()
+            return thrownObject == nil and objectThrower == nil
+        end
+    }
+
+    --------------------EVENTS---------------------
+    events.EntityEvent = function(e) 
+        if e.Event == "FOR_CourierDog_Fetch_SetObject" then
+            thrownObject = e.Params[1]
+            changeFetch = true
+            SetFlag(scratchIsPlayingFetchFlag)
+        elseif e.Event == "FOR_CourierDog_Fetch_SetThrower" then
+            objectThrower = e.Params[1]
+            changeFetch = true
+        elseif e.Event == "FOR_CourierDog_Fetch_ClearObject" and thrownObject == e.Params[1] then
+            thrownObject = nil
+        elseif e.Event == "FOR_CourierDog_Fetch_ClearThrower" and objectThrower == e.Params[1] then
+            objectThrower = nil
+        end
+    end
+end
+}

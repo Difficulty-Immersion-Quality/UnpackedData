@@ -1,0 +1,49 @@
+game.states.LOW_VoloFate_TiedVoloAD_Manager = State{function()
+
+    -- As Volos is using the chair on execution cart through constrain action, his anubis is inactive. 
+    -- Thus his tied ADs are triggered with this anubis on the constraining chair
+
+    modules = {"shared.dialog"}
+
+    local voloTiedAD = Dialog("LOW_VoloFate_AD_BusyInCart_50500cab-db5d-52e3-0af2-ddfbc25a6289")
+    local volo = Entity("S_GLO_Volo_2af25a85-5b9a-4794-85d3-0bd4c4d262fa")
+
+    local voloFreed = false
+
+    nodes.TiedVoloADs = Action{
+        CanEnter = function()
+            return EntityExists(volo)
+        end,
+
+        function()
+            Sleep(math.random(3.0,8.0))
+            if(not volo.IsInCombat) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                        voloTiedAD,
+                        {
+                            waitForCompletion = false,
+                        },
+                        volo
+                )
+            end
+        end,
+
+        Valid = function()
+            return not voloFreed
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    -- Event is sent from Osiris when "TIED_TO_CHAIR" status is removed on Volo
+    events.EntityEvent = function(e)
+        if e.Event == "LOW_VoloFate_VoloFreed" then
+            voloFreed = true
+        end
+    end
+
+end}

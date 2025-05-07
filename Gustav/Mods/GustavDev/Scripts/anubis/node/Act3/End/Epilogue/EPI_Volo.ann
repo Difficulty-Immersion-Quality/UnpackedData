@@ -1,0 +1,194 @@
+game.states.EPI_Volo = State{function()
+
+    modules = {"shared.dialog","shared.moveto"}
+
+    --------------- ADs ---------------
+    local idleAD = Dialog("EPI_Epilogue_AD_IdleVolo_6e3f6c6c-ef2c-a0e1-2af2-f7983b4ad736")
+    local welcomeAD = Dialog("EPI_Epilogue_AD_WelcomeVolo_926715f8-c2e0-a7d3-c8f9-a8735581ad1b")
+
+    ----------------- Animations --------------
+    local drinkAnim = Animation("CUST_EPI_Volo_Drinking_01_6cc681a0-25ff-4bec-8616-98f845062f96")
+    local eatAnim = Animation("CUST_EPI_Volo_Eating_01_5ad22e0a-24a4-4d7c-a993-0bae10ca9da5")
+    local wavingAnim = Animation("CUST_EPI_Volo_Waving_01_d22535a0-af57-40a2-b0e3-b8ceb2bc3f3c")
+    local writeAnim = Animation("CUST_EPI_Volo_LickQuillThink_01_e17313a9-c66e-4742-81e9-c4e2f6a1ada5")
+    local danceStart = Animation("CUST_EPI_Volo_Dance_01_Start_a5bd134b-2f64-44bb-b269-eb6df5564b23")
+    local danceLoop = Animation("CUST_EPI_Volo_Dance_01_Loop_2a1c3532-832f-4063-a9a9-b53483496d98")
+    local danceEnd = Animation ("CUST_EPI_Volo_Dance_01_End_ceeaf35b-e5d7-48cc-9bd4-c602500931a3")
+
+    -------------- Point triggers -------------
+    local eatPoint = Entity("S_EPI_Volo_EatPoint_946bb22a-8d83-4a3a-a1d9-41713abd4c9c")
+    local startPoint = Entity("S_EPI_StartPointVolo_4cb13df7-fa3a-445e-a46a-07a3fe8da9a1")
+    local drinkPoint = Entity("S_EPI_Volo_DrinkPoint_31a223f8-a014-4f31-a08f-17bd193c519a")
+    local ADPoint = Entity("S_EPI_Volo_ADPoint_10c642c4-f282-4407-abdd-7fefbffbc953")
+    local dancePoint = Entity("S_EPI_Volo_DancePos_52076a02-4874-4763-8365-e215714ce29d")
+    local bardPoint = Entity("S_EPI_DivineBardPoint_1f79f72a-6688-4dc9-9d42-b45b89dded2e")
+    local writePointA = Entity("S_EPI_Volo_WritePointA_3ef70774-e1ff-489f-8473-083463319021")
+    local writePointB = Entity("S_EPI_Volo_WritePointB_68a85b14-6be1-40cc-970e-8a18cae86078")
+
+    ---------------- Flags ---------------
+    local welcomeFlag = Flag("EPI_Epilogue_Volo_ReadyForGreeting_61272c04-2c8a-4c46-915a-f0443f8928bf")
+    local bardPlayingFlag = Flag("EPI_Epilogue_DivineBard_State_PlayingSong_262657bd-c979-4994-bb16-8266a3d2c146")
+    local tableSpotIsBusy = Flag("EPI_Origins_State_OppositeMiddleTableSpotOccupied_6b3996d9-2db1-4200-9018-05b33122c4df")
+
+    ----------------- Misc -------------
+    local node = nil
+    local readyToTalk = 3
+    local readyToWrite = 3
+
+    ----------------- Selector --------------
+    nodes = Selector {
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end,
+
+        function(nodes)
+ 			return GetWeightedCanEnter(nodes, { [nodes.IdleAD] = 2,
+                                                [nodes.DoWritingA] = 1,
+                                                [nodes.DoWritingB] = 1,
+                                                [nodes.DoEating] = 1,
+                                                [nodes.DoDrinking] = 2,
+                                                [nodes.DoDancing] = 1, 
+                                                [nodes.WelcomeAD] = 5})
+        end
+    }
+
+    -------------------- Nodes ---------------
+    nodes.WelcomeAD = Action{
+        function()
+                PlayAnimation(wavingAnim, true, false)
+                StartAutomatedDialog(welcomeAD, true, me)
+                SetFlag(welcomeFlag, me)
+        end,
+        CanEnter = function()
+            return not GetFlag(welcomeFlag, me)
+        end
+    }
+
+    nodes.IdleAD = Action{
+        function()
+            if mod.moveto.MoveToPoint(ADPoint, MovementSpeed.Stroll, me, 0.1) then
+                DebugText(me, "ADing")
+                LookFrom(ADPoint)
+                Sleep(0.8)
+                StartCheckedAutomatedDialogRateLimited(idleAD, {
+                    waitForCompletion = true,
+                    minDelay = 10.0 
+                }, me)
+                Sleep(2.5)
+                readyToTalk = 0
+            else
+                Sleep(3.0)
+            end
+            readyToWrite = readyToWrite + 1
+        end,
+        CanEnter = function()
+            return readyToTalk > 2
+        end
+    }
+
+    nodes.DoEating = Action{
+        CanEnter = function()
+            return not GetFlag(tableSpotIsBusy)
+        end,
+        function()
+            SetFlag(tableSpotIsBusy)
+            if mod.moveto.MoveToPoint(eatPoint, MovementSpeed.Stroll, me, 0.1) then
+                DebugText(me, "Eating")
+                LookFrom(eatPoint)
+                PlayAnimation(eatAnim, true, false)
+            else
+                Sleep(3.0)
+            end
+            readyToTalk = readyToTalk + 1
+            readyToWrite = readyToWrite + 1
+        end,
+        OnInterrupt = function()
+            ClearFlag(tableSpotIsBusy)
+        end,
+        OnLeave = function()
+            ClearFlag(tableSpotIsBusy)
+        end
+    }
+
+    nodes.DoDrinking = Action{
+        function()
+            if mod.moveto.MoveToPoint(drinkPoint, MovementSpeed.Stroll, me, 0.5) then
+                DebugText(me, "Drinking")
+                LookFrom(drinkPoint)
+                PlayAnimation(drinkAnim, true, false)
+                readyToTalk = readyToTalk + 1
+            else
+                Sleep(3.0)
+            end
+            readyToTalk = readyToTalk + 1
+            readyToWrite = readyToWrite + 1
+        end
+    }
+
+    nodes.DoWritingA = Action{
+        function()
+            if mod.moveto.MoveToPoint(writePointA, MovementSpeed.Stroll, me, 0.5) then
+                DebugText(me, "Writing")
+                LookFrom(writePointA)
+                PlayAnimation(writeAnim, true, false)
+            else
+                Sleep(3.0)
+            end
+            readyToTalk = readyToTalk + 1
+            readyToWrite = 0
+        end,
+        CanEnter = function()
+            return readyToWrite > 2
+        end
+    }
+
+    nodes.DoWritingB = Action{
+        function()
+            if mod.moveto.MoveToPoint(writePointB, MovementSpeed.Stroll, me, 0.5) then
+                DebugText(me, "Writing")
+                LookFrom(writePointB)
+                PlayAnimation(writeAnim, true, false)
+            else
+                Sleep(3.0)
+            end
+            readyToTalk = readyToTalk + 1
+            readyToWrite = 0
+        end,
+        CanEnter = function()
+            return readyToWrite > 2
+        end
+    }
+
+    nodes.DoDancing = Action{
+        function()
+            if mod.moveto.MoveToPoint(dancePoint, MovementSpeed.Stroll, me, 0.1) then
+                DebugText(me, "Dancing")
+                LookFrom(dancePoint)
+                Sleep(0.3)
+                PlayLoopingAnimation(danceStart, {danceLoop}, danceEnd, false) --plays two loops of the dancing middle
+                Sleep(30.1)
+                StopAnimation(me)
+                Sleep(3.6)
+            else
+                Sleep(3.0)
+            end
+            readyToTalk = readyToTalk + 1
+            readyToWrite = readyToWrite + 1
+            end,
+        Valid = function()
+            return GetFlag(bardPlayingFlag)
+        end,
+        OnInterrupt = function()
+            StopAnimation(me)
+            Sleep(3.6)
+        end
+    }
+
+    -- nodes.Fallback = Action{
+    --     function()
+    --         Sleep(3.0)
+    --     end
+    -- }
+
+end
+}

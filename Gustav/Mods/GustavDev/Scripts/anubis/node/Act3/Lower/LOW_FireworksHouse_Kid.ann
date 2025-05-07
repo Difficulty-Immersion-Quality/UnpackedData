@@ -1,0 +1,81 @@
+game.states.FireworksHouse_Kid = State{
+    function()
+
+        modules = { "shared.moveto"}
+
+        ------------SPLINES----------
+        local patrolSpline = Spline("S_LOW_FireworksHouse_KidPatrolSpline_ebd03a0f-09a3-4cfc-9d73-386195f5d985")
+
+        ------------BOOLS------------
+        local bWait = false
+
+        -------------ANIMS----------
+        local inspectAnim = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+        local idleAnim = Animation("CUST_LookingFar_01_5643e3dc-9631-4dba-b303-128fc29abfa7")
+        local playAnim = nil
+
+        ------------FLAGS-----------
+        local doPatrol = Flag("LOW_FireworksHouse_Event_KidScenePlayed_e7a54f98-a230-46a3-803b-6c357ae6cf4f")
+
+        ------------TRIGGERS--------
+        local defaultPos = Entity("S_LOW_FireworksHouse_KidReturnPos_81de95c3-ed1f-4ec9-bf7b-77909cbac7cc")
+
+        nodes.StandAtTrigger = Action {
+            function()
+                if not IsInDangerousSurfaceFor(defaultPos, me.Character) then
+                    if GetDistanceTo(me, defaultPos) > 2.0 then
+                        try
+                            MoveTo(defaultPos,MovementSpeed.Walk,false,true,1.0,1.0,true,PathClimbingMode.Enabled,PathDroppingMode.Enabled)
+                        catch e if ls.CheckType(e, error.MovementFailed) then
+                            SteerTo(defaultPos)
+                            Sleep(2.0)
+                        end
+                    else
+                        LookFrom(defaultPos)
+                    end
+                else
+                    SteerTo(defaultPos)
+                end
+                Sleep(2.0)
+            end,
+    
+            Valid = function()
+                return not GetFlag(doPatrol, me)
+            end
+        }
+
+        nodes.DoPatrol = Action{
+            function()
+                DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+            end,
+            Valid = function()
+                return GetFlag(doPatrol, me) and bWait == false
+            end
+        }
+    
+        nodes.PatrolAnimation = Action{
+            function()
+                LookFrom(patrolSpline)
+                PlayAnimation(playAnim ,true, false)
+                bWait = false
+            end,
+            Valid = function()
+                return GetFlag(doPatrol, me) and bWait == true
+            end
+        }
+
+        ------------EVENTS----------
+        events.SplineControlPointReached = function(e)
+            if e.Event == "Inspect" then
+                playAnim = inspectAnim
+                bWait = true
+            elseif e.Event =="Idle" then
+                playAnim = idleAnim
+                bWait = true
+            end
+        end
+    end
+}
+
+
+

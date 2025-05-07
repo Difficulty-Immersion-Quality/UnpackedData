@@ -1,0 +1,48 @@
+game.states.MOO_BazaarStander_003_Audience = State {function ()
+    description = [[Sul is waiting on the roof to serve wine to Ketheric]]
+
+    modules = {"shared.moveto", "shared.dialog"}
+--------------------------------LOCAL--------------------------------
+    local scaredAnim = Animation("CUST_HidingBehindSomeoneScared_01_Loop_c9dedf9f-6df1-41f7-9886-d4b6c6c38205")
+    local isAnimPlaying = false
+    local standingPoint = Entity("S_MOO_WineServingPilgrimPoint_7556aec7-0b8d-4741-92fd-484abc919b39")
+    local AD = Dialog("MOO_Audience_AD_MumblingSul_c09848a6-edae-406b-5d91-3a617c878ea8")
+    local availableFlag = Flag("MOO_Audience_State_SulAvailable_5d070fc1-5ec6-4fbe-8694-fe37d3295002")
+    local lookAtSulFlag = Flag("MOO_Audience_Event_LookAtSul_999c4771-21ee-45fd-80b8-9a0c6e274e3e")
+    local availableTrigger = Entity("S_MOO_SulAvailableBox_79a4179d-74e7-4f8e-86ac-37f4f7564b0b")
+
+--------------------------------NODES--------------------------------
+    nodes.IdleScared = Action {
+        function()
+            if mod.moveto.MoveToPoint(standingPoint, MovementSpeed.Walk, me) then
+
+                if IsInTrigger(me, availableTrigger.Trigger) and not GetFlag(availableFlag) then
+                    SetFlag(availableFlag)
+                end
+
+                LookFrom(standingPoint)
+                if not isAnimPlaying then
+                    PlayAnimation(scaredAnim, false, true)
+                    isAnimPlaying = true
+                end
+
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(AD, {
+                    waitForCompletion = true,
+                    minDelay = 30.0 
+                }, me)
+                SetFlag(lookAtSulFlag)
+            else
+                LookAtEntity(standingPoint, 3.0)
+            end
+            Sleep(4.0 + 6.0 * math.random())
+        end,
+        
+        OnLeave = function()
+            ClearFlag(availableFlag)
+            StopAnimation(me)
+            isAnimPlaying = false
+        end
+    }
+
+end
+}

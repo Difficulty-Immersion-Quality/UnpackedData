@@ -1,0 +1,189 @@
+game.states.CRE_EldritchTurret_Char = State{function()
+
+    params.DistanceSeeking = { type = EParamType.Number, default = 25.0,
+        help = [[Distance of activation for the turret]]}
+
+    params.DistanceShooting = { type = EParamType.Number, default = 20.0,
+        help = [[Distance of shooting for the turret]]}
+
+    params.BurstCount = { type = EParamType.Number, default = 2,
+        help = [[Number of projectiles shot before reload]]}
+
+    params.ReloadTime = { type = EParamType.Number, default = 2.0,
+        help = [[Reload time controlling rate of fire]]}
+
+    params.TurretBeam = {type = EParamType.String, required = false, default = "VFX_Beams_Underdark_Arcane_Turret_Beam_01_3af9c664-d864-cbcd-e6b1-11ea99e307df",help = [[Beam FX]]}
+
+    local f_ReloadTime = 0.5
+    local f_BurstTime = 0.25
+    local f_MaxHeightDiff = 8.0
+    local ch_Target = nil
+    local dist_Target = 1000.0
+    local fx_Warning = nil
+    local pfx_Warning = nil
+    local i_ShotCount = 0
+    local tg_Construct = Tag("CONSTRUCT_22e5209c-eaeb-40dc-b6ef-a371794110c2")
+    local tg_GithAlly = Tag("ACT1B_CRE_GITHALLY_70082ca5-e943-4e79-9490-56a0e98bc52d")
+    local s_ReloadTimer = "Timer_CRE_EldritchTurret_Char_Reload"
+    local ch_magehand = nil
+    local v_TurretCharged = false
+
+    self.OnInit = function()
+        dist_Target = 2 * params.DistanceSeeking
+        fx_Warning = PrepareEffect(params.TurretBeam)
+        if params.ReloadTime > 0.5 then
+            f_ReloadTime = params.ReloadTime
+        end
+    end
+
+    self.OnLeave = function()
+        helpers.UpdateWarningFX(nil)
+        ch_Target, dist_Target = nil, 2 * params.DistanceSeeking
+    end
+
+    events.TurnStarted = function(ev)
+        i_ShotCount = 0
+    end
+
+    events.TimerFinished = function(ev)
+        if ev.TimerName == s_ReloadTimer then
+            i_ShotCount = 0
+        end
+    end
+
+    helpers.UpdateWarningFX = function(ch_NewTarget)
+        if ch_NewTarget ~= ch_Target or pfx_Warning == nil then
+            if pfx_Warning ~= nil then
+                StopEffect(pfx_Warning)
+                pfx_Warning = nil
+            end
+            if ch_NewTarget ~= nil then
+                pfx_Warning = PlayBeamEffectAt(fx_Warning, me, ch_NewTarget, "", "")
+                DebugText(ch_NewTarget, "one")
+                SetEntityEvent(me, "CRE_GithTurret_SpotPlayer", ch_NewTarget)
+            end
+        end
+    end
+
+    helpers.CalculateTarget = function()
+        local ch_NewTarget = nil
+        local dist_NewTarget = 2 * params.DistanceSeeking
+
+        local characters = GetActiveCharacters(me, params.DistanceSeeking)
+        if #characters > 0 then
+            for i, character in ipairs(characters) do
+                if character.OnStage and not character.Character.IsDead and not IsTagged(character, tg_GithAlly)
+                  and not IsTagged(character, tg_Construct) then
+                    local f_HeightDiff = math.abs(character.Position.Y - me.Position.Y)
+                    --DebugText(me, "HeightDiff = " .. tostring(f_HeightDiff))
+
+                    if f_HeightDiff < f_MaxHeightDiff then
+                        local dist_ToChar = GetDistanceTo(me, character)
+
+                        if dist_ToChar < dist_NewTarget then
+                            local canSee = CanSee(me, character)
+                            if canSee then
+                                ch_NewTarget = character
+                                dist_NewTarget = dist_ToChar
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        helpers.UpdateWarningFX(ch_NewTarget)
+
+        ch_Target, dist_Target = ch_NewTarget, dist_NewTarget
+    end
+
+    helpers.Shoot = function(target)
+        ShootProjectileAt("Projectile_Turret_Arcane", me, ls.math.Vector3(0, 4, 0), target)
+    end
+
+    nodes.Activated = Selector{
+        OnEnter = function()
+        end
+    }
+
+    nodes.Activated.Seeking = Action{
+        function()
+            Sleep(1.0)
+            helpers.CalculateTarget()
+        end,
+
+        Valid = function()
+            return ch_Target == nil or dist_Target > params.DistanceSeeking
+        end
+    }
+
+    nodes.Activated.TargetLocked = Selector{
+        Valid = function()
+            return ch_Target ~= nil and dist_Target <= params.DistanceSeeking
+        end
+    }
+
+    nodes.Activated.TargetLocked.Warning = Action{
+        function()
+            helpers.CalculateTarget()
+            if ch_Target ~= nil then
+                SteerTo(ch_Target)
+            end
+        end,
+
+        Valid = function()
+            return dist_Target <= params.DistanceSeeking and dist_Target > params.DistanceShooting
+        end
+    }
+
+    nodes.Activated.TargetLocked.Shooting = Action{
+        function()
+            local i_ShotsMade = i_ShotCount
+            -- Verify we have a valid target before shooted
+            helpers.CalculateTarget()
+
+            if ch_Target then
+                local v_TargetPos = ch_Target.Position
+                SteerTo(ch_Target, true)
+
+                if i_ShotCount < params.BurstCount then
+                    if not v_TurretCharged then
+                        Sleep(2.0)
+                        v_TurretCharged = true
+                    end
+                    helpers.Shoot(ch_Target)
+                    i_ShotCount = i_ShotCount + 1
+                end
+
+                if not me.IsInCombat then
+                    Sleep(f_BurstTime)
+
+                    if i_ShotCount >= params.BurstCount and i_ShotsMade ~= i_ShotCount then
+                        StartTimer(me, s_ReloadTimer, f_ReloadTime, 0)
+                    end
+                elseif me.IsInTurnBasedMode or me.IsInCombat then
+                    Sleep(2.0)
+
+                    if i_ShotCount >= params.BurstCount then
+                        EndTurn(me)
+                    end
+                end
+            end
+        end,
+
+        OnLeave = function()
+            v_TurretCharged = false
+        end,
+
+        Valid = function()
+            return dist_Target <= params.DistanceShooting
+        end
+    }
+end}
+
+
+game.states.UND_EldritchTurret_Char_CrimesBehaviour = State{function()
+
+    self.Valid = function()
+        return false
+    end
+end}

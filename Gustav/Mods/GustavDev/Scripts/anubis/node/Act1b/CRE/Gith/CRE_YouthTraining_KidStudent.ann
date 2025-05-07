@@ -1,0 +1,164 @@
+game.states.CRE_YouthTraining_KidStudent = State 
+{
+    function()
+    description = [[Gith child youth's behaviour after the beating scene]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.BackToClassPos = {
+        type = EParamType.String,
+        required = true,
+        help=[[Entity that the student will be training against]]
+    }
+    
+
+    params.BackToClassAnim = {
+        type = EParamType.String,
+        required = false,
+        help = [[Animation that the student will play occasionally while they are training.]]
+    }
+
+    params.DebugAnimText = 
+    {
+        type = EParamType.String,
+        required = false,
+        help = [[Placeholder text]]
+    }
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local backToClassPos = Entity(params.BackToClassPos)
+    local backToClassAnim = Animation("CUST_MischeviousPlotting_01_d63ae245-e314-493c-b8e5-0538979109d7")
+    local debugAnimText = params.DebugAnimText --If intellisense is highlighing this, it's a bug: this behaves just fine. If it's not, please delete this comment.
+    local teacherBeatingBoyFlag = Flag("CRE_YouthTraining_State_TeacherBeatingBoy_ccaa2ee8-654b-491f-9623-c8a9376d3c61")
+    local backToClassFlag = Flag("CRE_YouthTraining_State_BackToClass_dad66da6-c0e9-41a9-93ee-5f106d69f92d")
+    local isInPosition = false
+    local escape = Flag("CRE_General_State_KidEscape_88e294b3-111a-4e6b-877a-1cca3fa3fe08")
+    local EscapePoint = Entity("S_CRE_KidEscape_ClassRoom_Point_cb1bf6c2-ddca-4eca-b346-e8b69b3cdd6a")
+    local crawl = Animation("UTIL_DeSpawn_01_d94250ed-e555-471a-89ac-e0cb3e3b4792")
+
+    local firstTimePausePlayed = false
+    local backToClassLookAttrigger = Entity("S_CRE_TrainingKids_LookAtTrigger_488d7b55-bc81-4ed6-a607-105e2998490f")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    nodes.Action_Escape = Action 
+    {
+        function ()
+            if IsInDangerousSurfaceFor(EscapePoint, me.Character) then
+                SteerTo(EscapePoint)
+                Sleep(2.0)
+                return
+            end
+            
+            --if GetDistanceTo(me, EscapePoint)>2.0 then
+                local moveResult = MoveTo(EscapePoint,MovementSpeed.Sprint, true,false,2.0,4.0)
+            --end
+
+            if moveResult ~= error.MovementError.None then
+                DebugText(me, "Error: movement failed")  
+                SteerTo(EscapePoint)
+                Sleep(2.0)
+                return
+            end    
+            SteerTo(EscapePoint)
+            PlayAnimation(crawl,true,false)
+            SetOnStage(me,false)
+        end,
+
+        Valid = function()
+            return GetFlag(escape,me)
+        end
+    }
+
+    nodes.Action_BackToClassPosition = Action 
+    {
+        function ()
+            mod.util.SleepRandom (7.0,9.0)
+            if IsInDangerousSurfaceFor(backToClassPos, me.Character) then
+                SteerTo(backToClassPos)
+                Sleep(2.0)
+                return
+            end
+            try
+                MoveTo(backToClassPos,MovementSpeed.Run, false,false)
+            catch e 
+                if ls.CheckType(e,error.MovementFailed) then
+                    SteerTo(backToClassPos)
+                    Sleep(2.0)     
+                    return         
+                end
+            isInPosition = true       
+            SteerTo(backToClassLookAttrigger)     
+        end,
+
+
+        Valid = function()
+            return (GetFlag(backToClassFlag) and not isInPosition and not GetFlag(escape,me))
+        end
+    }
+
+    nodes.Action_StudyLoop = Action
+    {
+        function ()
+            
+            if not firstTimePausePlayed then
+                mod.util.SleepRandom(1.0, 30.0)
+                firstTimePausePlayed = true
+            end
+
+            if backToClassAnim ~= nil then
+                SteerTo(backToClassLookAttrigger)
+                DebugText(me,"Playing Anim")
+                PlayAnimation(backToClassAnim)
+            end
+
+            mod.util.SleepRandom(5.0, 30.0)
+
+        end,
+
+        OnLeave = function()
+            firstTimePausePlayed = false
+            StopAnimation(me)
+        end,
+        OnInterrupt = function()
+            firstTimePausePlayed = false
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return (GetFlag(backToClassFlag) and isInPosition and not GetFlag(escape,me))
+        end
+    }
+
+    nodes.Action_WatchingBeating = Action 
+    {
+        function()
+            WaitForInterrupt()
+        end,
+            
+        Valid = function()
+            return not GetFlag(backToClassFlag) and not GetFlag(escape,me)
+        end
+
+    }
+     ------------------------------------------------
+end
+
+}

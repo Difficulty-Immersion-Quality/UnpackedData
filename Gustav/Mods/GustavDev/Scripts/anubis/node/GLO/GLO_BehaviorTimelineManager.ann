@@ -1,0 +1,110 @@
+game.states.GLO_BehaviorTimelineManager = State{function()
+    modules = {"shared.dialog"}
+
+    description = [[basic implementation for characters that loop a behavior timeline]]
+
+    params.timelineDialog = {type = EParamType.String, required=true, help=[[
+        The timeline to play.
+    ]]}
+
+    params.sceneTrigger = {type = EParamType.String, required=true, help=[[
+        The scene trigger to use. Character will automatically walk here
+    ]]}
+
+    params.optionalSpeaker1 = {type = EParamType.String, required=false, help=[[
+        Optional other speaker/object in the timeline. If this is a sitting World Behavior, the seat goes here.
+    ]]}
+
+    params.optionalSpeaker2 = {type = EParamType.String, required=false, help=[[
+        Optional other speaker/object in the timeline.
+    ]]}
+
+    params.optionalSpeaker3 = {type = EParamType.String, required=false, help=[[
+        Optional other speaker/object in the timeline.
+    ]]}
+
+
+    local sceneTrigger = Entity(params.sceneTrigger)
+    local timelineDialog = Dialog(params.timelineDialog)
+    local optionalSpeaker1 = Entity(params.optionalSpeaker1)
+    local optionalSpeaker2 = Entity(params.optionalSpeaker2)
+    local optionalSpeaker3 = Entity(params.optionalSpeaker3)
+    local forceRestart = false
+
+    self.Valid = function()
+            return timelineDialog ~= nil
+    end
+
+    nodes.DoTimeline = Action
+    {
+        function()
+            Sleep(2 + 1.5 * math.random())
+            try
+                if optionalSpeaker3 ~= nil and optionalSpeaker2 ~= nil and optionalSpeaker1 ~= nil then
+                    StartBehaviorDialog(timelineDialog, sceneTrigger.Trigger, true, me, optionalSpeaker1, optionalSpeaker2, optionalSpeaker3)
+                    Sleep(25 + 15 * math.random())
+                    BehaviorDialogRequestGracefulStop(me, false)
+                elseif optionalSpeaker2 ~= nil and optionalSpeaker1 ~= nil then
+                    StartBehaviorDialog(timelineDialog, sceneTrigger.Trigger, true, me, optionalSpeaker1, optionalSpeaker2)
+                    Sleep(25 + 15 * math.random())
+                    BehaviorDialogRequestGracefulStop(me, false)
+                elseif optionalSpeaker1 ~= nil then
+                    StartBehaviorDialog(timelineDialog, sceneTrigger.Trigger, true, me, optionalSpeaker1)
+                    Sleep(25 + 15 * math.random())
+                    BehaviorDialogRequestGracefulStop(me, false)
+                else
+                    StartBehaviorDialog(timelineDialog, sceneTrigger.Trigger, true, me)
+                    Sleep(25 + 15 * math.random())
+                    BehaviorDialogRequestGracefulStop(me, false)
+                end
+            catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                DebugText(me, "Dialog Failed")
+                Sleep(20 + 5 * math.random())
+            end
+        end,
+        Valid = function()
+            return not forceRestart
+        end,
+        CanEnter = function()
+            return not forceRestart
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end
+    }
+
+    nodes.RestartingOnSavegameLoad = Action {
+        function()
+            BehaviorDialogRequestGracefulStop(me, false)
+            forceRestart = false
+        end,
+        CanEnter = function()
+            return forceRestart
+        end,
+    }
+    events.SavegameLoaded = function(ev)
+        forceRestart = true
+    end
+
+end}
+
+game.states.GLO_BehaviorTimelineCharacter = State{function()
+
+    params.TimelineState = {type=EParamType.State, required = false, default = nil, help=[[Playing Timeline State.]]}
+    params.StandAtTriggerState = {type=EParamType.State, required = false, default = nil, help=[[Stand at trigger State.]]}
+
+    nodes.TimelineState = Proxy{
+        params.TimelineState
+    }
+
+    nodes.StandAtTriggerState = Proxy{
+        params.StandAtTriggerState
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Sleep(3.0)
+        end
+    }
+
+end}

@@ -1,0 +1,32 @@
+game.states.GLO_Mimic = State{function ()
+
+    description = [[A script helper for Mimics to trigger whole combat group into combat when one engages.]]
+
+    local GLO_Mimic_WokenFromCombatGroup = Flag("GLO_Mimic_WokenFromCombatGroup_97b39544-84ac-40fb-abd1-82b65e3afd37")
+
+    self.OnInit = function()
+    end
+
+    events.EnteredCombat = function(ev)
+        if ev.Entity == me and not GetFlag(GLO_Mimic_WokenFromCombatGroup, me) then
+            try
+                local combatGroup = GetCombatGroupEntities(me.CombatGroupID)
+                for k, v in pairs(combatGroup) do
+                    if not v.OnStage then
+                        SetFlag(GLO_Mimic_WokenFromCombatGroup, v)
+                        SetEntityEvent(v, "GLO_Mimic_Transform")
+                    end
+                end
+            catch ex if ls.CheckType(ex, error.MissingComponent) then
+                DebugText(me, "EXCEPTION: "..tostring(ex))
+                DebugLog("EXCEPTION: "..tostring(ex))
+            end
+        end
+    end
+
+    nodes.Idle = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+end}

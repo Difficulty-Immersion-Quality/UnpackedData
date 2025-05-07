@@ -1,0 +1,150 @@
+game.states.CRE_ChainOfCommand_Captain = State 
+{
+    function()
+    description = [[Captain's behaviours]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local talkingToTemplarFlag = Flag("CRE_ChainOfCommand_State_CaptainTalkingToTemplar_0b2b9e15-d9d4-4977-9cb9-bc81c63aa122")
+    local waitingAtBarrierFlag = Flag("CRE_ChainOfCommand_State_CaptainWaitingAtBarrier_3d2cd928-fe23-4124-84f1-009e11e84110")
+    local waitingAtSecurityOfficeFlag = Flag("CRE_ChainOfCommand_State_CaptainWaitingAtSecurityOffice_37f414da-aacb-4be2-a009-42a5d39bbe72")
+    local deskPos = Entity("S_CRE_CaptainDefaultPos dcfe55b2-8ef8-4fa3-b4ee-ac7136954042")
+    local talkingToTemplarPos = Entity("S_CRE_CaptainTalkingToTemplarPos 76d9419e-5579-4fa3-a906-f549b94f86dd")
+    local waitingAtBarrierPos = Entity("S_CRE_CaptainBackDoorPos c6ad6b9f-423e-4928-87f6-dc6431bf1fe0")
+    local waitingAtSecurityOfficePos = Entity("S_CRE_CaptainAtSecurityOfficeOutside 80757d1f-6134-4196-b04c-e02f90ac72a8")
+    local targetPos = Entity("S_CRE_CaptainDefaultPos dcfe55b2-8ef8-4fa3-b4ee-ac7136954042")
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    nodes.Action_BackToPosition = Action 
+    {
+        function ()        
+            mod.util.SleepRandom (1.0,2.0)
+            if IsInDangerousSurfaceFor(targetPos, me.Character) then
+                SteerTo(targetPos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(targetPos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(targetPos)
+                Sleep(2.0)
+                return false
+            end
+
+            LookFrom(targetPos)
+
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, targetPos) > 1.0
+        end
+    }
+
+    nodes.Action_WaitingAtSecurityOffice = Action
+    {
+        function ()
+            SetEntityEvent(me, "CRE_ChainOfCommand_CaptainActivateAD")
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(waitingAtSecurityOfficeFlag) and
+                   GetDistanceTo(me, waitingAtSecurityOfficePos) <= 1.0
+        end
+    }
+
+    nodes.Action_WaitingAtBarrier = Action
+    {
+        function ()
+            SetEntityEvent(me, "CRE_ChainOfCommand_CaptainActivateAD")
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(waitingAtBarrierFlag) and
+                   not GetFlag(waitingAtSecurityOfficeFlag) and
+                   GetDistanceTo(me, waitingAtBarrierPos) <= 1.0
+        end
+    }
+
+    nodes.Action_TalkingToTemplar = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(talkingToTemplarFlag) and 
+                   not GetFlag(waitingAtBarrierFlag) and
+                   not GetFlag(waitingAtSecurityOfficeFlag) and
+                   GetDistanceTo(me, talkingToTemplarPos) <= 1.0
+        end
+    }
+
+    nodes.Action_Working = Action{
+        function()
+            WaitForInterrupt()
+        end,
+ 
+        Valid = function()
+            return not GetFlag(talkingToTemplarFlag) and 
+                   not GetFlag(waitingAtBarrierFlag) and
+                   not GetFlag(waitingAtSecurityOfficeFlag) and
+                   GetDistanceTo(me, deskPos) <= 1.0
+        end
+    }
+
+    ------------------------------------------------
+    -- Events
+
+    events.FlagSet = function(e)
+        if e.Flag == talkingToTemplarFlag.Guid then
+            targetPos = talkingToTemplarPos
+        end
+        
+        if e.Flag == waitingAtBarrierFlag.Guid then
+            targetPos = waitingAtBarrierPos
+        end 
+
+        if e.Flag == waitingAtSecurityOfficeFlag.Guid then
+            targetPos = waitingAtSecurityOfficePos
+        end 
+    end------------------------------------
+    
+    events.FlagCleared = function(e)
+        if e.Flag == talkingToTemplarFlag.Guid then
+            targetPos = deskPos
+        end
+        
+        if e.Flag == waitingAtBarrierFlag.Guid then
+            targetPos = deskPos
+        end 
+
+        if e.Flag == waitingAtSecurityOfficeFlag.Guid then
+            targetPos = deskPos
+        end 
+    end
+
+end
+}

@@ -1,0 +1,115 @@
+game.states.CRE_ChainOfCommand_OuterGuard = State 
+{
+    function()
+    description = [[Guard that starts by frogmarching the cultists into the monastery and then ends up outside the captain's quarters]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+    params.InterrogateAnim = 
+    {
+        type = EParamType.String,
+        required = false,
+        default = "CUST_Threatening_01_Loop_b4656350-d651-49df-b080-fd66b5703639",
+        help = [[Animation for the cultists being interrogated]]
+    }
+
+    params.InterrogateAD = 
+    {
+        type = EParamType.String,
+        required = false,
+        help = [[AD for the cultists being interrogated]]
+    }
+
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+
+    local isWalkingInside = Flag("CRE_ChainOfCommand_Event_MonasteryGuardsStartWalkingDuringDialog_1f2f29ac-171e-4c13-b08d-341f9c1db1df")
+    local interrogateDialog = Dialog(params.InterrogateAD)
+    local beatingAnim = Animation(params.InterrogateAnim)
+    local dialogCultist = Entity("S_CRE_Cultist01_58fb7ff5-6eff-4746-ba78-0f143fd251bc")
+    local otherGith = Entity("S_CRE_GithGuardMonastery01_fd348f90-dbc9-41a8-8abc-b6e212e9ff77")
+    local quarterMistress = Entity("S_CRE_Quartermistress_ffb0ec61-5739-4b34-8d27-e61b1f4500ad")
+    local playerHasAccess = Flag("CRE_UpperGuards_State_GainedAccess_764df691-d1f0-4bde-ba36-73c4abe6a4e7")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    
+    nodes.Action_InterrogateCultists = Action{
+        function()
+            if  beatingAnim ~= nil then 
+                SleepRandom(0,0.4)
+                PlayAnimation(beatingAnim, false, true)
+            end
+
+            if interrogateDialog ~= nil then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    interrogateDialog,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 3.0,
+                    },
+                    me,
+                    dialogCultist,
+                    otherGith                    
+                )
+                mod.util.SleepRandom(1.00,5.00)
+            end
+        end,
+ 
+        Valid = function()
+            return not GetFlag(isWalkingInside)
+        end
+    }
+    
+    nodes.Action_WaitInCorridor = Action{
+        function()
+           WaitForInterrupt()
+        end,
+ 
+        Valid = function()
+            return GetFlag(isWalkingInside) and not GetFlag(playerHasAccess)
+        end
+    }
+    
+
+    nodes.Action_StandGuard = Action {
+        function()
+            if mod.moveto.MoveToPoint(quarterMistress, MovementSpeed.Stroll, me, 5.0) then
+                Wander(6.0, 6.0, MovementSpeed.Stroll, quarterMistress)
+                mod.util.SleepRandom(2.0, 6.0)
+            end
+
+        end,
+        
+
+        Valid = function()
+            return GetFlag(playerHasAccess)
+        end
+    }
+
+    ------------------------------------------------
+    -- Events   
+    ------------------------------------------------
+    events.FlagCleared = function(e)
+        if e.Flag == isWalkingInside.Guid then
+            StopAnimation(me)
+        end
+    end
+end
+}

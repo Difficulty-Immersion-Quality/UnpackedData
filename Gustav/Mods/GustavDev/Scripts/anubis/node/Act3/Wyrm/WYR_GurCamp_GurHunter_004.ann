@@ -1,0 +1,69 @@
+game.states.WYR_GurCamp_Hunter_004 = State {
+
+    function()
+
+        local pyre = Entity("S_WYR_GurCamp_Pyre_f67b8cd8-f01a-4783-9127-aa6d47ed3cc6")
+        local defaultPos = Entity("S_WYR_GurCamp_GurHunter_004_DefaultPos_a0d4f8f9-b0e5-476a-9f5f-7c57ea84ddcc")
+
+        local inDungeon = Flag("LOW_GurFollowUp_State_InDungeon_1f27517e-bbdf-4b45-8ab4-2c612650311e")
+
+        local anim_Start = Animation("CUST_ArmsCrossed_01_Start_dafd0bbc-012a-403c-aabe-4963aca9cf25")
+        local anim_Loop = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+        local anim_End = Animation("CUST_ArmsCrossed_01_End_ae43ea68-fc1b-456a-88ce-0e1d504e1d40")
+
+        nodes.InDungeon = Action{
+            function()
+                Sleep(6.0)
+            end,
+            Valid = function()
+                return GetFlag(inDungeon)
+            end
+        }
+
+        nodes.StandAtDefaultPos = Action {
+            function()
+                if not IsInDangerousSurfaceFor(defaultPos, me.Character) or IsTagged(me, ignoreDangerousSurfacesTag) then
+                    local moveResult = MoveTo(defaultPos, MovementSpeed.Stroll, false, false, 1.0, 1.5, false)
+                end
+                SteerTo(pyre)
+                Sleep(2.0)
+            end,
+            CanEnter = function()
+                return HasActiveStatus(pyre, "BURNING") and GetDistanceTo(me, defaultPos) > 1.0
+            end
+
+        }
+
+        nodes.ArmesCrossed = Action{
+            function()
+                LookFrom(defaultPos)
+                PlayLoopingAnimation(anim_Start, {anim_Loop}, anim_End)
+                WaitForInterrupt()
+            end,
+            OnLeave = function()
+                StopAnimation(me)
+            end,
+            OnInterrupt = function()
+                StopAnimation(me)
+            end,
+            Valid = function()
+                return HasActiveStatus(pyre, "BURNING")
+            end
+        }
+
+        nodes.IgnitePyre = Action {
+            function()
+                UseItem(pyre.Item, true)
+                Sleep(3.0)
+            end
+        }
+
+        nodes.Fallback = Action{
+            function()
+                Sleep(6.0)
+            end
+        }
+
+    end
+
+}

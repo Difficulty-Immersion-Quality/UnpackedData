@@ -1,0 +1,62 @@
+game.states.LOW_SerialKiller_FigaroAssistant = State{function ()
+
+    --------------------------------Modules--------------------------------
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Variables--------------------------------
+
+    local localChatterPosition = Entity("S_LOW_SerialKiller_Figaro_ChatterPoint_c148f6f3-f1ca-44c7-9bda-2f8fd1d462f6")
+    local localWanderPoint = Entity("LOW_SerialKiller_Figaro_BackstoreWanderPoint_fc15ef62-5426-4388-a789-edbf83e0ec1b")
+    local localEventFlag = Flag("LOW_SerialKiller_Figaros_Event_MoveToChatterPoint_00ee05d0-10b1-4289-b12f-d1867da3bf77")
+    local localWaitingFlag = Flag("LOW_SerialKiller_Figaros_State_WaitingToChatter_3455890f-78e8-4671-b568-b129712e86c6")
+    local localCanChatterFlag = Flag("LOW_SerialKiller_Figaros_State_CanChatter_a9dea102-5bc1-4224-b26c-2078b4794311")
+    --------------------------------Nodes--------------------------------
+
+    nodes.Wander = Action {
+        function()
+            Wander(10, 4.0, MovementSpeed.Walk, localWanderPoint)
+            Sleep(5 + 5 * math.random())
+            Wander(10, 4.0, MovementSpeed.Walk, localWanderPoint)
+            SetFlag(localEventFlag)
+        end,
+        CanEnter = function()
+            return not GetFlag(localEventFlag) and not GetFlag(localWaitingFlag)
+        end,
+    }
+
+    nodes.MoveToChatterPoint = Action {
+        function()
+            if mod.moveto.MoveToPoint(localChatterPosition,  MovementSpeed.Walk, me) then
+                SetFlag(localWaitingFlag)
+                ClearFlag(localEventFlag)
+            else
+                SteerTo(localChatterPosition)
+                Sleep(10 + 10 * math.random())
+            end
+
+        end,
+        CanEnter = function()
+            return GetFlag(localEventFlag) and not GetFlag(localWaitingFlag) and GetFlag(localCanChatterFlag)
+        end,
+    }
+
+    nodes.IdleUntilADFinishes = Action {
+        function()
+            WaitForInterrupt()
+        end,
+        CanEnter = function()
+            return GetFlag(localWaitingFlag)
+        end,
+    }
+    --------------------------------Events--------------------------------
+
+    events.FlagCleared = function(e)
+        if e.Flag == localWaitingFlag.Guid then
+            Interrupt()
+        end
+    end
+
+    --------------------------------Helpers--------------------------------
+
+end
+}

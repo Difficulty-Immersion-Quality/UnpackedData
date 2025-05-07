@@ -1,0 +1,56 @@
+game.states.LOW_Bonecloak_Derryth = State{function()
+
+    modules = {"shared.dialog"}
+
+    local sceneTrigger_Shopkeeper = Entity("S_LOW_BonecloakApothecary_DerrythShop_SceneTrigger_c957c2e9-5b08-4c6c-b2d0-63ed0f34549f")
+    local divorcedFlag = Flag("LOW_BonecloakApothecary_State_DerrythDivorced_0d0124ea-d047-1c62-5e0d-4e3bd26d8a17")
+    local shopkeeperBehavior = Dialog("BHVR_WLRD_GLO_ShopCounterIdling_8003a78e-abe0-459b-f068-418b7d1ec992")
+
+    local sceneTrigger_Divorced = Entity("S_LOW_BonecloakApothecary_DerrythDivorced_SceneTrigger_a2d26e47-a876-480f-a239-4584dd745bc6")
+    local drinkBehavior = Dialog("BHVR_WRLD_GLO_StandAndDrink_a4065598-1ea2-8866-d23f-f765b5008273")
+
+    local houseCatAD = Dialog("LOW_BonecloakApothecary_AD_DerrythMeetsCat_ebbb4c8e-7887-1be2-c9cc-d540408c4d91")
+    local houseCatArrivedFlag = Flag("LOW_BonecloakApothecary_State_CatArrived_97f0d528-039a-4665-ab9f-95ba2f3c0272")
+    local houseCatPermaDefeatedFlag = Flag("LOW_BonecloakApothecary_State_DerrythsCat_PermaDefeated_1b026228-5423-48f0-8377-726f2e3efd26")
+
+    nodes.Shopkeeper = Action{
+        CanEnter = function()
+            return not GetFlag(divorcedFlag)
+        end,
+
+        function()
+            Sleep(2.0)
+            if(not IsInDialog(me,false)) then
+                try
+                    StartBehaviorDialog(shopkeeperBehavior, sceneTrigger_Shopkeeper.Trigger, true, me)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    DebugText(me,"BehaviorDialogStartFailed on [1]", me.Name)
+                end
+            end
+            if(GetFlag(houseCatArrivedFlag) and not GetFlag(houseCatPermaDefeatedFlag)) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    houseCatAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 10 + math.random(5,10)
+                    },
+                    me
+                )
+            end
+        end
+    }
+
+    nodes.Divorced = Action{
+        function()
+            Sleep(2.0)
+            if(not IsInDialog(me,false)) then
+                try
+                    StartBehaviorDialog(drinkBehavior, sceneTrigger_Divorced.Trigger, true, me)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    DebugText(me,"BehaviorDialogStartFailed on [1]", me.Name)
+                end
+            end
+        end
+    }
+
+end}

@@ -1,0 +1,136 @@
+game.states.LOW_SerialKiller_WineFestivalCivilian = State{function ()
+    --------------------------------Description--------------------------------
+
+    description = [[Behaviour for civilians for the Wine Festival. They should have two different behaviours if they are in the wine festival or if they are looking at the crime scene.]]
+
+    --------------------------------Modules--------------------------------
+    modules = {"shared.dialog", "shared.params"}
+
+    --------------------------------Parameters--------------------------------
+    params.StanddAtCrimeScene = {type = EParamType.String, help = [[Trigger needed for the character be standing at the crime scene,]], required = true }
+    params.TimelineSceneTrigger = {type = EParamType.String, help = [[Timeline scene trigger for the world behaviour.]], required = true }
+    params.TimelineDialog = {type = EParamType.String, help = [[World behaviour dialog.]], required = true }
+    params.StandAtTriggerFallback = {type = EParamType.String, help = [[Stand at trigger fallback in case World Behaviour fails]], required = true }
+    params.RitualAnimationStart = {type = EParamType.String, help = [[For loop animations, start animation.]], required = false }
+    params.RitualAnimationLoop = {type = EParamType.String, help = [[For loop animations, start animation. For normal animations, single animation needed]], required = false }
+    params.RitualAnimationEnd = {type = EParamType.String, help = [[For loop animations, start animation.]], required = false }
+
+    --------------------------------Variables--------------------------------
+
+    local wineFestivalFlag = Flag("LOW_SerialKiller_State_WineFestival_a83198eb-b080-4001-bd00-d8368f1334a5")
+    local wineFestivalBool = false
+    local ritualHighberrysFlag = Flag("LOW_SerialKiller_State_HighberrysRitualPerformed_00c1e2ab-8752-47f1-b847-51aedc0fb189")
+    local ritualHighberrysBool = false
+    local localRitualAnimationStart = Animation(params.RitualAnimationStart)
+    local localRitualAnimationLoop = Animation(params.RitualAnimationLoop)
+    local localRitualAnimationEnd = Animation(params.RitualAnimationEnd)
+    local localTimelineDialog = Dialog(params.TimelineDialog)
+    local localSceneTrigger = Entity(params.TimelineSceneTrigger)
+    local forceRestart = false
+    --------------------------------Nodes--------------------------------
+
+    nodes.Ritual = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        CanEnter = function()
+            return ritualHighberrysBool
+        end
+    }
+
+    nodes.Ritual.ProxyStandAtTriggerCrimeScene = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.StanddAtCrimeScene
+        },
+        OnLeave = function()
+            Sleep(10 + 10 * math.random())
+        end
+    }
+
+    nodes.Ritual.PlayAnimation = Action {
+        function()
+            Sleep(1 + 2 * math.random())
+            if localRitualAnimationStart ~= nil then
+                try
+                    PlayLoopingAnimation(localRitualAnimationStart, {localRitualAnimationLoop}, localRitualAnimationEnd, false)
+                catch e then
+                    DebugLogPersonal("Loop animation failed to play: [1] " .. tostring(e))
+                end
+
+                Sleep(20 + 10 * math.random())
+            else
+
+                if localRitualAnimationLoop ~= nil then
+                    try
+                        PlayAnimation(localRitualAnimationLoop, true, false)
+                    catch e if ls.CheckType(e, error.ErrorType) then
+                        DebugLogPersonal("Animation failed to play: [1] " .. tostring(e))
+                    end
+                    Sleep(20 + 5 * math.random())
+                end
+            end
+        end,
+        CanEnter = function()
+            return localRitualAnimationLoop ~= nil
+        end,
+    }
+
+    nodes.TimelineNode = Action {
+        function()
+            try
+                StartBehaviorDialog(localTimelineDialog, localSceneTrigger.Trigger, true, me)
+                Sleep(25 + 15 * math.random())
+                BehaviorDialogRequestGracefulStop(me, false)
+            catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                Sleep(25 + 15 * math.random())
+            end
+        end,
+
+        CanEnter = function()
+            return wineFestivalBool and not ritualHighberrysBool
+        end,
+    }
+
+    nodes.StandAtTriggerFallback = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.StandAtTriggerFallback
+        }
+    }
+
+    nodes.RestartingOnSavegameLoad = Action {
+        function()
+            BehaviorDialogRequestGracefulStop(me, false)
+            forceRestart = false
+        end,
+        CanEnter = function()
+            return forceRestart
+        end,
+    }
+
+    --------------------------------Events--------------------------------
+    events.FlagSet = function(e)
+        if e.Flag == wineFestivalFlag.Guid then
+            wineFestivalBool = true
+        end
+        if e.Flag == ritualHighberrysFlag.Guid then
+            ritualHighberrysBool = true
+        end
+
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == wineFestivalFlag.Guid then
+            wineFestivalBool = false
+        end
+        if e.Flag == ritualHighberrysFlag.Guid then
+            ritualHighberrysBool = false
+        end
+    end
+
+    events.SavegameLoaded = function(ev)
+        forceRestart = true
+    end
+end
+}

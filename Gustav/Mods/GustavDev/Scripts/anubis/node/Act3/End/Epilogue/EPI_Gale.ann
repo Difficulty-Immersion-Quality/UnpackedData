@@ -1,0 +1,391 @@
+game.states.EPI_Gale = State{
+    function ()
+        modules = {"shared.moveto", "shared.util", "shared.items", "shared.math", "shared.dialog"}
+
+        description = [[Gale's behaviour for Act 3 EPI.]]
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- Local params
+
+        local galeCampSpot = Entity("S_EPI_StartPointGale_eb5481f4-5b2e-485f-ba3d-7cb3cd066872")
+        local galeTableSpot = Entity("S_EPI_GaleTableSpot_18e6d1e1-2d0d-43e7-8c34-d1efd48ca5b3")
+
+        local galeDrinkingSpots = {Entity("S_EPI_GaleDrinkingSpot_e8051030-c106-4137-a758-dbd7dd64afcc"),
+                               Entity("S_EPI_GaleDrinkingSpot_000_3791824b-b5f8-4aff-b874-a74eab6dd2d2"),
+                                Entity("S_EPI_GaleDrinkingSpot_001_10e7dd38-4f07-4836-aea7-398f03bfbbdb")}
+
+        local galeReadingSpots = {Entity("S_EPI_StartPointGale_eb5481f4-5b2e-485f-ba3d-7cb3cd066872"),
+                               Entity("S_EPI_GaleReadingSpot_9b180c40-025e-4791-9c97-1c7c9ada8fe1")}
+
+        local galeIsGod = Flag("ORI_Gale_State_IsGod_ec94f9a4-b032-ce25-f4eb-ecf4ed37d65d")
+        local spectralGale = Flag("EPI_Epilogue_State_SpectralGalePresent_fe6af825-0573-49e0-8dbb-ba2198f2be6b")
+        local galeInHell = Flag("END_GameFinale_Event_AccompanyKarlachToHell_35150cbf-2c72-1049-37ed-14dbc3736135")
+
+        local galeAD = Dialog("EPI_Epilogue_AD_IdleGale_d59f31c7-1818-167e-9247-455745f976fc")
+        local godGaleAD = Dialog("EPI_Epilogue_AD_IdleGodGale_129037dc-1013-c0d6-e1eb-c021f1251358")
+        local spectralGaleAD = Dialog("EPI_Epilogue_AD_IdleSpectralGale_19cdf831-ee3b-d4fa-db95-b4186eeb432c")
+
+        local chattingAnimStart = Animation("CUST_EPI_Gale_Chatting_01_Start_0dbd1f4b-6e97-4c96-9e87-c33c2d970cb0")
+        local chattingAnimLoop = Animation("CUST_EPI_Gale_Chatting_01_Loop_c49d9988-44f0-47ec-8afb-7c08857f7852")
+        local chattingAnimEnd = Animation("CUST_EPI_Gale_Chatting_01_End_28e5aa84-76fc-48ba-b129-2b8338a1cb99")
+
+        local drinkingAnimStart = Animation("CUST_EPI_Gale_Drinking_01_Start_b97491aa-c5f5-42ce-aec0-78043892ce39")
+        local drinkingAnimLoop = Animation("CUST_EPI_Gale_Drinking_01_Loop_ac8eb7ae-4e86-4f82-8586-ea152572f8c6")
+        local drinkingAnimEnd = Animation("CUST_EPI_Gale_Drinking_01_End_8814dff3-7b1f-4252-8f40-76e8e6a09698")
+        local eatingAnim = Animation("CUST_EPI_Gale_Eating_01_ac88a100-cd5e-48bc-9a3e-eb3da16b2f9b")
+
+        local readingAnim = Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716")
+        local readingAvernusAnim = Animation("CUST_EPI_GaleAvernus_Reading_Book_01_02aa2345-32c0-4e51-a384-ba1ea4cf71ec")
+
+        local chattingGodAnimStart = Animation("CUST_EPI_Gale_Chatting_01_Start_0dbd1f4b-6e97-4c96-9e87-c33c2d970cb0")
+        local chattingGodAnimLoop = Animation("CUST_EPI_Gale_Chatting_01_Loop_c49d9988-44f0-47ec-8afb-7c08857f7852")
+        local chattingGodAnimEnd = Animation("CUST_EPI_Gale_Chatting_01_End_28e5aa84-76fc-48ba-b129-2b8338a1cb99")
+
+        local drinkingGodAnim = Animation("CUST_EPI_GaleGod_Drinking_01_28c60b89-0685-4707-ab82-18fc12ca70d2")
+        local idleGodAnim = Animation("CUST_EPI_GaleGod_IdleRandom_01_1c29e931-f968-42dd-b18d-f4452ffadb09")
+
+        local spectralWaveAnim = Animation("CUST_EPI_GaleSpectral_Waving_01_fad4b08f-470b-4816-9dda-9b03399782c0")
+
+        local shouldPlayAD = nil
+
+        local tara = Entity("S_GLO_Gale_Tressym_ada7ee81-829d-48c7-ba73-9c9ec191d236")
+        local taraPresent = Flag("EPI_Epilogue_State_TaraPresent_3a3c5588-9b88-42bd-9357-8596543cbb36")
+
+        local divineBardSpot = Entity("S_EPI_DivineBardTrigger_d5000a2b-ec08-4ab2-b3ad-7d6fdcc63271")
+        local musicIsOnFlag = Flag("EPI_Epilogue_DivineBard_State_PlayingSong_262657bd-c979-4994-bb16-8266a3d2c146")
+        local musicIsOn = false
+        local startedDancing = false
+        --------------------------------------------------------------------------------------------------------------------
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- Helpers
+
+        helpers.action.PlayAnimationAt = function(pos, animation)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 0.1, false) then
+                LookFrom(pos)
+                DebugText(me, "Playing Animation: [1]", tostring(animation))
+                PlayAnimation(animation, true, false)
+                Sleep(3.0)
+            else
+                DebugText(me, "Error: can't move to [1]", pos.Name)
+                Sleep(3.0)
+            end
+        end
+
+        helpers.action.PlayAnimationAtAndPlayAD = function(pos, animation, dialog, pauseBeforeDialog)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 0.5, false) then
+                LookFrom(pos)
+                DebugText(me, "Playing Animation: [1]", tostring(animation))
+                StartTimer(me,"ADTimer_Gale", pauseBeforeDialog,0)
+                shouldPlayAD = dialog
+                PlayAnimation(animation, true, false)
+                Sleep(3.0)
+            else
+                DebugText(me, "Error: can't move to [1]", pos.Name)
+                Sleep(3.0)
+            end
+        end
+
+        events.TimerFinished = function(e)
+            if(e.TimerName == "ADTimer_Gale") then
+                if mod.dialog.IsSpeakerAvailable(me) then
+                    StartAutomatedDialogImmediate(shouldPlayAD, me)
+                end
+            end
+            if (e.TimerName == "MusicStillOn_Gale") then
+                StopAnimation(me, false)
+            end
+            if (e.TimerName == "MusicIsOff_Gale") then
+                musicIsOn = false
+            end
+        end
+
+        events.FlagCleared = function(e)
+            if e.Flag == musicIsOnFlag.Guid then
+                if (musicIsOn and startedDancing) then
+                    StartTimer(me,"MusicStillOn_Gale", math.random(1,2), 0)
+                    StartTimer(me,"MusicIsOff_Gale", math.random(4,6), 0)
+                end
+            end
+        end
+
+        helpers.action.PlayAD = function(probability, dialog, waitForADCompletion)
+            local rand = mod.math.random(0.0, 100.0)
+
+            if rand < probability then
+                DebugText(me, "Should play AD")
+                mod.dialog.StartCheckedAutomatedDialog(dialog,{ waitForCompletion = waitForADCompletion }, me)
+            end
+        end
+
+        helpers.FindClosestPlayerCharacter = function()
+            local characters = GetActiveCharacters(me, 30)
+
+            local minDistance = 9999.0
+            local closestCharacter = nil
+
+            if #characters > 0 then
+                for _, character in ipairs(characters) do
+                    local dist = GetDistanceTo(me, character)
+                    if  character ~= me and
+                        character.Character.IsPartyMember and
+                        character.OnStage and
+                        not character.Character.IsDead and
+                        dist < minDistance then
+                            minDistance = dist
+                            closestCharacter = character
+                    end
+                end
+            end
+
+            return closestCharacter
+        end
+        --------------------------------------------------------------------------------------------------------------------
+        -- States
+
+        local closestCharacter = nil
+
+        nodes.SpectralGale = Action{
+            function()
+                SteerTo(closestCharacter)
+                DebugText(me, "Playing Animation: [1]", tostring(spectralWaveAnim))
+                StartTimer(me,"ADTimer_Gale", 3,0)
+                shouldPlayAD = spectralGaleAD
+                PlayAnimation(spectralWaveAnim, true, false)
+                Sleep(7)
+            end,
+            Valid = function()
+                closestCharacter = nil
+                closestCharacter = helpers.FindClosestPlayerCharacter()
+                if closestCharacter == nil then return false end
+                return GetFlag(spectralGale) and GetDistanceTo(me, closestCharacter) <= 15
+            end,
+            OnLeave = function()
+                StopTimer(me,"ADTimer_Gale")
+            end
+        }
+
+        nodes.SpectralGaleIdle = Action{
+            function()
+                if mod.moveto.MoveToPoint(galeCampSpot, MovementSpeed.Stroll, me, 0.5, false) then LookFrom(galeCampSpot) end
+                Sleep(1)
+            end,
+            Valid = function()
+                return GetFlag(spectralGale)
+            end
+        }
+
+        local lastNodeName = nil
+        local talkToTara = 1
+        local readyToTalk = Flag("EPI_Epilogue_Gale_ReadyToTalkWithTara_214ca03f-1316-4734-99df-a10a4f62d0d2")
+        local taraIsReadyToTalk = Flag("EPI_Epilogue_Tara_ReadyToTalkWithGale_85a828ba-f86f-495f-9a86-87eb0179dea2")
+
+        nodes.TalkToTara_Prepare = Action{
+            function()
+                if mod.moveto.MoveToPoint(galeCampSpot, MovementSpeed.Stroll, me, 1, false) then
+                    SetFlag(readyToTalk)
+                    LookFrom(galeCampSpot)
+                    Sleep(15)
+                    if not GetFlag(taraIsReadyToTalk) then talkToTara = 1 end
+                else
+                    Sleep(5)
+                    talkToTara = 1
+                end
+            end,
+            Valid = function()
+                return talkToTara >= 2 and GetFlag(taraPresent) and not GetFlag(taraIsReadyToTalk)
+            end
+        }
+
+        nodes.TalkToTara = Action{
+            function()
+                local chattingStart = nil
+                local chattingLoop = nil
+                local chattingEnd = nil
+                local dialog = nil
+                if (GetFlag(galeIsGod)) then
+                    chattingStart = chattingGodAnimStart
+                    chattingLoop = chattingGodAnimLoop
+                    chattingEnd = chattingGodAnimEnd
+                    dialog = godGaleAD
+                else
+                    chattingStart = chattingAnimStart
+                    chattingLoop = chattingAnimLoop
+                    chattingEnd = chattingAnimEnd
+                    dialog = galeAD
+                end
+                if mod.moveto.MoveToPoint(galeCampSpot, MovementSpeed.Stroll, me, 1, false) then
+                    SteerTo(tara)
+                    try
+                        PlayLoopingAnimation(chattingStart, {chattingLoop}, chattingEnd)
+                    catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                        DebugText(me, "Chatting Animation failed")
+                    end
+                else
+                    DebugText(me, "Error: can't move to [1]", pos.Name)
+                    Sleep(3.0)
+                    talkToTara = false
+                end
+                mod.dialog.StartCheckedAutomatedDialog(
+                    dialog,
+                    {
+                        waitForCompletion = true,
+                        fallbackSoloDialog = galeAD,
+                    },
+                    me,
+                    tara
+                )
+                StopAnimation(me)
+                LookFrom(galeCampSpot)
+                Sleep(10)
+
+                lastNodeName = nil
+                talkToTara = 0
+            end,
+            OnLeave = function()
+                ClearFlag(readyToTalk)
+                ClearFlag(taraIsReadyToTalk)
+            end,
+            Valid = function()
+                return talkToTara >= 2 and GetFlag(taraPresent) and GetFlag(taraIsReadyToTalk)
+            end
+        }
+
+        nodes.HumanGale = Selector{
+            function(nodes)
+                if GetFlag(musicIsOnFlag) then
+                    musicIsOn = true
+                end
+                local newNodeName = lastNodeName
+                local newNode = nil
+                while (newNodeName == lastNodeName) do
+                    newNode = FindRandomSelectable(nodes)
+                    newNodeName = newNode.Name
+                end
+                lastNodeName = newNodeName
+                return newNode
+            end,
+            Valid = function()
+                return not GetFlag(galeIsGod)
+            end
+        }
+
+        nodes.HumanGale.Drinking = Action{
+            function()
+                DebugText(me,"Drinking interaction")
+                local pos = galeDrinkingSpots[math.random(#galeDrinkingSpots)]
+
+                if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 1, false) then
+                    SteerTo(divineBardSpot)
+                    startedDancing = true
+                    PlayLoopingAnimation(drinkingAnimStart, {drinkingAnimLoop}, drinkingAnimEnd)
+                    Sleep(5)
+                    mod.dialog.StartCheckedAutomatedDialog(galeAD,{ waitForCompletion = false }, me)
+                    Sleep(30)
+                    StopAnimation(me)
+                    startedDancing = false
+                else
+                    DebugText(me, "Error: can't move to [1]", pos.Name)
+                    Sleep(3.0)
+                end
+                talkToTara = talkToTara + 1
+            end,
+            Valid = function()
+                return musicIsOn
+            end,
+            OnLeave = function()
+                StopTimer(me,"MusicIsOn_Gale")
+            end,
+            OnInterrupt = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.HumanGale.Eating = Action{
+            function()
+                DebugText(me,"Eating interaction")
+                helpers.PlayAnimationAt(galeTableSpot, eatingAnim)
+                Sleep(3)
+                talkToTara = talkToTara + 1
+            end,
+            OnInterrupt = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.HumanGale.ReadingInfernal = Action{
+            function()
+                DebugText(me,"Reading infernal interaction")
+                helpers.PlayAnimationAt(galeReadingSpots[math.random(#galeReadingSpots)], readingAvernusAnim)
+                Sleep(10)
+                talkToTara = talkToTara + 1
+            end,
+            OnInterrupt = function()
+                StopAnimation(me)
+            end,
+            Valid = function()
+                return GetFlag(galeInHell, me)
+            end
+        }
+
+        nodes.HumanGale.Reading = Action{
+            function()
+                DebugText(me,"Reading interaction")
+                helpers.PlayAnimationAt(galeReadingSpots[math.random(#galeReadingSpots)], readingAnim)
+                Sleep(5)
+                talkToTara = talkToTara + 1
+            end,
+            OnInterrupt = function()
+                StopAnimation(me)
+            end,
+            Valid = function()
+                return not GetFlag(galeInHell, me)
+            end
+        }
+
+        nodes.GodGale = Selector{
+            function(nodes)
+                local newNodeName = lastNodeName
+                local newNode = nil
+                while (newNodeName == lastNodeName) do
+                    newNode = FindRandomSelectable(nodes)
+                    newNodeName = newNode.Name
+                end
+                lastNodeName = newNodeName
+                return newNode
+            end,
+            Valid = function()
+                return GetFlag(galeIsGod)
+            end
+        }
+
+        nodes.GodGale.Idle = Action{
+            function()
+                DebugText(me,"Idle interaction")
+                helpers.PlayAnimationAtAndPlayAD(galeCampSpot, idleGodAnim, godGaleAD, 1)
+                Sleep(10)
+                talkToTara = talkToTara + 1
+            end,
+            OnInterrupt = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.GodGale.Drinking = Action{
+            function()
+                DebugText(me,"Idle interaction")
+                helpers.PlayAnimationAt(galeCampSpot, drinkingGodAnim)
+                Sleep(10)
+                talkToTara = talkToTara + 1
+            end,
+            OnInterrupt = function()
+                StopAnimation(me)
+            end
+        }
+
+
+        --------------------------------------------------------------------------------------------------------------------
+
+
+    end
+    }

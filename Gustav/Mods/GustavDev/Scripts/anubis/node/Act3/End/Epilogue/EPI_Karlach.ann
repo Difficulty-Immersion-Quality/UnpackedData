@@ -1,0 +1,571 @@
+game.states.EPI_Karlach = State{
+function ()
+    modules = {"shared.moveto", "shared.util", "shared.items", "shared.math", "shared.dialog"}
+
+    description = [[Karlach's behaviour for Act 3 EPI.]]
+
+    local mindFlayerForm = Tag("FULL_CEREMORPH_3797bfc4-8004-4a19-9578-61ce0714cc0b")
+
+    --------------------------------------------------------------------------------------------------------------------
+    -- Local params
+    local divineBardPlaying = Flag("EPI_Epilogue_DivineBard_State_PlayingSong_262657bd-c979-4994-bb16-8266a3d2c146")
+
+    local idleAD = Dialog("EPI_Epilogue_AD_IdleKarlach_59298f3f-4061-09ea-ed62-2a2b2ae52c15")
+    local smelledFood = Flag("EPI_Karlach_Event_SmelledFood_f38e71c4-49ca-9ee3-e49b-8aabe70e0c05")
+    local aboutToEat = Flag("EPI_Karlach_Event_AboutToEat_60fcc151-c903-ba56-7ada-5f5a89e4f82a")
+    local engineHot = Flag("EPI_Karlach_Event_EngineHot_bdab9962-2cb2-cc98-da8b-beac2cb723d9")
+    local stargazing = Flag("EPI_Karlach_Event_Stargazing_88dd58fd-38d5-f8c5-5eba-fd3647c77a18")
+
+    -- Action_SitAndJam
+    local treeTrunk = Entity("S_EPI_TreeTrunk_7e08d719-5c72-4294-a0b3-c71f5dd81a01")
+    local treeTrunkValidPos = Entity("S_EPI_Karlach_TreeTrunkPos_f18e96f8-c2dd-4a8f-a076-fbe0247bac08")
+    local sittingOnTreeTrunk = false
+
+    -- Action_DrinkingFromBarrel
+    local barrel = Entity("S_EPI_KarlachBarrel_a5d0f97e-a02d-453c-84b7-a03795d70e60")
+    local drinkFromBarrelSceneTrigger = Entity("BHVR_WLRD_EPI_Karlach_DrinkingFromBarrel_SceneTrigger_84393049-c9e9-448e-8021-d62fb410872a")
+    local drinkFromBarrelDialog = Dialog("BHVR_WRLD_EPI_Karlach_DrinkingFromBarrel_d1d749ec-d798-f629-eac7-0e96d2d3820a")
+
+    -- Action_DrinkingAtTable
+    local chair = Entity("S_EPI_KarlachDrinkingChair_c18d7c58-a8b7-4464-8cc7-f45eed0228d1")
+    local chairPos = Entity("S_EPI_KarlachDrinkingChair_Pos_95453fdb-7270-4c76-80de-ea37d377b9cc")
+    local mug = Entity("S_EPI_KarlachDrinkingMug_40bcf5e6-f5e4-4602-a2c2-b16f23dd23fd")
+    local mugPos = Entity("S_EPI_KarlachDrinkingMug_Pos_dc0cc360-2177-413d-9517-82b0c827b43b")
+    local drinkingAtTableSceneTrigger = Entity("BHVR_WRLD_EPI_Karlach_DrinkingAtTable_SceneTrigger_9fd44107-f776-43a1-ba89-75059844aecf")
+    local drinkingAtTableDialog = Dialog("BHVR_WRLD_EPI_Karlach_DrinkingAtTable_6e06639f-3bff-9451-dac7-65afaf027d1d")
+
+    -- Action_Eating
+    local eatingPos = Entity("S_EPI_KarlachFoodTablePos_0623444d-8d7e-4b0b-ade1-32159571f62b")
+    local eatingSceneTrigger = Entity("BHVR_WLRD_EPI_Karlach_Eating_SceneTrigger_236f8723-5286-494a-bd2e-0f71efd18858")
+    local eatingDialog = Dialog("BHVR_WRLD_EPI_Karlach_Eating_21f0d9f2-1e95-af14-a1b7-26e9366fd908")
+
+    -- Action_Dancing
+    local moodForDancing = 0 -- The more she drinks the more she wants to dance
+    local dancingPos = Entity("S_EPI_KarlachDancePos_7035aae1-2fe1-4cc8-a733-d0b24be72642")
+    local dancingAnimationStart = Animation("CUST_EPI_Karlach_Dance_01_Start_b86cc985-88df-4e21-ac0f-1b63329338e7")
+    local dancingAnimationLoop = Animation("CUST_EPI_Karlach_Dance_01_Loop_0939135a-a08c-4025-9bcd-1d53b2758474")
+    local dancingAnimationEnd = Animation("CUST_EPI_Karlach_Dance_01_End_40bac793-0d03-4418-a7ba-db2972790f1a")
+    local jammingAnimationStart = Animation("CUST_EPI_Karlach_Jamming_01_Start_1367c13c-107d-41ff-89b5-f67308a3a5c5")
+    local jammingAnimationLoop = Animation("CUST_EPI_Karlach_Jamming_01_Loop_3c70c66b-1d9a-4d4d-a2bb-9f1cd31d1727")
+    local jammingAnimationEnd = Animation("CUST_EPI_Karlach_Jamming_01_End_79a73ef9-662e-42f7-8077-65f5a6554c53")
+
+    -- Action_Stargazing
+    local moodForStargazing = 0 -- The more she eats the more she wants to lie down
+    local stargazingPos = Entity("S_EPI_Karlach_Stargazing_633e3204-44e1-4c51-838b-427150007e72")
+    local stargazingStart = Animation("CUST_EPI_Karlach_StargazingStand_01_Start_cddbdbec-a07b-43c6-843a-905308687e76")
+    local stargazingLoop =  Animation("CUST_EPI_Karlach_StargazingStand_01_Loop_f80235d8-5c96-4dfc-a9a6-cc928606b156")
+    local stargazingEnd =   Animation("CUST_EPI_Karlach_StargazingStand_01_End_14eb5f0e-aa5c-4e89-87f3-215bd675609a")
+    local stargazingSitStart =  Animation("CUST_EPI_Karlach_StargazingSit_01_Start_7387d2a8-b99a-496f-bee3-1e65c15bab24")
+    local stargazingSitLoop =   Animation("CUST_EPI_Karlach_StargazingSit_01_Loop_43384cb6-9fab-4c91-ac9b-5ecde0e8d61c")
+    local stargazingSitEnd =    Animation("CUST_EPI_Karlach_StargazingSit_01_End_1caf9b7a-4acb-4017-af36-4a4ebdd80a35")
+
+    -- Action_PickingFlowers
+    local pickingFlowersPos = Entity("S_EPI_KarlachPickingFlowersPos_cd0b161f-9f6e-4b6d-9f04-98389b79097e")
+    local pickingFlowers = Animation("CUST_EPI_Karlach_PickFlower_01_af2606cb-dc75-4beb-a266-735b05a28e54")
+
+    -- Action_PartyTrick
+    local trick = Animation("CUST_EPI_Karlach_PartyTrick_01_5a13f6b9-357b-4290-a14f-41b907146e68")
+
+    -- Action_HappyBurst
+    local happyBurst = Animation("CUST_EPI_Karlach_HappyBurst_01_c485ac2d-7947-4a23-a2a3-1efd32d29e6d")
+
+    -- Clive interactions
+    local hasClive = Flag("EPI_Karlach_State_HasClive_0b52fc06-c291-4503-9475-3ed418bc816d")
+    local wasStanding = false -- Only play their interactions if in the previous action she was standing, also used for Action_PartyTrick
+
+    -- Action_PointAtOther
+    local pointAt = nil
+    local talkPlushStart =  Animation("CUST_EPI_Karlach_TalkPlush_01_Start_7e107858-7fe7-4a9a-93ae-36662d43d345")
+    local talkPlushLoop =   Animation("CUST_EPI_Karlach_TalkPlush_01_Loop_bffca561-6d7c-4379-a60f-5ff3b251fc3e")
+    local talkPlushEnd =    Animation("CUST_EPI_Karlach_TalkPlush_01_End_be41aa92-9de1-496d-b429-062545596b8f")
+
+    -- Action_HuggingClive
+    local hugPlush = Animation("CUST_EPI_Karlach_HugPlush_01_61a8916f-e214-4a5a-a560-f8b3b8ccc7a3")
+
+    -- Action_PushUps
+    local pushUpsPos = Entity("S_EPI_KarlachPushUps_4b8e1de3-d907-4423-bddc-2e1909a39f21")
+    local pushUps = Animation("CUST_EPI_Karlach_PushUp_01_6b4ca414-cb8c-4d0c-9258-da8631f05537")
+    --------------------------------------------------------------------------------------------------------------------
+
+    --------------------------------------------------------------------------------------------------------------------
+    -- Helpers
+    helpers.ItemAvailable = function(item, pos)
+        return  mod.items.ItemIsValid(item) and
+                not mod.items.SafeIsDestroyed(item) and
+                helpers.ItemAtPosition(item, pos)
+    end
+
+    helpers.ItemAtPosition = function(item, pos)
+        local distance = GetDistanceTo(item, pos)
+        local angle = math.abs(mod.math.VectorAngle(item.ForwardDirection, pos.ForwardDirection))
+
+        return distance < 0.05 and angle < 2
+    end
+
+    helpers.action.PlayAnimationAt = function(pos, animation)
+        if mod.moveto.MoveToPoint(pos, MovementSpeed.Walk, me, 0.5, false) then
+            LookFrom(pos)
+            DebugText(me, "Playing Animation: [1]", tostring(animation))
+            PlayAnimation(animation, true, false)
+            Sleep(3.0)
+        else
+            DebugText(me, "Error: can't move to [1]", pos.Name)
+            Sleep(3.0)
+        end
+    end
+
+    helpers.action.PlayLoopingAnimationAt = function(pos, animationStart, animationLoop, animationEnd, animationLength, endSleep)
+        if mod.moveto.MoveToPoint(pos, MovementSpeed.Walk, me, 0.5, false) then
+            LookFrom(pos)
+            DebugText(me, "Playing Animation: [1]", tostring(animationLoop))
+            DebugText(me, "Animation length: [1]", tostring(animationLength))
+            PlayLoopingAnimation(animationStart, {animationLoop}, animationEnd)
+            Sleep(animationLength)
+            StopAnimation(me)
+            Sleep(endSleep)
+        else
+            DebugText(me, "Error: can't move to [1]", pos.Name)
+            Sleep(3.0)
+        end
+    end
+
+    helpers.FindClosestCharacter = function()
+        local characters = GetActiveCharacters(me, 30)
+
+        local minDistance = 9999.0
+        local closestCharacter = nil
+
+        if #characters > 0 then
+            for _, character in ipairs(characters) do
+                local dist = GetDistanceTo(me, character)
+                if  character ~= me and
+                    character.OnStage and
+                    not character.Character.IsDead and
+                    CanSee(me, character) and
+                    dist < minDistance then
+                        minDistance = dist
+                        closestCharacter = character
+                end
+            end
+        end
+
+        return closestCharacter
+    end
+
+
+    helpers.action.PlayIdleAD = function(flag, probability, waitForADCompletion)
+        ClearFlag(smelledFood)
+        ClearFlag(aboutToEat)
+        ClearFlag(engineHot)
+        ClearFlag(stargazing)
+
+        SetFlag(flag)
+        local rand = mod.math.random(0.0, 100.0)
+        DebugText(me, "Rolled a [1] for AD", rand)
+
+        if rand < probability then
+            mod.dialog.StartCheckedAutomatedDialog(idleAD,{ waitForCompletion = waitForADCompletion }, me)
+        end
+    end
+    --------------------------------------------------------------------------------------------------------------------
+
+    --------------------------------------------------------------------------------------------------------------------
+    -- States
+    nodes = Selector{
+        function(node)
+            if IsTagged(me, mindFlayerForm) then
+                return node.Proxy_MindFlayerBehaviour
+            else
+                DebugText(me, "Can interact with Clive: [1].", wasStanding and GetFlag(hasClive, me))
+                return FindWeightedRandomSelectable(node, {
+                    [node.Action_Eating] = 3,
+                    [node.Action_Dancing] = moodForDancing,
+                    [node.Action_SitAndJam] = 2,
+                    [node.Action_DrinkingAtTable] = 2,
+                    [node.Action_DrinkingFromBarrel] = 2,
+                    [node.Action_Stargazing] =  moodForStargazing,
+                    [node.Action_PickingFlowers] = 3,
+                    [node.Action_PartyTrick] = 3,
+                    [node.Action_HappyBurst] = 3,
+                    [node.Action_PushUps] = 3,
+                    [node.State_CliveInteractions] = 5,
+                })
+            end
+        end
+    }
+
+    nodes.Proxy_MindFlayerBehaviour = Proxy{
+        game.states.EPI_Karlach_Mindflayer
+    }
+
+    nodes.Action_Stargazing = Action{
+        function()
+            DebugText(me, "I'm Stargazing")
+            if mod.moveto.MoveToPoint(stargazingPos, MovementSpeed.Walk, me, 0.5, false) then
+                LookFrom(stargazingPos)
+                helpers.PlayIdleAD(stargazing, 70, true)
+
+                if mod.math.random(0.0, 100.0) > 50.0 then
+                    helpers.PlayLoopingAnimationAt(stargazingPos, stargazingStart, stargazingLoop, stargazingEnd, 17.699997, 8.0)
+                else
+                    helpers.PlayLoopingAnimationAt(stargazingPos, stargazingSitStart, stargazingSitLoop, stargazingSitEnd, 27.200001, 8.0)
+                end
+            else
+                DebugText(me, "Stargazing: failed to move to pos.")
+                Sleep(3.0)
+            end
+        end,
+        OnEnter = function()
+            wasStanding = false
+            moodForStargazing = 0
+        end,
+    }
+
+    nodes.Action_Dancing = Action {
+        OnEnter = function()
+            moodForDancing = 0
+        end,
+        function()
+            DebugText(me, "I'm dancing or jamming.")
+            if mod.moveto.MoveToPoint(dancingPos, MovementSpeed.Walk, me, 0.5, false) then
+                LookFrom(dancingPos)
+
+                if mod.math.random(0.0, 100.0) > 50.0 then
+                    DebugText(me, "Playing Animation: [1]", tostring(dancingAnimationStart))
+                    local animLength = 1.66667 + 14.5 * math.random(1, 3)
+                    helpers.PlayLoopingAnimationAt(dancingPos, dancingAnimationStart, dancingAnimationLoop, dancingAnimationEnd, animLength, 5.0)
+                else
+                    DebugText(me, "Playing Animation: [1]", tostring(jammingAnimationStart))
+                    local animLength = 4.1 + 10.96667 * math.random(1, 3)
+                    helpers.PlayLoopingAnimationAt(dancingPos, jammingAnimationStart, jammingAnimationLoop, jammingAnimationEnd, animLength, 8.0)
+                end
+
+                helpers.PlayIdleAD(engineHot, 15, true)
+                mod.util.SleepRandom(3.0, 6.0)
+            else
+                DebugText(me, "Error: can't move to [1]", dancingPos.Name)
+                Sleep(3.0)
+            end
+            wasStanding = true
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        CanEnter = function()
+            return GetFlag(divineBardPlaying)
+        end,
+    }
+
+    nodes.Action_Eating = Action {
+        function()
+            DebugText(me, "I'm eating.")
+            local initialDistance = GetDistanceTo(me, eatingPos)
+
+            if initialDistance > 3 then -- Don't play the AD if she started close to the food
+                helpers.PlayIdleAD(smelledFood, 80, true)
+            end
+
+            if mod.moveto.MoveToPoint(eatingPos, MovementSpeed.Walk, me, 0.5, false) then
+                LookFrom(eatingPos)
+
+                if initialDistance > 3.0 then -- Don't play the AD if she started close to the food
+                    helpers.PlayIdleAD(aboutToEat, 60, true)
+                end
+
+                DebugText(me, "Playing Animation: [1]", tostring(eatingDialog))
+
+                try
+                    StartBehaviorDialog(eatingDialog, eatingSceneTrigger.Trigger, true, me)
+                    moodForStargazing = moodForStargazing + 1
+                    wasStanding = true
+                    mod.util.SleepRandom(3.0, 6.0)
+                catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                    DebugText(me, "Error: Eating animation failed")
+                    Sleep(3.0)
+                end
+            else
+                DebugText(me, "Error: can't move to [1]", eatingPos.Name)
+                Sleep(3.0)
+            end
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end
+    }
+
+    nodes.Action_DrinkingFromBarrel = Action {
+        function()
+            DebugText(me, "I'm drinking from the barrel.")
+            try
+                StartBehaviorDialog(drinkFromBarrelDialog, drinkFromBarrelSceneTrigger.Trigger, true, me, barrel)
+                moodForDancing = moodForDancing + 1
+                wasStanding = true
+                Sleep(6.0)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Error: Drinking from barrel animation failed")
+                Sleep(3.0)
+            end
+            mod.util.SleepRandom(3.0, 6.0)
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end
+    }
+
+    nodes.Action_DrinkingAtTable = Action {
+        function()
+            DebugText(me, "I'm drinking at the table.")
+            wasStanding = false
+            try
+                StartBehaviorDialog(drinkingAtTableDialog, drinkingAtTableSceneTrigger.Trigger, true, me, chair, mug)
+                moodForDancing = moodForDancing + 1
+                Sleep(6.0)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Error: Drinking from barrel animation failed")
+                Sleep(3.0)
+            end
+            mod.util.SleepRandom(3.0, 6.0)
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end,
+        Valid = function()
+            return  helpers.ItemAvailable(chair, chairPos) and helpers.ItemAvailable(mug, mugPos)
+        end
+    }
+
+
+    nodes.Action_SitAndJam = Action {
+        function()
+            DebugText(me, "I'm sitting and jamming.")
+            wasStanding = false
+            try
+                if not sittingOnTreeTrunk then
+                    UseItem(treeTrunk.Item)
+                    sittingOnTreeTrunk = true -- To avoid popping in the case that the action plays more than once
+                end
+
+                mod.util.SleepRandom(3.0, 6.0)
+                PlayAnimation(jammingAnimationLoop, true, false)
+                moodForDancing = moodForDancing + 1
+                mod.util.SleepRandom(3.0, 6.0)
+            catch e if ls.CheckType(e, error.UseItemFailed) then
+                DebugText(me, "Error: failed to sit on tree trunk")
+                Sleep(3.0)
+            end
+        end,
+        OnLeave = function()
+            sittingOnTreeTrunk = false
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return  helpers.ItemAvailable(treeTrunk, treeTrunkValidPos)
+        end
+    }
+
+    nodes.Action_PickingFlowers = Action {
+        function()
+            DebugText(me, "I'm picking flowers.")
+            helpers.PlayAnimationAt(pickingFlowersPos, pickingFlowers, true)
+            wasStanding = true
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Action_PartyTrick = Action{
+        function()
+            DebugText(me, "Party trick.")
+            PlayAnimation(trick, true, false)
+            mod.util.SleepRandom(3.0, 6.0)
+        end,
+        CanEnter = function()
+            return wasStanding
+        end,
+    }
+
+    nodes.Action_HappyBurst = Action{
+        function()
+            DebugText(me, "Happy burst.")
+            PlayAnimation(happyBurst, true, false)
+            mod.util.SleepRandom(3.0, 6.0)
+        end,
+        CanEnter = function()
+            return wasStanding
+        end,
+    }
+
+    nodes.Action_PushUps = Action{
+        function()
+            DebugText(me, "I'm doing push ups.")
+            helpers.PlayAnimationAt(pushUpsPos, pushUps, true) -- First push ups
+
+            wasStanding = true
+            helpers.PlayIdleAD(engineHot, 15, true)
+            mod.util.SleepRandom(3.0, 6.0)
+        end,
+    }
+    --------------------------------------------------------------------------------------------------------------------
+
+    --------------------------------------------------------------------------------------------------------------------
+    -- States: Clive interactions
+    nodes.State_CliveInteractions = Selector{
+        function(node)
+            return GetRandomCanEnterNoRepeat(node)
+        end,
+        CanEnter = function()
+            return wasStanding and GetFlag(hasClive, me)
+        end
+    }
+
+    nodes.State_CliveInteractions.Action_PointAtOther = Action{
+        function()
+            DebugText(me, "I'm pointing at [1] with Clive.", pointAt.Name)
+            SteerTo(pointAt)
+            Sleep(0.5)
+            helpers.PlayLoopingAnimationAt(me, talkPlushStart, talkPlushLoop, talkPlushEnd, 29.26667, mod.math.random(5.0, 8.0))
+        end,
+        CanEnter = function()
+            pointAt = helpers.FindClosestCharacter()
+            return pointAt ~= nil
+        end,
+    }
+
+    nodes.State_CliveInteractions.Action_HuggingClive = Action{
+        function()
+            DebugText(me, "I'm hugging Clive.")
+            Sleep(0.5)
+            PlayAnimation(hugPlush, true, false)
+            mod.util.SleepRandom(3.0, 6.0)
+        end,
+    }
+    --------------------------------------------------------------------------------------------------------------------
+
+end
+}
+
+game.states.EPI_Karlach_Mindflayer = State{function ()
+    modules = {"shared.moveto", "shared.util", "shared.math", "shared.dialog"}
+
+    description = [[Karlach's behaviours for when she is a mindflayer. Simplified behaviour with a few animations.]]
+
+    --------------------------------------------------------------------------------------------------------------------
+    -- Local params
+    local divineBardPlaying = Flag("EPI_Epilogue_DivineBard_State_PlayingSong_262657bd-c979-4994-bb16-8266a3d2c146")
+    local wanderArea = Entity("S_EPI_KarlachMindflayerWander_d350c29b-68ab-4f7e-ae9f-24ff56bef7d5")
+
+    local idleAD = Dialog("EPI_Epilogue_AD_IdleKarlach_59298f3f-4061-09ea-ed62-2a2b2ae52c15")
+
+    -- CUST_EPI_FlayerKarlach_Dance_01
+    local dancingPos = Entity("S_EPI_KarlachDancePos_7035aae1-2fe1-4cc8-a733-d0b24be72642")
+    local danceStart = Animation("CUST_EPI_MindFlayerKarlach_Dance_01_Start_e4a4ecaf-e0db-4f6f-8ebd-2b900668eb17")
+    local danceLoop = Animation("CUST_EPI_MindFlayerKarlach_Dance_01_Loop_6946227d-ffed-4c8c-b6b6-714ffd06f06a")
+    local danceEnd = Animation("CUST_EPI_MindFlayerKarlach_Dance_01_End_ad073c90-0b0a-4a9e-89f9-567300b90315")
+
+    -- CUST_EPI_FlayerKarlach_Stretch_01
+    local stretch = Animation("CUST_EPI_MindFlayerKarlach_Stretch_01_f965c54a-802c-46ff-abf8-835eb81543e1")
+
+    -- CUST_EPI_FlayerKarlach_TentancleTouch_01
+    local touchTentacle = Dialog("BHVR_WRLD_EPI_KarlachMindflayer_TouchingTentacles_d99a6747-2ca6-cbee-bcb8-0861e6af6b87")
+
+    -- CUST_EPI_FlayerKarlach_TentanclePlay_01
+    local playWithTentacle = Dialog("BHVR_WRLD_EPI_KarlachMindflayer_PlayingTentacles_d572cc7c-f81e-a9d7-fb61-8dbeb0363b25")
+    --------------------------------------------------------------------------------------------------------------------
+
+    --------------------------------------------------------------------------------------------------------------------
+    -- Helpers
+    helpers.action.PlayIdleAD = function()
+        if math.random(0, 100) < 25 then
+            mod.dialog.StartCheckedAutomatedDialog(idleAD,{ waitForCompletion = true }, me)
+            mod.util.SleepRandom(3.0, 6.0)
+        end
+    end
+    --------------------------------------------------------------------------------------------------------------------
+
+    --------------------------------------------------------------------------------------------------------------------
+    -- States
+    nodes = Selector{
+        function(node)
+            return FindWeightedRandomSelectable(node, {
+                [node.Action_Dance] = 3,
+                [node.Action_Stretch] = 2,
+                [node.Action_TouchTentacle] = 1,
+                [node.Action_PlayWithTentacle] = 1,
+                [node.Action_Wander] = 4,
+            })
+        end
+    }
+
+    nodes.Action_Dance = Action{
+        function()
+            if mod.moveto.MoveToPoint(dancingPos, MovementSpeed.Walk, me, 0.5, false) then
+                helpers.PlayIdleAD()
+                LookFrom(dancingPos)
+                PlayLoopingAnimation(danceStart, {danceLoop}, danceEnd)
+                Sleep(12.333333)
+                StopAnimation(me)
+                Sleep(5.0)
+            else
+                DebugText(me, "Stargazing: failed to move to pos.")
+                Sleep(3.0)
+            end
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+        CanEnter = function()
+            return GetFlag(divineBardPlaying)
+        end
+    }
+
+    nodes.Action_Stretch = Action{
+        function()
+            mod.util.SleepRandom(3.0, 6.0)
+            PlayAnimation(stretch, true, false)
+            mod.util.SleepRandom(3.0, 6.0)
+            helpers.PlayIdleAD()
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Action_TouchTentacle = Action{
+        function()
+            DebugText(me, "I'm touching my tentacles.")
+            mod.util.SleepRandom(3.0, 6.0)
+            StartBehaviorDialog(touchTentacle, nil, true, me)
+            mod.util.SleepRandom(3.0, 6.0)
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end
+    }
+
+    nodes.Action_PlayWithTentacle = Action{
+        function()
+            DebugText(me, "I'm playing with my tentacles.")
+            mod.util.SleepRandom(3.0, 6.0)
+            StartBehaviorDialog(playWithTentacle, nil, true, me)
+            mod.util.SleepRandom(3.0, 6.0)
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end
+    }
+
+    nodes.Action_Wander = Action {
+        function()
+            try
+                Wander(wanderArea, mod.math.random(3.0, 5.0), MovementSpeed.Walk)
+                helpers.PlayIdleAD()
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Error: failed to wander.")
+            end
+            Sleep(3.0)
+        end
+    }
+    --------------------------------------------------------------------------------------------------------------------
+end
+}

@@ -1,0 +1,143 @@
+game.states.CRE_YouthTraining_BeatenBoy = State
+{
+    function()
+    description = [[Teacher's behaviour during Youth Training]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local teacherBeatingBoyFlag = Flag("CRE_YouthTraining_State_TeacherBeatingBoy_ccaa2ee8-654b-491f-9623-c8a9376d3c61")
+    local flagKO = Flag("CRE_YouthTraining_State_BoyPretending_bf54e5b4-91bd-4f0e-9323-f4d32cdd76ef")
+    local flagInDorm = Flag("CRE_YouthTraining_State_BoySatInInfirmary_fcf04858-9cc6-440f-bffe-55b7b6b4fdf1")
+    local flagIsSpared = Flag("CRE_YouthTraining_State_BoySpared_4396d45f-8ef0-4be1-87b4-798ef58f2cbb")
+    local teacher = Entity("S_CRE_Teacher_60933e69-c642-46e0-92ee-0e4353fc2adf")
+    local hasAddressedClass = false
+    local sparedPos = Entity("S_CRE_GithBoyTrainingRoomPos_68418a7e-3de4-42af-a7d8-f32935be36bd")
+    local weaponSharpeningTrigger = Entity("BHVR_WRLD_CRE_YouthTraining_WeaponSharpening_SceneTrigger_20303117-0533-47b9-ab97-4f427796be77")
+    local sharpeningBeh = Dialog("BHVR_WRLD_CRE_YouthTraining_WeaponSharpening_03f57ac1-d530-46c1-7117-0fb71fda8211")
+    local grindStone = Entity("CRE_YouthTraining_Whetstone_fba4d2b2-1d35-4125-8d4b-d1869c96e072")
+    local anim_KneelingBesideCorpse_Start = Animation("CUST_KneelingBesideCorpse_01_Start_86c1e910-b6a7-40e4-bc17-e91152786fc1")
+    local anim_KneelingBesideCorpse_Loop_01 = Animation("CUST_KneelingBesideCorpse_01_Loop_312687d1-eb1b-4c66-a8fe-433b980c1f4f")
+    local anim_KneelingBesideCorpse_Loop_02 = Animation("CUST_KneelingBesideCorpse_02_Loop_0185a85b-1fb5-41b4-b41b-e4d19ec1ab63")
+    local anim_KneelingBesideCorpse_Loop_03 = Animation("CUST_KneelingBesideCorpse_03_Loop_bf4ddff9-5e50-4edc-8238-5486d17a6ae9")
+    local anim_KneelingBesideCorpse_End = Animation("CUST_KneelingBesideCorpse_01_End_978e3922-2e06-4b5f-8b9b-8cce3ba772d9")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Teacher plays a rate-limited AD while beating githBoy. Blocks other nodes.
+    nodes.Action_BeatingOngoing = Action
+    {
+        function()
+            PlayLoopingAnimation(anim_KneelingBesideCorpse_Start, {anim_KneelingBesideCorpse_Loop_02, anim_KneelingBesideCorpse_Loop_01, anim_KneelingBesideCorpse_Loop_03}, anim_KneelingBesideCorpse_End,false)
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return GetFlag(teacherBeatingBoyFlag) 
+        end
+    }
+
+    nodes.Action_SparedSharpeningSwords = Action
+    {
+        function()
+            SetWeaponUnsheathed(me, true, false)
+            Sleep(1.0)
+            DebugText(me, "Starting grinding")
+            StartBehaviorDialog(sharpeningBeh, weaponSharpeningTrigger.Trigger, true, me, grindStone)
+            Sleep(1.0)
+            DebugText(me, "Ended grinding")
+            SetWeaponUnsheathed(me, false, false)
+            Sleep(2.0)
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end,
+        Valid = function()
+            return GetFlag(flagIsSpared) and not GetFlag(flagInDorm)
+        end
+    }
+
+    nodes.Action_DeliriousInDorm = Action
+    {
+
+        function()
+            SitOnGround(me)
+            DebugText(me,"Uggghhh please heal me")
+            Sleep(10)
+        end,
+
+        OnEnter = function()
+        end,
+
+
+        Valid = function()
+            return GetFlag(flagInDorm) and (not GetFlag(flagIsSpared))
+        end
+    }
+
+   nodes.Action_HealedInDorm = Action
+   {
+
+       function()
+
+           Sleep(45.0)
+           ClearFlag(flagInDorm,nil)
+                               
+       end,
+
+       OnEnter = function()
+           DebugText(me, "Thanks for healing me! I should get back to class")
+       end,
+
+
+       Valid = function()
+           return GetFlag(flagInDorm) and GetFlag(flagIsSpared)
+       end
+   }
+
+    nodes.Action_CarriedToDorm = Action 
+    {
+        function ()
+            LieOnGround(me)
+            WaitForInterrupt()
+        end,
+
+        Valid = function ()
+            return GetFlag(flagKO) and 
+                   not GetFlag(flagInDorm) --This flag gets set in Osiris when the student reaches the position where the boy is dropped off
+        end
+    }
+
+    -- Due to the execution order of flags raising and dialogue ending, not having a fallback state will cause a No Valid State assert upon the boy's death if there isn't a fallback state. He's dead, so he doesn't need behaviour.
+    nodes.Action_Idle = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return true 
+        end
+    }
+    ------------------------------------------------
+
+    events.FlagCleared = function(e)
+        if e.Flag == teacherBeatingBoyFlag.Guid then
+            StopAnimation(me)
+        end
+    end
+end
+}

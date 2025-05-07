@@ -1,0 +1,53 @@
+game.states.EPI_DivineBard_AnimTest = State{
+function ()
+    description = [[ A jukebox posing as a bard. ]]
+
+    modules = { "shared.moveto", "shared.math", "shared.util" }
+    local isPlaying = false
+
+    local pushedInstrumentState = false
+    self.OnEnter = function()
+        if(not pushedInstrumentState) then
+            PushUnsheathedState(me, UnsheathState.Instrument)
+            pushedInstrumentState = true
+        end
+    end
+
+    self.OnLeave = function()
+        if pushedInstrumentState then
+            RemoveStatus(me, "EPI_DIVINE_BARD_PERFORM")
+            PopUnsheathedState(me)
+            pushedInstrumentState = false
+        end
+        isPlaying = false
+    end
+
+    -----------------------------------------
+    -- Nodes
+    nodes.StartPlayingLute = Action {
+        CanEnter = function()
+            return not isPlaying
+        end,
+        function()
+            if not HasActiveStatus(me,"PERFORM_POSITIVE") then
+                ApplyStatus(me, "EPI_DIVINE_BARD_PERFORM", true, -1.0, nil)
+                isPlaying = true
+            else
+                Sleep(6.0)
+                isPlaying = true
+            end
+        end
+    }
+
+    nodes.StandPlaying = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = "S_EPI_DivineBardPoint_1f79f72a-6688-4dc9-9d42-b45b89dded2e"
+            },
+        Valid = function()
+            return isPlaying
+        end
+    }
+    -----------------------------------------
+end
+}

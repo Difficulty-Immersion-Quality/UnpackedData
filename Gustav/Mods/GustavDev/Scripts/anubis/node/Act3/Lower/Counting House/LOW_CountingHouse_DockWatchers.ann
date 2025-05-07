@@ -1,0 +1,46 @@
+game.states.LOW_CountingHouse_DockWatchers = State{function()
+
+    params.guardSpot = {type=EParamType.String, required = false, default=nil, help=[[Guard spot]]}
+    local guardSpot = Entity(params.guardSpot)
+
+    params.patrolState = { type = EParamType.State, required = false, default = nil,
+        help= [[Gen Patrol]]}
+
+    local brainControlledWatcherFaction = Guid("GLO_SteelWatcher_BrainControlled_f0bb90ec-b609-4864-9716-0ad5d7222689")
+    local brainControlled = false
+
+    -- Once brain-controlled stop patrolling not to interfere with the possible combat among players and cashguards by walking around
+    nodes.StandAtTrigger = Action {
+        function()
+            if not IsInDangerousSurfaceFor(guardSpot, me.Character) or IsTagged(me, ignoreDangerousSurfacesTag) then
+                if GetDistanceTo(me, guardSpot) > 2.0 then
+                    try
+                        MoveTo(guardSpot,MovementSpeed.Walk,false,true,1.0,1.0,true,PathClimbingMode.Enabled,PathDroppingMode.Enabled)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        SteerTo(guardSpot)
+                        Sleep(2.0)
+                    end
+                else
+                    LookFrom(guardSpot)
+                end
+            else
+                SteerTo(guardSpot)
+            end
+            Sleep(2.0)
+        end,
+
+        Valid = function()
+            return brainControlled
+        end
+    }
+
+    nodes.Patrol = Proxy {
+        params.patrolState
+    }
+
+    events.BaseFactionChanged = function(e)
+        if(e.NewFaction == brainControlledWatcherFaction) then
+            brainControlled = true
+        end
+    end
+end}

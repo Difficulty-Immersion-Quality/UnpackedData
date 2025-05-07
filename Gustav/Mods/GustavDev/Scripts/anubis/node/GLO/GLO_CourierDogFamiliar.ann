@@ -1,0 +1,93 @@
+game.states.GLO_CourierDogFamiliar = State{ function()
+
+    -- local discoveryAnimation = Animation("CUST_Barking_01_09d3116c-04f3-40ab-9c32-86aaeb06a869")
+    local inCampFlag = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+    local scratchIsFocusedOnThrowFlag = Flag("FOR_CourierDog_State_FocusedOnThrowingPlayer_35d81592-1643-4618-8308-fa0fd8cbb43b")
+    local scratchIsPlayingFetchFlag = Flag("FOR_CourierDog_State_IsPlayingFetch_55ca1e39-8b83-4f9d-b720-a66e97abbb4e")
+    local discoveryAnimation = Animation("UTIL_Consume_01_88f95a55-7bc5-4f12-b507-d6569d745856")
+    local discoveryAD = Dialog("GLO_CourierDogFamiliar_Discovered_AD_5031d5ce-78a4-d351-967a-f1c972f0253b")
+    local moveToEntity = nil
+
+    self.OnInit = function()
+        RemoveStatus(me, "SCRATCH_DISCOVERED")
+    end
+
+    --------------------NODES---------------------
+    nodes.PlayFetch = Proxy {
+        Valid = function()
+            return GetFlag(scratchIsPlayingFetchFlag)
+        end,
+        game.states.CourierDog_PlayingFetch
+    }
+
+    nodes.WaitForFetch = Proxy{
+        Valid = function()
+            return GetFlag(scratchIsFocusedOnThrowFlag)
+            and not GetFlag(scratchIsPlayingFetchFlag)
+        end,
+        game.states.CourierDog_WaitForFetch
+    }
+
+    nodes.Follower = Proxy{
+        Valid = function()
+            return moveToEntity == nil
+            and not GetFlag(scratchIsFocusedOnThrowFlag)
+            and not GetFlag(scratchIsPlayingFetchFlag)
+            and not GetFlag(inCampFlag, me)
+        end,
+        game.states.DefaultPartyMember
+    }
+
+    nodes.InCamp = Action{
+        function()
+            Wander(5, 4, MovementSpeed.Walk)
+            Sleep(math.random(2.0, 5.0))
+        end,
+        Valid = function() 
+            return moveToEntity == nil
+            and not GetFlag(scratchIsFocusedOnThrowFlag)
+            and not GetFlag(scratchIsPlayingFetchFlag)
+            and GetFlag(inCampFlag, me)
+        end
+    }
+
+    nodes.DiscoverItem = Action{
+        Valid = function()
+            return moveToEntity ~= nil
+            and not GetFlag(scratchIsFocusedOnThrowFlag)
+            and not GetFlag(scratchIsPlayingFetchFlag)
+        end,
+        OnEnter = function()
+            ApplyStatus(me, "SCRATCH_DISCOVERED")
+        end,
+        OnLeave = function()
+            RemoveStatus(me, "SCRATCH_DISCOVERED")
+        end,
+        function()
+            StartAutomatedDialog(discoveryAD, false, me)
+            -- try to run near the target, can fail silently
+            MoveTo(moveToEntity, MovementSpeed.Run, false, false, 20.0, 21.0, false)
+            -- try to walk as close as possible, can fail silently
+            MoveTo(moveToEntity, MovementSpeed.Walk, false, false, 5.0, 6.0, false)
+            -- if not yet close enough or in line of sight, move in place to have line of sight, don't continue if failed
+            MoveInRange(moveToEntity, 5.0, 6.0, MovementSpeed.Walk, nil, false, false)
+            SteerTo(moveToEntity)
+            Sleep(8.0)
+            moveToEntity = nil
+        end
+    }
+
+
+    --------------------EVENTS---------------------
+    events.EntityEvent = function(e) 
+        if e.TargetEntity == me and e.Event == "FOR_CourierDog_Aura_MoveToDiscoveredItem" then
+            moveToEntity = e.Params[1]
+        end
+    end
+
+    events.SavegameLoaded = function(e)
+        if inCampFlag == nil then
+            inCampFlag = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+        end
+    end
+end}

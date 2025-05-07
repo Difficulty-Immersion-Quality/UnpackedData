@@ -1,0 +1,123 @@
+game.states.PLA_DropMine = State{
+    function()
+
+        modules = {"shared.items"}
+
+        inputs.Enable = {help = "Turn mine on"}
+        inputs.Disable = {help = "Turn mine off"}
+        inputs.Prime = {help = "Makes mine explode if no PrimeOff is sent within PrimeDelay seconds"}
+        inputs.PrimeOff = {help = "Turn prime off so the mine does not explode."}
+        inputs.Warning = {help = "Makes mine glow in a warning color"}
+        inputs.WarningOff = {help = "Stops mine from glowing in a warning color"}
+
+        inputs.Disarmed = {internal = true}
+        inputs.Explode = {internal = true}
+        inputs.On = {internal = true}
+        inputs.Off = {internal = true}
+
+        outputs.Enable =  {internal = true}
+        outputs.Disable = {internal = true}
+        outputs.Prime =  {internal = true}
+        outputs.PrimeOff =  {internal = true}
+        outputs.Warning =  {internal = true}
+        outputs.WarningOff = {internal = true}
+        outputs.Drop =  {internal = true}
+
+        outputs.Disarmed = {help = "Mine disarmed"}
+        outputs.Explode = {help = "Mine explodes"}
+        outputs.On = {help = "Mine turned on"}
+        outputs.Off = {help = "Mine turned off"}
+
+        inputs.Dropped = {internal = true}
+
+        nodes.MineProximity = Proxy{
+            game.states.MineProximity,
+            params = {StartEnabled = false,
+                      DamageTypes = {"Falling"},
+                      ExcludeDamageTypes = true},
+            inputs = {Enable = {outputs.Enable},
+                      Disable = {outputs.Disable},
+                      Prime = {outputs.Prime},
+                      PrimeOff = {outputs.PrimeOff},
+                      Warning = {outputs.Warning},
+                      WarningOff = {outputs.WarningOff}},
+            outputs = {Disarmed = {inputs.Disarmed},
+                       Explode = {inputs.Explode},
+                       On = {inputs.On},
+                       Off = {inputs.Off}}
+        }
+
+        nodes.Drop = Proxy{
+            game.states.Drop,
+            inputs = {Drop = {outputs.Drop}},
+            outputs = {Dropped = {inputs.Dropped}}
+        }
+
+        self.OnInit = function()
+            if me.Blackboard.GetFact("cnst.PLA_DropMine.Fell") == nil and
+               me.OnStage then
+                SetOnStage(me, false)
+                PlayEffectAt(PrepareEffect("VFX_Script_DestroyActions_Default_01_15362651-9b96-579a-86f5-829e53325d8b"), me)
+            end
+        end
+
+        socketEvents.Enable = function(ev)
+            if me.Blackboard.GetFact("cnst.PLA_DropMine.Fell") == nil then
+                SetOnStage(me, true)
+                TriggerOutput(outputs.Drop, ev.Object, ev.Param)
+                me.Blackboard.SetFact("cnst.PLA_DropMine.Fell", 0)
+            elseif me.Blackboard.GetFact("cnst.PLA_DropMine.Fell") == 1 then
+                TriggerOutput(outputs.Enable, ev.Object, ev.Param)
+            end
+        end
+
+        socketEvents.Dropped = function(ev)
+            if me.Blackboard.GetFact("cnst.PLA_DropMine.Fell") == 0 then
+                me.Blackboard.SetFact("cnst.PLA_DropMine.Fell", 1)
+                TriggerOutput(outputs.Enable, ev.Object, ev.Param)
+            end
+        end
+
+        socketEvents.Disable = function(ev)
+            if me.Blackboard.GetFact("cnst.PLA_DropMine.Fell") == 1 then
+                TriggerOutput(outputs.Disable, ev.Object, ev.Param)
+            elseif me.Blackboard.GetFact("cnst.PLA_DropMine.Fell") == 0 then
+                me.Blackboard.SetFact("cnst.PLA_DropMine.Fell", 1) --if falling, set to 1, so that if it lands, it's enabled.
+            end
+        end
+
+        socketEvents.Prime = function(ev)
+            TriggerOutput(outputs.Prime, ev.Object, ev.Param)
+        end
+
+        socketEvents.PrimeOff = function(ev)
+            TriggerOutput(outputs.PrimeOff, ev.Object, ev.Param)
+        end
+        
+        socketEvents.Warning = function(ev)
+            TriggerOutput(outputs.Warning, ev.Object, ev.Param)
+        end
+
+        socketEvents.WarningOff = function(ev)
+            TriggerOutput(outputs.WarningOff, ev.Object, ev.Param)
+        end
+
+
+        socketEvents.Disarmed = function(ev)
+            TriggerOutput(outputs.Disarmed, ev.Object, ev.Param)
+        end
+
+        socketEvents.Explode = function(ev)
+            TriggerOutput(outputs.Explode, ev.Object, ev.Param)
+        end
+        
+        socketEvents.On = function(ev)
+            TriggerOutput(outputs.On, ev.Object, ev.Param)
+        end
+
+        socketEvents.Off = function(ev)
+            TriggerOutput(outputs.Off, ev.Object, ev.Param)
+        end
+
+    end
+}

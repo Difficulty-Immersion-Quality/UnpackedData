@@ -1,0 +1,83 @@
+game.states.CRE_UpperGuards_HiddenGuard_Pacing = State{function()
+    description = [[Hidden guards behaviour]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local repeatedAD = Dialog("CRE_UpperGuards_AD_HiddenCheckpointChatter_d234f1a5-7d24-9949-de2d-33680a374cef")
+
+    local secondNPC = Entity("S_CRE_HiddenCheckpointWarningGuard_970d10ed-8092-463b-8446-223fe4cf2d68")
+    local pacingPoint01 = Entity("S_CRE_PatrolPoint01_ddf453f6-1e96-4035-8b1f-5062562d659c")
+    local pacingPoint02 = Entity("S_CRE_PatrolPoint02_6f8db4da-2a9c-4110-ba67-54f1222a6837")
+    local currentPacingPoint = Entity()
+
+    local isInPosition = false
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Unless killed, the guard keeps pacing with a rate limited AD triggered by the other Hidden guard
+    nodes.Action_Pacing = Action{
+        function()
+            if IsInDangerousSurfaceFor(currentPacingPoint, me.Character) then
+                SteerTo(currentPacingPoint)
+                Sleep(2.0)
+                return
+            end
+            try
+                MoveTo(currentPacingPoint,MovementSpeed.Stroll ,false,false)
+            catch e 
+                if ls.CheckType(e,error.MovementFailed) then
+                    SteerTo(currentPacingPoint)
+                    Sleep(2.0)     
+                    return         
+                end
+            
+            mod.util.SleepRandom (2.0,9.0)
+            
+            DebugText(me,"<Impatient animation>")
+
+            mod.util.SleepRandom (2.0,9.0)
+
+            if currentPacingPoint == pacingPoint01 then
+                currentPacingPoint = pacingPoint02
+            else
+                currentPacingPoint = pacingPoint01 
+            end
+
+        end,
+
+        OnEnter = function()
+            if currentPacingPoint == nil then
+                currentPacingPoint = pacingPoint01
+            end
+        end,
+
+
+        Valid = function()
+            return true
+        end
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

@@ -1,0 +1,146 @@
+game.states.GLO_Nightsong_CAMP = State{function()
+    description = [[Behaviour of Nightsong at the campsite]]
+    modules = {"shared.util"}
+
+     -- Flags
+     local campNight = Flag("GLO_CAMP_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+     local inCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+
+     -- State logic
+     local selectedBehaviour = nil
+     local behaviourLoops = 0
+     local ignoreReselectionUponInterrupt = false
+ 
+     self.OnEnter = function()
+         selectedBehaviour = nil
+         ignoreReselectionUponInterrupt = false
+     end
+ 
+     self.CanEnter = function()
+        return GetFlag(inCamp,me)
+     end
+ 
+     nodes.CAMP_Follower = Selector {
+         Valid = function(node)
+             return CheckAnySelectable(node)
+         end,
+ 
+         function(nodes)
+            -- Check if the behaviour was interrupted and enter it again if still valid
+            if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                ignoreReselectionUponInterrupt = false
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+
+            -- Always clear this, in case it was interrupted but was not able to select a node
+            ignoreReselectionUponInterrupt = false
+
+            -- Reduce behaviour loops by 1
+            if behaviourLoops > 0 then
+                behaviourLoops = behaviourLoops - 1
+            end
+
+            if selectedBehaviour == nil or behaviourLoops == 0 or
+            (selectedBehaviour ~= nil and not nodes.TryGetChild(selectedBehaviour).IsSelectable()) then
+                behaviourLoops = 1
+                local selectedNode = FindWeightedRandomSelectable(nodes, {
+                    [nodes.CrossedArms] = 3,
+                    [nodes.CrossedArms2] = 3,
+                    [nodes.LookingAround] = 2,
+                    [nodes.Pondering] = 1,
+                    [nodes.Idle] = 2
+                })
+
+                selectedBehaviour = selectedNode.Name
+                                --DebugText(me,"Selected camp behaviour [1]",selectedBehaviour)
+            end
+
+            return nodes.TryGetChild(selectedBehaviour)
+         end
+     }
+ 
+     -- Full Camp Behaviours
+     nodes.CAMP_Follower.LookingAround = Proxy {
+         game.states.CAMP_Idle,
+         params = {  behaviourPos = "CAMPPOS",
+                     idleAnim = "CUST_Investigating_LookingAround_02_ab739447-e85f-4fca-b1d4-fb783d61fa9c",
+                     loopIdleAnim = false,
+                     sleepDurationMin = 8.0,
+                     sleepDurationMax = 25.0},
+         OnEnter = function()
+             behaviourLoops = math.random(1,2)
+         end
+     }
+     
+     nodes.CAMP_Follower.CrossedArms = Proxy {
+         game.states.CAMP_Idle,
+         params = {  behaviourPos = "CAMPPOS",
+                     idleAnimStart = "CUST_AngryCrossedArms_01_Start_ebe25dce-800f-4662-ac29-ba2adc5b36b6",
+                     idleAnim = "CUST_AngryCrossedArms_01_Loop_4b288089-9bad-477b-909b-10aa79e5a370",
+                     idleAnimEnd = "CUST_AngryCrossedArms_01_End_ee31d4d8-00bd-4ff7-8c21-c1698022c4e2",
+                     loopIdleAnim = false,
+                     idleAnimLength = 45.0,
+                     idleAnimEndLength = 5.0,
+                     sleepDurationMin = 5.0,
+                     sleepDurationMax = 25.0}
+     }
+     
+     nodes.CAMP_Follower.CrossedArms2 = Proxy {
+         game.states.CAMP_Idle,
+         params = {  behaviourPos = "CAMPPOS",
+                     idleAnimStart = "CUST_ArmsCrossed_01_Start_dafd0bbc-012a-403c-aabe-4963aca9cf25",
+                     idleAnim = "CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71",
+                     idleAnimEnd = "CUST_ArmsCrossed_01_End_ae43ea68-fc1b-456a-88ce-0e1d504e1d40",
+                     loopIdleAnim = false,
+                     idleAnimLength = 45.0,
+                     idleAnimEndLength = 8.0,
+                     sleepDurationMin = 5.0,
+                     sleepDurationMax = 25.0}
+     }
+     
+     nodes.CAMP_Follower.Pondering = Proxy {
+         game.states.CAMP_Idle,
+         params = {  behaviourPos = "CAMPPOS",
+                     idleAnimStart = "CUST_Pondering_01_Start_2d14e6a9-d3a3-4f98-9031-22831546c392",
+                     idleAnim = "CUST_Pondering_01_Loop_a47454a1-05a2-4153-bdfe-7a0500fa62d0",
+                     idleAnimEnd = "CUST_Pondering_01_End_e15cc480-7f1a-4ed4-8a3c-36355a37c644",
+                     loopIdleAnim = false,
+                     idleAnimLength = 50.0,
+                     idleAnimEndLength = 8.0,
+                     sleepDurationMin = 5.0,
+                     sleepDurationMax = 25.0}
+     }
+ 
+     nodes.CAMP_Follower.Idle = Proxy {
+         game.states.CAMP_Idle,
+         params = {  behaviourPos = "CAMPPOS",
+                     sleepDurationMin = 30.0,
+                     sleepDurationMax = 55.0}
+     }
+
+    -- Clear current behaviour on day<->night transition
+    events.FlagSet = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == campNight.Guid then
+            selectedBehaviour = nil
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if e.Event == "InterruptCampBehaviour" then
+                selectedBehaviour = nil
+                Interrupt()
+            elseif e.Event == "InterruptCampBehaviour_WithoutReselection" then
+                Interrupt()
+            end
+        end
+    end
+end}

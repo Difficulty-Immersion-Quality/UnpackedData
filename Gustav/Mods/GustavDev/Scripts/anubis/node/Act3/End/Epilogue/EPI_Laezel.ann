@@ -1,0 +1,440 @@
+game.states.EPI_Laezel = State{
+    function ()
+        modules = {"shared.moveto", "shared.util", "shared.items", "shared.math", "shared.dialog"}
+    
+        description = [[Laezel's behaviour for Act 3 EPI.]]
+        -- Laezel's ADs logic:
+        -- -- Once an AD is played, no other ADs will play for the following 3 animations. On the fourth one onwards, if the state has an AD, it can play.
+        -- -- Each AD has it's own cooldown, so that she won't say the AD every time she does a specific animation (eg. Will say the AD by the fire at most once every three times she sits there)
+        -- -- Can't play the same AD twice in a row (eg. She says the AD by the fire, then does five non-AD states, which resets the general cooldown. Then even if she sits by the fire another three times in a row, she won't repeat the same line twice)
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- Local params
+
+        -- State flags
+        local hologramLaezel = Flag("END_GameFinale_State_LaezelLeavesFaerun_896fb62a-4f56-41d8-a173-7d06c4cb9209")
+        local isOnOrpheusPath = Flag("ORI_Laezel_State_IsOnOrpheusPath_97244ccc-a6b5-403e-9cfe-a3502eb4af56")
+        local sociallyExhausted = Flag("EPI_Laezel_State_SociallyExhausted_e2d0eae6-2e8f-443b-99e4-6c17142ac588")
+        local musicPlayingFlag = Flag("EPI_Epilogue_DivineBard_State_PlayingSong_262657bd-c979-4994-bb16-8266a3d2c146")
+        local beachOccupied = Flag("EPI_Origins_State_BeachOccupied_d915b645-b52f-41cc-ba61-76268aac41af")
+
+        -- Internal variables
+        local selectedBehaviour = nil
+        local social = 0 -- Laezel's social interaction tolerance bar gets filled up when she spends time around the campfire and social areas and empties when she spends time alone
+        local generalADTimeout = 0 -- Laezel says an AD once for every third state node she enters, if one is available
+        local stargazingADTimeout = 0 -- Each AD can only play once every three times an available state node plays (so, once every three times she stargazes)
+        local sittingADTimeout = 0
+        local musicADTimeout = 0
+        local warmingHandsADTimeout = 0
+        local lastPlayedAD = nil
+
+        local currentMusicPos = nil
+        local currentDrinkingPos = nil
+        local currentLookingAroundPos = nil
+
+        -- Dialogs
+        local idleAD = Dialog("EPI_Epilogue_AD_IdleLaezel_8a8fd2e0-5be6-1246-e421-0ebe2f703d8a")
+        local stargazingADActive = Flag("EPI_Laezel_Event_IdleAD_StargazingActive_c8e0c536-8d10-46d4-a6be-a8ce964c34c6")
+        local sittingADActive = Flag("EPI_Laezel_Event_IdleAD_SittingActive_038764ee-fcc7-4505-b0e5-314970bf30af")
+        local musicADActive = Flag("EPI_Laezel_Event_IdleAD_MusicActive_215a638f-7bb9-4b4e-8a26-69917cd3d80c")
+        local warmingHandsADActive = Flag("EPI_Laezel_Event_IdleAD_WarmingHandsActive_985bae44-51b2-49b1-b123-d03d1c4a7180")
+
+        local sittingBehaviour = Dialog("BHVR_WLRD_EPI_LaezelSitting_GTY_F_aecfb3b1-78f7-72ce-f6f0-02f612b1b131")
+        local sittingTriggerAlcove = Entity("BHVR_WRLD_EPI_LaezelSitting_GTY_F_SceneTrigger_ec3a509f-0601-4767-bf21-af42bc47e691")
+        local sittingTriggerCampfire = Entity("BHVR_WRLD_EPI_LaezelSitting_GTY_F_SceneTrigger_Campfire_fa548d19-c234-4c11-8eb1-46dd5f1059e7")
+        local sittingTriggerBeach = Entity("BHVR_WRLD_EPI_LaezelSitting_GTY_F_SceneTrigger_Beach_f6717c01-c110-4a71-8b5e-82681a854684")
+
+        local eatingBehaviour = Dialog("BHVR_WRLD_EPI_Laezel_Eating_ed3dbb23-6079-173c-a6bf-4cb273700755")
+        local eatingTrigger = Entity("BHVR_WRLD_EPI_Laezel_Eating_SceneTrigger_195c469e-0a7c-4edf-88e0-a127fcdff139")
+        local foodStationOccupiedFlag = Flag("EPI_Origins_State_FruitStationOccupied_7bf59d9d-857f-4169-bdf7-d1c39639661e")
+
+        local warmingHandsBehaviour = Dialog("BHVR_WRLD_EPI_Laezel_WarmingHands_ba376303-693c-374a-4844-6d2c3ceded2a")
+        local warmingHandsTrigger = Entity("BHVR_WRLD_EPI_Laezel_WarmingHands_SceneTrigger_ac4ad9c2-1934-45ae-882b-ee548d3d14f2")
+
+        -- Animations
+        local musicAnim = Animation("CUST_EPI_Laezel_ListeningToMusic_01_5c426fd3-76ec-4165-ab9b-f2582c046743")
+        local musicTriggers = {Entity("S_EPI_Laezel_NearBardPos_2003bba7-f912-467b-9b52-d810463c66e4"),
+                               Entity("S_EPI_Laezel_NearCampfirePos_94c65e8a-c1a5-43bf-a728-8a6f3a9c1469")}
+
+        local drinkingAnim = Animation("CUST_EPI_Laezel_DrinkingWine_01_bc14695d-b614-475c-9dcb-a54684e825b6")
+        local drinkingTriggersSocial = {Entity("S_EPI_Laezel_BesideTablePos_a4aa0f53-ce09-4272-8a22-99bcc5d751c7"), 
+                                        Entity("S_EPI_Laezel_NearStumpPos_4060ccdb-6f9f-4179-857c-e10b72572bee"), 
+                                        Entity("S_EPI_Laezel_NearBardPos_2003bba7-f912-467b-9b52-d810463c66e4")}
+        local drinkingTriggerAlcove = Entity("S_EPI_Laezel_AlcovePos_eb72fab8-6cb2-4b63-badc-c8e4708a1249")
+
+        local lookingUpAnims = {Animation("CUST_EPI_Laezel_LookingUp_01_b571f848-91d4-4777-b551-0e60e1973f61"), 
+                                Animation("CUST_EPI_Laezel_LookingUp_02_4cb2583a-3213-41dd-ba2d-884496da4146")}
+        local lookingUpTriggerAlcove = Entity("S_EPI_Laezel_AlcovePos_eb72fab8-6cb2-4b63-badc-c8e4708a1249")
+        local lookingUpTriggerBeach = Entity("S_EPI_Laezel_LookingUpBeachPos_5488c5dd-38ff-403d-80dd-033fb9e5a22f")
+
+        local lookingAroundAnim = Animation("CUST_EPI_Laezel_LookingAround_01_564143d2-e7dc-4eae-9eca-e8ddf1ae71b8")
+        local lookingAroundTriggersSocial = {Entity("S_EPI_Laezel_NearStumpPos_4060ccdb-6f9f-4179-857c-e10b72572bee"), 
+                                             Entity("S_EPI_Laezel_BesideTablePos_a4aa0f53-ce09-4272-8a22-99bcc5d751c7")}
+        local lookingAroundTriggerAlcove = Entity("S_EPI_Laezel_AlcovePos_eb72fab8-6cb2-4b63-badc-c8e4708a1249")
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- Helpers
+
+        helpers.action.PlayAnimationAt = function(pos, animation, pauseBeforeDialog)
+            if pos ~= nil then
+                if animation ~= nil then
+                    if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 0.5, false) then
+                        LookFrom(pos)
+                        helpers.TryPlayAD(pauseBeforeDialog)
+                        PlayAnimation(animation, true, false)
+                        Sleep(3.0)
+                    else
+                        DebugText(me, "Error: can't reach destination")
+                        Sleep(3.0)
+                    end
+                else
+                    DebugText(me, "Error: animation is nil")
+                end
+            else
+                DebugText(me, "Error: position is nil")
+            end
+        end
+
+        helpers.action.TryPlayAD = function(pauseBeforeDialog)
+            if pauseBeforeDialog ~= nil then
+                if GetFlag(stargazingADActive) or GetFlag(warmingHandsADActive) or GetFlag(sittingADActive) or GetFlag(musicADActive) then
+                    if generalADTimeout <= 0 then
+                        generalADTimeout = 3
+                        StartTimer(me,"EPI_Laezel_ADDelay", pauseBeforeDialog,0)
+                        DebugText(me, "Playing AD")
+                    else
+                        DebugText(me, "All ADs on cooldown, [1] turns remaining", tostring(generalADTimeout))
+                    end
+                else
+                    DebugText(me, "Specific AD is on cooldown")
+                end
+            else
+                DebugText(me, "State without AD")
+            end
+            generalADTimeout = generalADTimeout - 1
+        end
+
+        events.TimerFinished = function(e)
+            if(e.TimerName == "EPI_Laezel_ADDelay") then 
+                StartAutomatedDialogImmediate(idleAD, me)
+            end
+        end
+
+        helpers.action.PlayBehaviourAt = function(pos, behaviour, pauseBeforeDialog)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 1.5, false) then
+                LookFrom(pos)
+                mod.util.SleepRandom(1.0, 2.0)
+                helpers.TryPlayAD(pauseBeforeDialog)
+                try
+                    StartBehaviorDialog(behaviour, pos.Trigger, true, me)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    DebugText(me, "Error: Behaviour dialog failed")
+                    Sleep(3.0)
+                end
+                mod.util.SleepRandom(2.0, 4.0)
+            end
+        end
+
+        helpers.action.UpdateSocial = function(modifier)
+            Sleep(1.0)
+            DebugText(me, "Social exhaustion meter: [1]", tostring(social))
+            social = social + modifier
+            
+            if GetFlag(sociallyExhausted) and social <= 0 then
+                social = 0
+                ClearFlag(sociallyExhausted)
+                DebugText(me, "Social exhaustion cleared")
+            end
+
+            if not GetFlag(sociallyExhausted) and social > 5 then
+                social = 8
+                SetFlag(sociallyExhausted)
+                DebugText(me, "Social exhaustion set")
+            end
+        end
+
+        helpers.action.TrySetADFlag = function(flag, timeoutCount)
+            if lastPlayedAD ~= flag.Name then              
+                if timeoutCount <= 1 then
+                    if generalADTimeout <= 0 then
+                        SetFlag(flag) -- Cleared in dialog
+                        lastPlayedAD = flag.Name
+                        timeoutCount = 3
+                    end
+                else
+                    timeoutCount = timeoutCount - 1
+                    DebugText(me, "[1] AD on cooldown, [2] turns remaining", tostring(flag.Name),tostring(timeoutCount))
+                end
+            else
+                DebugText(me, "[1] was the last AD played, skipping", tostring(flag.Name))
+            end
+        end
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- States
+
+        nodes.EPI_Laezel = Selector {
+            Valid = function(node)
+                return CheckAnySelectable(node)
+            end,
+    
+            function(nodes)
+                if selectedBehaviour == nil or not nodes.TryGetChild(selectedBehaviour).IsSelectable()  then
+                    local selectedNode = nil
+                    if not GetFlag(sociallyExhausted) then
+                        selectedNode = FindWeightedRandomSelectable(nodes, {
+                            [nodes.SitSocial] = 1,
+                            [nodes.DrinkSocial] = 1,
+                            [nodes.LookingAroundSocial] = 1,
+                            [nodes.ListenToMusic] = 1,
+                            [nodes.EatFromTable] = 1,
+                            [nodes.WarmingHands] = 1
+                        })
+                    else
+                        selectedNode = FindWeightedRandomSelectable(nodes, {
+                            [nodes.CooldownAtBeach] = 1, -- Very rare
+                            [nodes.StargazeAlcove] = 5,
+                            [nodes.SitAlcove] = 5,
+                            [nodes.DrinkAlcove] = 5,
+                            [nodes.LookingAroundAlcove] = 5
+                        })
+                    end
+                    selectedBehaviour = selectedNode.Name
+                    return selectedNode
+                end
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+        }
+
+        -- Social behaviours
+        nodes.EPI_Laezel.DrinkSocial = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Drinking Social")
+                if currentDrinkingPos == nil then
+                    currentDrinkingPos = drinkingTriggersSocial[math.random(#drinkingTriggersSocial)]
+                end
+                helpers.PlayAnimationAt(currentDrinkingPos, drinkingAnim, nil)
+                mod.util.SleepRandom(5.0, 10.0)
+                helpers.PlayAnimationAt(currentDrinkingPos, drinkingAnim, nil)
+                helpers.UpdateSocial(2)
+                currentDrinkingPos = nil
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+    
+        nodes.EPI_Laezel.ListenToMusic = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Listening to Music")
+                helpers.TrySetADFlag(musicADActive, musicADTimeout)
+                if currentMusicPos == nil then
+                    currentMusicPos = musicTriggers[math.random(#musicTriggers)]
+                end
+                helpers.PlayAnimationAt(currentMusicPos, musicAnim, 3.0)
+                mod.util.SleepRandom(5.0, 10.0)
+                helpers.PlayAnimationAt(currentMusicPos, musicAnim, nil)
+                helpers.UpdateSocial(2)
+                currentMusicPos = nil
+                selectedBehaviour = nil
+            end,
+            
+            OnLeave = function()
+                StopAnimation(me)
+            end,
+
+            Valid = function()
+                return GetFlag(musicPlayingFlag)
+            end
+        }
+    
+        nodes.EPI_Laezel.LookingAroundSocial = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Looking around social")
+                helpers.TrySetADFlag(sittingADActive, sittingADTimeout) -- sitting intended, works here too
+                if currentLookingAroundPos == nil then
+                    currentLookingAroundPos = lookingAroundTriggersSocial[math.random(#lookingAroundTriggersSocial)]
+                end
+                helpers.PlayAnimationAt(currentLookingAroundPos, lookingAroundAnim, 3.0)
+                mod.util.SleepRandom(5.0, 10.0)
+                helpers.PlayAnimationAt(currentLookingAroundPos, lookingAroundAnim, nil)
+                helpers.UpdateSocial(2)
+                currentLookingAroundPos = nil
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.EPI_Laezel.SitSocial = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Sitting campfire")
+                helpers.TrySetADFlag(sittingADActive, sittingADTimeout)
+                helpers.PlayBehaviourAt(sittingTriggerCampfire, sittingBehaviour, 4.0) 
+                helpers.UpdateSocial(1)
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                BehaviorDialogRequestGracefulStop(me, false)
+            end
+        }
+
+        nodes.EPI_Laezel.EatFromTable = Action {
+            function()
+                Sleep(1.0)
+                SetFlag(foodStationOccupiedFlag)
+                DebugText(me, "Eating")
+                helpers.PlayBehaviourAt(eatingTrigger, eatingBehaviour, nil)
+                helpers.PlayBehaviourAt(eatingTrigger, eatingBehaviour, nil) 
+                helpers.UpdateSocial(2)
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                ClearFlag(foodStationOccupiedFlag)
+                BehaviorDialogRequestGracefulStop(me, false)
+            end,
+
+            CanEnter = function()
+                return not GetFlag(foodStationOccupiedFlag)
+            end
+        }
+
+        nodes.EPI_Laezel.WarmingHands = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Warming hands")
+                helpers.TrySetADFlag(warmingHandsADActive, warmingHandsADTimeout)
+                helpers.PlayBehaviourAt(warmingHandsTrigger, warmingHandsBehaviour, 3.0) 
+                mod.util.SleepRandom(2.0, 4.0)
+                helpers.PlayBehaviourAt(warmingHandsTrigger, warmingHandsBehaviour, nil) 
+                helpers.UpdateSocial(1)
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                BehaviorDialogRequestGracefulStop(me, false)
+            end
+        }
+
+
+        -- Non-Social behaviours
+        nodes.EPI_Laezel.CooldownAtBeach = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Cooldown at Beach")
+                SetFlag(beachOccupied)
+                local randomOrder = math.random(1,2)
+                if randomOrder == 1 then
+                    -- Stargaze first
+                    helpers.TrySetADFlag(stargazingADActive, stargazingADTimeout)
+                    helpers.PlayAnimationAt(lookingUpTriggerBeach, lookingUpAnims[math.random(#lookingUpAnims)], 3.0)
+
+                    mod.util.SleepRandom(2, 4)
+                    -- Sit on beach second
+                    helpers.TrySetADFlag(sittingADActive, sittingADTimeout)
+                    helpers.PlayBehaviourAt(sittingTriggerBeach, sittingBehaviour, 4.0) 
+
+                else
+                    -- Sit on beach first
+                    helpers.TrySetADFlag(sittingADActive, sittingADTimeout)
+                    helpers.PlayBehaviourAt(sittingTriggerBeach, sittingBehaviour, 4.0) 
+
+                    mod.util.SleepRandom(2, 4)
+                    -- Stargaze second
+                    helpers.TrySetADFlag(stargazingADActive, stargazingADTimeout)
+                    helpers.PlayAnimationAt(lookingUpTriggerBeach, lookingUpAnims[math.random(#lookingUpAnims)], 3.0)
+                end
+
+                helpers.UpdateSocial(-8) -- resets to 0
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                ClearFlag(beachOccupied)
+                BehaviorDialogRequestGracefulStop(me, false)
+                StopAnimation(me)
+            end,
+
+            CanEnter = function()
+                return not GetFlag(beachOccupied)
+            end
+        }
+
+        nodes.EPI_Laezel.StargazeAlcove = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Stargazing Alcove")
+                helpers.TrySetADFlag(stargazingADActive, stargazingADTimeout)
+                helpers.PlayAnimationAt(lookingUpTriggerAlcove, lookingUpAnims[math.random(#lookingUpAnims)], 3.0)
+                helpers.PlayAnimationAt(lookingUpTriggerAlcove, lookingAroundAnim, nil)
+                helpers.PlayAnimationAt(lookingUpTriggerAlcove, lookingUpAnims[math.random(#lookingUpAnims)], nil)
+                helpers.UpdateSocial(-1)
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.EPI_Laezel.SitAlcove = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Sitting Alcove")
+                helpers.TrySetADFlag(sittingADActive, sittingADTimeout)
+                helpers.PlayBehaviourAt(sittingTriggerAlcove, sittingBehaviour, 4.0)
+                helpers.UpdateSocial(-1)
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                BehaviorDialogRequestGracefulStop(me, false)
+            end
+        }
+
+        nodes.EPI_Laezel.DrinkAlcove = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Drinking Alcove")
+                helpers.PlayAnimationAt(drinkingTriggerAlcove, drinkingAnim, nil)
+                mod.util.SleepRandom(2.0, 4.0)
+                helpers.PlayAnimationAt(drinkingTriggerAlcove, drinkingAnim, nil)
+                helpers.UpdateSocial(-1)
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.EPI_Laezel.LookingAroundAlcove = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Looking around Alcove")
+                helpers.TrySetADFlag(sittingADActive, sittingADTimeout) -- sitting intended, works here too
+                helpers.PlayAnimationAt(lookingAroundTriggerAlcove, musicAnim, nil)
+                mod.util.SleepRandom(2.0, 4.0)
+                helpers.PlayAnimationAt(lookingAroundTriggerAlcove, musicAnim, nil)
+                helpers.UpdateSocial(-1)
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+        --------------------------------------------------------------------------------------------------------------------
+    
+    end
+}

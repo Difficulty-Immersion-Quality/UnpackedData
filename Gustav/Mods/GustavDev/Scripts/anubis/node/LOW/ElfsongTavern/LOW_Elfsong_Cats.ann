@@ -1,0 +1,95 @@
+game.states.LOW_Elfsong_Cats = State{function ()
+
+    --------------------------------Modules--------------------------------
+    modules = {"shared.moveto"}
+    --------------------------------Parameters--------------------------------
+    params.PlayingPoint = {type = EParamType.String, help = "[[Point to stay to reproduce the playing animation.]]", required = true }
+    params.SteeringPoint = {type = EParamType.String, help = "[[Steering point before playing]]", required = true }
+    --------------------------------Variables--------------------------------
+    local localSteeringPoint = Entity(params.SteeringPoint)
+    local localPlayingPoint = Entity(params.PlayingPoint)
+
+    local playCount = 0
+    local tiredCount = 0
+    local isTired = false
+    local napOngoing = false
+    local catPlayingAnimation = Animation("CUST_CatPlayingWithMouse_01_661ee367-ebfe-404f-a47f-74e8c2e6c268")
+    --------------------------------Nodes--------------------------------
+
+    nodes = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+    nodes.Nap = Action{
+        function()
+            Wander(10, 20, MovementSpeed.Stroll, localPlayingPoint)
+            if not napOngoing then
+                napOngoing = true
+                StartTimer(me, "LOW_Elfsong_CatNapTime", math.random(60.0, 120.0), 0)
+                ApplyStatus(me, "SLEEPING", false, -1)
+            end
+        end,
+        Valid = function()
+            return isTired
+        end
+    }
+
+    nodes.Play = Action{
+        CanEnter = function()
+            return not isTired
+        end,
+        OnEnter = function()
+            playCount = 0
+            tiredCount = math.random(2, 4)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(localPlayingPoint, MovementSpeed.Run, me) then
+                SteerTo(localSteeringPoint)
+                PlayAnimation(catPlayingAnimation,true,false)
+                Sleep(1.0 + 2.0 * math.random())
+                playCount = playCount + 1
+                if playCount == tiredCount then
+                    isTired = true
+                end
+            else
+                SteerTo(localSteeringPoint)
+                sleep(1.0)
+                return
+            end
+
+        end,
+        Valid = function()
+            return not isTired
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            Wander(10, 20, MovementSpeed.Stroll, localPlayingPoint)
+            isTired = true
+        end
+    }
+
+    --------------------------------EVENTS--------------------------------
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_Elfsong_CatNapTime") then
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end
+    end
+
+    events.StatusRemoved = function(e)
+        if me.Active and e.Status.StatusID == "SLEEPING" and not me.Character.IsDead then
+            StopTimer(me, "LOW_Elfsong_CatNapTime")
+            isTired = false
+            napOngoing = false
+        end
+    end
+    --------------------------------Events--------------------------------
+
+    --------------------------------Helpers--------------------------------
+
+end
+}

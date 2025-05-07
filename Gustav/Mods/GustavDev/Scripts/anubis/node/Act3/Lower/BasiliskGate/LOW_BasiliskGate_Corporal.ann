@@ -1,0 +1,50 @@
+game.states.LOW_BasiliskGate_Corporal = State { function ()
+    description = [[ Generic script to play an AD in trigger. ]]
+
+    modules = { "shared.dialog","shared.moveto","shared.util" }
+
+    params.StandAtTrigger = {type = EParamType.State, required=false, default = StateRef{game.states.GLO_StandAtTrigger}, help=[[Move to trigger]]}
+
+    local AD = Dialog("LOW_BasiliskGate_Corporal_AD_ee034e4c-ccb1-dde7-16be-9930a80956ab")
+    local trainees = {Entity("S_LOW_BasiliskGate_Private01_1871ea12-8341-4092-828e-fbc7fd464608"), Entity("S_LOW_BasiliskGate_Private02_62735f12-f693-4508-b802-0e90671218a9")}
+    local isTrainig_flag = Flag("LOW_BasiliskGate_PrivateIsTraining_State_f2747e59-c8d6-4005-bed9-871df799ac95")
+    local currentAction
+
+    self.OnInit = function()
+        currentAction = "moving"
+    end
+
+    nodes.StandAtTrigger = Proxy
+    {
+        params.StandAtTrigger,
+
+        Valid = function()
+            return currentAction == "moving"
+        end,
+        OnFinished = function()
+            currentAction = "ADing"
+        end
+    }
+
+    nodes.PlayADFromTrigger = Action {
+        function()
+            mod.util.SleepRandom(2.0, 2.0)
+            local training = false
+            for i,v in ipairs(trainees) do
+                if GetFlag(isTrainig_flag, v) then
+                    training = true
+                    break
+                end
+            end
+            if training then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(AD, {waitForCompletion = true, minDelay = 15.0}, me)
+            end
+        end, 
+        Valid = function()
+            return currentAction == "ADing"
+        end,
+        OnFinished = function()
+            currentAction = "moving"
+        end
+    }
+end}

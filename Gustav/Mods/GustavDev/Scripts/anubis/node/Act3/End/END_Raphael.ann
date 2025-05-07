@@ -1,0 +1,67 @@
+game.states.END_Raphael = State{function ()
+    description = [[Waiting to speak with the player after they burned all their bridges]]
+
+    modules = {"shared.moveto", "shared.dialog"}
+
+    local justArrived = true
+    local idlePoint = Entity("S_END_LastChanceRaphaelPoint_9926cf49-968c-47e0-9d06-9f2e74a2d543")
+    local lookAtOrpheusPoint = Entity("S_END_RaphLookAtOrpheusPoint_651a8bad-7b19-4942-9195-60f1c26f5c95")
+    local lookAtOrpheusFlag = Flag("END_IllithidOptions_Event_RaphaelLooksAtOrpheus_87aa92b0-20b1-4bb2-afaf-f020525612ab")
+    local AD = Dialog("END_IllithidOptions_AD_RaphaelWaiting_e2435344-4444-a3c0-7b28-c7018e20ca4d")
+
+    nodes.Arrived = Action {
+        function()
+            Sleep(10)
+            justArrived = false
+        end,
+
+        Valid = function()
+            return justArrived
+        end
+    }
+
+    nodes.LookAtOrpheus = Action {
+        CanEnter = function()
+            return GetFlag(lookAtOrpheusFlag)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(lookAtOrpheusPoint,  MovementSpeed.Walk, me) then
+                LookFrom(lookAtOrpheusPoint)
+                Sleep(6 + 6 * math.random())
+                mod.dialog.StartCheckedAutomatedDialog(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                    },
+                    me
+                )
+                Sleep(2.0)
+                ClearFlag(lookAtOrpheusFlag)
+            else
+                ClearFlag(lookAtOrpheusFlag)
+            end
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            if mod.moveto.MoveToPoint(idlePoint,  MovementSpeed.Walk, me) then
+                LookFrom(idlePoint)
+                Sleep(10 + 10 * math.random())
+                mod.dialog.StartCheckedAutomatedDialog(
+                    AD,
+                    {
+                        waitForCompletion = true,
+                    },
+                    me
+                )
+                SetFlag(lookAtOrpheusFlag)
+            else
+                SteerTo(idlePoint)
+            end
+        end
+    }
+
+
+end
+}

@@ -1,0 +1,63 @@
+game.states.LOW_BlushingMermaid_MaskedVictim = State{function()
+
+    modules = {"shared.dialog"}
+
+    params.idleAD = {type=EParamType.String, required = false, default=nil, help=[[Idle AD]]}
+    local idleAD = Dialog(params.idleAD)
+
+    local wanderTrigger = "S_LOW_BlushingMermaid_MaskedVictims_WanderTrigger_9a1efdf6-b644-420f-afd2-a37d3aaf7f62"    
+    local hagTrulyDeadAnim = Animation("CUST_KneelingCrying_01_Loop_9ea4a039-0c6c-4b5a-8d56-6a1bb64aa602")
+    local hagTrulyDeadFlag = Flag("LOW_BlushingMermaid_State_HagIsTrulyDead_c7c3e64d-dcfc-431b-a224-535a0c4a8e9c")
+
+    local wanderActive = true
+
+    nodes.PostHagTrulyDead = Action {
+        function()
+            Sleep(math.random(1.0,5.0))
+            PlayAnimation(hagTrulyDeadAnim,false,true)
+        end,
+
+        Valid = function()
+            return GetFlag(hagTrulyDeadFlag)
+        end
+    }
+
+    nodes.Wandering = Proxy {
+        OnEnter = function()
+            StartTimer(me,"LOW_MaskedVictimWandering_Timer",math.random(10.0,15.0),0)
+        end,
+
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 6,
+            sleepMin = 3,
+            trigger = wanderTrigger,
+            wanderMax = 10,
+            wanderMin = 5
+        },
+        
+        Valid = function()
+            return wanderActive
+        end
+    }    
+
+    nodes.idleAD = Action {
+        function()
+            Sleep(1.0)
+            mod.dialog.StartCheckedAutomatedDialog(
+                    idleAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+            wanderActive = true
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_MaskedVictimWandering_Timer") then
+            wanderActive = false
+        end
+    end
+end}

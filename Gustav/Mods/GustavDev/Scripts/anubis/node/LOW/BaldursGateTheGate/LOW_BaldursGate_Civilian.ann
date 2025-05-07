@@ -1,0 +1,82 @@
+game.states.LOW_BaldursGate_Civilian = State{function ()
+
+    --------------------------------Modules--------------------------------
+    modules = {"shared.dialog", "shared.math"}
+
+    --------------------------------Parameters--------------------------------
+
+    params.BoringAnimation_01 = {type = EParamType.String, help = [[First boring animation]], required = false, default = [[CUST_Bored_01_23588ba8-fafb-438c-9bc5-660ff6650aef]]}
+    params.NonBoringAnimation = {type = EParamType.String, help = [[Second animation]], required = false}
+    params.dialogAD = {type = EParamType.String, help = [[The AD for this character. NOT FOR PAIRS. Pairs are managed through Osiris.]], required = false }
+    params.IsInPairDialog = {type = EParamType.Bool, help=[[True if this character is involved in paired AD]], default = false }
+    params.OtherCharacterAD = {type = EParamType.String, help = [[The other character inside the AD.]], required = false }
+    --------------------------------Variables--------------------------------
+
+    local boringAnimation = Animation(params.BoringAnimation_01)
+    local secondaryAnimation = Animation(params.NonBoringAnimation)
+    local dialogAD = Dialog(params.dialogAD)
+    local otherCharacter = Entity(params.OtherCharacterAD)
+
+    --------------------------------Nodes--------------------------------
+
+    nodes = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.PlayFirstAnimation = Action {
+        function()
+            PlayAnimation(boringAnimation, true, false)
+            Sleep(10 + 5 * math.random())
+        end,
+        CanEnter = function()
+            return boringAnimation ~= nil
+        end
+    }
+
+    nodes.PlaySecondAnimation = Action {
+        function()
+            PlayAnimation(secondaryAnimation, true, false)
+            Sleep(10 + 5 * math.random())
+        end,
+        CanEnter = function()
+            return secondaryAnimation ~= nil
+        end
+    }
+
+    nodes.ReproduceAD = Action {
+        function()
+            if (not params.IsInPairDialog) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                    dialogAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+            else
+                if (otherCharacter ~= nil) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                    dialogAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me, otherCharacter
+                )
+                end
+            end
+
+        end,
+        CanEnter = function()
+            return dialogAD ~= nil
+        end,
+    }
+
+    nodes.Waiting = Action {
+        function()
+            Sleep(10 + 12 * math.random())
+        end,
+    }
+end
+}

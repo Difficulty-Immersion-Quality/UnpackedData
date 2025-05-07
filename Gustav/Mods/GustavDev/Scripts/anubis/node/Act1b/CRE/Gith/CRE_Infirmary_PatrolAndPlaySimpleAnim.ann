@@ -1,0 +1,85 @@
+game.states.CRE_Infirmary_PatrolAndPlaySimpleAnim = State { function ()
+
+    description = [[
+        Generic state to use to play a single animation. I.e. as a patrol action.
+    ]]
+
+    modules = { "shared.math", "shared.params", "shared.moveto", "shared.util" }
+
+    params.anim ={type = EParamType.String, required = false, default = nil, help =[[
+        Animations to play.
+    ]]}
+    params.patrolSpline = {type=EParamType.String, required = true,
+        help = [[Spline to be patrolled]]}
+    params.patrolSpeed = {type=EParamType.String, required = false, default = "Walk",
+        help = [[Speed at which to patrol: Stroll, Walk, Run, or Sprint]]}
+    params.patrolReverse = {type=EParamType.Bool, required = false, default = false,
+        help = [[Whether or not to patrol the spline in reverse]]}
+    params.startSplineIndex = {type=EParamType.Int, required = false, default = -1,
+        help = [[Start spline point index or -1 for nearest]]}
+    params.StandingTrigger = {
+        type = EParamType.String,
+        required = false,
+        default = nil,
+        help=[[Stand here during the infirmary ambus]]}
+
+    local patrolSpline = Spline(params.patrolSpline)
+
+    local anim = nil
+    local playAnim = false
+    local targetSplineIndex = params.startSplineIndex
+    local ambushFlag = Flag("CRE_GithInfirmary_State_DoctorTriesToCallGuards_b3ba07b1-b9c4-4919-a7c9-dd28ffe5f83e")
+
+    events.SplineControlPointReached = function(e)
+        DebugText(me,"splinepoint reached")
+        targetSplineIndex = e.NewIndex
+        playAnim = true
+    end
+
+
+    self.OnInit = function()
+        if params.anim ~= nil and params.anim ~= "" then
+            anim = Animation(params.anim)
+        end
+
+    end
+
+    nodes.StandAtTrigger = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = params.StandingTrigger
+        },
+        Valid = function ()
+            return params.StandingTrigger ~= nil and params.StandingTrigger~="" and GetFlag(ambushFlag)
+        end
+    }
+
+    nodes.PlayAnimation = Action{
+        function()
+            if anim ~= nil and anim ~= "" then
+                DebugText(me, "play animation")
+                PlayAnimation(anim, true, false)
+            end
+            Sleep(1.0)
+            playAnim = false
+            return
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+            playAnim = false
+        end,
+        Valid = function ()
+            return playAnim
+        end
+    }
+
+    nodes.Patrol = Action{
+        function()
+            DoPatrol(patrolSpline, params.patrolReverse, MovementSpeed[params.patrolSpeed], targetSplineIndex)
+        end,
+
+        Valid = function()
+            return patrolSpline ~= nil and playAnim == false
+        end
+    }
+end}

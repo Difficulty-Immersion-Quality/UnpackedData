@@ -1,0 +1,169 @@
+game.states.EPI_Minsc = State{
+    function ()
+        modules = {"shared.moveto", "shared.util", "shared.items", "shared.math", "shared.dialog"}
+    
+        description = [[Minsc's behaviour for Act 3 EPI.]]
+    
+        --------------------------------------------------------------------------------------------------------------------
+        -- Local params
+        local minscSpots = {}
+        local minscCampSpot = Entity("S_EPI_StartPointMinsc_69064f06-ab8a-4ce1-974b-1645f441de0f")
+
+        -- Action FeedBoo
+        local bhvrFeedBoo = Dialog("BHVR_WRLD_EPI_Epilogue_MinscBooFeeding_ec93839a-08c1-74ea-5ffd-2ba4b3ffb4c7")
+        local triggerFeedBoo = Entity("S_EPI_MinscFeedBoo_8df09030-8548-4688-8e3f-e165a69127b2")
+
+        -- Action PlayBoo
+        local bhvrPlayBoo = Dialog("BHVR_WRLD_EPI_Epilogue_MinscBooPlaying_80079949-2aa1-3eff-2020-66e577b0d34c")
+
+        -- Action StuffFood
+        local animStuffFood = Animation("CUST_EPI_Minsc_StuffFoods_01_6a821ed2-15d4-4814-b607-c639a962095a")
+        local pointStuffFood = Entity("S_EPI_MinscFoodTable_8a07c447-5ac3-4f1f-86ae-b2d83c59e5c5")
+
+        -- Action FlexingMuscle
+        local animFlexingMuscle = Animation("CUST_EPI_Minsc_FlexingMuscle_01_6d1732cd-761d-4cab-973c-17e03ba4ee2f")
+
+        -- Action PlayAD
+        local idleAD = Dialog("EPI_Epilogue_AD_IdleMinsc_ae6b2f10-0d02-f63e-94c9-38fd36656300")
+        local terrifiedThief = Entity("S_EPI_TerrifiedThief_85d6a92c-dc66-4f26-b6b7-1feb8301fa4c")
+        local terrifiedThiefFlag = Flag("ORI_Minsc_State_PartneredWithNineFingers_ff63b939-82d3-c670-ad59-c7cf6363d234")
+
+        local currentState = 0
+        local maxState = 3
+
+        local talkingToThiefFlag = Flag("EPI_Origins_Minsc_TalkingToThief_a19f1963-664a-41e2-b4b0-71126a55d525")
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- Helpers
+        helpers.action.PlayAnimationAt = function(pos, animation)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Walk, me, 0.5, false) then
+                LookFrom(pos)
+                DebugText(me, "Playing Animation: [1]", tostring(animation))
+                PlayAnimation(animation, true, false)
+                Sleep(3.0)
+            else
+                DebugText(me, "Error: can't move to [1]", pos.Name)
+                Sleep(3.0)
+            end
+        end
+
+        helpers.action.PlayBehaviorAt = function(pos, behavior, behaviorTrigger)
+            DebugText(me, "Playing Behavior: [1]", tostring(behavior))
+            if behaviorTrigger ~= nil then
+                StartBehaviorDialog(behavior, behaviorTrigger.Trigger, true, me)
+            else
+                StartBehaviorDialog(behavior, nil, true, me)
+            end
+            Sleep(3.0)
+        end
+
+        helpers.action.ChangeState = function()
+            currentState = currentState + 1
+            if (currentState > maxState) then currentState = 0 end
+        end
+
+        helpers.action.GetRandomSpot = function()
+            return minscSpots[math.random(1, #minscSpots)]
+        end
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- State (self) node functions
+        self.OnInit = function()
+            minscSpots[1] = minscCampSpot
+            minscSpots[2] = Entity("S_EPI_MinscCampfire_dc2d3ac0-db79-490b-bbae-d709dad47eec")
+        end
+
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- States
+
+        -- Talk to Thief
+
+        nodes.PlayAD = Action {
+            function(nodes)
+                local rand = mod.math.random(0.0, 100.0)
+                if rand < 50.0 then  
+                    if GetFlag(terrifiedThiefFlag) and mod.dialog.IsSpeakerAvailableAndNear(terrifiedThief, me, 8.0, true) then
+                        DebugText(me, "AD with thief")
+                        SetFlag(talkingToThiefFlag)
+                        if mod.moveto.MoveToPoint(terrifiedThief, MovementSpeed.Walk, me, 1.5, false) then
+                            mod.dialog.StartCheckedAutomatedDialog(idleAD, {waitForCompletion = true}, me, terrifiedThief)
+                        else
+                            mod.dialog.StartCheckedAutomatedDialog(idleAD, {waitForCompletion = true}, me)
+                        end
+                    else
+                        DebugText(me, "AD solo")
+                        mod.dialog.StartCheckedAutomatedDialog(idleAD, {waitForCompletion = true}, me)
+                    end
+                end
+                helpers.ChangeState()
+            end,
+
+            OnLeave = function()
+                ClearFlag(talkingToThiefFlag)
+            end,
+
+            CanEnter = function()
+                return currentState == 0
+            end
+        }
+
+        nodes.FeedBoo = Action{
+            function()
+                DebugText(me,"Feed Boo interaction")
+                helpers.PlayBehaviorAt(pointStuffFood, bhvrFeedBoo, triggerFeedBoo)
+                helpers.ChangeState()
+            end,
+            CanEnter = function()
+                return currentState == 1
+            end,
+            OnLeave = function()
+                BehaviorDialogRequestGracefulStop(me, false)
+            end
+        }
+
+        nodes.StufFood = Action{
+            function()
+                DebugText(me,"Stuff Food interaction")
+                helpers.PlayAnimationAt(pointStuffFood, animStuffFood)
+                helpers.ChangeState()
+            end,
+            CanEnter = function()
+                return currentState == 2
+            end
+        }
+
+        nodes.IdleAction = Selector{
+            function(nodes)
+                return FindDifferentRandomSelectable(nodes)
+            end,
+            CanEnter = function()
+                return currentState == 3
+            end
+        }
+
+        nodes.IdleAction.PlayBoo = Action{
+            function()
+                DebugText(me,"Play Boo interaction")
+                helpers.PlayBehaviorAt(helpers.GetRandomSpot(), bhvrPlayBoo, nil)
+                helpers.ChangeState()
+            end,
+            OnLeave = function()
+                BehaviorDialogRequestGracefulStop(me, false)
+            end
+        }
+
+        nodes.IdleAction.FlexMuscle = Action{
+            function()
+                DebugText(me,"Flex Muscle interaction")
+                helpers.PlayAnimationAt(helpers.GetRandomSpot(), animFlexingMuscle)
+                helpers.ChangeState()
+            end
+        }
+
+        --------------------------------------------------------------------------------------------------------------------
+    
+
+    end
+    }
+    

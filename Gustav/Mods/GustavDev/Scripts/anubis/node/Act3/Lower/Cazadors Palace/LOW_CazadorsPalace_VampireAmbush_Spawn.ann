@@ -1,0 +1,65 @@
+game.states.LOW_CazadorsPalace_VampireAmbush_Spawn_Combat = State{ function()
+
+    -- Combat script for Vampire Spawns during the Vampire Ambush camp night
+    -- if Astarion gets Downed or Dies they want to teleport with his body to Cazador
+    -- Their actions:
+    --  First turn after Astrion went down - play an AD - I'm going to kidnap him and move to Astarion
+    --  Second turn after Astarion went down - teleport with Astarion if he is within range still, if not - move to him
+    local astarionCharacter = Entity("S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255")
+    local teleportedToRitual = Flag("LOW_CazadorsPalace_State_SentToPalace_df019be0-deac-4302-a3a6-018fb985c705")
+    local ambushStarted = Flag("LOW_VampireAmbush_State_AmbushStarted_1d39e1e0-d419-4185-905c-c798511703b6")
+
+    local cannotBeKidnapped = Flag("LOW_VampireAmbush_State_CannotBeKidnapped_11d1273c-6c66-4621-abad-02b9cd4367cd")
+    local kidnapper = Flag("LOW_VampireAmbush_State_Kidnapper_d33af2db-fc2c-4bdc-bf58-3ea2cee4ac6a")
+    local kidnappingAD = Dialog("CAMP_VampireAmbush_AD_SpawnKidnapsAstarion_f0a214f7-9b6b-a541-f888-4694013bf18c")
+    local kidnapped = Flag("LOW_VampireAmbush_State_AstarionKidnapped_b52d681f-4722-4f43-ba95-ac9f49c173d8")
+    local soloPlayer = Flag("GEN_SoloPlayer_29e32f83-2001-0dbc-7df9-3ca2b3bc4349")
+    local declaredIntention = false
+
+    self.Valid = function()
+        return me.IsInCombat
+            and me.CanActInCombatTeamTurn
+            and GetFlag(ambushStarted)
+            and not GetFlag(cannotBeKidnapped)
+            and not GetFlag(kidnapped)
+            and not GetFlag(teleportedToRitual, me)
+            and GetFlag(kidnapper, me)
+            and ( HasActiveStatus(astarionCharacter, "DOWNED")
+                or astarionCharacter.Character.IsDead )
+    end
+
+    nodes.KidnapAstarion = Action{
+        function()
+            if not declaredIntention then
+                StartAutomatedDialog(kidnappingAD, true, me)
+                declaredIntention = true
+
+                if GetDistanceTo(me, astarionCharacter) > 1.5 and CanCast(me.Character, "Shout_Dash_NPC") then
+                    UseSpell("Shout_Dash_NPC", me)
+                end
+
+                local moveResult = MoveTo(astarionCharacter, MovementSpeed.Run, false, false, 1.0, 1.5, false)
+                if GetFlag(soloPlayer) then
+                    SetEntityEvent(me, "LOW_VampireAmbush_EscapeWithAstarion")
+                    Sleep(2.0)
+                else
+                    EndTurn(me)
+                end
+            else
+                if GetDistanceTo(me, astarionCharacter) > 1.5 and CanCast(me.Character, "Shout_Dash_NPC") then
+                    UseSpell("Shout_Dash_NPC", me)
+                end
+
+                local moveResult = MoveTo(astarionCharacter, MovementSpeed.Run, false, false, 1.0, 1.5, false)
+
+                if GetDistanceTo(me, astarionCharacter) <= 1.5 or GetFlag(soloPlayer) then
+                    SetEntityEvent(me, "LOW_VampireAmbush_EscapeWithAstarion")
+                    Sleep(2.0)
+                else
+                    EndTurn(me)
+                end
+            end
+        end
+    }
+end
+}

@@ -1,0 +1,56 @@
+game.states.TUT_ImpLooter_idle = State{function()
+
+    local corpse = {
+        [1] = Entity("S_TUT_LowerDeck_MindflayerDead_001_16bebcc5-41d7-4fea-9e34-6f042fbc5ca2"),
+        [2] = Entity("S_TUT_LowerDeck_Mindflayer_001_21f24385-259d-4118-90ed-61d02620bc6a"),
+        [3] = Entity("S_TUT_LowerDeck_IntellectDevourerDead_001_12afa6a2-8788-4adf-b078-7dcfcf3733c5"),
+        [4] = Entity("S_TUT_LowerDeck_IntellectDevourerDead_002_3d2cc1e0-4491-4dec-8aad-c1fb0ea28a15")}
+    local Anchor = Entity("S_TUT_LowerDeck_FightA_49df2159-c87c-46b8-833a-d7e80b9b0541")
+    local ImpLootWeight = 4
+    local ImpWanderWeight = 0
+    local CorpsePick
+
+    nodes.ImpSelect = Selector{
+        function(nodes)
+            return GetWeightedCanEnter(nodes, {[nodes.ImpLoot] = ImpLootWeight,
+                                               [nodes.ImpWander] = ImpWanderWeight}
+                                      )
+        end
+    }
+
+    nodes.ImpSelect.ImpLoot = Action{
+        function()
+            CorpsePick = (math.random(1, 4))
+            if IsInTrigger(corpse[CorpsePick], Anchor.Trigger) and not IsInDangerousSurfaceFor(corpse[CorpsePick], me.Character, 3.0) then
+                try
+                    SetWeaponUnsheathed(me,true)
+                    MoveTo(corpse[CorpsePick], MovementSpeed.Walk)
+                    LookAtEntity(corpse[CorpsePick], 3.0)
+                    --PlayAnimation(animation, true, false) //Imps has no custom placeholder animations. 
+                    DebugText(me, "Try Animation")
+                    ImpLootWeight = 0
+                    ImpWanderWeight = 6
+                    Sleep(4.0)
+                catch e if ls.CheckType(e, error.MovementFailed) then
+                    DebugText(me,"Move Exception")
+                end
+            else
+                Wander(5.0, 4.0, MovementSpeed.Walk, Anchor)
+                ImpLootWeight = (ImpLootWeight + 1)
+                ImpWanderWeight = (ImpWanderWeight - 1)
+                Sleep(2.0)
+            end
+        end
+    }
+
+    nodes.ImpSelect.ImpWander = Action{
+        function()
+            Wander(5.0, 4.0, MovementSpeed.Walk, Anchor)
+            ImpLootWeight = (ImpLootWeight + 1)
+            ImpWanderWeight = (ImpWanderWeight - 1)
+            Sleep(2.0)
+        end
+    }
+
+
+end}

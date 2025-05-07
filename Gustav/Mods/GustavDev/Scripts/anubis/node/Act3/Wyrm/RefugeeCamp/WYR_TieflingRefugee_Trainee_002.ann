@@ -1,0 +1,51 @@
+game.states.WYR_TieflingRefugee_Trainee_002 = State { function ()
+    description = [[ A behaviour for a child tiefling washing dishes. ]]
+
+    modules = { "shared.dialog", "shared.moveto", "shared.math" }
+
+    local sceneTrigger = Entity("BHVR_WRLD_WYR_RefugeeCamp_WashingDishes_SceneTrigger_b1620b59-8304-4f39-80bf-e9a50c475990")
+    local behaviorDialog = Dialog("BHVR_WRLD_WYR_RefugeeCamp_WashingDishes_8bee2f43-1096-69c0-141e-cc1b7f9ea2ec")
+
+    local bowl7 = Entity("S_WYR_RefugeeCamp_Bowl_A_007_6f2478f7-8ea5-4f42-a7ce-4466ed8e6cff")
+    local bowl6 = Entity("S_WYR_RefugeeCamp_Bowl_A_006_44c288dd-ea3a-4353-8ac2-59c04c13b244")
+
+    local failed = false
+
+    nodes.AtCamp = Action {
+        function()
+            if mod.moveto.MoveToPoint(sceneTrigger, MovementSpeed.Walk, me) then
+                Sleep(mod.math.random(1, 3))
+                if not IsPerformingWorldBehaviour(me) then
+                    try
+                        StartBehaviorDialog(behaviorDialog, sceneTrigger.Trigger, true, me, bowl7, bowl6)
+                    catch e then
+                        DebugLog("WYR_TieflingRefugee_Trainee_002: "..tostring(e))                        
+                        failed = true
+                        WaitForInterrupt()
+                    end
+                end
+            end
+        end,
+        CanEnter = function()
+            return not failed
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    }
+
+    nodes.BehaviorFailed = Proxy {
+        game.states.WYR_LoopingAnimAtTrigger,
+        params = {        
+            animEnd = [[CUST_InspectClose_01_End_b5e6ad3a-b760-48b4-937d-2369e8b0ff1e]],
+            animLoops = {
+                [[CUST_InspectClose_01_25631e14-916d-4d91-8b59-094122d78cd0]],
+            },
+            trigger = [[S_WYR_RefugeeCamp_Trainee_002_HomePos_5c7c0870-34f0-46fd-b6c5-5e3f36938e20]],
+            animStart = [[CUST_InspectClose_01_Start_f5fc4cd6-66f6-4291-a244-3e0de135b680]],
+        },
+        OnEnter = function()
+            failed = false
+        end
+    }
+end}

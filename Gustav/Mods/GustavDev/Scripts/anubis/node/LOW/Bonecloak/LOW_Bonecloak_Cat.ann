@@ -1,0 +1,127 @@
+game.states.LOW_Bonecloak_Cat = State{function()
+
+    modules = {"shared.moveto"}
+
+    params.streetWanderTrigger = {type=EParamType.String, required = false, default=nil, help=[[Default wander trigger for the cat]]}
+    local streetWanderTrigger = params.streetWanderTrigger
+    local streetWanderTriggerEntity = Entity(params.streetWanderTrigger)
+
+    local homeWanderTrigger = "S_LOW_BonecloakApothecary_HouseCat_WanderTrigger_4d171b7f-d444-4b0f-9e74-44e7bff67cd5"
+    local houseCatFlag = Flag("LOW_BonecloakApothecary_State_Housecat_74e6c7e1-00fc-88ba-2a7d-1b14edfb8491")
+    local houseCatArrivedFlag = Flag("LOW_BonecloakApothecary_State_CatArrived_97f0d528-039a-4665-ab9f-95ba2f3c0272")
+
+    local atTheDoorPointTrigger = Entity("S_LOW_BonecloakApothecary_DerrythsCatAtTheDoor_PointTrigger_2f1d6994-272f-4cd0-8de0-ac9c826eaf37")
+    local houseCatPointTrigger = Entity("S_LOW_BonecloakApothecary_DerrythsCat_PointTrigger_6d32a123-5d0a-4a60-83d6-05427586f787")
+    local catFollowPlayerFlag = Flag("LOW_BonecloakApothecary_Event_Cat_01_FollowsPlayer_c4b141f9-5b6c-2428-d402-8c58f3b3df96")
+    local playerToFollow = nil
+    local catThatCanFollowPlayer = Entity("S_LOW_BonecloakApothecary_CatForDerryth01_43dc449e-80a5-40fc-bad5-6901287424be")
+
+    nodes.FollowingPlayer = Action {
+        CanEnter = function()
+            return me == catThatCanFollowPlayer
+        end,
+
+        OnEnter = function()
+            StartTimer(me,"LOW_ResetBonecloakCatFollowPlayer_Timer",math.random(40.0,60.0),0)
+        end,
+
+        function()
+            SetFollowCharacter(me.Character, playerToFollow.Character)
+            FollowOwnerOrLeader()
+        end,
+
+        Valid = function()
+            return playerToFollow ~= nil and GetDistanceTo(me,playerToFollow) <= 20.0
+        end,
+
+        OnLeave = function()
+            StopTimer(me,"LOW_ResetBonecloakCatFollowPlayer_Timer")
+            if(playerToFollow ~= nil) then
+                ClearFlag(catFollowPlayerFlag,playerToFollow)
+            end
+            playerToFollow = nil
+        end
+    }
+
+    nodes.GoToStreetWandering = Action {
+
+        function()
+            Sleep(1.0)
+            mod.moveto.MoveToPoint(streetWanderTriggerEntity, MovementSpeed.Run, me, 0.5)
+        end,
+
+        Valid = function()
+            return not GetFlag(houseCatFlag,me) and GetDistanceTo(me,streetWanderTriggerEntity) > 10.0
+        end
+    }
+
+    nodes.StreetWandering = Proxy {
+        CanEnter = function()
+            return streetWanderTrigger ~= nil
+        end,
+
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 14,
+            sleepMin = 8,
+            trigger = streetWanderTrigger,
+            wanderMax = 6,
+            wanderMin = 3
+        },
+
+        Valid = function()
+            return not GetFlag(houseCatFlag,me)
+        end
+    }
+
+    nodes.GoingHome = Action {
+        function()
+            Sleep(1.0)
+            if(mod.moveto.MoveToPoint(houseCatPointTrigger, MovementSpeed.Run, me, 0.5) == false) then
+                mod.moveto.MoveToPoint(atTheDoorPointTrigger, MovementSpeed.Run, me, 0.5)
+                LookFrom(atTheDoorPointTrigger)
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(houseCatFlag,me) and not GetFlag(houseCatArrivedFlag)
+        end
+    }
+
+    nodes.HomeWandering = Proxy {
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 12,
+            sleepMin = 6,
+            trigger = homeWanderTrigger,
+            wanderMax = 8,
+            wanderMin = 4
+        },
+
+        Valid = function()
+            return GetFlag(houseCatFlag,me) and GetFlag(houseCatArrivedFlag)
+        end
+    }
+
+    nodes.Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "LOW_BonecloakApothecary_Cat01FollowPlayer" then
+            playerToFollow = e.Params[1]
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_ResetBonecloakCatFollowPlayer_Timer") then
+            if(playerToFollow ~= nil) then
+                ClearFlag(catFollowPlayerFlag,playerToFollow)
+            end
+            playerToFollow = nil
+        end
+    end
+
+end}

@@ -1,0 +1,145 @@
+game.states.EPI_Tara = State { function ()
+    description = [[ Gale's good friend ]]
+
+    modules = {"shared.moveto", "shared.math", "shared.dialog"}
+
+    local campPoint = Entity("S_EPI_StartPointTara_276ebe78-44d3-4fe7-8a75-5ba55c628799")
+    local Gale = Entity("S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604")
+    local GaleAD = Dialog("EPI_Epilogue_AD_IdleGale_d59f31c7-1818-167e-9247-455745f976fc")
+    local GaleGodAD = Dialog("EPI_Epilogue_AD_IdleGodGale_129037dc-1013-c0d6-e1eb-c021f1251358")
+    local NoGaleAD = Dialog("EPI_Epilogue_AD_IdleTara_dab5f499-5643-279d-4b5d-0fad285013c3")
+
+    local normalGalePresent = Flag("EPI_Epilogue_State_GalePresent_5693605b-02e5-4076-8555-f546ad08eb53")
+    local spectralGalePresent = Flag("EPI_Epilogue_State_SpectralGalePresent_fe6af825-0573-49e0-8dbb-ba2198f2be6b")
+    local GaleGod = Flag("ORI_Gale_State_IsGod_ec94f9a4-b032-ce25-f4eb-ecf4ed37d65d")
+    local galeWantsToTalk = Flag("EPI_Epilogue_Gale_ReadyToTalkWithTara_214ca03f-1316-4734-99df-a10a4f62d0d2")
+    local taraIsReadyToTalk = Flag("EPI_Epilogue_Tara_ReadyToTalkWithGale_85a828ba-f86f-495f-9a86-87eb0179dea2")
+    
+    local taraHomeSpot = Entity("S_EPI_Tara_TalkTrigger_5edcf885-7c4b-4aa8-9453-cf89d258ab63")
+
+    local taraRelaxStart = Animation("CUST_EPI_Tara_Relaxing_01_Start_a472a3a6-be86-4cff-b69e-db96a6d769fc")
+    local taraRelaxLoop = Animation("CUST_EPI_Tara_Relaxing_01_Loop_c47c6a74-76f7-4075-b9e7-577e844ec7dc")
+    local taraRelaxEnd = Animation("CUST_EPI_Tara_Relaxing_01_End_fea6b433-848e-490e-82b4-daa16a9f4f72")
+
+    local taraHairlessStart = Animation("CUST_EPI_Tara_Hairless_01_Start_e7991ea5-bdc7-4ee4-ba12-fe01421b0c90")
+    local taraHairlessLoop = Animation("CUST_EPI_Tara_Hairless_01_Loop_63e28e30-8d75-4fc1-b2ae-114a69a34bbb")
+    local taraHairlessEnd = Animation("CUST_EPI_Tara_Hairless_01_End_a0f59e0f-e7fe-435b-a318-b4f39f05af0d")
+
+    local taraLickAnim = Animation("CUST_EPI_Tara_LickPaw_01_644851c6-5837-42fa-b837-3f554229ce2c")
+    local readyToZoom = true
+    local wandering = true
+
+   
+------------- Helpers-------
+
+helpers.action.PlayAnimationAt = function(pos, animation, animationLength)
+    if pos ~= nil then
+        if mod.moveto.MoveToPoint(pos, MovementSpeed.Walk, me, 0.5, false) then
+            LookFrom(pos)
+            PlayAnimation(animation)
+            Sleep(animationLength)
+            StopAnimation(me)
+            mod.util.SleepRandom(1.0,2.0)
+        end
+    end
+        wandering = true
+end
+
+nodes.Talking = Action {
+    Valid = function()
+        return GetFlag(taraIsReadyToTalk)
+    end,
+    function()
+        if not GetFlag(GaleGod) then
+            LookFrom(pos)
+            PlayLoopingAnimation(taraHomeSpot, taraRelaxStart, taraRelaxLoop, taraRelaxEnd)
+            Sleep(1.0)
+        else
+            LookFrom(pos)
+            PlayLoopingAnimation(taraHomeSpot, taraHairlessStart, taraHairlessLoop, taraHairlessEnd)
+            Sleep(1.0)
+        end
+    end,
+    OnLeave = function()
+        StopAnimation(me)
+        Sleep(2.0)
+        wandering = true
+    end
+}
+
+
+nodes.Wander = Action {
+    Valid = function()
+        return wandering
+    end,
+    OnEnter = function()
+        StartTimer(me,"Tara_Wandering", math.random(30.0, 50.0), 0)
+    end,
+    function() 
+        Wander(10.0,6.0, MovementSpeed.Stroll, campPoint)
+        Sleep(math.random(2,5))
+    end,
+}
+
+nodes.GaleADMove = Action {
+    CanEnter = function()
+        return GetFlag(normalGalePresent)
+    end,
+    function()
+        if mod.moveto.MoveToPoint(taraHomeSpot, MovementSpeed.Stroll, me) then
+            SetFlag(taraIsReadyToTalk)
+            LookFrom(taraHomeSpot)
+        else
+            Sleep(4.0)
+        end
+    end,
+    Valid = function()
+        return GetFlag(galeWantsToTalk) and not GetFlag(taraIsReadyToTalk)
+    end
+}
+
+nodes.NoGaleAD = Action {
+    CanEnter = function()
+        return  GetFlag(spectralGalePresent)
+    end,
+    function()
+        mod.dialog.StartCheckedAutomatedDialogRateLimited(
+            NoGaleAD,
+            {
+                waitForCompletion = false,
+                minDelay = 60.0,
+            },
+            me
+        )
+    end,
+}
+
+nodes.Zoomie = Action {
+    function()
+        Wander(12.0,5.0, MovementSpeed.Run, campPoint)
+        Sleep(math.random(3,4))
+        StartTimer(me, "Tara_Zoomies", math.random(40.0, 60.0), 0)
+        readyToZoom = false
+    end,
+    Valid = function()
+        return readyToZoom
+    end
+}
+
+nodes.Preen = Action {
+    function()
+            helpers.PlayAnimationAt(taraHomeSpot, taraLickAnim, 9.0)
+        end
+
+}
+
+events.TimerFinished = function(e)
+        if(e.TimerName == "Tara_Zoomies") then 
+            readyToZoom = true
+        elseif(e.TimerName == "Tara_Wandering") then
+            wandering = false
+        end
+    end
+
+end
+}

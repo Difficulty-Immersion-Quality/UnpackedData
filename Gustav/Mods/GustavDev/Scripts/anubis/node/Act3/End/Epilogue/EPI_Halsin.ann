@@ -1,0 +1,527 @@
+game.states.EPI_Halsin = State{
+    function ()
+        modules = {"shared.moveto", "shared.util", "shared.items", "shared.math", "shared.dialog"}
+    
+        description = [[Halsin's behaviour for Act 3 EPI.]]
+        -- Halsin's gimmick:
+        -- He'll be avoiding drinking for a while, based on one of his ADs - to avoid losing control and turning into a bear
+        -- At some point he'll relax and start drinking, raising his drunkenness each time he enters a drinking behaviour
+        -- After a few times, he gets the DRUNK status
+        -- While DRUNK, a new state is available where he would go to the secluded beach if it's empty and turn into a bear for a few seconds, then turn back and is no longer DRUNK
+        -- After that we loop and he doesn't drink for a while, then drinks again, etc EPI_Wyll_State_CurrentlyDancing_38f96073
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- Local params
+
+        -- State flags
+        local drunkFlag = Flag("EPI_Halsin_State_Drunk_01a53dbf-d8c9-4dcc-bd8b-fd8c82dc6cdf")
+        local beachOccupied = Flag("EPI_Origins_State_BeachOccupied_d915b645-b52f-41cc-ba61-76268aac41af")
+        local postBearFlag = Flag("EPI_Halsin_State_PostBear_0866ec13-eff3-4bdb-a9b9-8317df5f5553")
+        local middleTableSpotOccupied = Flag("EPI_Origins_State_MiddleTableSpotOccupied_f9f7fcd9-a602-49e0-b940-5b8acc6b110a")
+        local musicPlayingFlag = Flag("EPI_Epilogue_DivineBard_State_PlayingSong_262657bd-c979-4994-bb16-8266a3d2c146")
+
+        -- Internal variables
+        local selectedBehaviour = nil
+        local drunkenness = 0 -- Halsin gets gradually more drunk the more times he's in the Drinking state
+        local generalADTimeout = 0
+        local lastPlayedAD = nil
+        local executingBearState = false
+        
+        local drunkADActive = Flag("EPI_Halsin_Event_IdleAD_DrunkActive_43be99f3-d8bd-429b-902a-5cf129ffca7a")
+        local eatingADActive = Flag("EPI_Halsin_Event_IdleAD_EatingActive_f8fbe67b-1aba-4974-ba6d-a3b471c3dc0c")
+        local bardADActive = Flag("EPI_Halsin_Event_IdleAD_BardActive_706b2c99-9a85-47a3-b1f2-c2b188e0b362")
+        local balladADActive = Flag("EPI_Halsin_Event_IdleAD_BalladActive_450d1cb3-4bfe-4101-b117-f6b2f551b6da")
+        local friendsADActive = Flag("EPI_Halsin_Event_IdleAD_FriendsActive_be6ae17f-c09a-4120-bf5a-8074ed134f50")
+
+        local eatingADTimeout = 0
+        local bardADTimeout = 0
+        local friendsADTimeout = 0
+        local balladADPlayedOnce = false
+        local balladSongFlag = Flag("EPI_Epilogue_State_DivineBardTrack006_b3ba3ad3-af4a-40bc-a90f-0bdea8d93646")
+
+        local currentDancingPos = nil
+
+        -- Dialogs
+        local idleAD = Dialog("EPI_Epilogue_AD_IdleHalsin_80427b77-ad8b-0361-e6f9-48ded22953a5")
+
+        -- Animations
+        local bearTriggers = {Entity("S_EPI_Halsin_BeachPos1_36dd6e66-d849-4310-a8b5-99b97f5943f2"),
+                              Entity("S_EPI_Halsin_BeachPos2_264395d6-c91e-4bd3-9cfd-5c46175831ff"),
+                              Entity("S_EPI_Halsin_BeachPos3_aec0f290-60d1-440e-a681-b82cbf73e5c9")}
+                        
+        local warmingHandsAnim = Animation("CUST_EPI_Halsin_WarmHandsBonfire_01_2e97dfe0-2224-4469-9c62-754690688a9a")
+        local warmingHandsTrigger = Entity("S_EPI_Halsin_NearCampfire_0f77ca5f-7360-4a58-b5d8-4517a8929167")
+
+        local danceStart = Animation("CUST_EPI_Halsin_Dance_01_Start_d8d4df38-794e-45ca-b950-4cb89da83d3d")
+        local danceLoop = Animation("CUST_EPI_Halsin_Dance_01_Loop_e0bbddb0-4e03-4f74-8fd4-dc172026de66")
+        local danceEnd = Animation("CUST_EPI_Halsin_Dance_01_End_bcbbdc90-da72-4f41-a4cf-3cec3564e355")
+        local danceTriggers = {Entity("S_EPI_Halsin_NearCampfire_0f77ca5f-7360-4a58-b5d8-4517a8929167"),
+                               Entity("S_EPI_Halsin_NearDanceFloor_5a07b3a7-7217-420d-820e-064b489338bb"),
+                               Entity("S_EPI_Halsin_NearTables_90411c92-b867-468d-9b5a-9201ea2848e3")}
+
+        local standingEatingBhvr = Dialog("BHVR_WRLD_EPI_Epilogue_HalsinStandDrinking_a33ba220-6c5f-f35c-1338-94cb95316280")
+        local standingEatingTrigger = Entity("BHVR_WRLD_EPI_Halsin_StandDrinkingTrigger_08f5fb8f-ece8-404c-9db3-30f722259571")
+
+        local sitAndDrinkBhvr = Dialog("BHVR_WRLD_EPI_Halsin_SitAndDrink_b7c82eb8-4ff9-92ce-eca1-f5228aa41bf7")
+        local sitAndDrinkChair = Entity("S_EPI_Halsin_SitAndDrink_Chair_87e64c13-4048-460c-80d7-2790832f2d79")
+        local sitAndDrinkChairPos = Entity("S_EPI_Halsin_ChairPos_27f9fa8f-04bb-4a1a-bebc-ff278c227ba5")
+        local sitAndDrinkTankard = Entity("S_EPI_Halsin_SitAndDrink_Tankard_9d1a89ff-20a5-4705-ae77-7eb79e92a810")
+        local sitAndDrinkTankardPos = Entity("S_EPI_Halsin_TankardPos_8e258b41-af3e-403e-8f36-da3a386ef8a8")
+        local sitAndDrinkTrigger = Entity("BHVR_WRLD_EPI_Halsin_SitAndDrink_SceneTrigger_07e51cb0-f260-414e-bb83-f0b680356be3")
+
+        local clothesAnim = Animation("CUST_EPI_Halsin_UncomfortableClothes_01_89e3c1ba-85e8-4a1e-ae95-9b8a1ffa140c") 
+        local clothesTrigger = Entity("S_EPI_Halsin_NearCampfire_0f77ca5f-7360-4a58-b5d8-4517a8929167")
+                                 
+        local seatMainTrunk = Entity("S_EPI_Origins_CampfireSeatMain_d6bf8a18-8cee-4833-ae90-1b9f554378ea")
+        local seatCampfireGround = Entity("S_EPI_Halsin_CampfireSitOnGround_ee79b3a2-9a3d-4d60-96d3-550dcae066ab")
+        local campfire = Entity("S_EPI_Campfire_9d1a1706-8862-4bc7-ab74-f425ddeeb1e6")
+
+        local drunkBearStart = Animation("CUST_TellStory_01_Start_50e94e00-fa55-431d-9d8b-e3d97a37c0b0")
+        local drunkBearLoop = Animation("CUST_TellStory_01_Loop_cc763951-1ae0-4b04-9c27-0261d8eef3fd")
+        local drunkBearEnd = Animation("CUST_TellStory_01_End_21293a06-b892-4c13-b119-1e2dfcf5d581")
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- Helpers
+
+        helpers.ItemAvailable = function(item, pos)
+            return  mod.items.ItemIsValid(item) and
+                    not mod.items.SafeIsDestroyed(item) and
+                    helpers.ItemAtPosition(item, pos)
+        end
+    
+        helpers.ItemAtPosition = function(item, pos)
+            local distance = GetDistanceTo(item, pos)
+            local angle = math.abs(mod.math.VectorAngle(item.ForwardDirection, pos.ForwardDirection))
+
+            return distance < 0.05 and angle < 2
+        end
+
+        helpers.action.PlayAnimationAt = function(pos, animation, pauseBeforeDialog)
+            if pos ~= nil then
+                if animation ~= nil then
+                    if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 0.5, false) then
+                        DebugText(me, "MoveTo succeeded")
+                        LookFrom(pos)
+                        Sleep(4.0)
+                        helpers.TryPlayAD(pauseBeforeDialog)
+                        PlayAnimation(animation, true, false)
+                        Sleep(3.0)
+                    else
+                        DebugText(me, "Error: can't reach destination")
+                        Sleep(3.0)
+                    end
+                else
+                    DebugText(me, "Error: animation is nil")
+                end
+            else
+                DebugText(me, "Error: position is nil")
+            end
+        end
+
+        helpers.action.PlayLoopingAnimationAt = function(pos, animationStart, animationLoop, animationEnd, animationLength, pauseBeforeDialog)
+            if pos ~= nil then
+                if animationStart ~= nil and animationLoop ~= nil and animationEnd ~= nil then
+                    if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 0.5, false) then
+                        LookFrom(pos)
+                        Sleep(4.0)
+                        helpers.TryPlayAD(pauseBeforeDialog)
+                        try
+                            PlayLoopingAnimation(animationStart, {animationLoop}, animationEnd)
+                            DebugText(me, "Animation succeeded")
+                            Sleep(animationLength)
+                        catch e then
+                            DebugText(me, "Animation failed to play: [1]", tostring(e))
+                        end
+                        StopAnimation(me)
+                        DebugText(me, "HELPER: Animation stopped")
+                        mod.util.SleepRandom(1.0,2.0)
+                    else
+                        DebugText(me, "Error: can't reach destination")
+                        Sleep(3.0)
+                    end
+                else
+                    DebugText(me, "Error: one or more animations are nil")
+                end
+            else
+                DebugText(me, "Error: position is nil")
+            end
+        end
+
+        helpers.action.PlayBehaviourAt = function(pos, behaviour, object1, object2, pauseBeforeDialog)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 1.5, false) then
+                DebugText(me, "MoveTo Succeeded")
+                LookFrom(pos)
+                helpers.TryPlayAD(pauseBeforeDialog)
+                if object1 ~= nil and object2 ~= nil then
+                    try
+                        StartBehaviorDialog(behaviour, pos.Trigger, true, me, object1, object2)
+                        DebugText(me, "Behaviour finished (1)")
+                    catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                        DebugText(me, "Error: Behaviour dialog failed")
+                        Sleep(3.0)
+                    end
+                elseif object1 ~= nil then
+                    try
+                        StartBehaviorDialog(behaviour, pos.Trigger, true, me, object1)
+                        DebugText(me, "Behaviour finished (2)")
+                    catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                        DebugText(me, "Error: Behaviour dialog failed")
+                        Sleep(3.0)
+                    end
+                else
+                    try
+                        StartBehaviorDialog(behaviour, pos.Trigger, true, me)
+                        DebugText(me, "Behaviour finished (3)")
+                    catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                        DebugText(me, "Error: Behaviour dialog failed")
+                        Sleep(3.0)
+                    end
+                end
+                DebugText(me, "Behaviour exiting")
+                mod.util.SleepRandom(1.0, 3.0)
+            end
+        end
+
+        helpers.action.TryPlayAD = function(pauseBeforeDialog)
+            DebugText(me, "PauseBeforeDialog: [1]", tostring(pauseBeforeDialog))
+            if pauseBeforeDialog ~= nil then
+                if GetFlag(drunkADActive) or GetFlag(eatingADActive) or GetFlag(bardADActive) or GetFlag(balladADActive) or GetFlag(friendsADActive) then
+                    if generalADTimeout <= 0 then
+                        generalADTimeout = 5
+                        StartTimer(me,"EPI_Halsin_ADDelay", pauseBeforeDialog,0)
+                        DebugText(me, "Playing AD")
+                    else
+                        DebugText(me, "ADs on cooldown, [1] turns remaining", tostring(generalADTimeout))
+                    end
+                else
+                    DebugText(me, "No AD flags are set")
+                end
+            else
+                DebugText(me, "State without AD")
+            end
+            generalADTimeout = generalADTimeout - 1
+        end
+        
+        helpers.action.UpdateDrunkenness = function(modifier)
+            Sleep(1.0)
+            drunkenness = drunkenness + modifier
+            if GetFlag(drunkFlag) and drunkenness <= 0 then
+                DebugText(me, "Sobered up")
+                drunkenness = 0
+                ClearFlag(drunkFlag)
+                RemoveStatus(me, "EPI_EPILOGUE_HALSIN_DRUNK")
+            end
+
+            if not GetFlag(drunkFlag) and drunkenness > 5 then
+                DebugText(me, "Got drunk")
+                drunkenness = 5
+                SetFlag(drunkFlag)
+                ApplyStatus(me, "EPI_EPILOGUE_HALSIN_DRUNK", true, -1.0, nil)
+            else
+                DebugText(me, "Drunk level: [1]/5", tostring(drunkenness))
+            end
+        end
+
+        helpers.action.TrySetADFlag = function(flag, timeoutCount)
+            if lastPlayedAD ~= flag.Name then          
+                DebugText(me, "LastPlayedAD: [1]", tostring(lastPlayedAD))
+                if timeoutCount <= 1 then
+                    DebugText(me, "Timeout count: [1]", tostring(timeoutCount))
+                    if generalADTimeout <= 0 then
+                        DebugText(me, "General AD timeout: [1]", tostring(generalADTimeout))                        
+                        SetFlag(flag) -- Cleared in dialog
+                        DebugText(me, "Flag set: [1]", tostring(flag.Name))
+                        lastPlayedAD = flag.Name
+                        timeoutCount = 3
+                    end
+                else
+                    timeoutCount = timeoutCount - 1
+                    DebugText(me, "[1] AD on cooldown, [2] turns remaining", tostring(flag.Name),tostring(timeoutCount))
+                end
+            else
+                DebugText(me, "[1] was the last AD played, skipping", tostring(flag.Name))
+            end
+        end
+
+        helpers.action.SitNearCampfire = function(pauseBeforeDialog)
+            if me.IsReposed == false then
+                Sleep(1.0)
+                if math.random(1,3) < 3 then
+                    if CanReposeOn(me, seatMainTrunk) then
+                        try
+                            UseItem(seatMainTrunk.Item)
+                            helpers.TryPlayAD(pauseBeforeDialog)
+                            mod.util.SleepRandom(40.0, 60.0)
+                            EndRepose(me)
+                        catch e if ls.CheckType(e, error.UseItemFailed) then
+                            helpers.SitOnCampfire_OnGround(pauseBeforeDialog)
+                        end
+                    else
+                        helpers.SitOnCampfire_OnGround(pauseBeforeDialog)
+                    end
+                else
+                    helpers.SitOnCampfire_OnGround(pauseBeforeDialog)
+                end
+            else
+                mod.util.SleepRandom(10.0,30.0)
+            end
+        end
+
+        helpers.action.SitOnCampfire_OnGround = function(pauseBeforeDialog)
+            if mod.moveto.MoveToPoint(seatCampfireGround, MovementSpeed.Stroll, me, 0.5, false) then
+                SteerTo(campfire)
+                SitOnGround(me)
+                helpers.TryPlayAD(pauseBeforeDialog)
+                mod.util.SleepRandom(40.0, 60.0)
+                EndRepose(me)
+            else
+                SteerTo(campfire)
+                SitOnGround(me)
+                helpers.TryPlayAD(pauseBeforeDialog)
+                mod.util.SleepRandom(40.0, 60.0)
+                EndRepose(me)
+            end
+        end
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- States
+
+        nodes.PostBear = Action {
+            function()
+                helpers.UpdateDrunkenness(-20)
+                SetFlag(beachOccupied)
+                ClearFlag(postBearFlag)
+                local randomDazedTimer = math.random(4.0, 8.0)
+                Sleep(1.0)
+                ApplyStatus(me, "EPI_EPILOGUE_HALSIN_DAZED", true, randomDazedTimer, nil)
+                Sleep(randomDazedTimer + 3.0)
+                ClearFlag(beachOccupied)
+                selectedBehaviour = nil
+                executingBearState = false
+            end,
+
+            OnInterrupt = function()
+                ClearFlag(postBearFlag)
+                selectedBehaviour = nil
+                executingBearState = false
+            end,
+
+            OnLeave = function()
+                ClearFlag(beachOccupied)
+                RemoveStatus(me, "EPI_EPILOGUE_HALSIN_DAZED")
+            end,
+
+            CanEnter = function()
+                return GetFlag(postBearFlag)
+            end
+        }
+
+        nodes.EPI_Halsin = Selector {
+            Valid = function(node)
+                return CheckAnySelectable(node)
+            end,
+    
+            function(nodes)
+                if selectedBehaviour == nil or not nodes.TryGetChild(selectedBehaviour).IsSelectable()  then
+                    local selectedNode = FindWeightedRandomSelectable(nodes, {
+                        [nodes.WarmingHands] = 1,
+                        [nodes.Dance] = 1,
+                        [nodes.StandEating] = 1,
+                        [nodes.SitAndDrink] = 2,
+                        [nodes.SitNearCampfire] = 1,
+                        [nodes.BearAccident] = 5
+                    })
+
+                    selectedBehaviour = selectedNode.Name
+                    return selectedNode
+                end
+
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+        }
+
+        nodes.EPI_Halsin.BearAccident = Action {
+            function()
+                DebugText(me, "Bear accident")
+                SetFlag(beachOccupied)
+                Sleep(1.0)
+
+                executingBearState = true
+
+                local firstPos = math.random(1,3)
+                local secondPos = firstPos + 1
+                if secondPos == 4 then secondPos = 1 end
+
+                if mod.moveto.MoveToPoint(bearTriggers[firstPos], MovementSpeed.Stroll, me, 0.5, false) then
+                    -- add logic
+                    LookFrom(bearTriggers[firstPos])
+                    local randomTime1 = math.random(10.0, 20.0)
+                    Sleep(randomTime1)
+
+                    if mod.moveto.MoveToPoint(bearTriggers[secondPos], MovementSpeed.Stroll, me, 0.5, false) then
+                        local dazedDuration = math.random(4.0, 8.0)
+                        ApplyStatus(me, "EPI_EPILOGUE_HALSIN_DAZED", true, dazedDuration, nil)
+                        Sleep(dazedDuration)
+                        ApplyStatus(me, "GOB_WolfPens_WILDSHAPE_BEAR", true, -1.0, nil)
+                        Sleep(3.0)
+                        try
+                            PlayLoopingAnimation(drunkBearStart, {drunkBearLoop}, drunkBearEnd)
+                            mod.util.SleepRandom(8.0, 12.0)
+                            StopAnimation(me, false)
+                        catch e then
+                            DebugText(me, "Animation failed to play: [1]", tostring(e))
+                            Sleep(math.random(3.0, 5.0))
+                        end
+                        SetFlag(postBearFlag)
+                        UseSpell("Shout_WildShape_Dismiss", me) -- The behaviour gets interrupted at this point as the anubis script gets readded 
+                    else
+                        DebugText(me, "Error: can't reach 2nd beach destination")
+                        Sleep(3.0)
+                    end
+                else
+                    DebugText(me, "Error: can't reach 1st beach destination")
+                    Sleep(3.0)
+                end
+                
+                ClearFlag(beachOccupied)
+            end,
+
+            OnInterrupt = function()
+                DebugText(me, "Interrupted")
+                drunkenness = 0
+                ClearFlag(drunkFlag)
+                RemoveStatus(me, "EPI_EPILOGUE_HALSIN_DRUNK")
+                RemoveStatus(me, "EPI_EPILOGUE_HALSIN_DAZED")
+                ClearFlag(beachOccupied)
+                selectedBehaviour = nil
+                executingBearState = false
+            end,
+
+            OnLeave = function()
+                DebugText(me, "Leaving")
+                RemoveStatus(me, "GOB_WolfPens_WILDSHAPE_BEAR")
+                ClearFlag(beachOccupied)
+            end,
+
+            CanEnter = function()
+                return not GetFlag(beachOccupied) and HasActiveStatus(me, "EPI_EPILOGUE_HALSIN_DRUNK")
+            end
+        }
+
+        nodes.EPI_Halsin.WarmingHands = Action {
+            function()
+                DebugText(me, "Warming hands")
+                Sleep(1.0)
+                helpers.TrySetADFlag(friendsADActive, friendsADTimeout)
+                helpers.PlayAnimationAt(warmingHandsTrigger, warmingHandsAnim, 5.0)
+                mod.util.SleepRandom(10.0, 15.0)
+                helpers.PlayAnimationAt(warmingHandsTrigger, warmingHandsAnim, nil)
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.EPI_Halsin.Dance = Action {
+            function()
+                DebugText(me, "Dancing")
+                Sleep(1.0)
+                helpers.TrySetADFlag(bardADActive, bardADTimeout)
+                if currentDancingPos == nil then
+                    currentDancingPos = danceTriggers[math.random(#danceTriggers)]
+                end
+                helpers.PlayLoopingAnimationAt(currentDancingPos, danceStart, danceLoop, danceEnd, math.random(40.0,60.0), 10.0)
+                currentDancingPos = nil
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me)
+            end,
+
+            Valid = function()
+                return GetFlag(musicPlayingFlag)
+            end
+        }
+    
+        nodes.EPI_Halsin.StandEating = Action {
+            function()
+                DebugText(me, "Eat standing")
+                SetFlag(middleTableSpotOccupied)
+                Sleep(1.0)
+                helpers.TrySetADFlag(eatingADActive, eatingADTimeout)
+                helpers.PlayBehaviourAt(standingEatingTrigger, standingEatingBhvr, nil, nil, 3.0)
+                ClearFlag(middleTableSpotOccupied)
+                selectedBehaviour = nil
+            end,
+            
+            OnLeave = function()
+                ClearFlag(middleTableSpotOccupied)
+                BehaviorDialogRequestGracefulStop(me, false)
+            end,
+
+            CanEnter = function()
+                return not GetFlag(middleTableSpotOccupied)
+            end
+        }
+    
+        nodes.EPI_Halsin.SitAndDrink = Action {
+            function()
+                DebugText(me, "Sit and drink")
+                Sleep(1.0)
+                if drunkenness == 0 then 
+                    SetFlag(drunkADActive)
+                end
+                helpers.PlayBehaviourAt(sitAndDrinkTrigger, sitAndDrinkBhvr, sitAndDrinkChair, sitAndDrinkTankard, 5.0)
+                helpers.UpdateDrunkenness(1)
+                selectedBehaviour = nil
+            end,
+            
+            OnLeave = function()
+                DebugText(me, "Exiting Behaviour")
+                BehaviorDialogRequestGracefulStop(me, true)
+            end,
+
+            Valid = function() 
+                return helpers.ItemAvailable(sitAndDrinkChair, sitAndDrinkChairPos) and helpers.ItemAvailable(sitAndDrinkTankard, sitAndDrinkTankardPos)
+            end
+        }
+    
+        nodes.EPI_Halsin.SitNearCampfire = Action {
+            function()
+                DebugText(me, "Sit near campfire")
+                Sleep(1.0)
+                helpers.TrySetADFlag(friendsADActive, friendsADTimeout)
+                helpers.SitNearCampfire(5.0)
+                selectedBehaviour = nil
+                mod.util.SleepRandom(1.0, 3.0)
+            end
+        }
+
+        events.FlagSet = function(e)
+            if e.Flag == balladSongFlag.Guid then
+                if executingBearState == false then
+                    if balladADPlayedOnce == false then
+                        balladADPlayedOnce = true
+                        SetFlag(balladADActive)
+                        StartTimer(me,"EPI_Halsin_ADDelay", 5.0,0)
+                    end
+                end
+            end
+        end
+
+        events.TimerFinished = function(e)
+            if(e.TimerName == "EPI_Halsin_ADDelay") then 
+                try
+                    DebugText(me, "AD Trying")
+                    StartAutomatedDialogImmediate(idleAD, me)
+                    DebugText(me, "AD Succeeded")
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                    DebugText(me, "AD Failed to play")
+                end
+            end
+        end        --------------------------------------------------------------------------------------------------------------------
+    end
+}

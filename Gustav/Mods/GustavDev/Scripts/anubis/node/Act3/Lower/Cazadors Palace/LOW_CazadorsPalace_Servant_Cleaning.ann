@@ -1,0 +1,56 @@
+game.states.LOW_CazadorsPalace_Servant_Cleaning = State {
+
+    function()
+
+        params.cleaningPos = {
+            type = EParamType.String,
+            required = true,
+        }
+
+        params.cleaningBehaviorDialog = {
+            type = EParamType.String,
+            required = true,
+        }
+
+        params.cleaningSceneTrigger = {
+            type = EParamType.String,
+            required = true,
+        }
+
+        params.cleaningAD = {
+            type = EParamType.String,
+            required = false,
+        }
+
+        modules = { "shared.util", "shared.dialog" }
+
+        local cleaningPos = Entity(params.cleaningPos)
+        local cleaningBehaviorDialog = Dialog(params.cleaningBehaviorDialog)
+        local cleaningSceneTrigger = Entity(params.cleaningSceneTrigger)
+        local cleaningAD = Dialog(params.cleaningAD) or nil
+
+        nodes.Cleaning = Action {
+            function()
+                SteerTo(cleaningPos)
+                local moveResult = MoveTo(cleaningPos, MovementSpeed.Stroll, false, false, 0.25, 0.5, false)
+
+                if (cleaningAD ~= nil) then
+                    mod.dialog.StartCheckedAutomatedDialogRateLimited(cleaningAD,
+                        {
+                            minDelay = 12.0,
+                            waitForCompletion = false
+                        },
+                        me
+                    )
+                end
+
+                if moveResult == error.MovementError.None then
+                    StartBehaviorDialog(cleaningBehaviorDialog, cleaningSceneTrigger.Trigger, true, me)
+                end
+                mod.util.SleepRandom(3, 9)
+            end
+        }
+
+    end
+
+}

@@ -1,0 +1,50 @@
+game.states.GLO_Jaheira_Act2_Combat = State{function()
+        
+    local assaultInProgressFlag = Flag("MOO_Assault_State_InProgress_0f3a8f5d-7402-4220-bebb-d4b21d3db08d")
+
+    local tryCastOncePerTurn = false
+    local castAttempted = false
+    local castedPantherShapeshift = false
+
+    self.Valid = function()
+        return me.IsInCombat
+    end
+    
+    -- Try to get into panther form during the assault before anything else to improve survivability
+    nodes.PantherShapeshift = Action{
+        
+        CanEnter = function()
+            return  me.CanActInCombatTeamTurn and GetFlag(assaultInProgressFlag) and not castedPantherShapeshift and not castAttempted and tryCastOncePerTurn
+        end,
+
+        function()
+            castAttempted = true
+            Sleep(1.0)
+            try
+                UseSpell("Shout_Wildshape_Panther_NPC", me)
+                castedPantherShapeshift = true
+            catch e if ls.CheckType(e, error.UseSpellFailed) then
+                Sleep(1.0)
+                DebugText(me, "Spell Cast Failed",e)
+                castedPantherShapeshift = false
+            end
+            Sleep(2.0)
+        end
+    }
+    
+    nodes.DefaultCombat = Proxy{
+        game.states.DefaultCombat    
+    }
+
+    events.TurnStarted = function(e)
+        if not castedPantherShapeshift then
+            tryCastOncePerTurn = true
+        end
+    end
+
+    events.TurnEnded = function(e)
+        tryCastOncePerTurn = false
+        castAttempted = false
+    end
+
+end}

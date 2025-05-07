@@ -1,0 +1,179 @@
+game.states.EPI_Jaheira = State{
+    function ()
+        modules = {"shared.moveto", "shared.util", "shared.items", "shared.math", "shared.dialog"}
+    
+        description = [[Jaheira's behaviour for Act 3 EPI.]]
+    
+        --------------------------------------------------------------------------------------------------------------------
+        -- Local params
+        local jaheiraCampSpot = Entity("S_EPI_StartPointJaheira_f0ef51bf-c1ff-4053-92eb-9ac86da25305")
+
+        -- Action FlutePlaying
+        local animFlutePlaying = Animation("CUST_EPI_Jaheira_FlutePlaying_01_b6673e38-04d2-47df-ae4a-a70ad2861d22")
+
+        -- Action ListeningToMusic
+        local animListeningToMusic = Animation("CUST_EPI_Jaheira_ListeningtoMusic_01_315bb6e9-01ea-4fff-adb8-8a5b7ed9527b")
+        local pointListeningToMusic = Entity("S_EPI_JaheiraListenToMusic_24591520-1f52-46b9-8d4b-13ef204a4a34")
+
+        -- Action Warmhands
+        local bhvrPokeFire = Dialog("BHVR_WRLD_WLD_PokingFire_HUM_F_31be3ac3-6416-c786-8d8b-2c4a77615b33")
+        local triggerPokeFire = Entity("S_EPI_JaheiraPokeFire_TimelineScene_420dbae2-1989-4ff3-a65d-cdfd73421840")
+        local animWarmhands = Animation("CUST_EPI_Jaheira_WarmHands_01_34b15837-2e6b-4090-a2ae-a0ed62efc475")
+        local bonfire = Entity("LTS_Camp_Bonfire_A_000_9d1a1706-8862-4bc7-ab74-f425ddeeb1e6")
+
+        -- Action DrinkWine
+        local animDrinkWine = Animation("CUST_EPI_Jaheira_WineDrinking_01_283e288f-d922-49c5-b136-bfb383b4c95b")
+
+        -- Action TakeFood
+        local animTakeFood = Animation("CUST_EPI_Jaheira_TakeFood_01_f5d47560-8534-4eba-9e9e-f42e92ffd529")
+        local pointTakeFood = Entity("S_EPI_JaheiraFoodTable_0998a296-64ad-40ee-9225-a38738f16586")
+        local tableSpotIsBusy = Flag("EPI_Origins_State_OppositeMiddleTableSpotOccupied_6b3996d9-2db1-4200-9018-05b33122c4df")
+
+        local nodeWeights = {}
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- Init
+        self.OnInit = function()
+            nodeWeights["FlutePlaying"] = 5
+            nodeWeights["ListeningToMusic"] = 5
+            nodeWeights["Warmhands"] = 5
+            nodeWeights["TakeFood"] = 5
+            nodeWeights["DrinkWine"] = 3 -- lower default chance, which will be increased after eating or warming up
+        end
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- Helpers
+        helpers.action.StartBonFire = function()
+            DebugText(me, "Playing Animation: [1]", tostring(bhvrPokeFire))
+            StartBehaviorDialog(bhvrPokeFire, triggerPokeFire.Trigger, false, me)
+            Sleep(5.0)
+            ApplyStatus(bonfire, "BURNING", false, -1, me)
+            Sleep(4.0)
+        end
+
+        helpers.action.PlayAnimationAt = function(pos, animation)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 0.5, false) then
+                DebugText(me, "Look from pos")
+                Sleep(1.0)
+                LookFrom(pos)
+                DebugText(me, "Playing Animation: [1]", tostring(animation))
+                Sleep(1.0)
+                PlayAnimation(animation, true, false)
+                Sleep(3.0)
+            else
+                DebugText(me, "Error: can't move to [1]", pos.Name)
+                Sleep(3.0)
+            end
+        end
+    
+        helpers.action.PlayLoopingAnimationAt = function(pos, animationStart, animationLoop, animationEnd, animationLength, endSleep)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Walk, me, 0.5, false) then
+                LookFrom(pos)
+                DebugText(me, "Playing Animation: [1]", tostring(animationLoop))
+                PlayLoopingAnimation(animationStart, {animationLoop}, animationEnd)
+                Sleep(animationLength)
+                StopAnimation(me)
+                Sleep(endSleep)
+            else
+                DebugText(me, "Error: can't move to [1]", pos.Name)
+                Sleep(3.0)
+            end
+        end
+
+
+
+        helpers.action.NextNode = function(lastNode)
+            nodeWeights["Warmhands"] = nodeWeights["Warmhands"] + 1 -- Jaheira gets colder over time
+            nodeWeights["TakeFood"] = nodeWeights["TakeFood"] + 1 -- Jaheira gets peckish over time
+            if lastNode == "Warmhands" then
+                nodeWeights["Warmhands"] = 0 -- Jaheira is warmed up
+                nodeWeights["DrinkWine"] = 10 -- Jaheira has a higher chance of drinking after warming up
+            elseif lastNode == "TakeFood" then
+                nodeWeights["TakeFood"] = 0 -- Jaheira is not hungry
+                nodeWeights["DrinkWine"] = 10 -- Jaheira has a higher chance of drinking after eatin
+            else
+                nodeWeights["DrinkWine"] = 3 -- reset drink chance
+            end
+        end
+        --------------------------------------------------------------------------------------------------------------------
+        -- States
+
+        -- Time to Idle
+
+        nodes.CampAction = Selector{
+            function(nodes)
+               return GetWeightedCanEnter(nodes, 
+                {
+                    [nodes.FlutePlaying] = nodeWeights["FlutePlaying"],
+                    [nodes.ListeningToMusic] = nodeWeights["ListeningToMusic"],
+                    [nodes.Warmhands] = nodeWeights["Warmhands"],
+                    [nodes.TakeFood] = nodeWeights["TakeFood"],
+                    [nodes.DrinkWine] = nodeWeights["DrinkWine"],
+                })
+            end,
+        }
+
+        nodes.CampAction.FlutePlaying = Action{
+            function()
+                DebugText(me,"Flute Playing interaction")
+                helpers.PlayAnimationAt(jaheiraCampSpot, animFlutePlaying)
+                helpers.NextNode("FlutePlaying")
+            end
+        }
+
+        nodes.CampAction.ListeningToMusic = Action{
+            function()
+                DebugText(me,"Listen to Music interaction")
+                helpers.PlayAnimationAt(pointListeningToMusic, animListeningToMusic)
+                helpers.NextNode("ListeningToMusic")
+            end
+        }
+
+        nodes.CampAction.Warmhands = Action{
+            function()
+                DebugText(me,"Warm Hands interaction")
+                if mod.moveto.MoveToPoint(jaheiraCampSpot, MovementSpeed.Stroll, me, 0.5, false) then
+                    if not HasActiveStatus(bonfire, "BURNING") then
+                        helpers.StartBonFire()
+                    end
+                    helpers.PlayAnimationAt(jaheiraCampSpot, animWarmhands)
+                    helpers.NextNode("Warmhands")
+                else
+                    DebugText(me, "Error: can't move to [1]", jaheiraCampSpot.Name)
+                    Sleep(3.0)
+                end
+            end
+        }
+
+        nodes.CampAction.TakeFood = Action{
+            CanEnter = function()
+                return not GetFlag(tableSpotIsBusy)
+            end,
+            function()
+                SetFlag(tableSpotIsBusy)
+                DebugText(me,"Take Food interaction")
+                helpers.PlayAnimationAt(pointTakeFood, animTakeFood)
+                helpers.NextNode("TakeFood")
+            end,
+            OnInterrupt = function()
+                ClearFlag(tableSpotIsBusy)
+            end,
+            OnLeave = function()
+                ClearFlag(tableSpotIsBusy)
+            end
+        }
+
+        nodes.CampAction.DrinkWine = Action{
+            function()
+                DebugText(me,"Drink Wine interaction")
+                helpers.PlayAnimationAt(jaheiraCampSpot, animDrinkWine)
+                helpers.NextNode("DrinkWine")
+            end
+        }
+
+        --------------------------------------------------------------------------------------------------------------------
+    
+
+    end
+    }
+    

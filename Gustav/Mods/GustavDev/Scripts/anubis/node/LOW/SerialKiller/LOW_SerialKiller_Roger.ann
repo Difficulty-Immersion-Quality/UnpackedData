@@ -1,0 +1,142 @@
+game.states.LOW_SerialKiller_Roger = State{function ()
+
+    --------------------------------Modules--------------------------------
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Parameters--------------------------------
+    params.CharacterAD = {type = EParamType.String, help = "[[Ad for this character]]", required = true }
+    params.TablePoint = {type = EParamType.String, help = "[[Place to move to say the card AD]]", required = true }
+    params.Sofa = {type = EParamType.String, help = "[[Sofa to sit]]", required = true }
+
+    --------------------------------Variables--------------------------------
+
+    --local localSofa = Entity(params.Sofa)
+    local localAD = Dialog(params.CharacterAD)
+    local localTablePoint = Entity(params.TablePoint)
+    local localSofa = Entity(params.Sofa)
+    local WineFestivalFlag = Flag("LOW_SerialKiller_State_WineFestival_a83198eb-b080-4001-bd00-d8368f1334a5")
+    local RogerMourningFlag = Flag("LOW_SerialKiller_State_RogerMourning_9cdc1c53-e0c2-4b00-9896-34997ede19b7")
+    local RogerMourningAD = Dialog("LOW_SerialKiller_AD_RogerHighberry_Mourning_9e57a699-ad7d-4411-c9f6-4422ea227c98")
+    local isSitting = false
+    local Cora = Entity("S_LOW_CoraHighberry_8a520cf7-c5da-419f-bdd4-792b27c5c679")
+
+    --------------------------------Nodes--------------------------------
+
+    nodes.WineFestival = Selector {
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end,
+        CanEnter = function()
+            return GetFlag(WineFestivalFlag) and not GetFlag(RogerMourningFlag)
+        end,
+        Valid = function()
+            return GetFlag(WineFestivalFlag) and not GetFlag(RogerMourningFlag)
+        end
+    }
+
+    nodes.WineFestival.WinefestivalIdle = Action {
+        function()
+            WaitForInterrupt()
+        end,
+    }
+    nodes.Mourning = Selector {
+        function(nodes)
+            return FindFirstSelectable(nodes)
+        end,
+        CanEnter = function()
+            return GetFlag(RogerMourningFlag)
+        end,
+        Valid = function()
+            return GetFlag(RogerMourningFlag)
+        end
+    }
+
+    nodes.Mourning.WineFestivalMourning = Action {
+        function()
+            MoveTo(Cora, MovementSpeed.Walk, true, false, 2.0, 3.0)
+            mod.dialog.StartCheckedAutomatedDialog(
+                RogerMourningAD,
+                {
+                    waitForCompletion = true
+                },
+                me
+            )
+            Sleep(20 + 10 * math.random())
+        end
+    }
+
+    nodes.RogerAtHome = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+        CanEnter = function()
+            return not GetFlag(WineFestivalFlag)
+        end,
+        Valid = function()
+            return not GetFlag(WineFestivalFlag) and not GetFlag(RogerMourningFlag)
+        end
+    }
+
+    nodes.RogerAtHome.SitOn = Action {
+        function()
+            local failedtoSeat = false
+            try
+                UseItem(localSofa.Item)
+            catch e if ls.CheckType(e, error.UseItemFailed) then
+                failedtoSeat = true
+            end
+            if failedtoSeat then
+                Sleep(15)
+            else
+                Sleep(5)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    localAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                Sleep(20)
+            end
+        end,
+        Valid = function()
+            return isSitting
+        end
+    }
+
+    nodes.RogerAtHome.CheckPapers = Action {
+        function()
+            if mod.moveto.MoveToPoint(localTablePoint, MovementSpeed.Walk, me) then
+                Sleep(3)
+                mod.dialog.StartCheckedAutomatedDialog(
+                    localAD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+                Sleep(20)
+            else --Fallback in case Anubis is failing to move the character there
+                Sleep(10)
+            end
+            if not localSofa.Item.IsDestroyed then
+                isSitting = true
+            end
+        end
+    }
+
+    nodes.RogerAtHome.Wander = Action {
+        function()
+            Wander(5.0, 4.0, MovementSpeed.Walk, localTablePoint)
+            Sleep(2 + 5 * math.random())
+            Wander(5.0, 4.0, MovementSpeed.Walk, localTablePoint)
+        end
+    }
+
+
+
+    --------------------------------Events--------------------------------
+
+end
+}

@@ -1,0 +1,251 @@
+game.states.EPI_DivineBard = State { function ()
+    description = [[ A jukebox posing as a bard. ]]
+    
+    modules = { "shared.moveto", "shared.math", "shared.util" }
+
+    local isPlaying = Flag("EPI_Epilogue_DivineBard_State_PlayingSong_262657bd-c979-4994-bb16-8266a3d2c146")
+    local changeTrack = Flag("EPI_DivineBard_State_StoppedPlaying_c1ede747-2096-4c57-8138-b5f8dcf973b8")
+    local track001 = Flag("EPI_Epilogue_State_DivineBardTrack001_14fa0523-1e89-f332-5418-44784c5cde7c")
+    local track002 = Flag("EPI_Epilogue_State_DivineBardTrack002_9deefcc1-3c78-761a-5998-e0d0df9b4e65")
+    local track003 = Flag("EPI_Epilogue_State_DivineBardTrack003_a92b0fb8-d4a7-8e5c-b840-d4b630d5c049")
+    local track004 = Flag("EPI_Epilogue_State_DivineBardTrack004_5dc969ee-9020-daab-6698-3445d6ed5ddb")
+    local track005 = Flag("EPI_Epilogue_State_DivineBardTrack005_1b328c9b-64f8-a5db-d2da-f058ebc12797")
+    local track006 = Flag("EPI_Epilogue_State_DivineBardTrack006_b3ba3ad3-af4a-40bc-a90f-0bdea8d93646")
+    local waitTrigger = Entity("S_EPI_DivineBardTrigger_d5000a2b-ec08-4ab2-b3ad-7d6fdcc63271")
+    local myLute = Entity("S_EPI_DivineBardLute_cfc20266-8775-4047-9961-42cacbc55ef6")
+
+    local songFlags = { Flag("EPI_Epilogue_State_DivineBardTrack001_14fa0523-1e89-f332-5418-44784c5cde7c"),
+                        Flag("EPI_Epilogue_State_DivineBardTrack002_9deefcc1-3c78-761a-5998-e0d0df9b4e65"), 
+                        Flag("EPI_Epilogue_State_DivineBardTrack003_a92b0fb8-d4a7-8e5c-b840-d4b630d5c049"), 
+                        Flag("EPI_Epilogue_State_DivineBardTrack004_5dc969ee-9020-daab-6698-3445d6ed5ddb"), 
+                        Flag("EPI_Epilogue_State_DivineBardTrack005_1b328c9b-64f8-a5db-d2da-f058ebc12797"), 
+                        Flag("EPI_Epilogue_State_DivineBardTrack006_b3ba3ad3-af4a-40bc-a90f-0bdea8d93646")}
+
+    local songStatuses = {  "EPI_DIVINE_BARD_PERFORM_BALDURANALE", 
+                            "EPI_DIVINE_BARD_PERFORM_BARDDANCE", 
+                            "EPI_DIVINE_BARD_PERFORM_EPILOGUESONG",
+                            "EPI_DIVINE_BARD_PERFORM_NEWLIGHT", 
+                            "EPI_DIVINE_BARD_PERFORM_STREETSANDFACES", 
+                            "EPI_DIVINE_BARD_PERFORM_WELIVE"}
+
+    local nextSong = 1
+    local resting = false
+    local pushedInstrumentState = false
+
+    self.OnEnter = function()
+        Equip(me.Character, myLute.Item)
+        if(not pushedInstrumentState) then
+            PushUnsheathedState(me, UnsheathState.Instrument)
+            pushedInstrumentState = true
+            if not HasAppliedStatus(me, "EPI_DIVINE_BARD_PERFORM") then 
+                ApplyStatus(me, "EPI_DIVINE_BARD_PERFORM", true, -1)
+            end 
+        end
+    end
+
+    self.OnLeave = function()
+        if pushedInstrumentState then
+            RemoveStatus(me, bardSongs[i])
+            PopUnsheathedState(me)
+            pushedInstrumentState = false
+        end
+        ClearFlag(isPlaying)
+    end
+    -----------------------------------------
+    -- Nodes
+
+    nodes.ChangingTune = Action {
+        CanEnter = function()
+            return not GetFlag(isPlaying)
+        end,
+        function()
+            for i,status in pairs(songStatuses) do
+                if HasAppliedStatus(me, status) then
+                    RemoveStatus(me, songStatuses[i])
+                    ClearFlag(songFlags[i])
+                end
+            end
+            Sleep(1.0)
+            if not HasAppliedStatus(me, "EPI_DIVINE_BARD_PERFORM") then 
+                ApplyStatus(me, "EPI_DIVINE_BARD_PERFORM", true, -1)
+            end  
+            Sleep(19.0)
+            resting = false
+        end,
+        Valid = function()
+            return resting
+        end
+    }
+
+    
+
+    nodes.StartPlayingLuteSelected = ImmediateSelector {
+        Valid = function()
+            return not GetFlag(isPlaying) and GetFlag(changeTrack) and not resting
+        end,
+    }
+
+    nodes.StartPlayingLuteSelected.BalduranAle = Action {
+        CanEnter = function()
+            return GetFlag(track001)
+        end,
+            function()
+                helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_BALDURANALE",1,146)
+            end
+        }
+        
+    nodes.StartPlayingLuteSelected.BardDance = Action {
+        CanEnter = function()
+            return GetFlag(track002)
+        end,
+            function()
+                helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_BARDDANCE",1,174)
+            end
+    }
+
+    nodes.StartPlayingLuteSelected.NewLight = Action {
+        CanEnter = function()
+            return GetFlag(track003)
+        end,
+        function()
+            helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_NEWLIGHT",1,137)
+        end
+    }
+
+    nodes.StartPlayingLuteSelected.StreetsAndFaces = Action {
+        CanEnter = function()
+            return GetFlag(track004)
+        end,
+        function()
+            helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_STREETSANDFACES",1,157)
+        end
+    }
+
+    nodes.StartPlayingLuteSelected.WeLive = Action {
+        CanEnter = function()
+            return GetFlag(track005)
+        end,
+        function()
+            helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_WELIVE",1,272)
+        end
+    }
+
+    nodes.StartPlayingLuteSelected.EpilogueSong = Action {
+        CanEnter = function()
+            return GetFlag(track006)
+        end,
+        function()
+            helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_EPILOGUESONG",2,281)
+        end
+    }
+-------Playlist Choice----
+
+nodes.EpilogueSong = Action {
+    CanEnter = function()
+        return nextSong == 1 and not GetFlag(isPlaying)
+    end,
+    function()
+        SetFlag(track006)
+        helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_EPILOGUESONG",2,281)
+    end
+}
+
+nodes.BalduranAle = Action {
+    CanEnter = function()
+        return nextSong == 2 and not GetFlag(isPlaying)
+    end,
+    function()
+        SetFlag(track001)
+        helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_BALDURANALE",3,146)
+    end
+}
+
+nodes.BardDance = Action {
+    CanEnter = function()
+        return nextSong == 3 and not GetFlag(isPlaying)
+    end,
+    function()
+        SetFlag(track002)
+        helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_BARDDANCE",4,174)
+    end
+}
+
+nodes.NewLight = Action {
+    CanEnter = function()
+        return nextSong == 4 and not GetFlag(isPlaying)
+    end,
+    function()
+        SetFlag(track003)
+        helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_NEWLIGHT",5,137)
+    end
+}
+
+nodes.StreetsAndFaces = Action {
+    CanEnter = function()
+        return nextSong == 5 and not GetFlag(isPlaying)
+    end,
+    function()
+        SetFlag(track004)
+        helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_STREETSANDFACES",6,157)
+    end
+}
+
+
+nodes.WeLive = Action {
+    CanEnter = function()
+        return nextSong == 6 and not GetFlag(isPlaying)
+    end,
+    function()
+        SetFlag(track005)
+        helpers.StartPlaylist("EPI_DIVINE_BARD_PERFORM_WELIVE",1,272)  
+    end
+}
+
+helpers.action.StartPlaylist= function(statusName,setNextSong,songTime)
+    if  not HasAppliedStatus(me,statusName) then
+        Sleep(1.0)
+        ApplyStatus(me, statusName, true, -1)
+        StartTimer(me,"DivineBard_SongTimer", songTime, 0)
+    else
+        Sleep(6.0)
+    end
+    SetFlag(isPlaying)
+    ClearFlag(changeTrack)
+    nextSong = setNextSong
+end
+
+    nodes.StandPlaying = Proxy{
+            game.states.GLO_StandAtTrigger,
+            params = {
+                trigger = "S_EPI_DivineBardTrigger_d5000a2b-ec08-4ab2-b3ad-7d6fdcc63271"
+            },
+
+        Valid = function()
+            return GetFlag(isPlaying)
+        end
+    }
+
+
+
+
+----------------------------------
+
+events.FlagSet = function(e)
+    if e.Flag == changeTrack.Guid then
+            ClearFlag(isPlaying)
+            resting = true
+            StopTimer(me,"DivineBard_SongTimer")
+            StartTimer(me, "DivineBard_Resting", 0.1, 0)
+    end
+end
+
+events.TimerFinished = function(e)
+    if(e.TimerName == "DivineBard_SongTimer") then 
+        ClearFlag(isPlaying)
+        resting = true
+    elseif (e.TimerName == "DivineBard_Resting") then
+        resting = false
+    end
+end
+end
+}

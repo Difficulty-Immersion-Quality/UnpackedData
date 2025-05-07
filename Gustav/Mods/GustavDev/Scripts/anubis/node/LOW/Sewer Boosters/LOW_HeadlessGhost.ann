@@ -1,0 +1,87 @@
+game.states.LOW_HeadlessGhost = State{function()
+    description = [[Headless Ghost's behaviours]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local followFlag = Flag("LOW_Sewers_State_HasForsakenSkull_c4f07e23-e2d9-4082-93dd-1c08db73aad2")
+    local playerToFollow = nil
+    local newPlayerToFollow = nil
+    local replaceFollowTarget = false
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+   
+
+    --Walks between points of interest and plays animations facing them. if they have an AD, they will play it during work.
+
+
+
+    nodes.Action_Following = Action
+    {
+        function ()
+            Follow(me,playerToFollow)
+            Sleep(1)
+        end,
+ 
+        Valid = function()
+            return playerToFollow~=nil and not replaceFollowTarget
+        end
+    }
+ 
+    nodes.Action_ReplaceTarget = Action
+    {
+        function()
+            playerToFollow = newPlayerToFollow
+            newPlayerToFollow = nil
+            replaceFollowTarget = false
+        end,
+        CanEnter = function()
+            return replaceFollowTarget
+        end
+    }
+ 
+    -- Action - fallback
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+    }
+ 
+    events.EntityEvent = function (e)
+        if(e.TargetEntity == me and e.Event == "LOW_Sewers_HeadlessGhost_StopFollow") then
+            local unFollowTarget = e.Params[1]
+            if unFollowTarget == playerToFollow then
+                playerToFollow = nil
+            end
+        end
+        if(e.TargetEntity == me and e.Event == "LOW_Sewers_HeadlessGhost_FollowingUpdate") then
+            local tempFollowTarget = e.Params[1]
+            if tempFollowTarget ~= playerToFollow then
+                newPlayerToFollow = e.Params[1]
+                replaceFollowTarget = true
+            end
+        end
+    end
+end}
+
+
+
+    

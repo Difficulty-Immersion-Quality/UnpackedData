@@ -1,0 +1,97 @@
+game.states.LOW_CazadorsPalace_Ballroom_Werewolf_Alpha = State {
+
+    function()
+
+        modules = { "shared.math", "shared.util" }
+
+        local ratsPosition = "S_LOW_CazadorsPalace_Ballroom_Werewolf_003_RatsPos_5318fb52-70b9-4b6a-84cd-2d0660283e8b"
+        local ratsFlag = "LOW_CazadorsPalace_Ballroom_State_LookingAtWerewolfWithRats_d1767ca8-1a4a-4aa4-a7e0-f1a95f6c9dc7"
+        local thronePos = "S_LOW_CazadorsPalace_Ballroom_Werewolf_003_ThronePos_155c4493-d01e-4eb1-9523-a51f4b58a256"
+        local throneFlag = "LOW_CazadorsPalace_Ballroom_State_LookingAtThrone_0c66b25e-b8d1-4dc6-9dd1-84ad40b8383e"
+        local wolfPos = "S_LOW_CazadorsPalace_Ballroom_Werewolf_003_WolfPos_8e6c035b-cbdf-4b89-918c-0c33b32cca9e"
+        local wolfFlag = "LOW_CazadorsPalace_Ballroom_State_LookingAtWerewolfWithHounds_79606aba-dc19-4d06-a91f-a2bcea0392bf"
+
+        nodes.Default = Selector {
+            function(nodes)
+                return FindDifferentRandomSelectable(nodes)
+            end
+        }
+
+        nodes.Default.AtRats = Proxy{
+            game.states.LOW_CazadorsPalace_Ballroom_Werewolf_Alpha_TalkAtPosition,
+            params = {
+                position = ratsPosition,
+                positionFlag = ratsFlag,
+            }
+        }
+
+        nodes.Default.AtThrone = Proxy{
+            game.states.LOW_CazadorsPalace_Ballroom_Werewolf_Alpha_TalkAtPosition,
+            params = {
+                position = thronePos,
+                positionFlag = throneFlag,
+            }
+        }
+
+        nodes.Default.AtWolf = Proxy{
+            game.states.LOW_CazadorsPalace_Ballroom_Werewolf_Alpha_TalkAtPosition,
+            params = {
+                position = wolfPos,
+                positionFlag = wolfFlag,
+            }
+        }
+    end
+}
+
+game.states.LOW_CazadorsPalace_Ballroom_Werewolf_Alpha_TalkAtPosition = State {
+
+    function()
+
+        params.position = {
+            type = EParamType.String,
+            required = true,
+        }
+
+        params.positionFlag = {
+            type = EParamType.String,
+            required = true,
+            help = "Flag specific for this position, required since the werewolf plays the same AD, but it has flagged greeting nodes",
+        }
+
+        modules = { "shared.util" }
+
+        local position = Entity(params.position)
+        local positionFlag = Flag(params.positionFlag)
+        local AD = Dialog("LOW_CazadorsPalace_Ballroom_AD_Werewolf_003_55c51a39-1f69-ea0e-8d42-884bc3d6b1ae")
+
+        nodes.TalkAtPosition = Action {
+            function()
+                if not IsInDangerousSurfaceFor(position, me.Character) then
+                    if GetDistanceTo(me, position) > 1.0 then
+                        local moveResult = MoveTo(position, MovementSpeed.Walk, false, false, 0.5, 1.0, false)
+                        if moveResult ~= error.MovementError.None then
+                            SteerTo(position)
+                        else
+                            LookFrom(position)
+                            StartAutomatedDialog(AD, true, me)
+                        end
+                    else
+                        LookFrom(position)
+                        StartAutomatedDialog(AD, true, me)
+                    end
+                else
+                    SteerTo(position)
+                end
+                mod.util.SleepRandom(3.0, 9.0)
+            end,
+
+            OnEnter = function()
+                SetFlag(positionFlag, me)
+            end,
+            OnLeave = function()
+                ClearFlag(positionFlag, me)
+            end,
+        }
+    end
+}
+

@@ -1,0 +1,45 @@
+game.states.PLA_Refugee = State{function ()
+    modules = { "shared.moveto" }
+
+    params.standPosBeforeDiscussion = {type = EParamType.String, required = true, help=[[
+        Where the paladin will stand before the discussion.
+    ]]}
+
+    params.standPosAfterDiscussion = {type = EParamType.String, required = true, help=[[
+        Where the paladin will stand after the discussion.
+    ]]}
+
+    params.otherRefugee = {type = EParamType.String, required = true, help=[[
+        The other paladin.
+    ]]}
+
+    local beforeStandPos = Entity(params.standPosBeforeDiscussion)
+    local afterStandPos = Entity(params.standPosAfterDiscussion)
+    local otherRefugee = Entity(params.otherRefugee)
+
+    local discussionFinished = Flag("PLA_KarlachRecruitmentTollhouse_State_FinishedDiscussion_8c460213-e3b8-4304-95e6-6d9fe6cb85a2")
+
+    nodes.Action_BeforeDiscussion = Action {
+        function()
+            mod.moveto.MoveToPoint(beforeStandPos, MovementSpeed.Walk,me)
+            SteerTo(otherRefugee)
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not GetFlag(discussionFinished) and not otherRefugee.Character.IsDead
+        end,
+    }
+
+    nodes.Action_AfterDiscussion = Action {
+        function()
+            if mod.moveto.MoveToPoint(afterStandPos, MovementSpeed.Walk, me) then
+                LookFrom(afterStandPos)
+                WaitForInterrupt()
+            else
+                SteerTo(afterStandPos)
+                Sleep(3.0)
+            end
+        end,
+    }
+end
+}

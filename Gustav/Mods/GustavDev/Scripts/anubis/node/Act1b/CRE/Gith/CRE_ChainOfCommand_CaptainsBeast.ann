@@ -1,0 +1,115 @@
+game.states.CRE_ChainOfCommand_CaptainsBeast = State{function()
+    description = [[Captain's beasts behaviour]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+
+    local cultistsPresentFlag = Flag("CRE_ChainOfCommand_State_GatesSceneCompleted_1f2666fd-f8b1-4a4c-8dc9-1a7e948e00d7")
+
+    local eatingStart = Animation("CUST_EatingCorpse_01_Start_a044c83d-ca4d-4b01-b7e2-f87c8693627b")
+    local eatingLoop = Animation("CUST_EatingCorpse_01_Loop_ea42da9e-15b5-4404-8fe2-9c0080b019c9")
+    local eatingEnd = Animation("CUST_EatingCorpse_01_End_866fc762-95db-41cd-92e1-681115d3f724")
+
+    params.cultist = {type = EParamType.String, required = false, default = nil, help = [[Cultist to eat.]]}
+    local cultist = Entity(params.cultist)
+
+    local firstTimePausePlayed = false
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Unless killed, the guards keep talking with a rate limited AD
+    -- self.OnInit = function()
+    --     cultist = Entity(params.cultist)
+    -- end
+
+    nodes.Action_EatingCultist = Action{
+        function()
+            DebugText(me, "eating node")
+            if mod.moveto.MoveToPoint(cultist, MovementSpeed.Walk, me) then
+                SteerTo(cultist)
+            end
+            if not firstTimePausePlayed then
+                mod.util.SleepRandom(1.0, 4.0)
+                firstTimePausePlayed = true
+            end
+                DebugText(me, "Eating animation")
+                PlayLoopingAnimation(eatingStart,{eatingLoop}, eatingEnd)
+            WaitForInterrupt();
+        end,
+        OnLeave = function()
+            firstTimePausePlayed = false
+            StopAnimation(me)
+        end,
+        OnInterrupt = function()
+            firstTimePausePlayed = false
+            StopAnimation(me)
+        end,
+        Valid = function()
+            return GetFlag(cultistsPresentFlag)
+        end 
+
+    }
+
+    nodes.Action_Sleeping = Action{
+        OnEnter = function()
+            if not HasActiveStatus(me, "SLEEPING") then
+                ApplyStatus(me, "SLEEPING", true, -1)
+            end
+            
+        end,
+        
+        OnLeave = function()
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end,
+        
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not GetFlag(cultistsPresentFlag) and not me.IsInCombat
+        end
+    }
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+
+    events.FlagSet = function(e)
+        if e.Flag == cultistsPresentFlag.Guid then
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end
+    end
+
+    events.EnteredCombat = function(e)
+        if e.Entity == me then
+            if HasActiveStatus(me, "SLEEPING") then
+                RemoveStatus(me, "SLEEPING")
+            end
+        end
+    end
+    ------------------------------------------------
+
+end
+}

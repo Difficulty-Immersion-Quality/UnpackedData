@@ -1,0 +1,61 @@
+game.states.CRE_MageHandKids_WatchGremishkaFight = State 
+{
+    function()
+        description = [[Gith child watches the gremishka fight]]
+        modules = {"shared.dialog", "shared.util", "shared.moveto"}
+        
+        -- Params
+
+        params.FleeingState = { type = EParamType.State, required = false, default = nil,
+        help= [[Plug the fleeing behaviour of the kids here]]}
+
+        params.WatchSpot = {
+            type = EParamType.String,
+            required = true,
+            help=[[Where the kid will stand and watch the gremishka combat.]]
+        }
+
+        -- Local State variables
+        local watchSpot = Entity(params.WatchSpot)
+        local watchingGremishkaFight = Flag("CRE_MageHandGame_State_GremishkaCombat_975dcfa7-759e-4bb4-b17e-60cd33b1d10f")
+        local gremishka = Entity("S_CRE_MageHandGremishka_1358e104-c187-400e-b111-b2cf8581422d")
+        local watchingAnim = Animation("CUST_SittingGroundListening_01_Loop_e3dca236-9064-4613-8d5f-2b8b40f3294d")
+        local lookingMischeviously = Animation("CUST_MischeviousPlotting_01_d63ae245-e314-493c-b8e5-0538979109d7")
+
+    nodes.Action_WatchTheFight = Action 
+    {
+        function ()
+            if IsInDangerousSurfaceFor(watchSpot, me.Character) then
+                SteerTo(watchSpot)
+                Sleep(2.0)
+                return
+            end
+            
+                if GetDistanceTo(me, watchSpot)>2.0 then
+                    local moveResult = MoveTo(watchSpot,MovementSpeed.Run, true,false,1.0,1.5, false)
+                end
+
+                if moveResult ~= error.MovementError.None then
+                    DebugText(me, "Error: movement failed")  
+                    SteerTo(watchSpot)
+                    Sleep(2.0)
+                    return
+                end
+            SteerTo(gremishka)
+            --TODO use below commented line, with proper animation to make them watch the fight without looking scared
+            PlayAnimation(lookingMischeviously, false, true, 1.0)
+            DebugText(me,"Laughing and pointing.")
+            Sleep(1.0)
+        end,
+
+        Valid = function()
+            return GetFlag(watchingGremishkaFight)
+        end
+    }
+
+    nodes.Escape = Proxy{
+        params.FleeingState
+    }
+
+end
+}

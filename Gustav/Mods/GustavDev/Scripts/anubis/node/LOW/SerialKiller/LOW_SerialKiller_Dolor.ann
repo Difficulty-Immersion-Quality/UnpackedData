@@ -1,0 +1,199 @@
+game.states.LOW_SerialKiller_Dolor = State{
+    function()
+
+    local atMurderTribunalFlag = Flag("LOW_MurderTribunal_State_DolorAtTribunal_922e7877-16c1-46b3-aecd-55a1619632dd")
+    local attackingTribunalFlag = Flag("LOW_MurderTribunal_Event_DolorMurdersTribunal_6256e7e2-056a-03c6-2905-42522d923dc5")
+    local deathKnightDefeatedFlag = Flag("LOW_MurderTribunal_State_DeathKnightDefeated_e7cf2480-e981-45bd-80f1-740661f49ed9")
+    local baptismStartedFlag = Flag("LOW_MurderTribunal_State_StartedBaptism_9231a565-3cf9-4754-a9c4-db02e7f0eeb8")
+    local trialEndedFlag = Flag("LOW_MurderTribunal_State_TrialResolved_f3fe8b2d-50ea-3b9c-91ea-13f18f60d617")
+    local didDeathKnightADFlag = Flag("LOW_MurderTribunal_State_DidDolorDeathKnightAD_bf7bb964-5335-46e8-bef5-3d1ebb065d7e")
+    local hasCourtroomKeyFlag = Flag("LOW_MurderTribunal_State_HasCourtroomDoorKey_86306f9e-d97d-41a6-b2ab-dfc3a8565775")
+
+    local foyerPatrol = Spline("S_LOW_MurderTribunal_Dolor_AtDeathKnight_Patrol_d3d4addc-dea3-4558-a227-82a4f027d371")
+
+    local courtroomDoor = Entity("S_LOW_MurderTribunal_Courtroom_Door_49d7d354-35d9-462c-9b14-43215ca956c3")
+    local inTribunalTrigger = Entity("S_LOW_MurderTribunal_Dolor_InTribunal_Box_e98b19b8-bed1-46da-9a05-82b24931fc0c")
+    local deathKnight = Entity("S_LOW_MurderTribunal_DeathKnight_c16a1ebd-4390-4309-b5d5-30df6e1333f6")
+    local courtroomKey = Entity("S_LOW_MurderTribunal_Courtroom_Key_1adad160-50ee-4027-b786-403a793d36a0")
+
+    local lookingForHiddenPlayerAD = Dialog("CMB_AD_LookingForHiddenPlayer_ca90c53f-f996-9053-723d-2070dcfbeca3")
+    local idleAtDeathKnightAD = Dialog("LOW_MurderTribunal_AD_Dolor_IdleAtDeathKnight_ec106bdb-2408-927e-3743-e3e15f29b74d")
+    local idleWaitingFoyerAD = Dialog("LOW_MurderTribunal_AD_Dolor_IdleWaitingFoyer_b0e5c81c-17a1-3dc9-e9b4-8f689d649032")
+
+    local doSleep = false
+    local ADCooldown = 0
+    local didNoKeyAD = false
+
+    self.OnInit = function()
+        
+    end
+
+    nodes.MurderTribunal = Selector{
+        Valid = function()
+            return GetFlag(atMurderTribunalFlag)
+        end
+    }
+
+    nodes.Idle = Action{
+        function()
+            
+        end
+    }
+
+    -------------------------------
+    -- MURDER TRIBUNAL BEHAVIOUR --
+    -------------------------------
+    nodes.MurderTribunal.Sleep = Action {
+        function()
+            Sleep(math.random()*2.0+2.0)
+
+            -- Try repeated AD if in correct state
+            if not GetFlag(attackingTribunalFlag) and not GetFlag(deathKnightDefeatedFlag) then
+                if ADCooldown < 1 then
+                    local AD = idleAtDeathKnightAD
+                    if GetFlag(deathKnightDefeatedFlag) then
+                        AD = idleWaitingFoyerAD
+                    end
+
+                    StartAutomatedDialogRateLimitedImmediate(AD,1.0,20.0,me)
+                    ADCooldown = math.random(1,3)
+                else 
+                    ADCooldown = ADCooldown-1
+                end
+            end
+            
+            --Random steers
+            local numSteers = math.random(0,3)
+            for i = 0, numSteers, 1 do
+                local steerTarget = me.Position + (me.ForwardDirection * 3.0) --multiplied to avoid steering to own position
+                local offset = Vector3(math.random()*2.0-1.0,0.0,math.random()*2.0-1.0) * 1.5 -- > multiplier > relative turn angle
+                steerTarget = steerTarget + offset
+                SteerTo(steerTarget)
+                Sleep(2.0)
+            end
+
+            Sleep(4.0)
+            doSleep = false
+        end,
+        CanEnter = function()
+            return doSleep
+        end,
+        OnLeave = function()
+            doSleep = false
+        end
+    }
+    
+    nodes.MurderTribunal.WaitingDeathKnightDefeated = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = "S_LOW_MurderTribunal_Dolor_NoDeathKnight_Patrol_d69a3ae8-37c8-4816-a1db-449336431aa7",
+            patrolSpeed = "Stroll"
+        },
+        CanEnter = function()
+            return not GetFlag(attackingTribunalFlag) and GetFlag(deathKnightDefeatedFlag)
+        end
+    }
+
+    nodes.MurderTribunal.WaitingAtDeathKnight = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_MurderTribunal_Dolor_Point_a5eeade8-cf66-45b0-a1b2-b41f934ea89f"
+        },
+        CanEnter = function()
+            return not GetFlag(attackingTribunalFlag) and not GetFlag(didDeathKnightADFlag)
+        end
+    }
+    
+
+    nodes.MurderTribunal.WaitingAtDeathKnight_DidAD = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = "S_LOW_MurderTribunal_Dolor_AtDeathKnight_Patrol_d3d4addc-dea3-4558-a227-82a4f027d371",
+            patrolSpeed = "Stroll"
+        },
+        Valid = function()
+            return not GetFlag(attackingTribunalFlag)
+        end
+    }
+
+    nodes.MurderTribunal.UnlockDoor = Action{
+        function()
+            if GetFlag(hasCourtroomKeyFlag,me) and not HasActiveStatus(courtroomDoor,"ARCANE_LOCK") then
+                UseItem(courtroomDoor.Item)
+            elseif GetFlag(hasCourtroomKeyFlag,deathKnight) and deathKnight.Character.IsDead and CanSee(me, deathKnight) then
+                local moveResult = MoveTo(deathKnight,MovementSpeed.Walk)
+                if moveResult == error.MovementError.None then
+                    PickUpItem(courtroomKey)
+                end
+            else
+                local success = false
+
+                if CanSee(me, courtroomKey) then
+                    local moveResult = MoveTo(courtroomKey)
+                    if (moveResult == error.MovementError.None) then
+                        try
+                            success = true
+                            PickUpItem(courtroomKey)
+                        catch e if ls.CheckType(e, error.PickUpItemFailed) then
+                            success = false
+                        end
+                    end
+                end
+
+                if not success then
+                    if not didNoKeyAD then
+                        StartAutomatedDialogRateLimitedImmediate(Dialog("LOW_MurderTribunal_AD_Dolor_NoDoorKey_2505e410-7f7d-d880-5ceb-768cccc830b5"),1.0,20.0,me)
+                        didNoKeyAD = true
+                    end
+                    
+                    --when in doubt, patrol
+                    DoPatrol(foyerPatrol,false,MovementSpeed.Stroll)
+                end
+                
+            end
+            
+        end,
+        Valid = function()
+            return courtroomDoor.Item.IsLocked and not IsInTrigger(me,inTribunalTrigger.Trigger)
+        end
+    }
+
+    -- Attacking of court and players is handled through Osiris
+    -- This state is for if Dolor is in the court but is somehow not in combat
+    -- Also handles Dolor walking over to the members of the tribunal
+    nodes.MurderTribunal.AtCourt_Baptism = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = "LOW_MurderTribunal_Dolor_AttackCourt_Baptism_Patrol_18df50f8-cf3f-4f5a-90ad-f843e45dce24",
+            patrolSpeed = "Walk",
+            startSplineIndex = 0
+        },
+        Valid = function()
+            return GetFlag(baptismStartedFlag) and not GetFlag(trialEndedFlag)
+        end
+    }
+
+    nodes.MurderTribunal.AtCourt = Proxy {
+        game.states.GEN_Patrol,
+        params = {
+            patrolSpline = "LOW_MurderTribunal_Dolor_AttackCourt_Patrol_6b8b5e87-71bd-4633-a8ed-bb6a9ecee12f",
+            patrolSpeed = "Walk",
+            startSplineIndex = 0
+        },
+    }
+
+    -----------------------------------------
+    -- Events
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Sleep" then
+            doSleep = true
+        elseif e.Event == "Sleep_Investigation" then
+            doSleep = true
+            if math.random(100) < 30 then --30% chance of doing AD
+                StartAutomatedDialogRateLimitedImmediate(lookingForHiddenPlayerAD,1.0,20.0,me)
+            end
+        end
+    end
+
+    end
+}

@@ -1,0 +1,156 @@
+game.states.EPI_Owlbear = State {function()
+    description = [[General behaviour of the Owlbear Cub at the campsite]]
+
+    modules = {"shared.moveto","shared.util","shared.math"}
+
+    local campPoint = Entity("S_EPI_StartPointOwlbear_c35155d5-12ed-4ea4-9c92-232212ab8ff2")
+
+    local restTime = 20
+    local failSafeTime
+    local playfulAnim = Animation([[CUST_Play_01_653ae4dc-c82a-44ad-84b6-ae6a1b16b54b]])
+    local owlbearCanBePet = Flag("EPI_OwlbearCub_State_PettingAvailable_90327c1a-537f-4df1-b31f-d03a00d029ba")
+    local shadowheartPetting = Flag("EPI_Shadowheart_State_PettingAvailable_84d1c35c-662b-4468-a20d-b468653e3daf")
+    local track001 = Flag("EPI_Epilogue_State_DivineBardTrack001_14fa0523-1e89-f332-5418-44784c5cde7c")
+    local track002 = Flag("EPI_Epilogue_State_DivineBardTrack002_9deefcc1-3c78-761a-5998-e0d0df9b4e65")
+    local track003 = Flag("EPI_Epilogue_State_DivineBardTrack003_a92b0fb8-d4a7-8e5c-b840-d4b630d5c049")
+    local hasPlayedAnim = false
+    local wandering = false
+
+    --------------------ANIMS & TRIGGERS-----------------------
+
+    local owlbearTiredSpot = Entity("S_EPI_Owlbear_SleepingSpot_998b1fe0-44fa-432e-989e-79813dbb9dc3")
+    local owlbearPlaySpot = Entity("S_EPI_Owlbear_FireflySpot_39ee94dd-f1e4-421c-8107-adc6bfe069ad")
+    local owlbearDanceSpot = Entity("S_EPI_Owlbear_DanceSpot_b3e60d96-1c43-4d41-af4b-7c68e7260a88")
+    local owlbearFishSpot = Entity("S_EPI_Owlbear_FishingSpot_bdf78147-993a-4cfe-94ef-52bc9e931333")
+
+    local owlbearSleepStart = Animation("CUST_EPI_Owlbear_Sleeping_01_Start_f88fa307-4bbd-41c7-be12-f17f41331e2d")
+    local owlbearSleepLoop = Animation("CUST_EPI_Owlbear_Sleeping_01_Loop_82bc9e51-69e3-4fa4-803e-c0dc8d87014b")
+    local owlbearSleepEnd = Animation("CUST_EPI_Owlbear_Sleeping_01_End_421b6f77-fa13-4c51-bad9-5d9e64d07bf2")
+    local owlbearPlayAnim = Animation("CUST_EPI_Owlbear_Fireflies_01_3fcf892b-f15c-41e6-985d-43827ce5d979")
+    local owlbearDanceStart = Animation("CUST_EPI_Owlbear_Dancing_01_Start_bd5ce087-8463-44c8-9363-aef3ab8059da")
+    local owlbearDanceLoop = Animation("CUST_EPI_Owlbear_Dancing_01_Loop_49a646ee-ed8a-447c-98a3-42bd9ccf9a1e")
+    local owlbearDanceEnd = Animation("CUST_EPI_Owlbear_Dancing_01_End_b3a5fd07-2a2c-4282-8dbc-ee72f22eb60b")
+    local owlbearFishAnim = Animation("CUST_EPI_Owlbear_Fishing_01_83411b82-7de8-4623-bb88-49e24d198cf3")
+
+
+
+    --------------------HELPERS---------------------
+    helpers.action.PlayfulAnimTransition = function(target, isWaiting)
+        LookAtEntity(target, 3.0)
+        failSafeTime = 0 --In case the courier dog never gets in range for whatever reason
+        while (GetDistance2DTo(me, target) > 3 and failSafeTime < 10) do
+            if isWaiting then
+                Sleep(1)
+            end
+            failSafeTime = failSafeTime + 1
+        end
+        PlayAnimation(playfulAnim,true,false)
+    end
+
+    --------------------NODES---------------------
+
+    helpers.action.PlayLoopingAnimationAt = function(pos, animationStart, animationLoop, animationEnd, animationLength, endSleep)
+        if pos ~= nil then
+            if animationStart ~= nil and animationLoop ~= nil and animationEnd ~= nil then
+                if mod.moveto.MoveToPoint(pos, MovementSpeed.Walk, me, 0.5, false) then
+                    LookFrom(pos)
+                    PlayLoopingAnimation(animationStart, {animationLoop}, animationEnd)
+                    Sleep(animationLength)
+                    StopAnimation(me)
+                    Sleep(endSleep)
+                end
+            end
+        end
+            ClearFlag(owlbearCanBePet)
+            wandering = true
+            StartTimer(me,"Owlbear_Wandering", math.random(30.0, 50.0), 0)
+    end
+
+    helpers.action.PlayAnimationAt = function(pos, animation, animationLength)
+        if pos ~= nil then
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Walk, me, 0.5, false) then
+                LookFrom(pos)
+                PlayAnimation(animation)
+                Sleep(animationLength)
+                StopAnimation(me)
+                mod.util.SleepRandom(1.0,2.0)
+            end
+        end
+            wandering = true
+            StartTimer(me,"Owlbear_Wandering", math.random(30.0, 50.0), 0)
+    end
+    ----
+    nodes.WaitingForPets = Action {
+        Valid = function()
+            return GetFlag(shadowheartPetting) and GetFlag(owlbearCanBePet)
+        end,
+        function()
+            WaitForInterrupt()
+        end,
+    }
+
+    nodes.ActiveMoves = Selector {
+        CanEnter = function()
+            return not wandering
+        end,
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end,
+    }
+
+    nodes.ActiveMoves.Fishing = Action {
+            function()
+                helpers.PlayAnimationAt(owlbearFishSpot, owlbearFishAnim, 6.3333349)
+            end
+    }
+
+    nodes.ActiveMoves.Dancing = Action {
+        CanEnter = function()
+            return GetFlag(track001) or GetFlag(track002) or GetFlag(track003)
+        end,
+            function()
+                helpers.PlayLoopingAnimationAt(owlbearDanceSpot, owlbearDanceStart, owlbearDanceLoop, owlbearDanceEnd, 18.9, 6.0)
+            end
+    }
+
+    nodes.ActiveMoves.PlayFireFly = Action {
+        function()
+            helpers.PlayAnimationAt(owlbearPlaySpot, owlbearPlayAnim, 12.6667)
+        end
+    }
+
+    nodes.ActiveMoves.Tired = Action {
+            function()
+                SetFlag(owlbearCanBePet)
+                helpers.PlayLoopingAnimationAt(owlbearTiredSpot,owlbearSleepStart, owlbearSleepLoop, owlbearSleepEnd, 21.666667, 6.0)
+            end,
+    }
+
+    nodes.Wander = Action {
+        Valid = function()
+            return wandering
+        end,
+        function()
+            Sleep(math.random(3,5))
+            Wander(10.0,5.0, MovementSpeed.Walk, campPoint)
+        end
+    }
+
+    --------------------EVENTS---------------------
+    events.FlagSet = function(e)
+        if e.Flag == shadowheartPetting.Guid then
+            StopAnimation(me)
+        elseif not e.Flag == shadowheartPetting.Guid then
+            ClearFlag(owlbearCanBePet)
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "Owlbear_Wandering") then
+            wandering = false
+        elseif(e.TimerName == "Owlbear_WaitedLongEnough") then
+            ClearFlag(owlbearCanBePet)
+        end
+    end
+
+end}

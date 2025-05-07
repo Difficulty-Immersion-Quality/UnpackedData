@@ -1,0 +1,104 @@
+game.states.END_Orpheus = State{function ()
+    description = [[END Behaviour for the Orpheus after being freed]]
+
+    modules = { "shared.moveto", "shared.dialog" }
+
+    local justFreedAD = Dialog("END_IllithidOptions_AD_OrpheusShacklesBroken_1f903453-dc35-a5d7-8964-6857dec37395")
+    local waitingDecisionAD = Dialog("END_IllithidOptions_AD_OrpheusWaitingForChoice_63565399-ff51-9fa3-a364-8f38c50e7e1f")
+    local portalOpenAD = Dialog("END_IllithidOptions_AD_OrpheusReadyToLeave_40084b8a-46a3-9583-3505-e02c84434f1c")
+    local decisionFlag = Flag("END_IllithidOptions_Event_TookMomentToChoose_4fc3d679-7bd5-4a2f-9175-4d5c028ed185")
+    local freeFlag = Flag("END_IllithidOptions_State_OrpheusIsFree_3b747050-1be0-432e-9de6-e48faa4b74bb")
+    local exitPortalFlag = Flag("END_IllithidOptions_State_ExitPortalAvailable_b97872a1-59cc-40cd-8963-e06be614adc0")
+    local freedPoint = Entity("S_END_OrpheusFreedPoint_5063c324-055f-467e-85c8-f036bf355c18")
+    local portalStandPoint = Entity("S_END_OpenExitPortalPoint_c6d5437e-ca42-4fa9-892f-f33a964c091c")
+    local protalADStarted = false
+    local recruitedFlag = Flag("END_IllithidOptions_State_OrpheusInParty_b6517ecb-99fe-470a-b9fe-787ca1ec3ddb")
+
+    --fallback for post brain defeat dialogs where Orpheus is not included
+    nodes.Recruited = Action{
+        CanEnter = function()
+            return GetFlag(recruitedFlag)
+        end,
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    nodes.ExitPortalIdle = Action {
+        CanEnter = function()
+            return GetFlag(exitPortalFlag)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(portalStandPoint,  MovementSpeed.Walk, me) then
+                LookFrom(portalStandPoint)
+                if not protalADStarted then
+                    mod.dialog.StartCheckedAutomatedDialog(
+                        portalOpenAD,
+                        {
+                            waitForCompletion = true,
+                        },
+                        me
+                    )
+                    protalADStarted = true
+                end
+            else
+                SteerTo(portalStandPoint)
+            end
+            Sleep(1)
+        end
+    }
+
+    nodes.WaitingDecision = Action {
+        CanEnter = function()
+            return GetFlag(freeFlag) and GetFlag(decisionFlag)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(freedPoint,  MovementSpeed.Stroll, me) then
+                LookFrom(freedPoint)
+                Sleep(20 + 10 * math.random())
+                mod.dialog.StartCheckedAutomatedDialog(
+                    waitingDecisionAD,
+                    {
+                        waitForCompletion = true,
+                    },
+                    me
+                )
+
+            else
+                SteerTo(freedPoint)
+            end
+            Sleep(1)
+        end
+    }
+
+    nodes.FreeIdle = Action {
+        CanEnter = function()
+            return GetFlag(freeFlag)
+        end,
+
+        function()
+            if mod.moveto.MoveToPoint(freedPoint,  MovementSpeed.Stroll, me) then
+                LookFrom(freedPoint)
+            else
+                SteerTo(freedPoint)
+            end
+            Sleep(1)
+        end
+    }
+
+
+    nodes.LockedUp = Action {
+        function()
+            Sleep(1)
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if e.Event == "END_IllithidOptions_ReachedAssimilation" then
+            reachedAssimilation = true
+        end
+    end
+end
+}

@@ -1,0 +1,90 @@
+game.roots.PUZ_SHA_Shadowquake = State{ function()
+
+    params.NumSpellsToCast = {type = EParamType.Int, default = 3, help = "Number of spells they cast before self destructing."}
+    params.Spells = { type = EParamType.String, arrayRange = "1.."
+    , help = "Spells they will randomly cast from"
+    , default = {
+        "Target_SHA_Shadowquake_Summon_Caster",
+        "Target_SHA_Shadowquake_Summon_Dual",
+        "Target_SHA_Shadowquake_Summon_Melee",
+        "Target_SHA_Shadowquake_Summon_Mace",
+        "Target_SHA_Shadowquake_Summon_Ranger",
+        "Target_SHA_Shadowquake_Summon_Shield"
+        },
+    }
+
+    params.EndTurnDelay = {type = EParamType.Number, default = 1.5, help = "Delay after casting before ending the turn."}
+    params.SummonRange = {type = EParamType.Number, default = 3, help = "Distance away from their position they will try to summon something on."}
+
+    helpers.Init = function()
+        if not me.Blackboard.GetFact("Cnst.PUZ_SHA_Shadowquake.RemainingTurns") then
+            me.Blackboard.SetFact("Cnst.PUZ_SHA_Shadowquake.RemainingTurns", params.NumSpellsToCast)
+        end
+    end
+
+    helpers.GetSpellToCast = function()
+        --early out if we only have 1 spell to cast
+        if #params.Spells == 1 then 
+           return params.Spells[1]
+        end
+
+        local previousSpell = me.Blackboard.GetFact("Cnst.PUZ_SHA_Shadowquake.LastUsedSpell")
+        local spellList = {}
+        for _, spell in ipairs(params.Spells) do
+            if spell ~= previousSpell then
+                table.insert(spellList, spell)
+            end
+        end
+
+        local spell = spellList[math.random(1,#spellList)]
+        me.Blackboard.SetFact("Cnst.PUZ_SHA_Shadowquake.LastUsedSpell", spell)
+        return spell
+    end
+
+    self.OnEditorChanges = function()
+        me.Blackboard.ClearFact("Cnst.PUZ_SHA_Shadowquake.RemainingTurns")
+        me.Blackboard.ClearFact("Cnst.PUZ_SHA_Shadowquake.LastUsedSpell")
+        helpers.Init()
+    end
+
+    self.OnInit = function()
+        helpers.Init()
+    end
+
+    events.TurnStarted = function()
+        local spellToCast = helpers.GetSpellToCast()
+        local radAngle = math.random() * 6.28
+        local position = me. Position + params.SummonRange * ls.math.Vector3(math.cos(radAngle), 0, math.sin(radAngle))
+        local castTarget = FindValidPosition(position, 5, nil)
+        if castTarget then 
+            try 
+                UseSpellImmediate(me, spellToCast, castTarget)
+            catch e if ls.CheckType(e, error.Precondition) then
+                -- silently ignore this one
+                --wait 1.0 seconds before ending turn
+                StartRealtimeTimer(me,"Cnst.PUZ_SHA_Shadowquake.EndTurn",params.EndTurnDelay,0)
+            end 
+        end
+    end
+
+    events.SpellCastResult = function(ev)
+        if ev.Success then 
+            local turnCount = me.Blackboard.GetFact("Cnst.PUZ_SHA_Shadowquake.RemainingTurns")
+            turnCount = turnCount - 1
+            me.Blackboard.SetFact("Cnst.PUZ_SHA_Shadowquake.RemainingTurns", turnCount)
+        end
+        --wait 1.0 seconds before ending turn
+        StartRealtimeTimer(me,"Cnst.PUZ_SHA_Shadowquake.EndTurn",params.EndTurnDelay,0)
+    end
+
+    events.TimerFinished = function(e)
+        if e.TimerName == "Cnst.PUZ_SHA_Shadowquake.EndTurn" then
+            local turnCount = me.Blackboard.GetFact("Cnst.PUZ_SHA_Shadowquake.RemainingTurns")
+            if turnCount <= 0 then 
+                Die(me, DeathType.LIFETIME, me)
+            else  
+                EndTurn(me)
+            end
+        end
+    end
+end}

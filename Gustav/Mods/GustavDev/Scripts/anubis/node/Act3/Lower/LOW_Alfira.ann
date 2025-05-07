@@ -1,0 +1,41 @@
+game.states.LOW_Alfira = State{function ()
+    local playingPos = Entity("S_LOW_Elfsong_AlfiraTP_d8128b77-5dff-48f0-814c-4041f8e05190")
+    local canPlay = Flag("LOW_Elfsong_Event_AlfiraPerformance_0504db7d-7e61-673f-c5d8-75bc0ae4457c")
+    local lakrissaIsPresent = Flag("LOW_Elfsong_State_LakrissaWithAlfira_3de59238-18ec-4d57-9edb-c11fae84fc74")
+
+    nodes.Action_PlaySong = Action {
+        function()
+            if MoveTo(playingPos, MovementSpeed.Walk, false, false) == error.MovementError.None then
+                LookFrom(playingPos)
+                Sleep(3.0)
+                try
+                    DebugText(me, "Start playing")
+                    UseSpell("Shout_Bard_Perform_ThePower_Lute", me, nil, nil, nil, false, false, false, false)
+                    WaitForInterrupt()
+                catch e if ls.CheckType(e, error.UseSpellFailed) then
+                    DebugText(me, "Error: failed to perform")
+                    Sleep(3.0)
+                end
+            else
+                DebugText(me, "Error: move to failed")
+                Sleep(3.0)
+            end
+        end,
+        OnLeave = function()
+            RemoveStatus(me,"PERFORM_POSITIVE")
+            RemoveStatus(me,"PERFORM_POSITIVE_THEPOWER")
+        end,
+        Valid = function()
+            return GetFlag(canPlay) and not GetFlag(lakrissaIsPresent)
+        end,
+    }
+
+    nodes.Proxy_StandAtTrigger = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_Elfsong_AlfiraTP_d8128b77-5dff-48f0-814c-4041f8e05190"
+        }
+    }
+
+end
+}

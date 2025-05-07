@@ -1,0 +1,70 @@
+game.states.MOO_FlyingGhoul = State{function ()
+    description = [[Simple wandering in a small range with the leader triggering an AD]]
+
+    modules = { "shared.dialog", "shared.moveto" }
+
+    params.IsADLeader = {
+        type = EParamType.Bool,
+        required = false,
+        default = false,
+        help = [[Is the character the main speaker for the AD]]
+    }
+
+    params.IdlePoint = {
+        type = EParamType.String,
+        required = true,
+        help = [[Main point the Ghoul hangs around]]
+    }
+
+    local idlePoint = Entity(params.IdlePoint)
+    local isADLeader = params.IsADLeader
+    local AD = Dialog("MOO_FlyingGhoul_AD_Hungry_04a5b760-c8c1-520c-dee7-048840bd244b")
+    local leavingFlag = Flag("MOO_FlyingGhouls_Event_FlyAway_6c5ac27e-800c-e7b3-f5a2-4a31cf7f682f")
+    local flyAwayPoint = Entity("S_MOO_TakeOffSpot_dfedfd05-cca8-4094-ba47-bcbdfb0a732e")
+
+    local ghoul1 = Entity("S_MOO_FlyingGhoul_000_6a6a2784-47b0-4838-bc6a-31288ac99158")
+    local ghoul2 = Entity("S_MOO_FlyingGhoul_001_ac6133f2-98fd-465b-9b12-e5bf72b4c3c9")
+    local ghoul3 = Entity("S_MOO_FlyingGhoul_002_90b8c61f-c7e8-445c-a1b1-9d9874457529")
+
+    nodes.Leaving = Action {
+        CanEnter = function()
+            return GetFlag(leavingFlag)
+        end,
+
+        function()
+            --Osiris handles them leaving and going off stage.
+            if mod.moveto.MoveToPoint(flyAwayPoint, MovementSpeed.Walk, me) then
+                LookFrom(flyAwayPoint)
+            end
+            Sleep(1)
+        end
+    }
+
+    nodes.Wander = Action {
+        function()
+            if mod.moveto.MoveToPoint(idlePoint, MovementSpeed.Stroll, me) then
+                Wander(2.0, 1.5, MovementSpeed.Stroll, idlePoint)
+            else
+                SteerTo(idlePoint)
+            end
+
+            if isADLeader then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                        AD,
+                        {
+                            waitForCompletion = true,
+                            minDelay = 25.0,
+                        },
+                        ghoul1,
+                        ghoul2,
+                        ghoul3
+                    )
+            end
+
+            Sleep(10 + 6 * math.random())
+        end
+
+    }
+
+end
+}

@@ -1,0 +1,147 @@
+game.states.CRE_YouthTraining_Teacher = State
+{
+    function()
+    description = [[Teacher's behaviour during Youth Training]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local teacherBeatingBoyFlag = Flag("CRE_YouthTraining_State_TeacherBeatingBoy_ccaa2ee8-654b-491f-9623-c8a9376d3c61")
+    local repeatedAD = Dialog("CRE_YouthTraining_AD_TeacherBeatingBoy_54a13362-dfe9-17c8-c393-cfa5fa844011")
+    local afterBeatingAD = Dialog("CRE_YouthTraining_AD_TeacherClass_2004eafd-99d2-12fc-3853-377e3832ecb1")
+    local githBoy = Entity("S_CRE_GithBoy_3e97baba-812b-4589-a7aa-454543aa3187")
+    local dummyPos = Entity ("S_CRE_GithBoyTrainingRoomDummy_451d369a-a1e4-4dd4-8a61-b7c19b2affb9")
+    local anatomyPos = Entity ("S_CRE_YouthTrainingTeacherPosAnatomy_67bb80e0-dd74-49e2-af5d-fecce6f49219")
+    local sparringPos = Entity ("S_CRE_YouthTrainingTeacherPosSparring_77b8913c-ed12-4d1f-a1f8-7855ca476f5f")
+    local popQuizStudent = Entity("S_CRE_CrecheKid02_5d33ac06-faa7-48c3-8794-6cff79515ce5")
+    local encouragePos = Entity("S_CRE_GithBoyBeatedPos_b232905c-07ff-46c1-9da3-f1db4fda5766")
+    local hasAddressedClass = false
+
+    local kickingAnim = Animation("CUST_GroundKicking_02_75a83a5d-6843-4243-8e6e-5f67e9818be7")
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Teacher plays a rate-limited AD while beating githBoy. Blocks other nodes.
+    nodes.Action_BeatBoy = Action
+    {
+        function()
+            mod.util.SleepRandom(0.0,0.4)
+            PlayAnimation(kickingAnim, false, true)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    repeatedAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 3.0,
+                    },
+                    me,
+                    githBoy
+                )
+        end,
+
+        Valid = function()
+            return GetFlag(teacherBeatingBoyFlag)
+        end
+    }
+
+    nodes.Action_Monologue = Action
+    {
+         function()
+            hasAddressedClass = true
+            StartAutomatedDialog(afterBeatingAD,true,me)
+         end,
+ 
+         Valid = function()
+             return ((not GetFlag(teacherBeatingBoyFlag)) and (not hasAddressedClass))
+         end
+    }
+
+    -- [AFTERBEATING] SUBSTATES: Teacher changes presence between groups in class indefinitely.
+
+   nodes.Selector_AfterBeating = Selector
+   {
+       function (nodes)
+            mod.util.SleepRandom(13.0,18.0)
+            return FindDifferentRandomSelectable(nodes)
+       end
+   }
+
+ 
+
+    -- Action [AFTERBEATING]
+    -- Teacher walks to dummy, plays an AD about martial technique, and animates to demonstrate.
+    nodes.Selector_AfterBeating.Action_DemonstrateOnTarget = Action
+    {
+        function()
+            local moveResult = MoveTo(dummyPos, MovementSpeed.Stroll, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(dummyPos)
+                Sleep(2.0)
+                return false
+            end
+            StartAutomatedDialog(afterBeatingAD,true,me)
+        end,
+
+        Valid = function()
+            return hasAddressedClass
+        end
+    }
+
+    -- Action [AFTERBEATING]
+    -- Teacher walks to desk and anatomical diagrams, asks a question to the students studying
+    nodes.Selector_AfterBeating.Action_CoachSparring = Action
+    {
+        function()
+            local moveResult = MoveTo(sparringPos, MovementSpeed.Stroll, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(sparringPos)
+                Sleep(2.0)
+                return false
+            end
+            StartAutomatedDialog(afterBeatingAD,true,me)
+
+        end,
+
+        Valid = function()
+            return hasAddressedClass
+        end
+    }
+
+    -- Action [AFTERBEATING]
+    -- Teacher walks between two training students and encourages them
+    nodes.Selector_AfterBeating.Action_EncourageTraining = Action
+    {
+        function()
+            local moveResult = MoveTo(encouragePos, MovementSpeed.Stroll, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(encouragePos)
+                Sleep(2.0)
+                return false
+            end
+            SteerTo(dummyPos)
+            StartAutomatedDialog(afterBeatingAD,true,me)
+        end,
+            
+        Valid = function()
+            return hasAddressedClass
+        end 
+    }
+
+
+end
+}

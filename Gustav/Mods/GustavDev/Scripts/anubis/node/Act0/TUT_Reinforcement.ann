@@ -1,0 +1,44 @@
+game.states.TUT_Reinforcement_Idle = State{function()
+
+    local MovePoint = Entity("S_TUT_LowerDeck_ReinforcementDestination_850e7f92-58d2-46f9-884a-2521399cbae1")
+    local CanMoveTo = false
+
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "TUT_LowerDeck_ReinforcementsReady" then
+                SetForceUpdate(me,true)
+                CanMoveTo = true
+            end
+        end
+    end
+
+    events.Dying = function(e)
+        SetForceUpdate(me, false)
+    end
+
+    nodes.Action_MovingToFight = Action{
+        function()
+            try
+                MoveTo(MovePoint, MovementSpeed.Run)
+                CanMoveTo = false
+                SetForceUpdate(me, false)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me,"Move Exception")
+            end
+        end,
+        Valid = function()
+            return CanMoveTo
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not CanMoveTo
+        end
+    }
+
+end}

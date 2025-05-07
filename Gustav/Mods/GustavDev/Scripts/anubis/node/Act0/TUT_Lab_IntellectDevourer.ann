@@ -1,0 +1,44 @@
+game.states.TUT_Lab_IntellectDevourer_Idle = State{function()
+
+    local patrolSpline = Spline("S_TUT_Lab_DevourerLabPatrol_73b5be9c-ccd0-4ca9-869f-af58238aed26")
+    local targetSplineIndex = -1
+    local CanPatrol = true
+
+
+    nodes.Action_PatrollingRooms = Action{
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Run, targetSplineIndex, false)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+            end
+        end,
+        Valid = function()
+            return CanPatrol
+        end
+    }
+
+    nodes.Action_Fallback = Action{
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return not CanPatrol
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        if patrolSpline == Spline("S_TUT_Lab_DevourerLabPatrol_73b5be9c-ccd0-4ca9-869f-af58238aed26") then
+            if e.Index == 5 then
+                CanPatrol = false
+                ClearPatrol()
+                patrolSpline = Spline("S_TUT_Lab_DevourerPatrol_6527f3a1-7a36-41af-9482-178c3f4922a6")
+                targetSplineIndex = 6
+                CanPatrol = true
+            end
+        end
+    end
+
+
+end}

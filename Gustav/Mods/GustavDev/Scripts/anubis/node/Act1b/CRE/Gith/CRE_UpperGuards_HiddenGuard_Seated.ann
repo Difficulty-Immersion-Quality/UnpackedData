@@ -1,0 +1,82 @@
+game.states.CRE_UpperGuards_HiddenGuard_Seated = State{function()
+    description = [[Hidden guards behaviour]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local repeatedAD = Dialog("CRE_UpperGuards_AD_HiddenCheckpointChatter_d234f1a5-7d24-9949-de2d-33680a374cef")
+
+    local chair = Entity("FUR_GEN_Chair_Wood_Poor_A_005_c460c9bc-91a8-440b-bcbc-bdd8dd0eb558")
+
+    local secondNPC = Entity("S_CRE_HiddenCheckpointWarningGuard_970d10ed-8092-463b-8446-223fe4cf2d68")
+
+    local isInPosition = false
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Unless killed, the guards keep talking with a rate limited AD
+    nodes.Action_ADLoop = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    repeatedAD,
+                    {
+                        waitForCompletion = false,
+                        minDelay = 12.0,
+                    },
+                    me,
+                    secondNPC
+                )
+        end,  
+
+        Valid = function()
+            return isInPosition
+        end
+    }
+
+
+    nodes.Action_GoSit = Action 
+    {
+        function()
+            if IsInDangerousSurfaceFor(chair, me.Character) then
+                SteerTo(chair)
+                Sleep(2.0)
+                return
+            end
+            try
+                UseItem(chair.Item,true,true,false,false)
+            catch e 
+                if ls.CheckType(e,error.UseItemFailed) then
+                    SteerTo(chair)
+                    Sleep(2.0)     
+                    return         
+                end
+            isInPosition = true
+            end,
+
+            Valid = function()
+                return not isInPosition
+            end
+    }
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

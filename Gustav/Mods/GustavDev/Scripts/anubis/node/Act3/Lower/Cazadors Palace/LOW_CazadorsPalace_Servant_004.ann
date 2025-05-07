@@ -1,0 +1,69 @@
+game.states.LOW_CazadorsPalace_Servant_004 = State {
+
+    function()
+
+        local candelabra = Entity("S_LOW_CazadorsPalace_Candelabra_3e0cb0ff-0efa-4472-a1c6-cec321431117")
+        local candelabraMoved = Flag("LOW_CazadorsPalace_State_CandelabraMoved_29918a98-9c4f-4910-9675-1e8bf8eea925")
+        local candelabraDestroyed = Flag("LOW_CazadorsPalace_State_CandelabraDestroyed_b5d6921b-2e99-4183-8768-2373719c1d9b")
+        local wanderTrigger = "S_LOW_CazadorsPalace_Servant_004_WanderTrigger_d5f433c5-40e8-4414-aa46-487e655d4384"
+
+        local cleaningWallPos = "S_LOW_CazadorsPalace_Servant_004_WallPos_53534944-e286-4531-b504-cba619edf6a7"
+        local cleaningWallSceneTrigger = "S_LOW_CazadorsPalace_Servant_004_WallSceneTrigger_67330280-038d-4ee0-8fdf-6ccecb2c78dd"
+        local cleaningWallBehaviorDialog = "BHVR_WRLD_LOW_CazadorsPalace_CleaningWall_c7c8fb7f-ebfa-7ab9-7082-efe300a4be41"
+
+        modules = { "shared.util" }
+
+        nodes.Default = Selector {
+            function(nodes)
+                return FindRandomSelectable(nodes)
+            end,
+            CanEnter = function()
+                return not GetFlag(candelabraMoved) and not GetFlag(candelabraDestroyed)
+            end
+        }
+
+        nodes.Default.UseCandelabra = Action{
+            function()
+                try
+                    -- if already lit - unlit and wait
+                    if HasActiveStatus(candelabra, "BURNING") then
+                        UseItem(candelabra.Item)
+                        Sleep(3.0)
+                    end
+                    -- lit the candelabra
+                    UseItem(candelabra.Item)
+                catch e if ls.CheckType(e, error.UseItemFailed) then
+                end
+
+                mod.util.SleepRandom(2.0, 4.0)
+            end
+        }
+
+        nodes.Default.CleaningWall = Proxy{
+            game.states.LOW_CazadorsPalace_Servant_Cleaning,
+            params = {
+                cleaningPos = cleaningWallPos,
+                cleaningBehaviorDialog = cleaningWallBehaviorDialog,
+                cleaningSceneTrigger = cleaningWallSceneTrigger,
+            }
+        }
+
+        nodes.Default.Wander = Proxy {
+            game.states.GEN_Wander,
+            params = {
+                sleepMin = 2,
+                sleepMax = 4,
+                trigger = wanderTrigger,
+                wanderMin = 3,
+                wanderMax = 6,
+            },
+        }
+
+        nodes.Wait = Action {
+            function()
+                mod.util.SleepRandom(3.0, 9.0)
+            end
+        }
+    end
+
+}

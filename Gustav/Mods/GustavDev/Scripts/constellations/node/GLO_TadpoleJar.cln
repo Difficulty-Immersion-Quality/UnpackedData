@@ -1,0 +1,59 @@
+game.states.GLO_TadpoleJar =  State{function ()
+
+    description = [[Tadpole jar spotting for Daisy ADs.]]
+
+    local hasBeenSeen = false
+    local tadpoledTag = Tag("ILLITHID_1eec74e8-3673-4500-abec-57b7ed8469ed")
+
+    self.CanEnter = function()
+        return false
+    end
+
+    events.Activated = function()
+        if not hasBeenSeen then
+            StartTimer(me, "CheckJarSight", 1.0, -1)
+        end
+    end
+
+    events.Deactivated = function()
+        if not hasBeenSeen then
+            StopTimer(me, "CheckJarSight")
+        end
+    end
+
+    events.TimerFinished  = function(e)
+        if e.TimerName == "CheckJarSight" then
+            if hasBeenSeen then
+                StopTimer(me, "CheckJarSight")
+            else
+                DebugText(me,"Checking sight")
+                local actives = GetActiveCharacters(me,6.0)
+                for _,char in pairs(actives) do
+                    if char.Character.IsPlayer and
+                    HasLineOfSight(char, me) and
+                    IsTagged(char,tadpoledTag) then
+                        hasBeenSeen = true
+                        StopTimer(me, "CheckJarSight")
+                        DebugText(me,"Seen")
+                        SetEntityEvent(char,"GLO_TadpoleJar_Spotted",me)
+                    end
+                end
+            end
+        end
+    end
+
+    events.Destroyed = function(e)
+        if e.Entity == me then
+            StopTimer(me, "CheckJarSight")
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and e.Event == "GLO_TadpoleJar_StopSpotting" and not hasBeenSeen then
+            hasBeenSeen = true
+            StopTimer(me, "CheckJarSight")
+        end
+    end
+end
+}
+    

@@ -1,0 +1,91 @@
+game.states.LOW_BlushingMermaid_Hag = State{function()
+
+    modules = {"shared.dialog"}
+
+    local disguisedAD = Dialog("LOW_BlushingMermaid_AD_DisguisedHag_Idle_1b26d35d-c514-8b90-ee34-0ce4caf0b4ec")
+    local cellarAD = Dialog("LOW_BlushingMermaid_AD_Hag_CellarIdle_7e26d7f0-0e02-8ddd-6621-54153ec66b15")
+
+    local disguisedWanderTrigger = "S_LOW_BlushingMermaid_CaptainsRoom_WanderTrigger_cd55e6e2-20b8-423a-8a06-5c181045d462"
+    local cellarWanderTrigger = "S_LOW_BlushingMermaid_HagCellar_WanderTrigger_e04bb745-9c9a-4760-a7b2-7a6a623b1aea"
+
+    local retreatedToCellarFlag = Flag("LOW_BlushingMermaid_State_HagRetreatedToCellar_0f973681-c559-4b66-9caf-d42809059369")
+    local cantCareveOutVanraFlag = Flag("LOW_BlushingMermaid_State_CantCarveOutVanra_860c8e13-f2e6-4939-ace9-56cac5ae3626")
+
+    local wanderActive = true
+
+    nodes.Wandering = Proxy {
+        OnEnter = function()
+            StartTimer(me,"LOW_HagWandering_Timer",math.random(10.0,15.0),0)
+        end,
+
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 6,
+            sleepMin = 3,
+            trigger = disguisedWanderTrigger,
+            wanderMax = 10,
+            wanderMin = 5
+        },
+        
+        Valid = function()
+            return wanderActive and not GetFlag(retreatedToCellarFlag)
+        end
+    }
+
+    nodes.CellarWandering = Proxy {
+        OnEnter = function()
+            StartTimer(me,"LOW_HagWandering_Timer",math.random(10.0,15.0),0)
+        end,
+
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 6,
+            sleepMin = 3,
+            trigger = cellarWanderTrigger,
+            wanderMax = 10,
+            wanderMin = 5
+        },
+
+        Valid = function()
+            return wanderActive and not HasActiveStatus(me,"INVISIBLE")
+        end
+    }
+
+    nodes.idleAD = Action {
+        CanEnter = function()
+            return not GetFlag(cantCareveOutVanraFlag) and not HasActiveStatus(me,"INVISIBLE")
+        end,
+
+
+        function()
+            Sleep(1.0)
+            local AD
+            if(not GetFlag(retreatedToCellarFlag)) then
+                AD = disguisedAD
+            else
+                AD = cellarAD
+            end
+
+            mod.dialog.StartCheckedAutomatedDialog(
+                    AD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+            wanderActive = true
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_HagWandering_Timer") then
+            wanderActive = false
+        end
+    end
+end}

@@ -1,0 +1,67 @@
+game.states.LOW_SerialKiller_CivilianOutside = State{function ()
+
+    --------------------------------Modules--------------------------------
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Parameters--------------------------------
+
+    params.CharacterAD = {type = EParamType.String, help = "[[Character AD for the Civilian]]", required = false }
+    params.WanderPoint = {type = EParamType.String, help = "[[Trigger used as anchor for wandering]]", required = true }
+
+    --------------------------------Variables--------------------------------
+
+    local localAD = Dialog(params.CharacterAD)
+    local localWanderPoint = Entity(params.WanderPoint)
+
+    --------------------------------Nodes--------------------------------
+
+    nodes = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)
+        end
+    }
+
+    nodes.Wander = Proxy{
+        game.states.GEN_Wander,
+        params = {
+            wanderMin = 1,
+            wanderMax = 5,
+            sleepMin = 3,
+            sleepMax = 10,
+            trigger = params.WanderPoint
+        }
+    }
+
+    nodes.CombeBackToInitialPosition = Action {
+        function()
+            if mod.moveto.MoveToPoint(localWanderPoint, MovementSpeed.Walk, me) then
+                Sleep(15 + 10 * math.random())
+            else
+                SteerTo(localWanderPoint)
+                Sleep(20 + 10 * math.random())
+            end
+        end,
+        CanEnter = function()
+            return localWanderPoint ~= nil
+        end,
+    }
+
+    nodes.SayingAD = Action {
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                localAD,
+                {
+                    waitForCompletion = true
+                },
+                 me
+            )
+            Sleep(20 + 10 * math.random())
+        end,
+        CanEnter = function()
+            return localAD ~= nil
+        end,
+    }
+
+end
+}

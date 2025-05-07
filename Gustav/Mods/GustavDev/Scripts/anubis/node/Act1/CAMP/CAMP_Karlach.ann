@@ -1,0 +1,208 @@
+game.states.CAMP_Karlach = State{function ()
+
+    description = [[Karlach's camp behaviours (both day and night).]]
+
+    -- Flags
+    local itsNightTime = Flag("GLO_CAMP_NightMode_fb53edc2-9a89-4ad2-af83-20b5fe425cdd")
+
+    local outdoorCamps = {
+        Flag("CAMP_WLDMAIN_State_InRegion_3eb9118b-b60d-4fac-bb27-bfe63b852ff5"),
+        Flag("CAMP_SCLMAIN_State_InRegion_0dac89ce-ab4b-43a9-8a92-99c38bfbd64e"),
+        Flag("CAMP_SCLHAVEN_State_InRegion_a630f364-29b6-4a44-b56e-5adc43b5e20e"),
+        Flag("CAMP_INT_State_InRegion_6cbd54fb-ee55-46dc-a97f-2771cc0114d1"),
+        Flag("CAMP_BGOFarm_State_InRegion_f8e08e1f-932b-4b3f-8fd9-3917beba05bd")
+    }
+
+    local selectedBehaviour = nil
+    local ignoreReselectionUponInterrupt = false
+
+    self.OnEnter = function()
+        selectedBehaviour = nil
+        ignoreReselectionUponInterrupt = false
+    end
+
+    nodes.CAMP_Karlach = Selector{
+        function(nodes)
+            -- Check if the behaviour was interrupted and enter it again if still valid
+            if ignoreReselectionUponInterrupt == true and selectedBehaviour ~= nil and nodes.TryGetChild(selectedBehaviour).IsSelectable() then
+                ignoreReselectionUponInterrupt = false
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+
+            -- Always clear this, in case it was interrupted but was not able to select a node
+            ignoreReselectionUponInterrupt = false
+
+            -- Select new behaviour
+            local selectedNode = FindWeightedRandomSelectable(nodes, { -- Give higher priority to non-looping animations
+                [nodes.Proxy_PickingNails] = 3,
+                [nodes.Proxy_ChattingToSelf] = 3,
+                [nodes.Proxy_CombingHair] = 3,
+                [nodes.Proxy_Drinking] = 1,
+                [nodes.Proxy_WarmingUp] = 4,
+                [nodes.Proxy_Stretching] = 4,
+                [nodes.Proxy_SmellingArmpits] = 2,
+                [nodes.Proxy_Stargazing] = 3, -- Higher priority since can only happen outdoors
+            })
+            selectedBehaviour = selectedNode.Name
+            return nodes.TryGetChild(selectedBehaviour)
+        end,
+
+        Valid = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Fallback = Action {
+        function()
+            Sleep(3.0)
+        end
+    }
+
+    --------------------------------------------------------------
+    -- Shared animations between day/night
+    nodes.CAMP_Karlach.Proxy_PickingNails = Proxy{
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnimStart = "CUST_CleaningNails_01_Start_2e00ea8f-5bb2-4062-9bc8-08e35f9ae1de",
+            idleAnim = "CUST_CleaningNails_01_Loop_22d33fbc-f920-4c44-9488-afc6bd9e0e9c",
+            idleAnimEnd = "CUST_CleaningNails_01_End_1db1f13b-2a6a-4596-b1b7-6f03e7b69ca5",
+            loopIdleAnim = false,
+            idleAnimLength = 30.9,
+            idleAnimEndLength = 13.7
+        }
+    }
+
+    nodes.CAMP_Karlach.Proxy_ChattingToSelf = Proxy{
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnimStart = "CUST_ChattingToSelf_01_Start_38875758-268a-437e-9918-f44d2b352937",
+            idleAnim = "CUST_ChattingToSelf_01_Loop_7113440d-91bd-4f9d-af25-8bf66377e6de",
+            idleAnimEnd = "CUST_ChattingToSelf_01_End_831b73e5-4f40-47c9-94ea-37e77546e582",
+            loopIdleAnim = false,
+            idleAnimLength = 54.0,
+            idleAnimEndLength = 13.0
+        }
+    }
+
+    nodes.CAMP_Karlach.Proxy_CombingHair = Proxy{
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnimStart = "CUST_KarlachCombingHair_01_Start_f9bef3e3-b9fd-4109-b97d-db9e2679b718",
+            idleAnim = "CUST_KarlachCombingHair_01_Loop_306ac7b7-0198-4f5d-96da-0b79c213e98a",
+            idleAnimEnd = "CUST_KarlachCombingHair_01_End_87b9d414-f065-42de-b922-612fb7350182",
+            loopIdleAnim = false,
+            idleAnimLength = 40.9,
+            idleAnimEndLength = 15.0
+        }
+    }
+
+    nodes.CAMP_Karlach.Proxy_Drinking = Proxy{ -- Will only play when not part of the active party
+        game.states.CAMP_WorldBehaviourAtIdlePos,
+        params = {
+            behaviourPos = "CAMPPOS",
+            worldBehaviourDialog = "BHVR_WRLD_GLO_StandAndDrink_HUM_F_5d28ec9c-6114-59eb-00ea-ce6147a7149d"
+        }
+    }
+    --------------------------------------------------------------
+
+    --------------------------------------------------------------
+    -- Only day animations
+    nodes.CAMP_Karlach.Proxy_WarmingUp = Proxy{
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnimStart = "CUST_WarmingUp_01_Start_519d985b-0511-4d25-bd36-233f84d038b5",
+            idleAnim = "CUST_WarmingUp_01_Loop_8208eccb-2c27-4d87-bbe0-41d0b2760faf",
+            idleAnimEnd = "CUST_WarmingUp_01_End_ee20ab7f-ad08-454f-b9ef-1f64ee8aa956",
+            loopIdleAnim = false,
+            idleAnimLength = 25.5,
+            idleAnimEndLength = 13.4
+        },
+        CanEnter = function()
+            return not GetFlag(itsNightTime)
+        end
+    }
+    --------------------------------------------------------------
+
+    --------------------------------------------------------------
+    -- Only night animations
+    nodes.CAMP_Karlach.Proxy_Stretching = Proxy{
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnimStart = "CUST_KarlachStretching_01_Start_22f6ab93-9078-4314-ae4f-45117e7151e7",
+            idleAnim = "CUST_KarlachStretching_01_Loop_eefec33b-3617-4529-b400-340d5dd9fc40",
+            idleAnimEnd = "CUST_KarlachStretching_01_End_313611f4-b6ce-4a57-8357-f93840639d26",
+            loopIdleAnim = false,
+            idleAnimLength = 34.2,
+            idleAnimEndLength = 12.0
+        },
+        CanEnter = function()
+            return GetFlag(itsNightTime)
+        end
+    }
+
+
+    nodes.CAMP_Karlach.Proxy_SmellingArmpits = Proxy{
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnim = "CUST_SmellingArmpits_01_dd8f03df-9e30-467c-9cfd-ce349f81d1d6",
+            loopIdleAnim = false,
+        },
+        CanEnter = function()
+            return GetFlag(itsNightTime)
+        end
+    }
+
+    nodes.CAMP_Karlach.Proxy_Stargazing = Proxy{
+        game.states.CAMP_Idle,
+        params = {
+            behaviourPos = "CAMPPOS",
+            idleAnimStart = "CUST_Stargazing_01_Start_d9e8e590-0e24-4a1b-a5e9-6036f6287d65",
+            idleAnim = "CUST_Stargazing_01_Loop_355a7a54-dbff-4bde-a203-a7c107917631",
+            idleAnimEnd = "CUST_Stargazing_01_End_095b0a1e-bdce-4940-8d44-850b42cf1b02"
+        },
+        CanEnter = function()
+            if GetFlag(itsNightTime) then  -- Check for night time
+                for _, camp in ipairs(outdoorCamps) do
+                    if GetFlag(camp, me) then
+                        return true -- If she is in an outdoors camp
+                    end
+                end
+                return false
+            else
+                return false
+            end
+        end
+    }
+    --------------------------------------------------------------
+
+    -- Clear current behaviour on day<->night transition
+    events.FlagSet = function(e)
+        if e.Flag == itsNightTime.Guid then
+            Interrupt()
+        end
+    end
+
+    events.FlagCleared = function(e)
+        if e.Flag == itsNightTime.Guid then
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if (e.TargetEntity == me) then
+            if e.Event == "InterruptCampBehaviour" then
+                selectedBehaviour = nil
+                Interrupt()
+            elseif e.Event == "InterruptCampBehaviour_WithoutReselection" then
+                Interrupt()
+            end
+        end
+    end
+end
+}

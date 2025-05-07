@@ -1,0 +1,109 @@
+game.states.LOW_BlushingMermaid_Quenora = State{function()
+
+    modules = {"shared.dialog"}
+
+    local noHagAD = Dialog("LOW_BlushingMermaid_AD_Quenora_NoHag_f67f15a7-8dcb-56ea-709c-75125fdeab48")
+    local postHagAD = Dialog("LOW_BlushingMermaid_AD_Quenora_PostHag_e850c25e-893d-5c76-f294-7cc65312a3a7")
+    local maskedAD = Dialog("LOW_BlushingMermaid_AD_MaskedQuenora_IdleDigging_d3e1f73c-7697-9342-141c-adbb5b91f53f")
+
+    local civFaction = Guid("ACT3_LOW_BlushingMermaid_Civilians_c0d4b9de-5884-41c1-aab8-1fbce6991129")
+    local maskedFaction = Guid("GLO_HagMaskedVictims_208ebac7-6954-4087-802f-6145cce161c0")
+
+    local wanderTrigger = "S_LOW_BlushingMermaid_CaptainsRoom_WanderTrigger_cd55e6e2-20b8-423a-8a06-5c181045d462"
+    local maskedWanderTrigger = "S_LOW_BlushingMermaid_MaskedVictims_WanderTrigger_9a1efdf6-b644-420f-afd2-a37d3aaf7f62"
+
+    local hagDefeatedFlag = Flag("HAG_Hag_State_HagDefeated_7a1acad0-589f-ae02-f712-f0d24080d720")
+    local quenoraSavedFlag = Flag("LOW_BlushingMermaid_State_QuenoraIsSaved_2d5e3ae7-12b3-4dae-94c6-ec9acfceb61e")
+    local savedQuenoraBackInPub = Flag("LOW_BlushingMermaid_State_SavedQuenoraBackInPub_ac5b3faf-1d38-4521-a1db-c81c70aead36")
+
+    local unmaskedAnim = Animation("CUST_ArmsCrossed_01_Loop_e6c49668-99b1-41d6-8daa-7ed6864b4e71")
+
+    local wanderActive = true
+    local isMasked = false
+
+    nodes.PostUnmasked = Action {
+        function()
+            PlayAnimation(unmaskedAnim,false,true)
+            Sleep(math.random(3.0,6.0))
+        end,
+
+        Valid = function()
+            return GetFlag(quenoraSavedFlag) and not GetFlag(savedQuenoraBackInPub)
+        end
+    }
+
+    nodes.Wandering = Proxy {
+        OnEnter = function()
+            StartTimer(me,"LOW_QuenoraWandering_Timer",math.random(10.0,15.0),0)
+        end,
+
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 6,
+            sleepMin = 3,
+            trigger = wanderTrigger,
+            wanderMax = 10,
+            wanderMin = 5
+        },
+        
+        Valid = function()
+            return wanderActive and not isMasked
+        end
+    }
+
+    nodes.MaskedWandering = Proxy {
+        OnEnter = function()
+            StartTimer(me,"LOW_QuenoraWandering_Timer",math.random(10.0,15.0),0)
+        end,
+
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 6,
+            sleepMin = 3,
+            trigger = maskedWanderTrigger,
+            wanderMax = 10,
+            wanderMin = 5
+        },
+
+        Valid = function()
+            return wanderActive
+        end
+    }
+
+    nodes.idleAD = Action {
+        function()
+            Sleep(1.0)
+            local AD
+            if(not GetFlag(hagDefeatedFlag) and not GetFlag(quenoraSavedFlag)) then
+                AD = noHagAD
+            elseif(GetFlag(hagDefeatedFlag) and not GetFlag(quenoraSavedFlag)) then
+                AD = maskedAD
+            elseif(GetFlag(quenoraSavedFlag)) then
+                AD = postHagAD
+            end
+
+            mod.dialog.StartCheckedAutomatedDialog(
+                    AD,
+                    {
+                        waitForCompletion = true
+                    },
+                    me
+                )
+            wanderActive = true
+        end
+    }
+
+    events.BaseFactionChanged = function(e)
+        if(e.NewFaction == maskedFaction) then
+            isMasked = true
+        elseif(e.NewFaction == civFaction) then
+            isMasked = false
+        end
+    end
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_QuenoraWandering_Timer") then
+            wanderActive = false
+        end
+    end
+end}

@@ -1,0 +1,298 @@
+game.states.EPI_Minthara = State {function()
+
+    modules = {"shared.moveto", "shared.util", "shared.items", "shared.math", "shared.dialog"}
+
+    local atStandingIdlingLocation = false
+    local atMainTable = false
+    local isInTableAnimation = false
+    local wanderPoint = nil
+    local wanderingPartyTriggers = {}
+    local gotFoodRecently = -6
+    local restedRecently = -6
+    local readyToWander = false
+    local arrivalComplete = false
+
+    local inEpilogueFlag = Flag("EPI_Epilogue_State_MintharaPresent_62daf94d-8677-4ce8-8cd4-f50afadb0017")
+
+    local feetUpOnTableTrigger = Entity("S_EPI_MintharaLegsUp_f56d246a-75a2-43a4-9023-10ff0dec9ea7")
+    local feetUpOnTableChair = Entity("FUR_GEN_Chair_Wood_Poor_A_000_b5742e50-2f93-40f9-86bd-dd78055a7d6b")
+    local feetUpOnTableTable = Entity("FUR_GEN_Table_Wood_Poor_A_Indestructible_002_1348fc95-feed-450e-a91c-cc00424fdd60")
+
+    local nearRiverTrigger = Entity("S_EPI_MintharaNearRiver_c9b9b1fa-1709-466a-9e1a-d2fafae024c0")
+    local observingTableTrigger = Entity("S_EPI_MintharaObservingTable_3c7a6c00-cbab-4761-93e1-8532066064c3")
+    local watchingDanceFloorTrigger01 = Entity("S_EPI_MintharaWatchingDanceFloor01_39aa83c6-9638-4982-9d04-26e12422062f")
+    local watchingDanceFloorTrigger02 = Entity("S_EPI_MintharaWatchingDanceFloor02_e7c6b33e-3eef-41bb-9b6c-05b6a55cc445")
+    local watchingDanceFloorTrigger03 = Entity("S_EPI_MintharaWatchingDanceFloor03_9334442f-aba8-4975-bfd9-0a3fdfd681d2")
+    local gettingFoodTrigger = Entity("S_EPI_MintharaEatingPoint a5f3a1d5-2ecd-4570-8eba-ea7c88c88d6a")
+    
+    local fruitPlatter = Entity("FUR_GEN_Table_Wood_Poor_A_Indestructible_002_1348fc95-feed-450e-a91c-cc00424fdd60")
+    local danceFloorSteerTo = Entity("S_EPI_MintharaDanceFloorLookAtPoint_d62c5a20-c71c-45e7-8ea9-ab58854e7eba")
+    local foodTableSteerTo = Entity("FUR_GEN_Table_Wood_Poor_A_Indestructible_001_3a44e870-9c18-440d-a3b7-a7144424cbf8")
+
+    local feetUpOnTableAnimation = Animation("CUST_EPI_Minthara_EnjoyingParty_01_f2e2145e-39b6-4038-aa77-9157f69a9204")
+    local EatingAnimation = Animation("CUST_EPI_Minthara_Eating_01_ffcf5fd1-862b-4765-8645-3cbc0f96432c")
+
+    local drinkingIdleAnimation = Animation("CUST_EPI_Minthara_Drinking_01_09f84725-67ec-4680-b415-b0c2b176ac55")
+    local boredIdleAnimation = Animation("CUST_EPI_Minthara_Bored_01_8fdbac5c-f4a9-4d25-b7ea-bbbae6147753")
+    local lookingAroundIdleAnimation = Animation("CUST_EPI_Minthara_LookAround_01_e957120e-e00d-4a47-8c7b-f58e12f83f7f")
+    local relaxedIdleAnimation = Animation("CUST_EPI_Minthara_Relaxed_01_b49ea08e-1fa9-48f1-9799-d3c0f66afb0c")
+
+    local idleAD = Dialog("EPI_Epilogue_AD_IdleMinthara_a03f2bf6-b014-84c4-7f75-86ad32ae1a00")
+    local foodAndWineADFlag = Flag("EPI_Epilogue_MintharaAccustomedToSunFood_613c5057-3ce3-8253-5eb2-2b176a566e3f")
+    local gatheringTargetADFlag = Flag("EPI_Epilogue_MintharaWantsForUlaverWine_ad6b063c-3c84-d051-462b-cc2f282412c8")
+    local neverInvitedADFlag = Flag("EPI_Epilogue_MintharaGatheringHeroesTarget_a80dfc6b-aa90-d440-007b-d49d91c1fa80")
+    local tableSpotIsBusy = Flag("EPI_Origins_State_OppositeMiddleTableSpotOccupied_6b3996d9-2db1-4200-9018-05b33122c4df")
+
+    self.OnInit = function()
+        table.insert(wanderingPartyTriggers, nearRiverTrigger)
+        table.insert(wanderingPartyTriggers, observingTableTrigger)
+        table.insert(wanderingPartyTriggers, watchingDanceFloorTrigger01)
+        table.insert(wanderingPartyTriggers, watchingDanceFloorTrigger02)
+        table.insert(wanderingPartyTriggers, watchingDanceFloorTrigger03)
+        wanderPoint = wanderingPartyTriggers[math.random(#wanderingPartyTriggers)]
+    end
+    
+    helpers.CheckReadyToWander = function()
+        if (gotFoodRecently >= 0 or restedRecently >= 0) then
+            readyToWander = true
+        else
+            readyToWander = false
+        end
+    end
+
+    nodes.States_ArrivedAtEpilogue = Action{
+        CanEnter = function()
+            return GetFlag(inEpilogueFlag)
+        end,
+        function()
+            wanderPoint = feetUpOnTableTrigger
+            mod.moveto.MoveToPoint(wanderPoint, MovementSpeed.Stroll, me, 0.5, false)
+            arrivalComplete = true
+            wanderPoint = wanderingPartyTriggers[math.random(#wanderingPartyTriggers)]
+        end,
+        Valid = function()
+            return not arrivalComplete
+        end
+    }
+
+    nodes.MintharaState = Selector{
+        CanEnter = function()
+            return GetFlag(inEpilogueFlag) and arrivalComplete
+        end,
+        function(nodes)
+            DebugText(me, "Previous Wander: [1]", tostring(readyToWander))
+            helpers.CheckReadyToWander()
+            DebugText(me, "New Wander: [1]", tostring(readyToWander))
+            return FindRandomSelectable(nodes)
+        end
+    }
+
+    nodes.MintharaState.StandingIdles = Selector{
+        CanEnter = function()
+            return readyToWander
+        end,
+        function(nodes)
+            return FindWeightedRandomSelectable(nodes, {
+                [nodes.Bored] = 1,
+                [nodes.Drinking] = 4,
+                [nodes.LookingAround] = 4,
+                [nodes.WanderTheParty] = 3,
+            })
+        end,
+        Valid = function()
+            return readyToWander
+        end
+    }
+
+    nodes.MintharaState.NearTable = Selector{
+        CanEnter = function()
+            return not readyToWander
+        end,
+        function(nodes)
+            return FindWeightedRandomSelectable(nodes, {
+                [nodes.Eating] = gotFoodRecently * -1,
+                [nodes.FeetOnTable] = restedRecently * -1,
+            })
+        end,
+        Valid = function()
+            return not readyToWander
+        end
+    }
+
+    nodes.MintharaState.NearTable.Eating = Action{
+        CanEnter = function()
+            return gotFoodRecently <= 0 and not GetFlag(tableSpotIsBusy)
+        end,
+        function()
+            SetFlag(tableSpotIsBusy)
+            mod.moveto.MoveToPoint(gettingFoodTrigger, MovementSpeed.Stroll, me, 0.1, false)
+            SteerTo(fruitPlatter, false, 5.0)
+            if foodAndWineADFlag or gatheringTargetADFlag or neverInvitedADFlag then
+                ClearFlag(gatheringTargetADFlag)
+                ClearFlag(neverInvitedADFlag)
+                ClearFlag(foodAndWineADFlag)
+                mod.dialog.StartCheckedAutomatedDialog(idleAD, {waitForCompletion = false}, me)
+            else
+                mod.dialog.StartCheckedAutomatedDialog(idleAD, {waitForCompletion = false}, me)
+            end
+            try
+                PlayAnimation(EatingAnimation, true, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Eating Anim failed to play")
+            end
+            gotFoodRecently = 3
+            mod.moveto.MoveToPoint(observingTableTrigger, MovementSpeed.Stroll, me, 0.1, false)
+            DebugText(me, tostring(gotFoodRecently))
+        end,
+        Valid = function()
+            return true
+        end,
+        OnInterrupt = function()
+            ClearFlag(tableSpotIsBusy)
+        end,
+        OnLeave = function()
+            ClearFlag(tableSpotIsBusy)
+        end
+    }
+
+    nodes.MintharaState.NearTable.FeetOnTable = Action{
+        CanEnter = function()
+            return not mod.items.SafeIsDestroyed(feetUpOnTableChair) and restedRecently <= 0
+        end,
+        function()
+            mod.moveto.MoveToPoint(feetUpOnTableTrigger, MovementSpeed.Stroll, me, 0.5, false)
+            SteerTo(feetUpOnTableChair, false, 5.0)
+            SitOnEntity(me, feetUpOnTableChair)
+            try
+                PlayAnimation(feetUpOnTableAnimation, true, false)
+            catch e if ls.CheckType(e, error.PlayAnimationFailed) then
+                DebugText(me, "Legs Up failed to play")
+            end
+            mod.util.SleepRandom(3.0, 8.0)
+            restedRecently = 4
+            mod.moveto.MoveToPoint(feetUpOnTableTrigger, MovementSpeed.Stroll, me, 0.1, false)
+            DebugText(me, tostring(restedRecently))
+        end,
+        Valid = function()
+            return true
+        end
+    }
+
+    nodes.MintharaState.StandingIdles.WanderTheParty = Action{
+        CanEnter = function()
+            return wanderPoint ~= nil
+        end,
+        function()
+            wanderPoint = wanderingPartyTriggers[math.random(#wanderingPartyTriggers)]
+            atStandingIdlingLocation = mod.moveto.MoveToPoint(wanderPoint, MovementSpeed.Stroll, me)
+            restedRecently = restedRecently - 1
+            gotFoodRecently = gotFoodRecently - 1
+        end,
+        Valid = function()
+            return not atStandingIdlingLocation
+        end
+    }
+
+    nodes.MintharaState.StandingIdles.Drinking = Action{
+        CanEnter = function()
+            return GetFlag(inEpilogueFlag)
+        end,
+        function()
+            if wanderPoint.Trigger == watchingDanceFloorTrigger01.Trigger or wanderPoint.Trigger == watchingDanceFloorTrigger02.Trigger or wanderPoint.Trigger == watchingDanceFloorTrigger03.Trigger then
+                SteerTo(danceFloorSteerTo, false, 5.0)
+            end
+            if wanderPoint.Trigger == observingTableTrigger.Trigger then
+                SteerTo(foodTableSteerTo, false, 5.0)
+            end
+            if foodAndWineADFlag and not (gatheringTargetADFlag and neverInvitedADFlag) then
+                mod.dialog.StartCheckedAutomatedDialog(idleAD, {waitForCompletion = false}, me)
+            elseif foodAndWineADFlag and (gatheringTargetADFlag or neverInvitedADFlag) then
+                ClearFlag(neverInvitedADFlag)
+                ClearFlag(gatheringTargetADFlag)
+                mod.dialog.StartCheckedAutomatedDialog(idleAD, {waitForCompletion = false}, me)
+            else
+                SetFlag(foodAndWineADFlag)
+                mod.dialog.StartCheckedAutomatedDialog(idleAD, {waitForCompletion = false}, me)
+            end
+            PlayAnimation(drinkingIdleAnimation, true, false)
+            mod.util.SleepRandom(3.0, 8.0)
+            restedRecently = restedRecently - 1
+            gotFoodRecently = gotFoodRecently - 1
+        end,
+        OnLeave = function()
+            atStandingIdlingLocation = false
+        end
+    }
+
+    nodes.MintharaState.StandingIdles.Bored = Action{
+        CanEnter = function()
+            return GetFlag(inEpilogueFlag)
+        end,
+        function()
+            DebugText(me, tostring(wanderPoint.Trigger))
+            if wanderPoint.Trigger == watchingDanceFloorTrigger01.Trigger or wanderPoint.Trigger == watchingDanceFloorTrigger02.Trigger or wanderPoint.Trigger == watchingDanceFloorTrigger03.Trigger then
+                SteerTo(danceFloorSteerTo, false, 5.0)
+            end
+            if wanderPoint.Trigger == observingTableTrigger.Trigger then
+                SteerTo(foodTableSteerTo, false, 5.0)
+            end
+            if gatheringTargetADFlag or neverInvitedADFlag then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(idleAD, {minDelay = 20.0, waitForCompletion = false}, me)
+            else
+                SetFlag(gatheringTargetADFlag)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(idleAD, {minDelay = 20.0, waitForCompletion = false}, me)
+            end
+            PlayAnimation(boredIdleAnimation, true, false)
+            mod.util.SleepRandom(3.0, 8.0)
+            restedRecently = restedRecently - 1
+            gotFoodRecently = gotFoodRecently - 1
+        end,
+        OnLeave = function()
+            atStandingIdlingLocation = false
+        end
+    }
+
+    nodes.MintharaState.StandingIdles.LookingAround = Action{
+        CanEnter = function()
+            return GetFlag(inEpilogueFlag)
+        end,
+        function()
+            if wanderPoint.Trigger == watchingDanceFloorTrigger01.Trigger or wanderPoint.Trigger == watchingDanceFloorTrigger02.Trigger or wanderPoint.Trigger == watchingDanceFloorTrigger03.Trigger then
+                SteerTo(danceFloorSteerTo, false, 5.0)
+            end
+            if wanderPoint.Trigger == observingTableTrigger.Trigger then
+                SteerTo(foodTableSteerTo, false, 5.0)
+            end
+            if not foodAndWineADFlag and (gatheringTargetADFlag or neverInvitedADFlag) then
+                mod.dialog.StartCheckedAutomatedDialog(idleAD, {minDelay = 20.0, waitForCompletion = false}, me)
+            else
+                SetFlag(neverInvitedADFlag)
+                mod.dialog.StartCheckedAutomatedDialog(idleAD, {waitForCompletion = false}, me)
+            end
+            PlayAnimation(lookingAroundIdleAnimation, true, false)
+            mod.util.SleepRandom(3.0, 8.0)
+            restedRecently = restedRecently - 1
+            gotFoodRecently = gotFoodRecently - 1
+        end,
+        OnLeave = function()
+            atStandingIdlingLocation = false
+        end
+    }
+
+    nodes.States_Fallback = Action{
+        function()
+            Sleep(5.0)
+            local newWanderPoint = wanderPoint
+            while wanderPoint == newWanderPoint do
+                if wanderPoint == newWanderPoint then
+                    newWanderPoint = wanderingPartyTriggers[math.random(#wanderingPartyTriggers)]
+                end
+            end
+        end,
+        Valid = function()
+            return newWanderPoint ~= wanderPoint
+        end
+    }
+
+end
+}

@@ -1,0 +1,128 @@
+game.states.CRE_Hatchery_Expeditioner = State{function()
+    description = [[Stub ann for expeditioner]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    ------------------------------------------------ 
+    local hasSeen = Flag("CRE_Expeditioner_State_HasSeen_5dec7cce-ab2a-4fe0-b520-ccf513861b25")
+    local hasCompleted = Flag("CRE_Expeditioner_State_QuestCompleted_900406ae-4449-49f8-aa24-deba1dc58cef")
+
+    local defaultPosition = Entity("S_CRE_Expeditioner_HangoutTrigger_b07b81b6-27fc-4774-a3d0-3c2241e91b0a")
+    local packingPosition = Entity("S_CRE_Expeditioner_ByBagsStrigger_b7ca44ad-b42f-4035-8c81-b505e0f3a26e")
+
+    local waitingStart = Animation("CUST_Bored_01_Start_8a7d1eef-f09a-4520-b277-37ddcf5aebb8")
+    local waitingLoop = Animation("CUST_Bored_01_Loop_23588ba8-fafb-438c-9bc5-660ff6650aef")
+    local waitingEnd = Animation("CUST_Bored_01_End_80547143-a038-449f-bc38-993e216b804a")
+
+    local searchingAnim = Animation("CUST_BanditLookingAtHole_01_5aa2427f-b8ab-4213-ae48-57c10a619239")
+
+    local readingStart = Animation("CUST_Reading_Book_01_Start_16107c0f-dbf6-47c4-9596-4c8cca8a683d")
+    local readingLoop = Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716")
+    local readingEnd = Animation("CUST_Reading_Book_01_End_6fda7690-15e7-4668-acc0-1025692de049")
+
+    local scaredStart = Animation("CUST_Cower_01_Start_3fa36140-1987-4837-8a1f-8c7b864c2328")
+    local scaredLoop = Animation("CUST_Cower_01_Loop_961ee06c-6131-4347-a974-4f7186c988f3")
+    local scaredEnd = Animation("CUST_Cower_01_End_124fa693-d2ee-4727-b1db-68c15f5bacb2")
+
+    local crecheDestroyed = Flag("CRE_Lance_Event_Exploded_f7d93dd1-c30e-4ef2-87c0-0cada12f180d")
+    local reactedToCrecheDestroyed = Flag("CRE_Expeditioner_State_ReactedToExplosion_af82ae27-5ff0-40a4-9069-5ca578050d75")
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- 
+
+    nodes.Action_PreGreeting = Action{
+        function()
+            if mod.moveto.MoveToPoint(defaultPosition, MovementSpeed.Stroll, me, 0.5) then
+                DebugText(me, "Reading animation")
+                PlayLoopingAnimation(readingStart,{readingLoop}, readingEnd)
+            end
+            Sleep(10.0)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return not GetFlag(hasSeen)
+        end
+    }
+
+    nodes.Action_WatchingExplosion = Action{
+        function()
+            if mod.moveto.MoveToPoint(defaultPosition, MovementSpeed.Run, me, 0.5) then
+                DebugText(me, "Scared/surprised animation")
+                PlayLoopingAnimation(scaredStart,{scaredLoop}, scaredEnd)
+            end
+            Sleep(10.0)
+        end,
+        
+    
+    -- Potential TODO: Add flag check for lance firing.
+       Valid = function()
+           return GetFlag(crecheDestroyed) and not GetFlag(reactedToCrecheDestroyed)
+       end
+    }
+
+    nodes.Action_PackingToLeave = Action{
+        function()
+            if mod.moveto.MoveToPoint(packingPosition, MovementSpeed.Stroll, me, 0.5) then
+                DebugText(me, "searching animation")
+                PlayLoopingAnimation(nil,{searchingAnim}, nil)
+            end
+            Sleep(10.0)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return GetFlag(hasCompleted) or GetFlag(reactedToCrecheDestroyed)
+        end
+    }
+
+
+
+    nodes.Action_HangingAround = Action{
+        function()
+            if mod.moveto.MoveToPoint(defaultPosition, MovementSpeed.Stroll, me, 0.5) then
+                DebugText(me, "Waiting animation")
+                PlayLoopingAnimation(nil,{waitingLoop}, nil)
+            end
+            WaitForInterrupt();
+            Sleep(10.0)
+        end,
+
+
+        OnLeave = function()
+            StopAnimation(me)
+        end,
+
+        Valid = function()
+            return not GetFlag(hasCompleted)
+        end
+    }
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

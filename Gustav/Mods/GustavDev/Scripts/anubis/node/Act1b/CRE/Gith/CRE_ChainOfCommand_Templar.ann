@@ -1,0 +1,113 @@
+game.states.CRE_ChainOfCommand_Templar = State 
+{
+    function()
+    description = [[Templar's behaviours]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local talkingToCaptainFlag = Flag("CRE_ChainOfCommand_State_CaptainTalkingToTemplar_0b2b9e15-d9d4-4977-9cb9-bc81c63aa122")
+    local talkingToCaptainPos = Entity("S_CRE_TemplarTalkingToCaptainPos 8b263c50-136b-4210-8327-c64dc6399e8d")
+    local securityOfficePos = Entity("S_CRE_TemplarSecurityOfficePos 4c46984d-d512-4b35-9df9-9c7ed50c49c4")
+    
+    local astralPrisonFlag = Flag("CRE_AstralPrison_State_AstralPrisonWasEntered_2203e87a-6c7b-4aba-b2e8-e22ed96b9762")
+    local hostilePos = Entity("S_CRE_TemplarHostilePos_34b2a7e6-5743-48d8-aa53-26850a5e3e83")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    nodes.Action_HostileInSecurityOffice = Action{
+        function()
+            if IsInDangerousSurfaceFor(hostilePos, me.Character) then
+                SteerTo(hostilePos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(hostilePos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(hostilePos)
+                Sleep(2.0)
+                return false
+            end
+        end,
+
+        Valid = function()
+            return GetFlag(astralPrisonFlag)
+        end
+    }
+
+    -- Action
+    -- Players can't disturb the Templar while this is ongoing, as he is behind a barrier and behind a cutscene that starts as soon as players enter the room
+    nodes.Action_TalkingToCaptain = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(talkingToCaptainFlag)
+        end
+    }
+
+    -- Action
+    -- The templar initially goes to the security office in Osiris with a PROC_DisappearOutOfSightTo followed by PROC_AppearOutOfSightTo
+    -- This logic is for potential displacements afterwards
+    nodes.Action_GoingToSecurityOffice = Action
+    {
+        function ()
+            mod.util.SleepRandom (1.0,2.0)
+            if IsInDangerousSurfaceFor(securityOfficePos, me.Character) then
+                SteerTo(securityOfficePos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(securityOfficePos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(securityOfficePos)
+                Sleep(2.0)
+                return false
+            end
+        end,
+
+        Valid = function()
+            return not GetFlag(talkingToCaptainFlag) and
+            not GetFlag(astralPrisonFlag) and
+            GetDistanceTo(me, securityOfficePos) > 1.0
+        end
+    }
+
+    -- Action
+    nodes.Action_AtSecurityOffice = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not GetFlag(talkingToCaptainFlag) and
+            not GetFlag(astralPrisonFlag) and
+            GetDistanceTo(me, securityOfficePos) <= 1.0
+        end
+    }
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}

@@ -1,0 +1,477 @@
+game.states.EPI_Wyll = State{
+    function ()
+        modules = {"shared.moveto", "shared.util", "shared.items", "shared.math", "shared.dialog"}
+    
+        description = [[Wyll's behaviour for Act 3 EPI.]]
+        --------------------------------------------------------------------------------------------------------------------
+        -- Local params
+
+        -- State flags
+        local dukeWyll = Flag("GLO_Wyll_State_GrandDuke_0e223e4d-be63-89f4-380f-5cc755817abd")
+        local inAvernusWyll = Flag("ORI_Wyll_State_FollowKarlachToHells_e91a4ad5-e2f5-b336-f583-9f480ee7544e")
+        local isDevil = Flag("ORI_Wyll_State_IsDevil_f83eee79-271b-4044-947a-d8eb699d734a")
+        local musicPlayingFlag = Flag("EPI_Epilogue_DivineBard_State_PlayingSong_262657bd-c979-4994-bb16-8266a3d2c146")
+        local wyllDancingActiveFlag = Flag("EPI_Wyll_State_CurrentlyDancing_38f96073-bc87-45b5-a60f-c04e90cf90c1")
+
+        -- Internal variables
+        local selectedBehaviour = nil
+        local tiredness = 1 -- Wyll gets tired when he dances and needs some time to recover before he can dance again
+        local generalADTimeout = 0 -- Wyll says an AD once for every third state node he enters
+        local clappingTimeout = false
+        local wantToClap = false
+        local clappingReadyToStop = false
+
+        local suitableTracks = {Flag("EPI_Epilogue_State_DivineBardTrack001_14fa0523-1e89-f332-5418-44784c5cde7c"), 
+                                Flag("EPI_Epilogue_State_DivineBardTrack002_9deefcc1-3c78-761a-5998-e0d0df9b4e65"), 
+                                Flag("EPI_Epilogue_State_DivineBardTrack003_a92b0fb8-d4a7-8e5c-b840-d4b630d5c049")}
+        local otherTracks =    {Flag("EPI_Epilogue_State_DivineBardTrack004_5dc969ee-9020-daab-6698-3445d6ed5ddb"), 
+                                Flag("EPI_Epilogue_State_DivineBardTrack005_1b328c9b-64f8-a5db-d2da-f058ebc12797")}
+
+        local currentDrinkingPos = nil
+        local currentAvernusSitAndDrinkPos = nil
+        local currentEnjoyMusicPos = nil
+        local currentReadingPos = nil
+        
+        -- Dialogs
+        local idleAD = Dialog("EPI_Epilogue_AD_IdleWyll_365039e4-2eef-27a8-d092-08b843a894b5")
+
+        -- Animations
+        -- Duration: 16.0666676
+        local avernusDanceStart = Animation("CUST_EPI_AvernusWyll_Dance_01_Start_b33d650a-d3e3-4d46-b346-2cf54b1e7dc7")
+        local avernusDanceLoop = Animation("CUST_EPI_AvernusWyll_Dance_01_Loop_9dab7359-b7c6-468f-917d-d2fe76be0829")
+        local avernusDanceEnd = Animation("CUST_EPI_AvernusWyll_Dance_01_End_41bae6d7-3a5f-4849-a8c9-807f2569b5bb")
+        local avernusDanceTriggers = {Entity("S_EPI_Wyll_DancingPos01_c05c4cc9-f4dc-443b-8fb7-91bd448df9d3"),
+                                      Entity("S_EPI_Wyll_DancingPos02_ede438d2-6f4e-482f-9b5b-39fc17977ab3"),
+                                      Entity("S_EPI_Wyll_DancingPos03_f75b5120-4b83-4edc-819e-e673302a03e7")}
+
+        -- Duration: 33.26677
+        local avernusSitAndDrinkStart = Animation("CUST_EPI_AvernusWyll_SittingOnFloorDrink_01_Start_7d3c036e-16aa-4f01-80b8-d4e0ccf34892")
+        local avernusSitAndDrinkLoop = Animation("CUST_EPI_AvernusWyll_SittingOnFloorDrink_01_Loop_40d59dd0-1364-46c2-ba02-e0b4f52bad98")
+        local avernusSitAndDrinkEnd = Animation("CUST_EPI_AvernusWyll_SittingOnFloorDrink_01_End_59e2574a-75dd-4476-9512-bcaa3ecc68fa")
+        local avernusSitAndDrinkTriggers = {Entity("S_EPI_Wyll_InsideTent_09058ae1-f956-4dac-b267-838bfde37b13"), 
+                                            Entity("S_EPI_Wyll_NearRiver_e5d97a42-6ae3-4e31-baaf-04404a8b7783"),
+                                            Entity("S_EPI_Wyll_NearBeach_54ce5911-efd2-488d-8842-57297305b603")}
+
+        local avernusStuffingBehaviour = Dialog("BHVR_WRLD_EPI_Epilogue_WyllGettingFood_71164a64-ca9c-26b5-2cd2-ec1ac3a9e4c9")
+        local avernusStuffingTrigger = Entity("BHVR_WRLD_EPI_Epilogue_WyllGettingFood_SceneTrigger_93ccf805-c513-4f89-a083-92792ad61cc1")
+        local foodStationOccupiedFlag = Flag("EPI_Origins_State_FruitStationOccupied_7bf59d9d-857f-4169-bdf7-d1c39639661e")
+                                    
+        -- Duration: 27.6333351
+        local dukeEnjoyMusicStart = Animation("CUST_EPI_DukeWyll_EnjoyingTheMusic_01_Start_53a8a375-7270-4e3d-ad9c-5a319c10085f")
+        local dukeEnjoyMusicLoop = Animation("CUST_EPI_DukeWyll_EnjoyingTheMusic_01_Loop_63221d04-2ae3-4d7e-a626-a86c0c717222")
+        local dukeEnjoyMusicEnd = Animation("CUST_EPI_DukeWyll_EnjoyingTheMusic_01_End_c0c4f4d0-b7df-4500-8313-77b30a1a7b2a")
+        local dukeEnjoyMusicTriggers = {Entity("S_EPI_Wyll_InsideTent_09058ae1-f956-4dac-b267-838bfde37b13"), 
+                                        Entity("S_EPI_Wyll_NearMinsc_64c9ae2a-d86d-470d-bbd6-e195d65c3c5e"), 
+                                        Entity("S_EPI_Wyll_NearCampfire_0329bb32-2f84-4f0d-b818-e9efc69a54ca"), 
+                                        Entity("S_EPI_Wyll_NearBard_4ff30b7a-2610-405d-89dd-d715089d5c04")}
+
+        -- Duration: 16.7
+        local dukeReadingStart = Animation("CUST_EPI_DukeWyll_Reading_01_Start_65522081-2663-4da3-9966-fa5f9832dde2")
+        local dukeReadingLoop = Animation("CUST_EPI_DukeWyll_Reading_01_Loop_e7047375-2edf-4c19-a408-e1f507020e78")
+        local dukeReadingEnd = Animation("CUST_EPI_DukeWyll_Reading_01_End_88df4a29-cd31-411e-9b40-b8979647a5f4")
+        local dukeReadingTriggers = {Entity("S_EPI_Wyll_InsideTent_09058ae1-f956-4dac-b267-838bfde37b13"), 
+                                     Entity("S_EPI_Wyll_NearRiver_e5d97a42-6ae3-4e31-baaf-04404a8b7783")}
+
+        -- Duration: 15.833334
+        local clappingStart = Animation("CUST_EPI_Wyll_Clap_01_Start_ae069332-a374-47d7-93c4-c7347b75ba73")
+        local clappingLoop = Animation("CUST_EPI_Wyll_Clap_01_Loop_923fd6d1-7ff6-4cdd-ae46-7ae0d1ee043b")
+        local clappingEnd = Animation("CUST_EPI_Wyll_Clap_01_End_e6bee909-54ea-40bf-9a66-c29ade4c60c7")
+        local clappingTriggers = {Entity("S_EPI_Wyll_NearBard_4ff30b7a-2610-405d-89dd-d715089d5c04"), 
+                                  Entity("S_EPI_Wyll_NearCampfire_0329bb32-2f84-4f0d-b818-e9efc69a54ca"),
+                                  Entity("S_EPI_Wyll_NearMinsc_64c9ae2a-d86d-470d-bbd6-e195d65c3c5e"), 
+                                  Entity("S_EPI_Wyll_InsideTent_09058ae1-f956-4dac-b267-838bfde37b13")}
+
+        -- Duration: 21.1666679
+        local drinkingStart = Animation("CUST_EPI_Wyll_Drinking_01_Start_eb9184ef-7488-4c1a-8d0e-4975c1a79493")
+        local drinkingLoop = Animation("CUST_EPI_Wyll_Drinking_01_Loop_3dd86f4a-a63a-4e90-92d5-de5a14da6474")
+        local drinkingEnd = Animation("CUST_EPI_Wyll_Drinking_01_End_65ad6956-53b4-4eb0-88ba-ada3548be6d1")
+        local drinkingTriggers = {Entity("S_EPI_Wyll_InsideTent_09058ae1-f956-4dac-b267-838bfde37b13"), 
+                                  Entity("S_EPI_Wyll_NearRiver_e5d97a42-6ae3-4e31-baaf-04404a8b7783"),
+                                  Entity("S_EPI_Wyll_NearCampfire_0329bb32-2f84-4f0d-b818-e9efc69a54ca"), 
+                                  Entity("S_EPI_Wyll_NearMinsc_64c9ae2a-d86d-470d-bbd6-e195d65c3c5e")}
+
+        local sitAndDrinkBehaviour = Dialog("BHVR_WRLD_EPI_Wyll_SitAndDrink_aca76102-8ce2-8770-9abd-693e9b4a8e60")
+        local sitAndDrinkChair = Entity("S_EPI_WyllChairBehaviour_ff89ffa3-76f6-4f49-a5a3-d92d6755c294")
+        local sitAndDrinkGlass = Entity("S_EPI_WyllWineGlassBehaviour_f825c0da-ecfa-4859-a8a0-c3963c565ec5")
+        local sitAndDrinkTrigger = Entity("BHVR_WRLD_EPI_Wyll_SitAndDrink_SceneTrigger_df48285b-f80e-4837-96ea-393e3ad9ef40")
+
+        --------------------------------------------------------------------------------------------------------------------
+        -- Helpers
+
+        helpers.action.PlayLoopingAnimationAt = function(pos, animationStart, animationLoop, animationEnd, animationLength, pauseBeforeDialog)
+            if pos ~= nil then
+                if animationStart ~= nil and animationLoop ~= nil and animationEnd ~= nil then
+                    if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 0.5, false) then
+                        LookFrom(pos)
+                        helpers.TryPlayAD(pauseBeforeDialog)
+                        try
+                            PlayLoopingAnimation(animationStart, {animationLoop}, animationEnd)
+                            DebugText(me, "Animation succeeded")
+                            Sleep(animationLength)
+                        catch e then
+                            DebugText(me, "Animation failed to play: [1]", tostring(e))
+                        end
+                        StopAnimation(me)
+                        DebugText(me, "HELPER: Animation stopped")
+                        mod.util.SleepRandom(1.0,2.0)
+                    else
+                        DebugText(me, "Error: can't reach destination")
+                        Sleep(3.0)
+                    end
+                else
+                    DebugText(me, "Error: one or more animations are nil")
+                end
+            else
+                DebugText(me, "Error: position is nil")
+            end
+        end
+
+        helpers.action.TryPlayAD = function(pauseBeforeDialog)
+            if pauseBeforeDialog ~= nil then
+                    if generalADTimeout <= 0 then
+                        generalADTimeout = 3
+                        StartTimer(me,"EPI_Wyll_ADDelay", pauseBeforeDialog,0)
+                        DebugText(me, "Playing AD")
+                    else
+                        DebugText(me, "ADs on cooldown, [1] turns remaining", tostring(generalADTimeout))
+                    end
+            else
+                DebugText(me, "State without AD")
+            end
+            generalADTimeout = generalADTimeout - 1
+        end
+
+        helpers.action.PlayBehaviourAt = function(pos, behaviour, object1, object2, pauseBeforeDialog)
+            if mod.moveto.MoveToPoint(pos, MovementSpeed.Stroll, me, 1.5, false) then
+                LookFrom(pos)
+                helpers.TryPlayAD(pauseBeforeDialog)
+                if object1 ~= nil and object2 ~= nil then
+                    try
+                        StartBehaviorDialog(behaviour, pos.Trigger, true, me, object1, object2)
+                    catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                        DebugText(me, "Error: Behaviour dialog failed")
+                        Sleep(3.0)
+                    end
+                elseif object1 ~= nil then
+                    try
+                        StartBehaviorDialog(behaviour, pos.Trigger, true, me, object1)
+                    catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                        DebugText(me, "Error: Behaviour dialog failed")
+                        Sleep(3.0)
+                    end
+                else
+                    try
+                        StartBehaviorDialog(behaviour, pos.Trigger, true, me)
+                    catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                        DebugText(me, "Error: Behaviour dialog failed")
+                        Sleep(3.0)
+                    end
+                end
+                mod.util.SleepRandom(1.0, 3.0)
+            end
+        end
+
+        helpers.action.LowerTiredness = function(modifier)
+            DebugText(me, "Current tiredness: [1]", tostring(tiredness))
+            if tiredness > modifier then
+                tiredness = tiredness - modifier
+            else
+                tiredness = 1 -- Tiredness is minimum 1 as it's used as a multiplier for selecting nodes
+            end
+        end
+
+        helpers.action.GetClosestPos = function(array)
+            local closestPos = nil
+
+            for _, pos in ipairs(array) do
+                if closestPos == nil then
+                    closestPos = pos
+                else
+                    if GetDistanceTo(me, pos) < GetDistanceTo(me, closestPos) then
+                        closestPos = pos
+                    end
+                end
+            end
+
+            return closestPos
+        end
+        --------------------------------------------------------------------------------------------------------------------
+        -- States
+    
+        -- Claps when a song is about to be changed
+        nodes.Clapping = Action {
+            function()
+                selectedBehaviour = nil
+                DebugText(me, "Clapping")
+                Sleep(1.0)
+                helpers.LowerTiredness(2)
+                local clappingPos = helpers.GetClosestPos(clappingTriggers)
+                helpers.PlayLoopingAnimationAt(clappingPos, clappingStart, clappingLoop, clappingEnd, math.random(10.0, 20.0), 3.0)
+                if clappingReadyToStop then
+                    wantToClap = false
+                    clappingTimeout = true
+                    StartTimer(me, "EPI_Wyll_ClappingCooldown", 60.0, 0)
+                end
+            end,
+            
+            OnLeave = function()
+                StopAnimation(me)
+            end,
+
+            Valid = function()
+                return wantToClap and not clappingTimeout
+            end
+        }
+        
+        -- Starts dancing if a suitable song is available and gets tired. Can't dance again until tiredness is lowered
+        -- Duke version is much shorter with longer cooldown to reflect that he wants to keep his image, but can't help himself to relax around friends
+        nodes.DukeDancing = Action {
+            function()
+                DebugText(me, "Duke Dancing")
+                SetFlag(wyllDancingActiveFlag)
+                Sleep(1.0)
+                tiredness = 20
+                helpers.PlayLoopingAnimationAt(avernusDanceTriggers[math.random(#avernusDanceTriggers)], avernusDanceStart, avernusDanceLoop, avernusDanceEnd, math.random(15.0, 25.0), nil)
+                ClearFlag(wyllDancingActiveFlag)
+            end,
+
+            OnInterrupt = function()
+                StopAnimation(me)
+                ClearFlag(wyllDancingActiveFlag)
+            end,
+
+            CanEnter = function()
+                return GetFlag(dukeWyll) and tiredness <= 1
+            end,
+
+            Valid = function()
+                for _, track in ipairs(suitableTracks) do
+                    if GetFlag(track) then
+                        return true
+                    end
+                end
+                return false
+            end
+        }
+
+        nodes.AvernusDancing = Action {
+            function()
+                DebugText(me, "Avernus Dancing")
+                SetFlag(wyllDancingActiveFlag)
+                Sleep(1.0)
+                tiredness = 10
+                helpers.PlayLoopingAnimationAt(avernusDanceTriggers[math.random(#avernusDanceTriggers)], avernusDanceStart, avernusDanceLoop, avernusDanceEnd, math.random(40.0, 80.0), nil)
+                ClearFlag(wyllDancingActiveFlag)
+            end,
+
+            OnInterrupt = function()
+                StopAnimation(me)
+                ClearFlag(wyllDancingActiveFlag)
+            end,
+
+            CanEnter = function()
+                return not GetFlag(dukeWyll) and tiredness <= 1
+            end,
+
+            Valid = function()
+                for _, track in ipairs(suitableTracks) do
+                    if GetFlag(track) then
+                        return true
+                    end
+                end
+                return false
+            end
+        }
+
+        -- When not dancing, Wyll is recovering his tiredness until it builds up to dance again (if suitable song is playing)
+        nodes.EPI_Wyll_Idles = Selector {
+            Valid = function(node)
+                return CheckAnySelectable(node) and (not wantToClap or clappingTimeout)
+            end,
+    
+            function(nodes)
+                if selectedBehaviour == nil or not nodes.TryGetChild(selectedBehaviour).IsSelectable()  then
+                    local selectedNode = nil
+                    if GetFlag(dukeWyll) then
+                        -- Grand Duke
+                        selectedNode = FindWeightedRandomSelectable(nodes, {
+                            -- Duke doesn't care for the tiredness as he dances way less, but still uses tiredness to determine gap between dances
+                            [nodes.DrinkStanding] = 1, -- All Grand Duke ADs
+                            [nodes.DukeReading] = 1, -- No ADs
+                            [nodes.DukeEnjoyMusic] = 1, -- All Grand Duke ADs
+                            [nodes.SitAndDrink] = 1, -- All Grand Duke ADs
+                        })
+                    elseif GetFlag(inAvernusWyll) then
+                        -- In Avernus
+                        selectedNode = FindWeightedRandomSelectable(nodes, {
+                            [nodes.DrinkStanding] = 1 * tiredness, -- All Blade of Avernus ADs
+                            [nodes.AvernusStuffing] = 2 * tiredness, -- No ADs
+                            [nodes.DukeEnjoyMusic] = 4, -- All Blade of Avernus ADs
+                            [nodes.AvernusSitAndDrink] = 2 * tiredness -- All Blade of Avernus ADs
+                        })
+                    else
+                        -- In Faerun but not Duke
+                        selectedNode = FindWeightedRandomSelectable(nodes, {
+                            [nodes.DukeEnjoyMusic] = 4, -- All Fallback ADs
+                            [nodes.DrinkStanding] = 1 * tiredness, -- All Fallback ADs
+                            [nodes.SitAndDrink] = 2 * tiredness -- All Fallback ADs
+                        })
+                    end
+                    
+                    selectedBehaviour = selectedNode.Name
+                    return selectedNode
+                end
+
+                return nodes.TryGetChild(selectedBehaviour)
+            end
+        }
+
+        nodes.EPI_Wyll_Idles.DrinkStanding = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Drinking Standing")
+                if currentDrinkingPos == nil then
+                    currentDrinkingPos = drinkingTriggers[math.random(#drinkingTriggers)]
+                end
+                helpers.PlayLoopingAnimationAt(currentDrinkingPos, drinkingStart, drinkingLoop, drinkingEnd, math.random(40.0, 60.0), 10.0)
+                helpers.LowerTiredness(3)
+                currentDrinkingPos = nil
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+    
+        nodes.EPI_Wyll_Idles.DukeReading = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Duke Reading")
+                if currentReadingPos == nil then
+                    currentReadingPos = dukeReadingTriggers[math.random(#dukeReadingTriggers)]
+                end
+                helpers.PlayLoopingAnimationAt(currentReadingPos, dukeReadingStart, dukeReadingLoop, dukeReadingEnd, math.random(25.0, 50.0), nil)
+                helpers.LowerTiredness(1)
+                currentReadingPos = nil
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me)
+            end
+        }
+
+        nodes.EPI_Wyll_Idles.DukeEnjoyMusic = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Duke Enjoy Music")
+                if currentEnjoyMusicPos == nil then
+                    currentEnjoyMusicPos = dukeEnjoyMusicTriggers[math.random(#dukeEnjoyMusicTriggers)]
+                end
+                helpers.PlayLoopingAnimationAt(currentEnjoyMusicPos, dukeEnjoyMusicStart, dukeEnjoyMusicLoop, dukeEnjoyMusicEnd, math.random(25.0, 50.0), 5.0)
+                helpers.LowerTiredness(1)
+                currentEnjoyMusicPos = nil
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me)
+            end,
+
+            Valid = function()
+                return GetFlag(musicPlayingFlag)
+            end
+        }
+
+        nodes.EPI_Wyll_Idles.AvernusStuffing = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Avernus Stuffing")
+                SetFlag(foodStationOccupiedFlag)
+                helpers.LowerTiredness(2)
+                helpers.PlayBehaviourAt(avernusStuffingTrigger, avernusStuffingBehaviour, nil, nil, nil) 
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                BehaviorDialogRequestGracefulStop(me, true)
+                ClearFlag(foodStationOccupiedFlag)
+            end,
+
+            CanEnter = function()
+                return not GetFlag(foodStationOccupiedFlag)
+            end
+        }
+
+        nodes.EPI_Wyll_Idles.AvernusSitAndDrink = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Avernus Sit and Drink")
+                helpers.LowerTiredness(3)
+                if currentAvernusSitAndDrinkPos == nil then
+                    currentAvernusSitAndDrinkPos = avernusSitAndDrinkTriggers[math.random(#avernusSitAndDrinkTriggers)]
+                end
+                helpers.PlayLoopingAnimationAt(currentAvernusSitAndDrinkPos, avernusSitAndDrinkStart, avernusSitAndDrinkLoop, avernusSitAndDrinkEnd, math.random(30.0, 70.0), 10.0)
+
+                currentAvernusSitAndDrinkPos = nil
+                selectedBehaviour = nil
+            end,
+
+            OnLeave = function()
+                StopAnimation(me, true)
+            end
+        }
+
+        nodes.EPI_Wyll_Idles.SitAndDrink = Action {
+            function()
+                Sleep(1.0)
+                DebugText(me, "Sit and Drink")
+                helpers.LowerTiredness(3)
+                helpers.PlayBehaviourAt(sitAndDrinkTrigger, sitAndDrinkBehaviour, sitAndDrinkChair, sitAndDrinkGlass, 5.0) 
+                selectedBehaviour = nil
+            end,
+            
+            OnLeave = function()
+                BehaviorDialogRequestGracefulStop(me, false)
+            end
+        }
+        --------------------------------------------------------------------------------------------------------------------
+        -- Events
+
+        events.FlagSet = function(e)
+            for _, flag in ipairs(suitableTracks) do
+                if e.Flag == flag.Guid then
+                    if clappingTimeout == false then
+                        wantToClap = true
+                    end
+                end
+            end
+
+            for _, flag in ipairs(otherTracks) do
+                if e.Flag == flag.Guid then
+                    if clappingTimeout == false then
+                        wantToClap = true
+                    end
+                end
+            end 
+        end
+
+        events.EntityEvent = function(e)
+            if e.TargetEntity == me and e.Event == "EPI_Wyll_SongChanged" then
+                clappingReadyToStop = true
+            end
+        end
+
+        events.TimerFinished = function(e)
+            if(e.TimerName == "EPI_Wyll_ADDelay") then 
+                StartAutomatedDialogImmediate(idleAD, me)
+            end
+
+            if (e.TimerName == "EPI_Wyll_ClappingCooldown") then
+                clappingTimeout = false
+            end
+        end
+        
+    end
+}

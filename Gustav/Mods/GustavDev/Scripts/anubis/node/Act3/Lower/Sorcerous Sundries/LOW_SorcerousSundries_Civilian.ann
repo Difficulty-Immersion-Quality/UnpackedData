@@ -1,0 +1,135 @@
+game.states.LOW_SorcerousSundries_Civilian = State{function()
+    description = [[Characters with repeated AD in Sorcerous Sundries]]
+    modules = {"shared.dialog", "shared.util","shared.moveto","shared.character"}
+    -----------------------------------------
+    -- Nodes
+
+    params.OtherSpeaker = {type = EParamType.String, required=false, default=nil, help=[[
+        The other NPC to talk to
+    ]]}
+
+    params.AD = {type = EParamType.String, required=false, default=nil, help=[[
+        The AD to play.
+    ]]}
+
+    params.WanderPos = {type = EParamType.String, required=false, default=nil, help=[[
+        The position of the trigger to wander.
+    ]]}
+
+    params.StartADFlag = {type = EParamType.String, required=false, default=nil, help=[[
+        GUID of the condition before starting to talk.
+    ]]}
+
+    params.Animation = {type = EParamType.String, required=false, default=nil, help=[[
+        GUID of the animation they'll do when not talking.
+    ]]}
+
+    params.LookAtAnimation = {type = EParamType.String, required=false, default=nil, help=[[
+        Where character will be looking while animating.
+    ]]}
+
+    local otherCivilian = Entity(params.OtherSpeaker)
+    local wanderPos = Entity(params.WanderPos)
+    local AD = Dialog(params.AD)
+    local StartADFlag = Flag(params.StartADFlag)
+    local FledFlag = Flag("LOW_SorcerousSundries_State_ShopEmptied_afa22562-ce57-4377-a153-59d60674d997")
+    local animation = Animation(params.Animation)
+    local LookAtAnimation = Entity(params.LookAtAnimation)
+    nodes.Talking = Action {
+
+        function()
+
+            if not FledFlag and mod.dialog.IsSpeakerAvailable(otherCivilian) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    AD, 
+                    {
+                        
+                        waitForCompletion = false,
+                        minDelay = math.random(5.0, 10.0)}, 
+                    me,
+                    otherCivilian
+                )
+            end
+
+            if animation == nil then
+                Sleep(math.random(5,15))
+            else
+                if LookAtAnimation ~= nil then
+                   SteerTo(LookAtAnimation) 
+                end
+                PlayAnimation(animation, true, false)
+            end
+
+            Sleep(math.random(3,10))
+
+        end,
+
+        CanEnter = function()
+            return (not mod.character.IsDefeated(otherCivilian) and otherCivilian ~= nil) and AD ~= nil and (StartADFlag == nil or GetFlag(StartADFlag))
+        end
+    }
+
+    nodes.TalkingAlone = Action {
+
+        function()
+            if not FledFlag then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+
+                    AD, 
+                    {
+                        waitForCompletion = true,
+                        minDelay = math.random(5.0, 10.0)}, 
+                    me
+                    )
+            end
+                if animation == nil then
+                    Sleep(math.random(5,15))
+                else
+                    PlayAnimation(animation, true, false)
+                end
+            
+        end,
+
+        CanEnter = function()
+            return (otherCivilian == nil) and AD ~= nil and (StartADFlag == nil or GetFlag(StartADFlag))
+        end
+    }
+
+
+    nodes.BeingTalkedTo = Action {
+
+        function()
+           WaitForInterrupt()
+        end,
+
+        CanEnter = function()
+            return not mod.character.IsDefeated(otherCivilian) and AD == nil
+        end
+    }
+
+
+    nodes.NotTalking_Wander = Action {
+
+        function()
+            Wander(8.0,5.0,MovementSpeed.Walk,wanderPos)
+            Sleep(math.random(3, 9))
+        end,
+
+        Valid = function()
+            return WanderPos ~= nil
+        end
+    }
+
+    nodes.NotTalking_Sleep = Action {
+
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return WanderPos == nil
+        end
+    }
+
+end
+}

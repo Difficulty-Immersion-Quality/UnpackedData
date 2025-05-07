@@ -1,0 +1,128 @@
+game.states.CRE_YouthTraining_SparringStudent = State 
+{
+    function()
+    description = [[Gith non-child youth's sparring behaviour after the beating scene]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto" }
+
+    ------------------------------------------------
+    -- Params
+
+    params.TrainingPos = {
+        type= EParamType.String,
+        required = false,
+        default = nil,
+        help = [[The trigger position the student will go to when they return to training]]
+    }
+   
+    params.TrainingBehav = {
+        type = EParamType.String,
+        required = false,
+        default = nil,
+        help=[[World Behaviour that the student will use to train]]
+    }
+
+    params.BehavInitiator = {
+        type = EParamType.Bool,
+        required = false,
+        default = false,
+        help=[[Is this character going to initiate the world behaviour.]]
+    }
+
+    params.TrainingPartner = {
+        type = EParamType.String,
+        required = false,
+        default = nil,
+        help=[[Other Student to train with]]
+    }
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local trainingTrigger = Entity(params.TrainingPos)
+    local trainingBehav = Dialog(params.TrainingBehav)
+    local trainingPartner = Entity(params.TrainingPartner)
+    local teacherBeatingBoyFlag = Flag("CRE_YouthTraining_State_TeacherBeatingBoy_ccaa2ee8-654b-491f-9623-c8a9376d3c61")
+    local backToClassFlag = Flag("CRE_YouthTraining_State_BackToClass_dad66da6-c0e9-41a9-93ee-5f106d69f92d")
+    local teacher = Entity("S_CRE_Teacher_60933e69-c642-46e0-92ee-0e4353fc2adf")
+    local randomStart = true
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Boy returns to study after witnessing beating
+
+    nodes.Action_WatchBeating = Action
+    {
+        function()
+            DebugText(me, "Watching")
+            --SteerTo(teacher)
+            Sleep(3.0)
+        end,
+        Valid = function ()
+            return GetFlag(teacherBeatingBoyFlag)
+        end
+
+    }
+
+    nodes.Action_TrainingLoop = Action
+    {
+        function ()
+            if (params.BehavInitiator and trainingBehav ~= nil and trainingBehav ~= "" and trainingTrigger ~= nil and trainingTrigger ~= "" and trainingPartner~= nil and trainingPartner~= "") then
+                
+                SetWeaponUnsheathed(me, true, false)
+                SetWeaponUnsheathed(trainingPartner, true, false)
+                Sleep(3.0)
+                DebugText(me, "Training")
+                StartBehaviorDialog(trainingBehav,trainingTrigger.Trigger,true,me, trainingPartner)
+                DebugText(me, "Training Finished")
+                Sleep(1.0)
+                SetWeaponUnsheathed(me, false, false)
+                SetWeaponUnsheathed(trainingPartner, false, false)
+                Sleep(3.0)
+                
+            else
+                if not IsInDangerousSurfaceFor(trainingTrigger, me.Character, 1.0) then
+                    -- local moveResult = MoveTo(trainingTrigger, MovementSpeed.Run, true, false, 0.5, 4.0, false)
+                    --     if moveResult ~= error.MovementError.None then
+                    --         DebugText(me, "Error: MoveTo failed")
+                    --     end
+                        WaitForInterrupt()
+                end
+            end
+
+        end,
+
+        OnLeave = function ()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end,
+
+        Valid = function()
+            return GetFlag(backToClassFlag)
+        end
+    }
+
+    nodes.Action_Idle = Action{
+        function()
+            DebugText(me, "Nothing")
+            WaitForInterrupt()
+        end,
+ 
+        Valid = function()
+            return not GetFlag(backToClassFlag)
+        end
+    }
+
+     ------------------------------------------------
+end
+}

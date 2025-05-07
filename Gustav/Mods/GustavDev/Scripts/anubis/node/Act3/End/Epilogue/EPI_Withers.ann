@@ -1,0 +1,178 @@
+game.states.EPI_Withers = State{function ()
+    modules = { "shared.moveto" , "shared.math"}
+
+    description = [[Withers hosting the camp party and hiding out in the back room]]
+
+    local startPoint = Entity("S_EPI_StartPointWithers_37a4d86e-a04c-4776-a556-be67d0624017")
+    local backRoomPoint = Entity("S_EPI_WithersSecludedPoint_978dc7d8-12fc-4861-8e60-dbd4b1cd7633")
+    local bookshelfPoint = Entity("S_EPI_WithersBookshelfPoint_001b1ca3-e1c6-40fc-bcae-6c41d11c7680")
+    local scrollTableChair = Entity("FUR_Thayan_Chair_B_000_ca8bcbd5-dd12-4c8e-8bfe-621da25d3127")
+    local gameTableChair = Entity("FUR_GEN_Tavern_Stool_Small_A_000_49d8c06c-ff29-4ec4-a245-76229785a351")
+
+    local readingStart = Animation("CUST_Reading_Book_01_Start_16107c0f-dbf6-47c4-9596-4c8cca8a683d")
+    local readingLoop = Animation("CUST_Reading_Book_01_c3af4377-7383-4aeb-a067-d8c36e82f716")
+    local readingEnd = Animation("CUST_Reading_Book_01_End_6fda7690-15e7-4668-acc0-1025692de049")
+
+    local epilogueStartedFlag = Flag("EPI_Epilogue_State_PartyGameplayStarted_1ff87c8c-a363-45fb-aeb8-762abc69b99e")
+
+    local isInRoom = false
+    local wasSitting
+
+    nodes.BackRoom = Selector{
+        function(nodes)
+            local nextAction = FindWeightedRandomSelectable(nodes, {
+                [nodes.SitScrollTable] = 1,
+                [nodes.SitGameTable] = 1,
+                [nodes.LookAtBooks] = 4,
+                [nodes.Idle] = 4
+            })
+            if nextAction ~= nil then
+                return nextAction
+            else
+                return nodes.MoveToBackRoom
+            end
+        end,
+        Valid = function()
+            return isInRoom
+        end
+    }
+
+    nodes.BackRoom.SitScrollTable = Action {
+        CanEnter = function()
+            if scrollTableChair ~= nil and not IsInDangerousSurfaceFor(scrollTableChair, me.Character) and not wasSitting then
+                return true
+            else
+                return false
+            end
+        end,
+
+        function()
+            wasSitting = true
+            try
+                MoveTo(scrollTableChair)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Failed to use seat")
+            end
+
+            try
+                UseItem(scrollTableChair.Item)
+            catch e if ls.CheckType(e, error.UseItemFailed) then
+                DebugText(me, "Failed to use seat")
+                useFailed = true
+            end
+            Sleep(1)
+            --Don't bother waiting if not actually sitting
+            if me.IsReposed then
+                Sleep(30 + 20 * math.random())
+            end
+        end,
+
+        Valid = function()
+            return scrollTableChair ~= nil
+        end
+    }
+
+    nodes.BackRoom.SitGameTable = Action {
+        CanEnter = function()
+            if gameTableChair ~= nil and not IsInDangerousSurfaceFor(gameTableChair, me.Character) and not wasSitting then
+                return true
+            else
+                return false
+            end
+        end,
+
+        function()
+            wasSitting = true
+            try
+                MoveTo(gameTableChair)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                DebugText(me, "Failed to use seat")
+            end
+
+            try
+                UseItem(gameTableChair.Item)
+            catch e if ls.CheckType(e, error.UseItemFailed) then
+                DebugText(me, "Failed to use seat")
+            end
+            Sleep(1)
+            if me.IsReposed then
+                Sleep(30 + 20 * math.random())
+            end
+        end,
+
+        Valid = function()
+            return gameTableChair ~= nil
+        end
+    }
+
+    nodes.BackRoom.LookAtBooks = Action {
+        function()
+            wasSitting = false
+            if mod.moveto.MoveToPoint(bookshelfPoint,  MovementSpeed.Walk, me) then
+                LookFrom(bookshelfPoint)
+                Sleep(3.0)
+                PlayLoopingAnimation(readingStart,{readingLoop}, readingEnd)
+            else
+                SteerTo(bookshelfPoint)
+            end
+            Sleep(30 + 40 * math.random())
+        end
+    }
+
+    nodes.BackRoom.Idle = Action {
+        function()
+            wasSitting = false
+            if mod.moveto.MoveToPoint(backRoomPoint,  MovementSpeed.Walk, me) then
+                LookFrom(backRoomPoint)
+                Sleep(3.0)
+                if mod.math.CoinToss() then
+                    PlayLoopingAnimation(readingStart,{readingLoop}, readingEnd)
+                end
+            else
+                SteerTo(backRoomPoint)
+            end
+            Sleep(20 + 20 * math.random())
+        end
+    }
+
+    nodes.EnterParty = Selector{
+        Valid = function(node)
+            return not isInRoom
+        end
+    }
+
+    nodes.EnterParty.MoveToBackRoom = Action {
+        CanEnter = function()
+            return GetFlag(epilogueStartedFlag)
+        end,
+        function()
+            if mod.moveto.MoveToPoint(backRoomPoint, MovementSpeed.Walk, me) then
+                isInRoom = true
+            else
+                SteerTo(backRoomPoint)
+            end
+            Sleep(1)
+        end
+    }
+
+
+    nodes.EnterParty.Idle = Action {
+        function()
+            if mod.moveto.MoveToPoint(startPoint, MovementSpeed.Walk, me) then
+                LookFrom(startPoint)
+            else
+                SteerTo(startPoint)
+            end
+        end
+    }
+
+    events.Destroyed = function(e)
+        if e.Entity == gameTableChair then
+            gameTableChair = nil
+        elseif e.Entity == scrollTableChair then
+            scrollTableChair = nil
+        end
+    end
+
+end
+}

@@ -1,0 +1,99 @@
+game.states.GLO_Elminster_Idle = State{function ()
+
+    local trigger = nil
+    local smokeDialog = Dialog("BHVR_WRLD_GLO_Elminster_SmokePipe_8e91880c-4022-74db-9549-28cc31999f27")
+    local inCamp = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f") 
+    local magicIntro = Animation("CUST_ElminsterIdleCustom_01_Start_4f7bb116-743c-47b2-bfc2-3d5744aa36e8")
+    local magicCentre = {Animation("CUST_ElminsterIdleCustom_01_Loop_bec8df49-baac-4fe5-a11c-15916a671f47")}
+    local magicOutro = Animation("CUST_ElminsterIdleCustom_01_End_dc75bf04-fa9e-438b-a4ed-c38c6bfe7752")
+
+
+    nodes.requestTrigger = Action{
+        function()
+            SetUnicastEntityEvent(me,"CampPosRequest")
+            Sleep(2.0)
+        end,
+        Valid = function()
+            return GetFlag(inCamp, me) and
+                   trigger == nil
+        end
+    }
+
+    --// Default behaviour in HAV, alone in room
+    nodes.Idle = Selector {
+        function(nodes)
+            return FindDifferentRandomSelectable(nodes)        
+        end,
+        Valid = function()
+            return trigger == nil or
+                   GetDistanceTo(trigger, me) < 3.0
+        end
+    }
+
+    nodes.Idle.Sleep = Action{
+        function()
+            if trigger ~= nil then
+                LookFrom(trigger)
+            end
+            sleep(5.0 + 2.0*math.random())
+        end
+    }
+
+    nodes.Idle.Smoke = Action{
+        function()
+            if trigger ~= nil then
+                LookFrom(trigger)
+            end
+            StartBehaviorDialog(smokeDialog, nil, true, me)
+        end
+    }
+
+    nodes.Idle.Spell = Action{
+        function()
+            if trigger ~= nil then
+                LookFrom(trigger)
+            end
+            PlayLoopingAnimation(magicIntro, magicCentre, magicOutro, false)
+            sleep(5.0 + 2.0*math.random())
+        end,
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.ReturnToTrigger = Action{
+        function()
+            if not IsInDangerousSurfaceFor(trigger, me.Character) then
+                    try
+                        MoveTo(trigger)
+                    catch e if ls.CheckType(e, error.MovementFailed) then
+                        SteerTo(trigger)
+                        Sleep(2.0)
+                    end
+            else
+                SteerTo(trigger)
+            end
+            Sleep(2.0)
+        end,
+        Valid = function()
+            return trigger ~= nil 
+        end
+    }
+
+    events.FlagSet = function(e)
+        if e.Flag == inCamp.Guid then
+            trigger = nil
+            Interrupt()
+        end
+    end
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me and
+           (e.Event == "GLO_Elminster_PositionChange" or
+            e.Event == "CampPositionChange") then
+            trigger = e.Params[1]
+        end
+   end
+
+end
+}

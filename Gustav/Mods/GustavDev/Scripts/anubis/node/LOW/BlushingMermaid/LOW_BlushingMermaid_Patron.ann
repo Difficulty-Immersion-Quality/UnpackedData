@@ -1,0 +1,91 @@
+game.states.LOW_BlushingMermaid_Patron = State{function()
+    
+    modules = {"shared.dialog"}
+
+    params.idleAD = {type=EParamType.String, required = false, default=nil, help=[[Idle AD]]}
+    local idleAD = Dialog(params.idleAD)
+
+    params.convoPartner = {type=EParamType.String, required = false, default=nil, help=[[Conversation partner in case of the idle AD involving 2 participants]]}
+    local convoPartner = Entity(params.convoPartner)
+
+    params.behaviorDialog = {type=EParamType.String, required = false, default=nil, help=[[World Behavior]]}
+    local behaviorDialog = Dialog(params.behaviorDialog)
+
+    params.sceneTrigger = {type=EParamType.String, required = false, default=nil, help=[[World Behavior]]}
+    local sceneTrigger = Entity(params.sceneTrigger)
+
+    params.extraBehaviorSpeaker = {type=EParamType.String, required = false, default=nil, help=[[World Behavior]]}
+    local extraBehaviorSpeaker = Entity(params.extraBehaviorSpeaker)
+
+    nodes.Idle = Selector {        
+        function(nodes)
+            if(idleAD ~= nil and behaviorDialog ~= nil) then
+                return FindDifferentRandomSelectable(nodes)
+            else
+                return FindRandomSelectable(nodes)
+            end
+        end
+    }
+    
+    nodes.Idle.PlayingAD = Action{
+        CanEnter = function()
+            return idleAD ~= nil
+        end,
+
+        function()
+            if(convoPartner ~= nil and not IsInDialog(convoPartner,true)) then
+                DialogRequestStop(convoPartner)
+                Sleep(2.0)
+            else
+                Sleep(math.random(2.0,5.0))
+            end
+
+            if(convoPartner ~= nil and mod.dialog.IsSpeakerAvailable(convoPartner)) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    idleAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 40
+                    },
+                    me,
+                    convoPartner
+                )
+            elseif(convoPartner == nil) then
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    idleAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 40
+                    },
+                    me
+                )
+            end
+            Sleep(math.random(3.0,6.0))
+        end
+    }
+
+    nodes.Idle.PlayWorldBehavior = Action {
+        CanEnter = function()
+            return behaviorDialog ~= nil
+        end,
+
+        function()
+            Sleep(math.random(2.0,5.0))
+            local behaviorProp = nil
+            if(extraBehaviorSpeaker ~= nil) then
+                behaviorProp = extraBehaviorSpeaker
+            end
+
+            if(not IsInDialog(me,false)) then
+                try
+                    StartBehaviorDialog(behaviorDialog, sceneTrigger.Trigger, true, me, behaviorProp)
+                catch e if ls.CheckType(e, error.BehaviorDialogStartFailed) then
+                    DebugText(me,"BehaviorDialogStartFailed on [1]", me.Name)
+                end
+            end
+
+            -- Use the call  with StartBehaviorDialog false once it gets characters out of anim loop
+            -- BehaviorDialogRequestGracefulStop(me)
+        end
+    }
+end}

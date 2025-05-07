@@ -1,0 +1,97 @@
+game.states.CRE_YouthTraining_StudyingStudent = State 
+{
+    function()
+    description = [[Gith non-child youth's behaviour after the beating scene]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.StudySeat = {
+        type = EParamType.String,
+        required = true,
+        help=[[Entity that the student will be training against]]
+    }
+    
+
+    params.StudyingAD = {
+        type = EParamType.String,
+        required = false,
+        help = [[AD that the student will play occasionally while they are training. Leave empty if their AD is handled by another Trainee.]]
+    }
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local studySeat = Entity(params.StudySeat)
+    local studyingAD = Dialog(params.StudyingAD)
+    local teacherBeatingBoyFlag = Flag("CRE_YouthTraining_State_TeacherBeatingBoy_ccaa2ee8-654b-491f-9623-c8a9376d3c61")
+    local backToClassFlag = Flag("CRE_YouthTraining_State_BackToClass_dad66da6-c0e9-41a9-93ee-5f106d69f92d")
+    local isInPosition = false
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    nodes.Action_BackToClassPosition = Action 
+    {
+        function ()
+            mod.util.SleepRandom (7.0,9.0)
+            if IsInDangerousSurfaceFor(studySeat, me.Character) then
+                SteerTo(studySeat)
+                Sleep(2.0)
+                return
+            end
+            try
+                UseItem(studySeat.Item,true,true,false,false)
+            catch e 
+                if ls.CheckType(e,error.UseItemFailed) then
+                    SteerTo(studySeat)
+                    Sleep(2.0)     
+                    return         
+                end
+            isInPosition = true       
+        end,
+
+
+        Valid = function()
+            return (GetFlag(backToClassFlag) and not isInPosition)
+        end
+    }
+
+    nodes.Action_StudyLoop = Action
+    {
+        function ()
+            
+        end,
+
+        Valid = function()
+            return (GetFlag(backToClassFlag) and isInPosition)
+        end
+    }
+
+    nodes.Action_Idle = Action{
+        function()
+            WaitForInterrupt()
+        end,
+ 
+        Valid = function()
+            return not GetFlag(backToClassFlag)
+        end
+    }
+     ------------------------------------------------
+end
+
+}

@@ -1,0 +1,83 @@
+game.states.LOW_SorcerousSundries_Prodigy = State{function()
+    description = [[Rolan in shop / Ramazith's Tower]]
+    modules = {"shared.util" ,"shared.moveto","shared.items","shared.math"}
+    -----------------------------------------
+    -- Nodes
+    local running = false
+    local atShopFlag = Flag("LOW_Rolan_State_RolanAtTheShop_cd1aa0f6-c061-48e3-8222-ac648a66d3ca")
+    local stayedAtTower = Flag("LOW_SorcerousSundries_State_ProdigyHasStayedAtRamazith_524ab56a-8169-4926-9105-8bcaf8c87499")
+    local interrogateFlag = Flag("LOW_SorcerousSudries_State_RolanWantsToInterrogate_0b3c14e8-628a-42e7-9886-691958d671d1")
+    local confrontationFlag = Flag("LOW_SorcerousSundries_State_FinalConfrontationOngoing_d2be5d4b-d315-4b28-9c76-78419b48e64f")
+    local ramazithThrone = Entity("FUR_GEN_BookThrone_A_000_2c72e1f6-9dbb-4675-959b-14d781f05a00")
+    local wanderPos = Entity("S_LOW_SorcerousSundries_RamazithRolanWanderTrigger_2b87243c-88ed-4b84-9457-a30a1359e390")
+    local checkAnimation = Animation("12d35429-72c4-42f2-b35d-29c22da74625")
+    local lookAtPos
+    local positions = {
+        "LOW_SorcerousSundries_TowerBooksLook_000_b95005a9-e0d8-4895-acf1-5754bd034fff",
+        "LOW_SorcerousSundries_TowerBooksLook_001_9fc73de5-b32a-44b5-bc2d-7b52e33e6353",
+        "LOW_SorcerousSundries_TowerBooksLook_002_9e822bd1-1bf5-4a8b-b042-f0c856aad860"
+    }
+    local randomPosition
+
+    nodes.InShop = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_RolanTeleportTo_c76eb1ca-e97e-4b27-ad8d-51e4cc4fd381"
+        },
+        Valid = function()
+            return GetFlag(atShopFlag,me)
+        end,
+    }
+
+    nodes.InConfrontation = Proxy {
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = "S_LOW_RolanLorroakanTeleportTo_13708935-bd6f-4053-98e1-bd07a2aeab78"
+        },
+        CanEnter = function()
+            return GetFlag(confrontationFlag)
+        end,
+    }
+
+    nodes.InTower= Action {
+        
+        function()
+        
+            randomPosition = math.random(#positions)
+            lookAtPos = Entity(positions[randomPosition])
+
+            if mod.moveto.MoveToPoint(lookAtPos, MovementSpeed.Walk, me, 5.0) then
+
+                SteerTo(lookAtPos) 
+                PlayAnimation(checkAnimation, true, false)
+            end
+            if CanReposeOn(me, ramazithThrone) and GetFlag(stayedAtTower)  then
+                try
+                    UseItem(ramazithThrone.Item)
+                    mod.util.SleepRandom(10.0, 20.0)
+                    EndRepose(me)
+                end
+            end
+            Wander(15.0,10.0,MovementSpeed.Walk,wanderPos)
+            Sleep(mod.math.random(3, 9))
+
+        end, 
+        
+        
+        Valid = function()
+            return not GetFlag(atShopFlag,me) and not (GetFlag(interrogateFlag) and not GetFlag(stayedAtTower) and not GetFlag(confrontationFlag))
+        end
+    
+    }
+    nodes.Fallback = Action {
+
+        function()
+            WaitForInterrupt()
+        end,
+        Valid = function()
+            return (GetFlag(interrogateFlag) and not GetFlag(stayedAtTower))
+        end
+
+    }
+end
+}

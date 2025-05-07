@@ -1,0 +1,92 @@
+game.states.LOW_BlushingMermaid_Vanra = State{function()
+    
+    modules = {"shared.dialog"}
+
+    -- Played either in the hag cellar or home when Vanra is not around
+    local noLoraAD = Dialog("LOW_BlushingMermaid_AD_Vanra_HomeAlone_4c3b718c-efe8-a14d-f1c9-bc061fd06770")
+    local lora = Entity("S_LOW_BlushingMermaid_MissingKidsMother_58ece4ba-e097-4b3b-ac71-7abe8706d3a8")
+
+    local hagDefeatedFlag = Flag("HAG_Hag_State_HagDefeated_7a1acad0-589f-ae02-f712-f0d24080d720")
+    local savedVanraReturnedFlag = Flag("LOW_BlushingMermaid_State_MotherSawSavedChild_cb5678e1-298c-4c25-b5af-9ee34463d048")
+
+    local homeWanderTrigger = "S_LOW_BlushingMermaid_LoraVanraHomeWander_Trigger_73e6258b-594c-4e12-890c-6e27c2c41f0c"
+    local wanderActive = false
+
+    local homeTrigger = Entity("S_LOW_BlushingMermaid_LoraVanraHomeWander_Trigger_73e6258b-594c-4e12-890c-6e27c2c41f0c")
+
+    nodes.CellarIdle = Action{
+        OnEnter = function()
+            ApplyStatus(me, "ANIM_COWER")
+        end,
+
+        function()
+            Sleep(math.random(2.0,4.0))
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    noLoraAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 15
+                    },
+                    me
+                )
+        end,
+
+        OnLeave = function()
+            RemoveStatus(me, "ANIM_COWER")
+        end,
+        
+        Valid = function()
+            return GetFlag(hagDefeatedFlag) and not GetFlag(savedVanraReturnedFlag)
+        end
+    }
+
+    nodes.Wandering = Proxy {
+        OnEnter = function()
+            StartTimer(me,"LOW_VanraWander_Timer",math.random(10.0,15.0),0)
+        end,
+
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 6,
+            sleepMin = 3,
+            trigger = homeWanderTrigger,
+            wanderMax = 10,
+            wanderMin = 5
+        },
+        
+        Valid = function()
+            return wanderActive and (not GetFlag(hagDefeatedFlag) or GetFlag(savedVanraReturnedFlag))
+        end
+    }
+
+    nodes.HomeIdle = Action{        
+        function()
+            Sleep(math.random(2.0,4.0))
+            if(lora.Character.IsDead or not IsInTrigger(lora,homeTrigger.Trigger)) then
+                mod.dialog.StartCheckedAutomatedDialog(
+                        noLoraAD,
+                        {
+                            waitForCompletion = true
+                        },
+                        me
+                    )
+                if(not CanSee(me,lora)) then
+                    wanderActive = true
+                end
+            elseif(not lora.Character.IsDead and IsInTrigger(lora,homeTrigger.Trigger)) then
+                if(GetFlag(savedVanraReturnedFlag)) then
+                    SetFollowCharacter(me.Character, lora.Character)
+                    FollowOwnerOrLeader()
+                else
+                    wanderActive = true
+                end
+            end     
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_VanraWander_Timer") then
+            wanderActive = false
+        end
+    end
+end}

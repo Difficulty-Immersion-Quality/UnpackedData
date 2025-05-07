@@ -1,0 +1,109 @@
+game.states.CRE_Infirmary_AmbushGuard = State 
+{
+    function()
+    description = [[Behaviour for the ambushing guards in the infirmary]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+    params.FirstAmbushPos = 
+    {
+        type = EParamType.String,
+        required = true,
+        help = [[Ready position before the ambush breaches the door]]
+    }
+
+    params.SecondAmbushPos = 
+    {
+        type = EParamType.String,
+        required = false,
+        help = [[Target position inside the zaithisk room once they breach]]
+    }
+
+    params.PreAmbushIdle = { type = EParamType.State, required = false, default = nil,
+    help= [[Put individual idle behaviour here]]}
+
+    
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+
+    local targetPos = Entity(params.FirstAmbushPos)
+    local isAmbushing = false
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    nodes.Action_Ambushing = Action {
+    function ()        
+        if (GetDistanceTo(me.Position, targetPos) > 0.2) then            
+
+            local moveResult = MoveTo(targetPos, MovementSpeed.Run, true, false, 2, 3.5, false)
+
+            if moveResult ~= error.MovementError.None then
+                SteerTo(targetPos)
+                Sleep(2.0)
+                return false
+            end
+
+        else
+            Sleep(300.0)
+            SetEntityEvent(me, "CRE_GithInfirmary_GuardReachAmbushPos")
+        end
+    end,
+
+        Valid = function()
+            return isAmbushing
+        end
+    }
+
+    -- Action
+    -- Guards are standing guard in the captain's office
+    nodes.Action_IdleProxy = Proxy
+    {
+        params.PreAmbushIdle,
+
+        Valid = function()
+            return not isAmbushing and params.PreAmbushIdle~=nil and params.PreAmbushIdle~=""
+        end
+    }
+
+    nodes.Action_IdleFallback = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not isAmbushing
+        end
+    }
+
+    events.EntityEvent = function(e)
+        if e.Event == "CRE_GithInfirmary_AmbushReady"
+        then
+            isAmbushing = true
+        end
+
+        if e.Event == "CRE_GithInfirmary_GuardReachAmbushPos"
+        then
+            if params.SecondAmbushPos ~= nil then
+            targetPos = Entity(params.SecondAmbushPos)
+            end
+        end
+    end------------------------------------
+    
+end
+}

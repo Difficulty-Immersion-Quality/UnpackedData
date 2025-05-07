@@ -1,0 +1,300 @@
+game.states.GLO_Halsin_Act1 = State{function()
+
+    modules = {"shared.items", "shared.dialog", "shared.moveto"}
+
+    ------------ITEMS------------
+    local cageDoor = Entity("S_GOB_WolfPens_CageDoor_002_19b032a0-e027-4524-96f9-1c0cd48d726e")
+    local prisonDoor = Entity("S_GOB_PrisonDoor_9934571f-8f27-41ab-9614-96a4d28fc042")
+
+    ------------TRIGGERS------------
+    local cageBox = Entity("S_GOB_WolfPens_Cage002Trigger_59104718-66ff-418a-b7ac-46696a1e2fc3")
+    local waitingPoint = Entity("S_GOB_WolfPens_WaitingArea_3e29895c-5b0d-4b98-80be-a0e5fe324690")
+    local outsideCagePoint = Entity("S_GOB_WolfPens_PositionOfPrisonerOutsideCage_248cbc2e-afa7-4d01-bc94-4f4bd636238e")
+    local wolfPensSub = Entity("S_GOB_WolfPens_SUB_a9a4a7c2-87c6-4031-9859-7eddb0528ff6")
+    local denPondPoint = Entity("S_DEN_HalsinPondPos_75fa3857-8084-49a8-8578-7af14cee59f8")
+    local freePlayerPoint = Entity("S_GOB_HalsinFreePlayerPoint_7e12e891-c86b-45bc-af53-caa45e90a87c")
+
+    ------------CHARACTERS------------
+    local bearFriend = Entity("S_DEN_ZenBear_d4d4bfd2-9639-45bc-a256-2f079e53db29")
+    local druidLeader = Entity("S_DEN_DruidLeader_95eb2b0b-a522-4ea5-8167-c5f4d1418156")
+
+    ------------FLAGS------------
+    local enragedFlag = Flag("GOB_WolfPens_State_BearEnraged_9b6a106b-6431-42b9-8ac1-48ba2a79e46b")
+    local leftCageFlag = Flag("GOB_WolfPens_State_PrisonerLeftCage_4cd17a8b-7605-47c7-a13c-93821e68f177")
+    local introHappenedFlag = Flag("GOB_WolfPens_State_HalsinIntroHappened_7d0751b9-1055-4a54-9ccd-f5e95e2a1f69")
+    local spokeWithDruidLeaderFlag = Flag("GLO_Halsin_Event_TalkedWithDruidLeader_b337012e-aabc-3a99-1f27-225ebb185d58")
+    local combatInProgressFlag = Flag("GOB_WolfPens_State_CombatInProgress_7253c9e4-4d4d-4cc1-a8b3-ba36b2e2c6ec")
+    local lockedPlayerFlag = Flag("GOB_PrisonEscape_State_PlayerIsLocked_6e0a4853-32d7-4a36-96fd-8b15ec10d16a")
+    local halsinFoundFlag = Flag("GLO_Halsin_Knows_IsFound_a0d83476-e2d0-4972-a76b-b23c39078cd7")
+    local idleInDenFlag = Flag("DEN_AttackOnDen_State_HalsinPostFollowUp_5de87bc4-5780-4e53-852f-a235eeb182d6")
+
+    ------------SPLINES----------
+
+    local patrolSpline = Spline("S_DEN_HalsinSpline_b2d609da-5298-4bef-b36a-04c05da34bd8")
+
+    ------------BOOLS------------
+    local isEnraged = false
+    local hasReachedDen = false
+    local isAtDenPond = false
+    local canAD = true
+    local bWait = false
+
+    local inspectAnim = Animation("CUST_Inspect_01_2c30ba8e-eca1-44b8-8f2a-4addbc34db17")
+    local angryAnim = Animation("CUST_Angry_01_5295fe1e-abec-4873-a09a-23ae6e895a63")
+    local druidLeaderAD= Dialog("DEN_AttackOnDen_AD_HalsinAndDruidLeader_45988a35-db08-c844-5006-d86867a4c090")
+
+    ------------HELPERS------------
+    helpers.CanLeaveCage = function()
+        return mod.items.SafeIsDestroyed(cageDoor)
+            or cageDoor.Item.IsOpened
+            or cageDoor.Item.IsOpening
+    end
+
+    nodes.AtDen = Selector {
+        Valid = function()
+            return hasReachedDen
+        end,
+    }
+
+    ------------ACTIONS------------
+    nodes.AtDen.VictoryEntrance = Proxy{
+        game.states.GLO_StandAtTrigger,
+        params = {
+            trigger = [[S_DEN_VictoryHalsinPos_8a64c311-e43a-4e2f-81d5-401728fd07bb]]
+        },
+        Valid = function()
+            return not isAtDenPond
+        end
+    }
+
+    nodes.AtDen.WithDruidLeader = Action{
+        function()
+            mod.dialog.StartCheckedAutomatedDialog(
+                druidLeaderAD,
+                {
+                    waitForCompletion = true
+                },
+                me,
+                druidLeader
+            )
+            canAD = false
+        end,
+        OnLeave = function()
+            canAD = false
+            StopTimer(me,"ADTimer_DEN_AttackOnDen_AD_HalsinAndDruidLeader")
+            StartTimer(me,"ADTimer_DEN_AttackOnDen_AD_HalsinAndDruidLeader", 12.0, 0)
+        end,
+        Valid = function()
+            return canAD
+        end
+    }
+
+    nodes.AtDen.NoDruidLeader = Action{
+        function()
+            if mod.moveto.MoveToPoint(denPondPoint,MovementSpeed.Stroll,me) then
+                LookFrom(denPondPoint)
+            end 
+            Sleep(5)
+        end,
+        Valid = function()
+            return isAtDenPond and not GetFlag(idleInDenFlag)
+        end
+    }
+
+    nodes.AtDen.PatrolAtDen = Action{
+        function()
+            DoPatrol(patrolSpline, false, MovementSpeed.Stroll)
+        end,
+        Valid = function()
+            return GetFlag(idleInDenFlag) and bWait == false
+        end
+    }
+
+    nodes.AtDen.PatrolAnimation = Action{
+        function()
+            LookFrom(patrolSpline)
+            PlayAnimation(inspectAnim ,true, false)
+            bWait = false
+        end,
+        Valid = function()
+            return GetFlag(idleInDenFlag) and bWait == true
+        end
+    }
+
+    nodes.AtGobinCamp = Selector{
+        Valid = function()
+            return true
+        end
+    }
+
+    nodes.AtGobinCamp.State_FreePlayerFromPrison = Action{
+        function()
+            Sleep(2.0)
+            if mod.moveto.MoveToPoint(freePlayerPoint, MovementSpeed.Run, me) then
+                SteerTo(prisonDoor)
+                ApplyStatus(me, "GOB_WolfPens_WILDSHAPE_BEAR", true, -1)
+                Sleep(4)
+                Attack(prisonDoor, true, true)
+                SetEntityEvent(me, "GOB_PrisonEscape_BearOpenPrison")
+                Sleep(2)
+                --lockedPlayerFlag is cleared in Act1_GOB_PrisonEscape
+            end
+        end,
+
+        OnLeave = function()
+            RemoveStatus(me, "GOB_WolfPens_WILDSHAPE_BEAR")
+        end,
+
+        Valid = function()
+            return IsInTrigger(me, wolfPensSub.Trigger)
+                and GetFlag(lockedPlayerFlag) 
+                and not IsInTrigger(me, cageBox.Trigger) and
+                GetFlag(halsinFoundFlag) --This is set after combat, so won't try to free player till combat has concluded 
+                                         --(mainly for if a player is in jail while another is doing dialog with Bear Halsin)
+        end
+    }
+
+    nodes.AtGobinCamp.State_WaitingOutsideCage = Action{
+        function()
+            Sleep(2.0)
+            try
+                MoveTo(waitingPoint, MovementSpeed.Stroll)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(1.0)
+            end
+            Sleep(8.0)
+        end,
+        Valid = function()
+            return IsInTrigger(me, wolfPensSub.Trigger)
+                and not IsInTrigger(me, cageBox.Trigger)
+                and GetDistance2DTo(me, waitingPoint) > 2.0
+        end
+    }
+
+    nodes.AtGobinCamp.Waiting = Action {
+        function()
+            Sleep(6.0)
+        end,
+        Valid = function()
+            return GetFlag(introHappenedFlag)
+        end
+    }
+
+    nodes.AtGobinCamp.State_LeavingCage = Action{
+        function()
+            try
+                MoveTo(outsideCagePoint, MovementSpeed.Run)
+            catch e if ls.CheckType(e, error.MovementFailed) then
+                Sleep(1.0)
+            end
+        end,
+        Valid = function()
+            return IsInTrigger(me, cageBox.Trigger) and helpers.CanLeaveCage()
+        end
+    }
+
+    -- The delay to let the bear to join the combat which should activate its custom combat state
+    -- which in order will activate the combat cutscene for the bear & door
+    nodes.AtGobinCamp.State_EnragedInternal = Action{
+        function()
+            if GetFlag(combatInProgressFlag) then
+                Sleep(4.0)
+            end
+            isEnraged = true
+        end,
+        Valid = function()
+            return GetFlag(enragedFlag) and not isEnraged
+        end
+    }
+
+    nodes.AtGobinCamp.State_WaitingInsideCage = Selector{
+        function(nodes)
+            return FindRandomSelectable(nodes)
+        end,
+        Valid = function()
+            return IsInTrigger(me, cageBox.Trigger)
+                and not isEnraged
+                and not helpers.CanLeaveCage()
+        end
+    }
+
+    nodes.AtGobinCamp.State_WaitingInsideCage.Idle = Action{
+        function()
+            Sleep(8.0)
+        end
+    }
+
+    nodes.AtGobinCamp.State_WaitingInsideCage.AngryAnimation = Action{
+        function()
+            DebugText(me, "WAITING INSIDE - ANIMATION")
+            PlayAnimation(angryAnim, true)
+            Sleep(4.0)
+        end
+    }
+
+    nodes.AtGobinCamp.State_Enraged = Action{
+        function()
+            Attack(cageDoor, true, true)
+            Sleep(2.0)
+            isEnraged = false
+        end,
+        Valid = function()
+            return IsInTrigger(me, cageBox.Trigger)
+                and isEnraged
+                and not helpers.CanLeaveCage()
+                and not IsInDialog(me, true)
+        end
+    }
+
+    nodes.AtGobinCamp.State_Fallback = Action{
+        function()
+            Sleep(8.0)
+        end
+    }
+
+    ------------EVENTS------------
+    events.EntityEvent = function(e)
+        if(e.TargetEntity == me) then
+            if(e.Event == "GLO_Halsin_ArrivedAtGrove") then
+                hasReachedDen = true
+                Interrupt()
+            elseif(e.Event == "GLO_Halsin_WithDruidLeader") then
+                isAtDenPond = true
+                Interrupt()
+            end
+        end
+    end
+
+    events.SplineControlPointReached = function(e)
+        if e.Event == "Inspect" then
+            bWait = true
+        end
+    end
+
+    ------------TIMER------------
+    events.TimerFinished = function(e)
+        if(e.TimerName == "ADTimer_DEN_AttackOnDen_AD_HalsinAndDruidLeader") then 
+            canAD = true
+        end
+    end
+end
+}
+
+
+game.states.GLO_Halsin_CAMP = State{
+    function()
+
+        local inCampFlag = Flag("CAMP_GLO_State_InCamp_161b7223-039d-4ebe-986f-1dcd9a66733f")
+
+        nodes.Standing = Proxy{
+            game.states.CAMP_Idle,
+            params = {  behaviourPos = "CAMPPOS",
+                        idleAnim = nil},
+        }
+
+        self.CanEnter = function()
+            return GetFlag(inCampFlag, me)
+        end
+        
+    end
+}

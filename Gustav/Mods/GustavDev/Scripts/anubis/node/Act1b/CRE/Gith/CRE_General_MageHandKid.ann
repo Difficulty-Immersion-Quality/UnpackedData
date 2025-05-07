@@ -1,0 +1,195 @@
+game.states.CRE_General_MageHandKid = State{function()
+    description = [[Mage hand kids behaviour]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.RepeatedAD = {
+        type = EParamType.String,
+        required = true,
+        help=[[Repeated dialog played when shouting attacks]]
+    }
+
+    params.OtherKid = {
+        type = EParamType.String,
+        required = true,
+        help=[[The other kid playing the shove game]]
+    }
+
+    params.MoveAsidePos = {
+        type = EParamType.String,
+        required = true,
+        help=[[The position where the kid goes after the player tells them to leave the box alone]]
+    }
+
+    params.MageHand = {
+        type = EParamType.String,
+        required = true,
+        help=[[The mage hand belonging to this kid]]
+    }
+
+    params.SitDownPos = {
+        type = EParamType.String,
+        required = true,
+        help=[[The position where the kid goes after the player tells them to leave the box alone]]
+    }
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local gremishkaDeadFlag = Flag("CRE_MageHandGame_State_GremishkaDefeated_54b31861-3330-4a21-b3cd-c5a43b823bbe")
+    local activationFlag = Flag("CRE_General_State_MageHandKidsPlayingShove_a4da0c89-a3b5-47f0-a726-28c818c91312")
+    local activeFlag = Flag("CRE_General_Event_MageHandKid_ActiveKid_96461d01-0ad2-4b0b-ba02-5ba65141a6ea")
+    local escape = Flag("CRE_General_State_KidEscape_88e294b3-111a-4e6b-877a-1cca3fa3fe08")
+    local EscapePoint =Entity("S_CRE_KidEscape_Point_6ed303c8-3187-40ea-be1f-fbf598151ee8")
+    local crawl = Animation("UTIL_DeSpawn_01_d94250ed-e555-471a-89ac-e0cb3e3b4792")
+    local lookingMischeviously = Animation("CUST_MischeviousPlotting_01_d63ae245-e314-493c-b8e5-0538979109d7")
+    local sittingDownAnim = Animation("CUST_SittingGroundListening_01_Loop_e3dca236-9064-4613-8d5f-2b8b40f3294d")
+    
+    local firstTimePausePlayed = false
+    local sittingPosition = Entity(params.SitDownPos)
+    local repeatedAD = Dialog(params.RepeatedAD)
+    local otherKid = Entity(params.OtherKid)
+    local moveAsidePos = Entity(params.MoveAsidePos)
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Kid waits for their turn to shove again
+    nodes.Action_Escape = Action 
+    {
+        function ()
+            if IsInDangerousSurfaceFor(EscapePoint, me.Character) then
+                SteerTo(EscapePoint)
+                Sleep(2.0)
+                return
+            end
+            
+            --if GetDistanceTo(me, EscapePoint)>2.0 then
+                local moveResult = MoveTo(EscapePoint,MovementSpeed.Sprint, true,false,2.0,4.0)
+            --end
+
+            if moveResult ~= error.MovementError.None then
+                DebugText(me, "Error: movement failed")  
+                SteerTo(EscapePoint)
+                Sleep(2.0)
+                return
+            end
+            SteerTo(EscapePoint)    
+            PlayAnimation(crawl,true,false)
+            SetOnStage(me,false)
+        end,
+
+        Valid = function()
+            return GetFlag(escape,me)
+        end
+    }
+
+    nodes.Action_WaitForTurn = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetFlag(activationFlag) and
+                   not GetFlag(activeFlag, me) and not GetFlag(escape,me)
+        end
+    }
+    -- Action
+    -- Kids play a rate limited AD while playing shove
+    nodes.Action_PlayShove = Action{
+        function()
+            mod.util.SleepRandom(7.0,9.0)
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    repeatedAD,
+                    {
+                        waitForCompletion = true,
+                        minDelay = 6.0,
+                    },
+                    me
+                )
+            ClearFlag(activeFlag, me)  
+            SetFlag(activeFlag, otherKid)              
+            
+        end,
+
+        Valid = function()
+            return GetFlag(activationFlag) and
+                   GetFlag(activeFlag, me) and 
+                   not GetFlag(escape,me) and
+                   not GetFlag(gremishkaDeadFlag)
+        end
+    }
+
+    -- Action
+    -- Fallback
+    nodes.Action_WatchesFromCorner = Action{
+        function()
+            if IsInDangerousSurfaceFor(moveAsidePos, me.Character) then
+                SteerTo(moveAsidePos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(moveAsidePos, MovementSpeed.Run, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(moveAsidePos)
+                Sleep(2.0)
+                --return false
+            end
+            lookfrom(moveAsidePos)
+            mod.util.SleepRandom(0.1,3.0)
+            PlayAnimation(lookingMischeviously)
+            mod.util.SleepRandom(5.0, 30.0)
+        end,
+
+        Valid = function()
+            return not GetFlag(activationFlag) and not GetFlag(escape,me) and not GetFlag(gremishkaDeadFlag)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    nodes.Action_Sitdown = Action{
+        function()
+            if not firstTimePausePlayed then
+                Sleep(3.0)
+                firstTimePausePlayed = true
+            end
+            if mod.moveto.MoveToPoint(sittingPosition, MovementSpeed.Run, me) then
+                LookFrom(sittingPosition)
+            end
+            PlayLoopingAnimation(nil, {sittingDownAnim},nil)
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not GetFlag(activationFlag) and not GetFlag(escape,me) and GetFlag(gremishkaDeadFlag)
+        end,
+
+        OnLeave = function()
+            StopAnimation(me)
+        end
+    }
+
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ----------------------------------------
+
+end
+}

@@ -1,0 +1,57 @@
+game.states.LOW_AdventurerLeader = State {function ()
+    
+    modules = { "shared.dialog" }
+
+    --
+    description = [[Behaviour of the adventurers' leader in act 3, who's gone to Sorcerous Sundries]]
+
+    --Flags
+    local yellingFlag = Flag("LOW_Aradin_State_IsAtSorcerousSundriesYelling_bdd65a61-c0fc-45d7-bf58-23ad26ea9d92")
+
+    local yellingAD = Dialog("LOW_SorcerousSundries_AradinYellingAtKlank_AD_448f1e67-ee18-d237-d8ef-06e0cc5e50f8")
+    local interrupted = false
+    local klankEntity = Entity("S_LOW_KlankTeleportTo_d76db988-442f-4bb4-a6af-789f7bb1cd95")
+    -----------------------------------------
+    -- Nodes
+    
+    nodes.YellingAtShop= Action {
+        
+        function()
+
+            SteerTo(klankEntity)
+
+            mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                yellingAD, 
+                {minDelay = math.random(10.0, 15.0)}, 
+                me
+            )
+        end,
+
+        Valid = function()
+            return (GetFlag(yellingFlag) and (not interrupted == true))
+        end
+    }
+
+    nodes.Sleep = Action {
+        function()
+            WaitForInterrupt()
+            
+        end,        
+        Valid = function()
+            return not (GetFlag(yellingFlag)) or interrupted == true
+        end
+
+    }
+
+    events.EntityEvent = function(e)
+        if(e.Event == "LOW_SorcerousSundries_InterruptAradinYelling") then
+            interrupted = true
+        end
+        if(e.Event == "LOW_SorcerousSundries_ResumeAradinYelling") then
+            interrupted = false
+        end
+    end
+
+
+
+end}

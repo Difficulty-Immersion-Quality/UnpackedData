@@ -1,0 +1,74 @@
+game.states.WYR_LoopingAnimAtTrigger = State { function ()
+
+    description = [[ 
+        Generic state to use for playing a looping animations while staying in a trigger.
+    ]]
+
+    modules = { "shared.math", "shared.params", "shared.moveto" }
+
+    params.animStart = {type = EParamType.String, required = false, help=[[
+        Start for the looping anim
+    ]]}
+
+    params.animLoops = {type = EParamType.String, arrayRange = "1..", required = false, help=[[
+        Loop for the looping anim
+    ]]}
+
+    params.animEnd = {type = EParamType.String, required = false, help=[[
+        End for the looping anim
+    ]]}
+
+    params.pauseBeforeFirstPlay = { type = EParamType.Number, required = false, default = 2.0, help = [[
+        From 1 to the value.
+    ]]}
+
+    params.trigger = {type = EParamType.String, required = false, help=[[
+        The trigger at which the character stands.
+    ]]}
+
+    local animStart = Animation(params.animStart)
+    local animLoops = {}
+    local animEnd = Animation(params.animEnd)
+    local trigger = nil
+    local firstTimePausePlayed = false
+    local skipLookFrom = false
+
+    self.OnInit = function()
+        animLoops = mod.params.ParamArrayToAnimationsList(params.animLoops)
+        if params.trigger ~= nil then
+            trigger = Entity(params.trigger)
+        end
+    end
+
+    nodes.PlayAnimation = Action{
+        function()
+            if trigger ~= nil then
+                if mod.moveto.MoveToPoint(trigger, MovementSpeed.Walk, me) and not skipLookFrom then
+                    LookFrom(trigger)
+                end
+            end
+            if not firstTimePausePlayed then
+                Sleep(mod.math.random(1, params.pauseBeforeFirstPlay))
+                firstTimePausePlayed = true
+            end
+            PlayLoopingAnimation(animStart, animLoops, animEnd)
+        end,        
+        OnLeave = function()
+            firstTimePausePlayed = false
+            skipLookFrom = false
+            StopAnimation(me)
+        end,
+        OnInterrupt = function()
+            skipLookFrom = false
+            StopAnimation(me)
+        end,
+    }
+
+    events.EntityEvent = function(e)
+        if e.TargetEntity == me then
+            if e.Event == "StopWaitOnDialogEnd" then
+                skipLookFrom = true
+            end
+        end
+    end
+end}

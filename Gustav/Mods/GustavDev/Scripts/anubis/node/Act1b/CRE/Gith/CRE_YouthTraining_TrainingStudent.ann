@@ -1,0 +1,107 @@
+game.states.CRE_YouthTraining_TrainingStudent = State 
+{
+    function()
+    description = [[Gith non-child youth's behaviour after the beating scene]]
+    modules = {"shared.dialog", "shared.util", "shared.moveto", "shared.items" }
+
+    ------------------------------------------------
+    -- Params
+
+    params.TrainingPos = {
+        type= EParamType.String,
+        required = false,
+        default = nil,
+        help = [[The trigger position the student will go to when they return to training]]
+    }
+   
+    params.TrainingBehav = {
+        type = EParamType.String,
+        required = false,
+        default = nil,
+        help=[[World Behaviour that the student will use to train]]
+    }
+
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local trainingTrigger = Entity(params.TrainingPos)
+    local trainingBehav = Dialog(params.TrainingBehav)
+    local teacherBeatingBoyFlag = Flag("CRE_YouthTraining_State_TeacherBeatingBoy_ccaa2ee8-654b-491f-9623-c8a9376d3c61")
+    local backToClassFlag = Flag("CRE_YouthTraining_State_BackToClass_dad66da6-c0e9-41a9-93ee-5f106d69f92d")
+    local teacher = Entity("S_CRE_Teacher_60933e69-c642-46e0-92ee-0e4353fc2adf")
+    local randomStart = true
+
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- Boy returns to study after witnessing beating
+
+    nodes.Action_WatchBeating = Action
+    {
+        function()
+            DebugText(me, "Watching")
+            --SteerTo(teacher)
+            Sleep(3.0)
+        end,
+        Valid = function ()
+            return GetFlag(teacherBeatingBoyFlag)
+        end
+
+    }
+
+    nodes.Action_TrainingLoop = Action
+    {
+        function ()
+
+            if randomStart then
+                mod.util.SleepRandom(0.0,3.0)
+                randomStart = false
+            end
+            if (trainingBehav ~= nil and trainingBehav ~= "" and trainingTrigger ~= nil and trainingTrigger ~= "") then
+                SetWeaponUnsheathed(me, true, false)
+                Sleep(3.0)
+                DebugText(me, "Training")
+                StartBehaviorDialog(trainingBehav,trainingTrigger.Trigger,true,me)
+                Sleep(1.0)
+                SetWeaponUnsheathed(me, false, false)
+                DebugText(me, "Training Finished")
+            end
+            Sleep(3.0)
+
+        end,
+
+        OnLeave = function ()
+            BehaviorDialogRequestGracefulStop(me, false)
+        end,
+
+        Valid = function()
+            return GetFlag(backToClassFlag)
+        end
+    }
+
+    nodes.Action_Idle = Action{
+        function()
+            DebugText(me, "Nothing")
+            WaitForInterrupt()
+        end,
+ 
+        Valid = function()
+            return not GetFlag(backToClassFlag)
+        end
+    }
+
+     ------------------------------------------------
+end
+}

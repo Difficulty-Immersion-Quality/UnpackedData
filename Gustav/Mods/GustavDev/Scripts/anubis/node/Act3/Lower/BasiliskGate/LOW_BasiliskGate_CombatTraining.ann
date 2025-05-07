@@ -1,0 +1,64 @@
+game.states.LOW_BasiliskGate_CombatTraining = State { function ()
+    description = [[Moves to a point and keeps a ttackign a target from that position]]
+
+    modules = {"shared.moveto","shared.util" }
+
+    params.StandAtTrigger = {type = EParamType.State, required=false, default = StateRef{game.states.GLO_StandAtTrigger}, help=[[...]]}
+    params.target = {type=EParamType.String, required = true, help=[[Target entity to attack]]}
+
+    local target = Entity(params.target)
+    local isTrainig_flag = Flag("LOW_BasiliskGate_PrivateIsTraining_State_f2747e59-c8d6-4005-bed9-871df799ac95")
+    local exhaustedChance = 0.0
+    local currentAction = "moving"
+
+    helpers.Cleanup = function(str)
+        exhaustedChance = 0.0
+        RemoveStatus(me,  "EXHAUSTED")
+        ClearFlag(isTrainig_flag, me)
+        currentAction = "moving"
+        SetWeaponUnsheathed(me, false, false)
+    end
+
+    nodes.Exhausted = Action{function()
+        WaitForInterrupt()
+    end,
+    Valid = function()
+        return HasActiveStatus(me, "EXHAUSTED") and currentAction == "training"
+    end
+    }
+
+    nodes.Attack = Action{function()
+        SteerTo(target)
+        while not HasActiveStatus(me, "EXHAUSTED") do
+            SetWeaponUnsheathed(me, true, false)
+            SetFlag(isTrainig_flag, me)
+            Attack(target, false, false)
+            exhaustedChance = exhaustedChance + 0.04
+            if math.random() <= exhaustedChance then
+                exhaustedChance = 0.0
+                ApplyStatus(me, "EXHAUSTED", true, 15.0)
+            end
+            mod.util.SleepRandom(3.0, 6.0)
+        end
+    end,
+    Valid = function()
+        return not HasActiveStatus(me, "EXHAUSTED") and currentAction == "training"
+    end
+    
+    }
+    
+    nodes.StandAtTrigger = Proxy{
+        params.StandAtTrigger,
+        OnFinished = function()
+            currentAction = "training"
+        end,
+        Valid = function()
+            return currentAction == "moving"
+        end        
+    }
+
+    self.OnLeave = function()
+        helpers.Cleanup()
+    end
+
+end}

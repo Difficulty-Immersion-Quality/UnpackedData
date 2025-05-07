@@ -1,0 +1,96 @@
+game.states.CRE_General_MageHand = State{function()
+    description = [[Mage hand behaviour]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.OwnerKid = {
+        type = EParamType.String,
+        required = true,
+        help=[[The kid that owns this mage hand]]
+    }
+
+    params.BoxStartPosition = {
+        type = EParamType.String,
+        required = true,
+        help=[[The position where the box should start before a shove.]]
+    }
+
+    params.MageHandStartPosition = {
+        type = EParamType.String,
+        required = true,
+        help=[[The position where the Mage Hand should start before a shove.]]
+    }
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local activationFlag = Flag("CRE_General_State_MageHandKidsPlayingShove_a4da0c89-a3b5-47f0-a726-28c818c91312")
+    local shoveFlag = Flag("CRE_General_Event_MageHandKid_UseShove_47d5d45a-05b1-406f-af21-ada9bccf6088")
+    local mageHandBox = Entity("S_CRE_MageHandBox 49bc0f54-3bd2-4945-8785-cc1f813d8a30")
+
+    local ownerKid = Entity(params.OwnerKid)
+    local boxStartPosition = Entity(params.BoxStartPosition)
+    local mageHandStartPosition = Entity(params.BoxStartPosition)
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+    -- The mage hand shoves the box
+    nodes.Action_UseShove = Action{
+        function()
+            mod.util.SleepRandom(1.0,2.0)
+            -- TODO: Implement long-term solution instead of teleport
+            if mageHandBox then
+                if GetDistanceTo(me, mageHandBox) <= 5.0 then
+                    if GetDistanceTo(mageHandBox, boxStartPosition) > 0.2 then
+                        local boxStartVector3 = ls.math.Vector3(boxStartPosition.Position.X, boxStartPosition.Position.Y, boxStartPosition.Position.Z)
+                        TeleportTo(mageHandBox, boxStartVector3)
+                    end
+                    --Sleep(0.2)
+                    UseSpell("Target_CRE_MageHand_AutoShove", mageHandBox, nil, nil, nil, true, true)
+                end
+            end         
+
+            Sleep(2.0)
+            ClearFlag(shoveFlag, ownerKid)                
+            
+        end,
+
+        Valid = function()
+            return GetFlag(activationFlag) and
+                   GetFlag(shoveFlag, ownerKid)
+        end
+    }
+
+    -- Action
+    -- Fallback
+    nodes.Action_WaitsForCommand = Action{
+        function()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return not GetFlag(activationFlag) or
+                   not GetFlag(shoveFlag, ownerKid)
+        end
+    }
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Events
+    ----------------------------------------
+
+end
+}

@@ -1,0 +1,51 @@
+game.states.WYR_RefugeeCamp_Refugee_13 = State { function ()
+    description = [[ A behaviour for a child tiefling washing dishes. ]]
+
+    modules = { "shared.dialog", "shared.moveto", "shared.math" }
+
+    local sceneTrigger = Entity("BHVR_WRLD_WYR_RefugeeCamp_CookingStew_SceneTrigger_eeaae75b-fd32-4d51-805a-cb055b793a7a")
+    local behaviorDialog = Dialog("BHVR_WRLD_WYR_RefugeeCamp_CookingStew_b01ccfff-11d5-c6e5-2d9b-19bda954a6f8")
+
+    local pot = Entity("S_WYR_RefugeeCamp_Kitchen_Pot_Cauldron_Covered_B_1a6eb96b-c1dd-4fe1-82e2-7697100eea1f")
+    local lid = Entity("S_WYR_RefugeeCamp_Kitchen_Pot_Cauldron_Lid_B_64d1375a-1438-4ec5-bc49-1cd31aed0dde")
+
+    local failed = false
+
+    nodes.AtCamp = Action {
+        function()
+            if mod.moveto.MoveToPoint(sceneTrigger, MovementSpeed.Walk, me) then
+                Sleep(mod.math.random(2, 3))
+                if not IsPerformingWorldBehaviour(me) then
+                    try
+                        StartBehaviorDialog(behaviorDialog, sceneTrigger.Trigger, true, me, pot, lid)
+                    catch e then
+                        DebugLog("WYR_RefugeeCamp_Refugee_13: "..tostring(e))                        
+                        failed = true
+                        WaitForInterrupt()
+                    end
+                end
+            end
+        end,
+        CanEnter = function()
+            return not failed
+        end,
+        OnLeave = function()
+            BehaviorDialogRequestGracefulStop(me, true)
+        end
+    }
+
+    nodes.BehaviorFailed = Proxy {
+        game.states.WYR_RandomAnimationAtTrigger,
+        params = {
+            randomAnims = {
+                [[CUST_InspectingBasket_01_6b69a357-9f1d-448e-91b8-b2c26b2309e0]],
+            },
+            trigger = "S_WYR_RefugeeCamp_Refugee_13_HomePos_da7c4619-ae1c-4687-82c7-401bd10ce18d",
+            randomPauseBetweenAnimation = 3,
+            pauseBetweenAnimations = 2,
+        },
+        OnEnter = function()
+            failed = false
+        end
+    }
+end}

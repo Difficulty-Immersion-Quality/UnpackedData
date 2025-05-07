@@ -1,0 +1,69 @@
+game.states.LOW_HagSurvivors_Bandit = State{function()
+
+    modules = {"shared.dialog"}
+
+    params.idleAD = {type=EParamType.String, required = false, default=nil, help=[[Idle AD]]}
+    local idleAD = Dialog(params.idleAD)
+
+    local wanderTrigger = "S_LOW_HagSurvivors_BanditsWander_Trigger_01eb8dd1-6a54-4c40-b6f3-a433848f9f46"    
+    local wanderActive = true
+
+    local ADspeaker_2 = Entity("S_LOW_HagSurvivors_Bandit_Bard_01_ede83d7d-ba00-4064-aa8c-0bab713b3518")
+    local ADspeaker_3 = Entity("S_LOW_HagSurvivors_Bandit_Wizard_01_e17a32d6-78e5-4c33-b718-c548c058aac4")
+    local ADspeaker_4 = Entity("S_LOW_HagSurvivors_Bandit_Warlock_01_1802e84d-f136-43c6-9c41-2c934ae56fa3")
+
+    local ADspeakers = {ADspeaker_2,ADspeaker_3,ADspeaker_4}
+
+    nodes.Wandering = Proxy {
+        OnEnter = function()
+            if(idleAD ~= nil) then
+                StartTimer(me,"LOW_HagSurvivorsBandit_Timer",math.random(10.0,15.0),0)
+            end
+        end,
+
+        game.states.GEN_Wander,
+        params = {
+            sleepMax = 30,
+            sleepMin = 20,
+            trigger = wanderTrigger,
+            wanderMax = 10,
+            wanderMin = 5
+        },
+        
+        Valid = function()
+            return wanderActive
+        end
+    }    
+
+    nodes.idleAD = Action {
+        function()
+            Sleep(1.0)
+            for i = 1, #ADspeakers do
+                if(not mod.dialog.IsSpeakerAvailable(ADspeakers[i])) then
+                    wanderActive = true
+                end
+            end
+
+            mod.dialog.StartCheckedAutomatedDialog(
+                    idleAD,
+                    {
+                        maxDistance = 50.0,
+                        checkSight = false,
+                        waitForCompletion = true                        
+                    },
+                    me,
+                    ADspeaker_2,
+                    ADspeaker_3,
+                    ADspeaker_4
+                )
+            
+            wanderActive = true
+        end
+    }
+
+    events.TimerFinished = function(e)
+        if(e.TimerName == "LOW_HagSurvivorsBandit_Timer") then
+            wanderActive = false
+        end
+    end
+end}

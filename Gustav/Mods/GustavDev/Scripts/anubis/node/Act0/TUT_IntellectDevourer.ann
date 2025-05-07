@@ -1,0 +1,98 @@
+game.states.TUT_IntellectDevourer_Idle = State{function()
+
+    local targetSplineIndex = -1
+    local DeckThrall = {
+        [1] = Entity("S_TUT_UpperDeck_Thrall_001_5944faf9-c37e-4886-9dbc-1210e9de4911"),
+        [2] = Entity("S_TUT_UpperDeck_Thrall_002_2fa74de8-486e-476d-b184-d2265ceebd37")}
+    local StandStillWeight = 3
+    local ControlThrallWeight = 1
+    local ContinuePatrolWeight = 8
+    local patrolSpline = Spline("S_TUT_UpperDeck_PatrolSpline_001_e0d0bbb3-621a-45f8-9efc-0911a976f561")
+    local splineEvent = ""
+    local CanPatrol = true
+    local ThrallPick
+    local ControlEffect
+    local ControlledEffect
+    local ControlFlag = Flag("TUT_UpperDeck_Event_ControlThrall_c72ae971-d3b3-459f-aca9-867053d26b3a")
+
+    self.OnInit = function()
+        ControlEffect = PrepareEffect("VFX_Enemies_MindFlayer_Psychic_Tentacles_Cast_HandFX_Textkey_01_2b063d49-2b8e-74a8-5507-5a8a5d63d4b1")
+        ControlledEffect = PrepareEffect("VFX_Enemies_MindFlayer_Psychic_Tentacles_Impact_HeadFX_Textkey_01_7bdc6beb-2aee-c94b-0f60-fdbb19c29c13")
+
+    end
+
+    nodes = Selector{
+        CanEnter = function(node)
+            return CheckAnySelectable(node)
+        end
+    }
+
+    nodes.Action_PatrollingDeck = Action{
+        function()
+            try
+                DoPatrol(patrolSpline, false, MovementSpeed.Run, targetSplineIndex, false)
+            catch e if ls.CheckType(e, error.StartPatrolFailed) then
+                LookFrom(patrolSpline)
+                Sleep(1)
+            end
+        end,
+        Valid = function()
+            return CanPatrol
+        end
+    }
+
+    nodes.PatrolAction = Selector{
+        function(nodes)
+            return GetWeightedCanEnter(nodes, {[nodes.StandStill] = StandStillWeight,
+                                               [nodes.ControlThrall] = ControlThrallWeight,
+                                               [nodes.ContinuePatrol] = ContinuePatrolWeight}
+                                      )
+        end,
+        CanEnter = function()
+            return not CanPatrol
+        end
+    }
+
+
+    nodes.PatrolAction.StandStill = Action{
+        function()
+            LookFrom(patrolSpline)
+            Sleep(5.0)
+            StandStillWeight = 2
+            CanPatrol = true
+        end
+    }
+
+    nodes.PatrolAction.ControlThrall = Action{
+        function()
+            ThrallPick = (math.random(1, 2))
+            LookAtEntity(DeckThrall[ThrallPick], 3.0)
+            PlayEffectAt(ControlEffect, me)
+            Sleep(0.5)
+            SetFlag(ControlFlag, DeckThrall[ThrallPick])
+            PlayEffectAt(ControlledEffect, DeckThrall[ThrallPick])
+            Sleep(2.0)
+            ClearFlag(ControlFlag, DeckThrall[ThrallPick])
+            ControlThrallWeight = 0
+            CanPatrol = true
+        end
+    }
+
+    nodes.PatrolAction.ContinuePatrol = Action{
+        function()
+            CanPatrol = true
+            ControlThrallWeight = (ControlThrallWeight + 1)
+            StandStillWeight = (StandStillWeight + 1)
+        end
+    }
+
+    events.SplineControlPointReached = function(e)
+        CanPatrol = false
+        if e.Event ~= nil then
+            splineEvent = e.Event
+        else
+            splineEvent = ""
+        end
+    end
+
+end}

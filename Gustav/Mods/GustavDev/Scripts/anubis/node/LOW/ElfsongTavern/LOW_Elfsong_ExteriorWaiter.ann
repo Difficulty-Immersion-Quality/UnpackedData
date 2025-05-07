@@ -1,0 +1,87 @@
+game.states.LOW_Elfsong_ExteriorWaiter = State{function ()
+
+    --------------------------------Params and modules--------------------------------
+
+    params.patrolSpline = { type = EParamType.String, help = "[[Patrol spline to clean tables]]", required = true }
+    params.CleanAnimation = {type = EParamType.String, help = "[[Timeline animation for cleaning tables]]", required = false }
+
+    modules = {"shared.dialog", "shared.moveto"}
+
+    --------------------------------Flags and variables--------------------------------
+    local localSpline = Spline(params.patrolSpline)
+    local localAnimation = Dialog(params.CleanAnimation)
+
+    local firstTrigger = Entity("S_LOW_Elfsong_BHVR_WLRD_CleaningTable_Exterior_001_6c20a2ee-0409-49c7-bc4a-40f2f13def7b")
+    local secondTrigger = Entity("S_LOW_Elfsong_BHVR_WLRD_CleaningTable_Exterior_000_743e2f88-fa8f-47a2-9283-ada3d13ffc21")
+    local thirdTrigger = Entity("S_LOW_Elfsong_BHVR_WLRD_CleaningTable_Exterior_3110c7b4-ac0d-48f0-bd70-5b6b979f676f")
+
+    local sceneTrigger = nil
+    local pause = false
+
+
+    --------------------------------Nodes--------------------------------
+
+    nodes.CleanAndTalk = Action {
+        OnEnter = function()
+            ShortPatrolInterrupt()
+        end,
+        function()
+            -- SteerTo(pointToSteer)
+            if (localAnimation ~= nil) then
+                    try
+                        StartBehaviorDialog(localAnimation, sceneTrigger.Trigger, true, me)
+                    catch e if ls.CheckType(e, error.MissingCompenent) then
+                         DebugText(me, " failed to find trigger ")
+                         Sleep(3.0)
+                    catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                        DebugText(me, " failed to start dialog ")
+                    end
+            end
+            pause = false
+        end,
+
+        Valid = function()
+            return pause
+        end,
+
+        OnInterrupt = function()
+            pause = false
+        end
+    }
+
+    nodes.Patrol = Action {
+        function()
+            DoPatrol(localSpline, false, MovementSpeed.Walk, 0)
+        end,
+        CanEnter = function()
+            return localSpline ~= nil
+        end,
+        Valid = function()
+            return not pause
+        end
+    }
+
+    nodes.Idle = Action {
+        function()
+            WaitForInterrupt()
+        end
+    }
+
+
+        --------------------------------Events--------------------------------
+    events.SplineControlPointReached = function(ev)
+        pause = true
+        if ev.Event == "One" then
+            DebugText(me, "One")
+            sceneTrigger = firstTrigger
+        end
+        if ev.Event == "Two" then
+            DebugText(me, "Two")
+            sceneTrigger = secondTrigger
+        end
+        if ev.Event == "Three" then
+            DebugText(me, "Three")
+            sceneTrigger = thirdTrigger
+        end
+    end
+end}

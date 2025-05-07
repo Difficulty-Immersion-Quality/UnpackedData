@@ -1,0 +1,259 @@
+game.states.LOW_CazadorsPalace_Cazador = State {
+
+    function()
+
+        modules = { "shared.dialog" }
+
+        local astarionCharacter = Entity("S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255")
+
+        local ritualInProgress = Flag("LOW_CazadorsPalace_RitualRoom_State_RitualInProgress_95fe8bc3-21da-4741-a6dc-f5ccfd89be2a")
+        local ritualCannotBeCompleted = Flag("LOW_CazadorsPalace_RitualRoom_State_RitualCannotBeCompleted_71cb0aae-aea2-4304-9932-4c57bf6669a8")
+        local ritualCompleted = Flag("LOW_CazadorsPalace_RitualRoom_State_RitualCompleted_7edf33ff-b185-46ed-b4d8-546c8a016387")
+
+        local beforeRitualAD = Dialog("LOW_CazadorsPalace_RitualRoom_AD_Cazador_2443e2f6-8d0f-1d5f-e2cf-8ece26d79ffc")
+        local coffin = Entity("S_LOW_CazadorsPalace_RitualRoom_CoffinLid_82b2b28f-c1cd-4baa-9341-71b465afd853")
+
+        nodes.AfterAscension = Proxy {
+            game.states.GEN_Wander,
+            params = {
+                trigger = [[S_LOW_CazadorsPalace_RitualRoom_RitualArea_60e2e3a7-f648-427b-86d3-96e9621fab03]],
+                wanderMin = 6,
+                wanderMax = 12,
+                sleepMin = 6,
+                sleepMax = 12},
+            CanEnter = function()
+                return GetFlag(ritualCompleted)
+            end,
+        }
+
+        nodes.RitualActions = Proxy {
+            game.states.LOW_CazadorsPalace_Cazador_RitualActions,
+            CanEnter = function()
+                return GetFlag(ritualInProgress)
+                    and not GetFlag(ritualCannotBeCompleted)
+                    and not HasActiveStatus(me, "SILENCED")
+                    and ( HasActiveStatus(astarionCharacter, "LOW_CAZADORSPALACE_RITUAL_INCAPACITATED")
+                        or HasActiveStatus(astarionCharacter, "LOW_CAZADORSPALACE_RITUAL_CRYSTALLISED") )
+
+            end
+        }
+
+        nodes.Capture = Action {
+            function()
+                try
+                    SteerTo(astarionCharacter)
+                    UseSpell("Target_LOW_RitualCapture_Cazador", me, astarionCharacter, nil, nil, true, true, true)
+                catch e if ls.CheckType(e, error.UseSpellFailed) then
+                end
+                Sleep(2.0)
+            end,
+            CanEnter = function()
+                return (astarionCharacter.Character.IsDead
+                    or HasActiveStatus(astarionCharacter, "DOWNED"))
+                    and CanSee(me, astarionCharacter)
+            end
+
+        }
+
+        nodes.Talk = Action{
+
+            function()
+                SteerTo(coffin)
+                mod.dialog.StartCheckedAutomatedDialogRateLimited(
+                    beforeRitualAD,
+                    {
+                        minDelay = math.random(12.0, 18.0)
+                    },
+                    me
+                )
+                Sleep(6.0)
+            end,
+        }
+
+    end
+
+}
+
+game.states.LOW_CazadorsPalace_Cazador_RitualActions = State {
+
+    function()
+
+        modules = { "shared.dialog" }
+
+        local astarionCharacter = Entity("S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255")
+
+        local ritualCannotBeCompleted = Flag("LOW_CazadorsPalace_RitualRoom_State_RitualCannotBeCompleted_71cb0aae-aea2-4304-9932-4c57bf6669a8")
+        local ritualInProgress = Flag("LOW_CazadorsPalace_RitualRoom_State_RitualInProgress_95fe8bc3-21da-4741-a6dc-f5ccfd89be2a")
+        local ritualCompleted = Flag("LOW_CazadorsPalace_RitualRoom_State_RitualCompleted_7edf33ff-b185-46ed-b4d8-546c8a016387")
+
+        local ritualIndicator_001 = Entity("S_LOW_CazadorsPalace_RitualRoom_RitualIndicator_001_09f0b7a5-3b7b-4bc1-b844-3e7e07db9e6a")
+        local ritualIndicator_002 = Entity("S_LOW_CazadorsPalace_RitualRoom_RitualIndicator_002_442f7c8a-2282-419d-9de3-8b15175046ed")
+        local ritualIndicator_003 = Entity("S_LOW_CazadorsPalace_RitualRoom_RitualIndicator_003_a695ea65-f76c-44e5-a1eb-a553c533c276")
+
+        local ritualAD_Completed = Dialog("LOW_CazadorsPalace_RitualRoom_AD_CazadorRitualSuccess_338f546b-1c0f-0f1e-7b4e-68d30b21d27d")
+
+        nodes.ProgressRitual = Selector {
+        }
+
+        nodes.ProgressRitual.Complete = Proxy{
+            game.states.LOW_CazadorsPalace_Cazador_CompleteRitual,
+            CanEnter = function()
+                return HasActiveStatus(ritualIndicator_003, "LOW_CAZADORSPALACE_SCRIPTURE_GLOWING")
+            end
+        }
+
+        nodes.ProgressRitual.Step_003 = Proxy{
+            game.states.LOW_CazadorsPalace_Cazador_ProgressRitual,
+            params = {
+                ritualAD = "LOW_CazadorsPalace_RitualRoom_AD_TakingTurn_003_Combat_b66e917c-4667-e458-2661-664a2ac94726",
+                ritualIndicator = "S_LOW_CazadorsPalace_RitualRoom_RitualIndicator_003_a695ea65-f76c-44e5-a1eb-a553c533c276",
+            },
+            CanEnter = function()
+                return HasActiveStatus(ritualIndicator_002, "LOW_CAZADORSPALACE_SCRIPTURE_GLOWING")
+            end
+        }
+
+        nodes.ProgressRitual.Step_002 = Proxy{
+            game.states.LOW_CazadorsPalace_Cazador_ProgressRitual,
+            params = {
+                ritualAD = "LOW_CazadorsPalace_RitualRoom_AD_TakingTurn_002_Combat_1fd36035-480d-3b1e-11ba-7b40c93dd6c8",
+                ritualIndicator = "S_LOW_CazadorsPalace_RitualRoom_RitualIndicator_002_442f7c8a-2282-419d-9de3-8b15175046ed",
+            },
+            CanEnter = function()
+                return HasActiveStatus(ritualIndicator_001, "LOW_CAZADORSPALACE_SCRIPTURE_GLOWING")
+            end
+        }
+
+        nodes.ProgressRitual.Step_001 = Proxy{
+            game.states.LOW_CazadorsPalace_Cazador_ProgressRitual,
+            params = {
+                ritualAD = "LOW_CazadorsPalace_RitualRoom_AD_TakingTurn_001_Combat_0917b96b-06df-e443-a997-81c02f991d32",
+                ritualIndicator = "S_LOW_CazadorsPalace_RitualRoom_RitualIndicator_001_09f0b7a5-3b7b-4bc1-b844-3e7e07db9e6a",
+            }
+        }
+
+    end
+
+}
+
+game.states.LOW_CazadorsPalace_Cazador_Combat = State {
+
+    function()
+
+        local astarionCharacter = Entity("S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255")
+
+        local ritualCannotBeCompleted = Flag("LOW_CazadorsPalace_RitualRoom_State_RitualCannotBeCompleted_71cb0aae-aea2-4304-9932-4c57bf6669a8")
+        local ritualInProgress = Flag("LOW_CazadorsPalace_RitualRoom_State_RitualInProgress_95fe8bc3-21da-4741-a6dc-f5ccfd89be2a")
+        local ritualCompleted = Flag("LOW_CazadorsPalace_RitualRoom_State_RitualCompleted_7edf33ff-b185-46ed-b4d8-546c8a016387")
+        local canProgressRitualInCombat = Flag("LOW_CazadorsPalace_RitualRoom_State_CanProgressRitualInCombat_078a4b8e-cf26-4f2c-b4e1-efa07935f1be")
+
+        self.Valid = function()
+            return me.IsInCombat
+                and me.CanActInCombatTeamTurn
+                and GetFlag(canProgressRitualInCombat, me)
+                and GetFlag(ritualInProgress)
+                and not GetFlag(ritualCompleted)
+                and not GetFlag(ritualCannotBeCompleted)
+                and not HasActiveStatus(me, "SILENCED")
+                and ( HasActiveStatus(astarionCharacter, "LOW_CAZADORSPALACE_RITUAL_INCAPACITATED")
+                    or HasActiveStatus(astarionCharacter, "LOW_CAZADORSPALACE_RITUAL_CRYSTALLISED") )
+
+        end
+
+        nodes.RitualActions = Proxy {
+            game.states.LOW_CazadorsPalace_Cazador_RitualActions,
+            OnLeave = function()
+                ClearFlag(canProgressRitualInCombat, me)
+            end
+        }
+
+        events.TurnStarted = function(e)
+            DebugText(me, "Turn Started!")
+            SetFlag(canProgressRitualInCombat, me)
+        end
+
+    end
+
+}
+
+game.states.LOW_CazadorsPalace_Cazador_ProgressRitual = State {
+
+    function()
+
+        params.ritualAD = {
+            type = EParamType.String,
+            required = true,
+        }
+
+        params.ritualIndicator = {
+            type = EParamType.String,
+            required = true,
+        }
+
+        local astarionCharacter = Entity("S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255")
+
+        local ritualAD = Dialog(params.ritualAD)
+        local ritualIndicator = Entity(params.ritualIndicator)
+
+        local canProgressRitualInCombat = Flag("LOW_CazadorsPalace_RitualRoom_State_CanProgressRitualInCombat_078a4b8e-cf26-4f2c-b4e1-efa07935f1be")
+
+        nodes.ProgressRitual = Action{
+            function()
+                if not me.IsInCombat then
+                    SteerTo(astarionCharacter)
+                end
+
+                try
+                    StartAutomatedDialog(ritualAD, true, me)
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                end
+                SetEntityEvent(ritualIndicator, "LOW_CazadorsPalace_RitualRoom_EnableRitualIndicator")
+                ClearFlag(canProgressRitualInCombat, me)
+                Sleep(1.5)
+            end,
+        }
+
+    end
+
+}
+
+game.states.LOW_CazadorsPalace_Cazador_CompleteRitual = State {
+
+    function()
+
+        local ritualAD_Completed = Dialog("LOW_CazadorsPalace_RitualRoom_AD_CazadorRitualSuccess_338f546b-1c0f-0f1e-7b4e-68d30b21d27d")
+
+        local astarionCharacter = Entity("S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255")
+
+        nodes.CompleteRitual = Action{
+            function()
+                SetEntityEvent(me, "LOW_CazadorsPalace_RitualRoom_PreAscended")
+                if not me.IsInCombat then
+                    SteerTo(astarionCharacter)
+                end
+
+                try
+                    StartAutomatedDialog(ritualAD_Completed, true, me)
+                catch e if ls.CheckType(e, error.AutomatedDialogStartFailed) then
+                end
+
+                try
+                    UseSpell("Shout_LOW_Cazador_Ascend", me, me, nil, nil, true, true, true)
+                catch e if ls.CheckType(e, error.UseSpellFailed) then
+                end
+
+                SetEntityEvent(me, "LOW_CazadorsPalace_RitualRoom_Ascended")
+                -- Delay for the ritual to complete
+                -- Normally, flag RitualCompleted will be set before 8 seconds pass and we will
+                -- leave this state
+                Sleep(8.0)
+            end,
+            OnLeave = function()
+                -- Fallback
+                SetEntityEvent(me, "LOW_CazadorsPalace_RitualRoom_Ascended")
+            end
+        }
+
+    end
+
+}

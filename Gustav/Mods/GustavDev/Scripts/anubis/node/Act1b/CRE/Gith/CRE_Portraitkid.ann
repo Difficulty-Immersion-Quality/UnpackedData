@@ -1,0 +1,95 @@
+game.states.CRE_Portraitkid = State 
+{
+    function()
+    description = [[Kid near the Vlaakith portrait behaviour]]
+    modules = {"shared.dialog", "shared.util"}
+
+    ------------------------------------------------
+    -- Params
+
+    params.DefaultPos = {
+        type = EParamType.String,
+        required = true,
+        help=[[Default position for the character to be in]]
+    }
+    ------------------------------------------------
+
+    ------------------------------------------------
+    -- Local State variables
+    local defaultPos = Entity(params.DefaultPos)
+    local shouldBeCleaning = Flag("CRE_General_State_PortraitKid_ShouldBeCleaning_bb83775f-db4f-49f6-b638-87aca9c14eb1")
+    local cleaningBhvr = Dialog("CRE_General_WB_KidWipingPortrait_dc8309e4-1bcd-878b-c805-6c174f3f9a79")
+    local sceneTrigger = Entity("CRE_General_WB_KidWipingPortrait_Scenetrigger_a730d2d1-6ead-4054-8d04-67eab5e22907")
+    ------------------------------------------------ 
+
+    ------------------------------------------------
+    -- Helper functions
+    ------------------------------------------------
+ 
+    ------------------------------------------------
+    -- State (self) node functions
+    ------------------------------------------------
+    
+    ------------------------------------------------
+    -- Nodes
+
+    -- Action
+
+    nodes.Action_Cleaning = Action 
+    {
+        function ()
+            StartBehaviorDialog(cleaningBhvr, sceneTrigger.Trigger, true, me)
+        end,
+
+        Valid = function()
+            return GetFlag(shouldBeCleaning)
+        end
+
+    }
+
+    nodes.Action_BackToPosition = Action 
+    {
+        function ()        
+            mod.util.SleepRandom (1.0,2.0)
+            if IsInDangerousSurfaceFor(defaultPos, me.Character) then
+                SteerTo(defaultPos)
+                Sleep(2.0)
+                return
+            end
+
+            local moveResult = MoveTo(defaultPos, MovementSpeed.Walk, true, false, 2, 3.5, false)
+            if moveResult ~= error.MovementError.None then
+                SteerTo(defaultPos)
+                Sleep(2.0)
+                return false
+            end
+
+            LookFrom(defaultPos)
+
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, defaultPos) > 1.0
+            and not GetFlag(shouldBeCleaning)
+        end
+    }
+
+    -- Action
+    nodes.Action_StandingGuard = Action
+    {
+        function ()
+            WaitForInterrupt()
+        end,
+
+        Valid = function()
+            return GetDistanceTo(me, defaultPos) <= 1.0
+            and not GetFlag(shouldBeCleaning)
+        end
+    }
+
+    ------------------------------------------------
+    -- Events
+    ------------------------------------------------
+
+end
+}
