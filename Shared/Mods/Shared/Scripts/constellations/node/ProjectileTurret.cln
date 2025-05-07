@@ -1,0 +1,253 @@
+game.states.ProjectileTurret = State{
+    function()
+
+        description = "Shoots a projectile spell when triggered"
+
+        params.Spell = {type = EParamType.String, required=true, help = [[Spell cast.]], default_value_provider = [[spell_projectile]]}
+        params.VFX = {type = EParamType.String, required=false, help = [[VFX played when spell is cast.]]}
+        params.Offset = {type = EParamType.Vector3, required=false, default = Vector3(0,0,0), help = [[Offset from which the projectile will fire (world coordinates by default, set OffsetIsLocal to true for local coordinates).]]}
+        params.OffsetIsLocal = {type = EParamType.Bool, help = [[Interpret the Offset as relative to the forward direction of the turret]], required = false, default = false}
+        params.Rotation = {type = EParamType.Vector3, required=false, default = Vector3(0,0,0), help = [[Rotation relative to forward direction in which the projectile will fire.]]}
+
+        inputs.Trigger = {help = "Fires Projectile Spell"}
+
+        local preparedVFX
+
+        self.OnLoaded = function()
+            if params.VFX ~= nil then
+                preparedVFX = PrepareEffect(params.VFX)
+            end
+        end
+
+        socketEvents.Trigger = function(ev)
+            ShootProjectile(params.Spell, me, params.Offset, (me.ForwardDirection+params.Rotation), nil, params.OffsetIsLocal)
+            if preparedVFX ~= nil then
+                PlayEffectAt(preparedVFX, me)
+            end
+        end
+
+    end
+}
+
+game.states.TimedProjectileTurret = State{
+    function()
+
+        -- For any object that functions as a trigger by walking on, using, etc.
+        params.Spell = {
+            type = EParamType.String,
+            help = [[Projectile Spell]],
+            default_value_provider = [[spell_projectile]],
+            required = true,
+        }
+
+        params.Period = {
+            type = EParamType.Number,
+            help = [[Delay between shots]],
+            required = true,
+        }
+
+        params.VFX = {
+            type = EParamType.String,
+            help = [[VFX played when the projectile spell fires]],
+            required = false,
+        }
+
+        params.Offset = {
+            type = EParamType.Vector3,
+            required=false,
+            default = Vector3(0,0,0),
+            help = [[Offset from which the projectile will fire (world coordinates by default, set OffsetIsLocal to true for local coordinates).]]
+        }
+
+        params.OffsetIsLocal = {
+            type = EParamType.Bool,
+            help = [[Interpret the Offset as relative to the forward direction of the turret]],
+            required = false,
+            default = false
+        }
+
+        params.DC = {
+            type = EParamType.String,
+            default="HiddenPerception_Medium_cd1800ab-1b11-4c7a-9f50-fdeb8d35481f",
+            help=[[The skill DC used for the "Type" parameter check.]]
+        }
+
+        params.StartEnabled = {
+            type = EParamType.Bool,
+            default = true,
+            help = "Does the turret start enabled?"
+        }
+
+        params.MinDistance = {
+            type = EParamType.Number,
+            required=false,
+            default=6.0,
+            help=[[Minimum distance that players are required to be in for the skill check. A distance of 0 disables the check.]]
+        }
+
+        params.Skill = {
+            type = EParamType.String,
+            default="Perception",
+            help=[[The skill checked.]]
+        }
+
+        params.IsTrap = {
+            type = EParamType.Bool,
+            default=true,
+            help=[[The skill checked.]]
+        }
+
+        params.Type = {
+            type = EParamType.String,
+            default="Interactable",
+            help=[[
+                Type of invisibility. Options:
+                None: No perception logic.
+                Invisible: Object is invisible until discovered
+                Interactable: Object is uninteractable (like scenery) until discovered. Also hides 'trapped' state, if object is trapped.
+                Trapped: Hides trapped state until discovered.
+                Highlight: Object is highlighted when noticed.
+            ]]
+        }
+
+        params.VFXOn = {type = EParamType.String,
+            required = true,
+            help = "VFX while item is on."
+        }
+
+
+        params.VFXOnBone = {type = EParamType.String,
+            required = false,
+            default = "Dummy_FX",
+            help = "Bone on which the the VFX is played."
+        }
+
+        params.SoundOn = {
+            type = EParamType.String,
+            default = "PUZ_Trap_Mechanical_On",
+            help = "Sound when turret is enabled"
+        }
+
+        params.SoundOff = {
+            type = EParamType.String,
+            default = "PUZ_Trap_Mechanical_Off",
+            help = "Sound when turret is disabled"
+        }
+
+        params.Immediate = {
+            type = EParamType.Bool,
+            default = false,
+            help = "Does the turret shoot the zone spell immediately when enabled instead of first going through a period?"
+        }
+
+        params.DestroyOnDisarm = {
+            type=EParamType.Bool,
+            default = true,
+            help = "Does the item break on Disarm?"
+        }
+
+        params.Rotation = {
+            type = EParamType.Vector3,
+            required=false,
+            default = Vector3(0,0,0),
+            help = [[Rotation relative to forward direction in which the projectile will fire.]]
+        }
+
+        inputs.Enable = {help = "Turn turret on"}
+        inputs.Disable = {help = "Turn turret off"}
+        outputs.EnableInt = {internal = true}
+        outputs.DisableInt = {internal = true}
+
+        inputs.Reveal = {help = [[Reveals the turret]]}
+        outputs.Reveal = {internal = true}
+
+        inputs.Enabled = {internal = true}
+        inputs.Disabled = {internal = true}
+        outputs.Enabled = {help = "Turret has been enabled"}
+        outputs.Disabled = {help = "Turret as been disabled"}
+
+        inputs.Disarmed = {internal = true}
+        outputs.Disarmed = {help = [[Trap was disarmed]]}
+
+        inputs.DisarmFailed = {internal = true}
+        outputs.DisarmFailed = {help = "Failed to disarm trap"}
+
+        outputs.Trigger = {internal = true}
+        outputs.TryActivate = {internal = true}
+        inputs.Activated = {internal = true}
+
+        nodes.ProjectileTurret = Proxy{
+            game.states.ProjectileTurret,
+            params = {Spell = params.Spell,
+                      VFX = params.VFX,
+                      Offset = params.Offset,
+                      OffsetIsLocal = params.OffsetIsLocal,
+                      Rotation = params.Rotation},
+            inputs = {Trigger = {outputs.Trigger}}
+        }
+
+        nodes.TimerPerceptionDisarmOnOff = Proxy{
+            game.states.TimerPerceptionDisarmOnOff,
+            params = {VFXOn = params.VFXOn,
+                      VFXOnBone = params.VFXOnBone,
+                      DC = params.DC,
+                      MinDistance = params.MinDistance,
+                      Skill = params.Skill,
+                      Type = params.Type,
+                      IsTrap = true,
+                      StartEnabled = params.StartEnabled,
+                      SoundOn = params.SoundOn,
+                      SoundOff = params.SoundOff,
+                      TickLength = params.Period,
+                      Repeats = -1,
+                      DestroyOnDisarm = params.DestroyOnDisarm},
+            outputs = {DisarmFailed = {inputs.DisarmFailed},
+                       Enabled = {inputs.Enabled},
+                       Disabled = {inputs.Disabled},
+                       Disarmed = {inputs.Disarmed},
+                       Activate = {inputs.Activated}},
+            inputs = {Reveal = {outputs.Reveal},
+                      Enable = {outputs.EnableInt},
+                      Disable = {outputs.DisableInt},
+                      TryActivate = {outputs.TryActivate}}
+        }
+
+        socketEvents.Enable = function(ev)
+            TriggerOutput(outputs.EnableInt, ev.Object, ev.Param)
+            TriggerOutput(outputs.Reveal, ev.Object, ev.Param)
+        end
+
+        socketEvents.Disable = function(ev)
+            TriggerOutput(outputs.DisableInt, ev.Object, ev.Param)
+        end
+
+        socketEvents.Activated = function(ev)
+            TriggerOutput(outputs.Trigger, ev.Object, ev.Param)
+        end
+
+        socketEvents.Enabled = function(ev)
+            TriggerOutput(outputs.Enabled, ev.Object, ev.Param)
+                if params.Immediate then 
+                    TriggerOutput(outputs.Trigger, ev.Object, ev.Param) 
+                end
+        end
+
+        socketEvents.Disabled = function(ev)
+            TriggerOutput(outputs.Disabled, ev.Object, ev.Param)
+        end
+
+        socketEvents.Reveal = function(ev)
+            TriggerOutput(outputs.Reveal, ev.Object, ev.Param)
+        end
+
+        socketEvents.Disarmed = function(ev)
+            TriggerOutput(outputs.Disarmed, ev.Object, ev.Param)
+        end
+
+        socketEvents.DisarmFailed = function(ev)
+            TriggerOutput(outputs.TryActivate, ev.Object, ev.Param)
+            TriggerOutput(outputs.DisarmFailed, ev.Object, ev.Param)
+        end
+
+    end
+}

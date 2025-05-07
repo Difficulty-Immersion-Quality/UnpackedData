@@ -1,0 +1,288 @@
+<ls:UIWidget x:Name="ActiveSearch"
+             ls:UIWidget.ContextName="ActiveSearch"
+             d:DataContext="{d:DesignInstance Type=ls:DCActiveSearch}"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" ls:TooltipExtender.Owner="{Binding CurrentPlayer.SelectedCharacter}"
+             d:DesignHeight="2160" d:DesignWidth="3840"
+             Template="{StaticResource Hud.Root}"
+             FocusDown="UIDown" FocusUp="UIUp">
+    <ls:UIWidget.ContentTemplate>
+        <DataTemplate>
+            <DataTemplate.Resources>
+                <DataTemplate x:Key="InteractableItemTemplate">
+                    <ContentControl x:Name="FocusableContent" Style="{StaticResource FocusableContentControlStyle}" Margin="0,0,0,12" Tag="{Binding Path=(ItemsControl.AlternationIndex), RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ContentPresenter}},
+                            Converter={StaticResource AddConverter}, ConverterParameter=1}">
+                        <ls:AttachedProperties.AutomationId>
+                            <MultiBinding StringFormat="{}InteractableObjects_{0}">
+                                <Binding Path="EntityUUID"/>
+                            </MultiBinding>
+                        </ls:AttachedProperties.AutomationId>
+                        <Grid x:Name="ItemPanel">
+                            
+                            <b:Interaction.Triggers>
+                                <b:DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=FocusableContent}" Value="True">
+                                    <b:InvokeCommandAction Command="{Binding DataContext.SetTargetCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" 
+                                                           CommandParameter="{Binding .}"/>
+                                    <b:InvokeCommandAction Command="{Binding DataContext.HighlightGameobject, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" 
+                                                           CommandParameter="{Binding .}"/>
+                                    <b:InvokeCommandAction Command="{Binding DataContext.SetCameraOnGameObject, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}" />
+                                </b:DataTrigger>
+                                <b:DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=FocusableContent}" Value="False">
+                                    <b:InvokeCommandAction Command="{Binding DataContext.ClearHighlightGameobject, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" 
+                                                           CommandParameter="{Binding .}"/>
+                                </b:DataTrigger>
+                            </b:Interaction.Triggers>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="ItemBorder" Grid.Column="0" Grid.ColumnSpan="2" BorderThickness="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="18,18" Opacity="0" BorderBrush="{StaticResource LS_accent00TxtColor}" />
+                            <Grid Grid.Column="0" Width="{StaticResource GenericSlotContentSize}" Height="{StaticResource GenericSlotContentSize}" VerticalAlignment="Center" Margin="30,30">
+                                <ls:LSEntityObject EntityRef="{Binding EntityHandle}" Background="{Binding Icon}"/>
+                                <TextBlock x:Name="itemCount" Text="{Binding Count}" VerticalAlignment="Bottom" HorizontalAlignment="Right" FontSize="{StaticResource ScaledSmallFontSize}"
+                                           noesis:Text.StrokeThickness="4" noesis:Text.Stroke="{StaticResource LS_tint00}" FontWeight="Bold"/>
+                            </Grid>
+
+                            <DockPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,32,0">
+                                <Image x:Name="Icon" DockPanel.Dock="Right" Visibility="Collapsed" Stretch="None" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock DockPanel.Dock="Right" x:Name="ContainerState" Text="{Binding Source='h823595e6g550fg4614gb1ddgdcd323bb4c69',Converter={StaticResource TranslatedStringConverter}, StringFormat='{} ({0})'}" Visibility="Collapsed" 
+                                           FontSize="{StaticResource ScaledDefaultFontSize}" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="ItemName" Text="{Binding Name}" FontSize="{StaticResource ScaledDefaultFontSize}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </Grid>
+
+                    </ContentControl>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding HasIllegalInteraction}" Value="True">
+                            <Setter TargetName="ItemName" Property="Foreground" Value="{StaticResource LS_alertTxtColor}" />
+                            <Setter TargetName="ContainerState" Property="Foreground" Value="{StaticResource LS_alertTxtColor}" />
+                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource LS_alertTxtColor}" />
+                            <Setter TargetName="ItemBorder" Property="Opacity" Value="0.6" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsFocused}" Value="True">
+                            <Setter TargetName="ItemBorder" Property="Opacity" Value="1" />
+                        </DataTrigger>
+                        <Trigger SourceName="itemCount" Property="Text" Value="1">
+                            <Setter TargetName="itemCount" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                       
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsContainer}" Value="True"/>
+                                <Condition Binding="{Binding HasLoot}" Value="False"/>
+                                <Condition Binding="{Binding HasBeenOpened}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="ContainerState" Property="Visibility" Value="Visible" />
+                        </MultiDataTrigger>
+
+                        <!-- Icon triggers (the "is-moving-to-the-target" one takes priority over the "is-a-container" one, so order here is important) -->
+                        <DataTrigger Binding="{Binding IsContainer}" Value="True">
+                            <Setter TargetName="Icon" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Icon" Property="Source" Value="pack://application:,,,/Core;component/Assets/Shared/ico_search_container_c.png" />
+                        </DataTrigger>
+
+                        <DataTrigger Value="True">
+                            <DataTrigger.Binding>
+                                <MultiBinding Converter="{StaticResource EqualConverter}">
+                                    <Binding Path="."/>
+                                    <Binding Path="DataContext.CurrentPlayer.UIData.ActiveTask.TaskTarget" ElementName="ActiveSearch"/>
+                                </MultiBinding>
+                            </DataTrigger.Binding>
+                            <Setter TargetName="Icon" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Icon" Property="Source" Value="pack://application:,,,/Core;component/Assets/HUD_c/c_ico_timerHUD.png" />
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+
+                <ControlTemplate x:Key="InteractablesListTemplate">
+                    <ScrollViewer MaxHeight="1340" ls:ScrollViewerHelper.VerticalScrollOffsetMargin="187" VerticalScrollBarVisibility="Auto"  Margin="12,0,12,0">
+                        <ItemsPresenter x:Name="ItemsListPresenter" MinHeight="240" Margin="0,0"/>
+                    </ScrollViewer>
+                </ControlTemplate>
+
+                <BitmapImage x:Key="FiltersPanelBg" UriSource="pack://application:,,,/Core;component/Assets/Shared_c/c_contextMenu_BG.png" />
+            </DataTemplate.Resources>
+            <Grid x:Name="ActiveSearchPanel" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" >
+
+                <Rectangle x:Name="SideShading" HorizontalAlignment="Left" VerticalAlignment="Stretch" Fill="{StaticResource LeftSideShadingBrush}" Opacity="1" Width="1800"/>
+                
+                <Grid x:Name="Root" Margin="180,0" Width="1000" HorizontalAlignment="Left" VerticalAlignment="Center" >
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="GotKeyboardFocus">
+                            <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=ActiveSearch}" CommandParameter="{Binding ElementName=TooltipHolder}"/>
+                        </b:EventTrigger>
+                        <b:DataTrigger Binding="{Binding HasInputEnabled, ElementName=ActiveSearch}" Value="True">
+                            <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=ActiveSearch}" CommandParameter="{Binding ElementName=TooltipHolder}"/>
+                        </b:DataTrigger>
+
+                        <b:EventTrigger EventName="Loaded">
+                            <b:Interaction.Behaviors>
+                                <b:ConditionBehavior>
+                                    <b:ConditionalExpression>
+                                        <b:ComparisonCondition LeftOperand="{Binding DataContext.CurrentPlayer.UIData.InteractableObjects.Count, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Operator="NotEqual" RightOperand="0"/>
+                                    </b:ConditionalExpression>
+                                </b:ConditionBehavior>
+                            </b:Interaction.Behaviors>
+                            <ls:SetMoveFocusAction TargetName="ActiveSearch" FocusElement="{Binding ElementName=InteractableObjectsList}"/>
+                            <b:InvokeCommandAction Command="{Binding EnableTooltipOnUIElementCommand, ElementName=ActiveSearch}" 
+                                               CommandParameter="{Binding ElementName=TooltipHolder}"/>
+                            <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=ActiveSearch}" CommandParameter="{Binding ElementName=TooltipHolder}"/>
+                           
+                        </b:EventTrigger>
+                        <b:EventTrigger EventName="Unloaded">
+                            <b:InvokeCommandAction Command="{Binding HideTooltipOnUIElementCommand, ElementName=ActiveSearch}"/>
+                        </b:EventTrigger>
+                        <b:DataTrigger Binding="{Binding Layout}" Value="Left">
+                            <b:ChangePropertyAction TargetName="Root" PropertyName="Margin" Value="30,0,0,0"/>
+                            <b:ChangePropertyAction TargetName="Root" PropertyName="HorizontalAlignment" Value="Left"/>
+                            <b:ChangePropertyAction TargetName="SideShading" PropertyName="Width" Value="1200"/>
+                        </b:DataTrigger>
+                        <b:DataTrigger Binding="{Binding Layout}" Value="Right">
+                            <b:ChangePropertyAction TargetName="Root" PropertyName="Margin" Value="0,0,30,0"/>
+                            <b:ChangePropertyAction TargetName="Root" PropertyName="HorizontalAlignment" Value="Right"/>
+                            <b:ChangePropertyAction TargetName="SideShading" PropertyName="Width" Value="1200"/>
+                            <b:ChangePropertyAction TargetName="SideShading" PropertyName="HorizontalAlignment" Value="Right"/>
+                            <b:ChangePropertyAction TargetName="SideShading" PropertyName="Fill" Value="{StaticResource RightSideShadingBrush}"/>
+                        </b:DataTrigger>
+                    </b:Interaction.Triggers>
+
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+
+                    <TextBlock Grid.Row="0" Text="{Binding Source='hd3ed8394g34a6g4e76g9a43gcaf52ddb2dd4',Converter={StaticResource TranslatedStringConverter}}" Style="{StaticResource PanelTitleStyle}" HorizontalAlignment="Center" Margin="0,0,0,100"/>
+
+                    <ItemsControl x:Name="InteractableObjectsList" Grid.Row="1" ItemsSource="{Binding DataContext.CurrentPlayer.UIData.InteractableObjects, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                              AlternationCount="{Binding DataContext.CurrentPlayer.UIData.InteractableObjects.Count, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" ItemTemplate="{StaticResource InteractableItemTemplate}"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto" Template="{StaticResource InteractablesListTemplate}" MaxHeight="1300">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Vertical"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <b:Interaction.Triggers>
+                            <b:PropertyChangedTrigger Binding="{Binding DataContext.CurrentPlayer.UIData.InteractableObjects.Count, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}">
+                                <b:Interaction.Behaviors>
+                                    <b:ConditionBehavior>
+                                        <b:ConditionalExpression>
+                                            <b:ComparisonCondition LeftOperand="{Binding DataContext.CurrentPlayer.UIData.InteractableObjects.Count}" Operator="GreaterThan" RightOperand="0"/>
+                                        </b:ConditionalExpression>
+                                    </b:ConditionBehavior>
+                                </b:Interaction.Behaviors>
+                                <ls:SetMoveFocusAction TargetName="ActiveSearch" DirectionFocusSourceElement="{Binding FocusedElement, ElementName=ActiveSearch}" DirectionFocus="Up"/>
+                            </b:PropertyChangedTrigger>
+                        </b:Interaction.Triggers>
+                    </ItemsControl>
+
+                    <Control x:Name="TooltipHolder" Grid.Row="1" >
+                        <Control.ToolTip>
+                            <ls:LSTooltip PlayerId="{Binding PlayerId, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Content="{Binding FocusedElement.DataContext, ElementName=ActiveSearch}"
+                                      DataContext="{Binding FocusedElement.DataContext, ElementName=ActiveSearch}" Margin="26,-16" />
+                        </Control.ToolTip>
+                    </Control>
+
+                    <Grid x:Name="ControllerHints" Grid.Row="2" Visibility="Visible" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,120,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <ls:LSButton x:Name="ActionBtn" MaxWidth="980" 
+                                 ContentTemplate="{StaticResource ControllerButtonHint}" 
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIAccept'}"
+                                 Tag="{Binding TargetActionDescription}"
+                                 Command="{Binding ExecuteTargetActionCommand}" Arrangement="Left"
+                                 IsEnabled="{Binding TargetActionEnabled}"
+                                 CommandParameter="{Binding FocusedElement.DataContext, ElementName=ActiveSearch}" SoundID="UI_Shared_Accept" HorizontalAlignment="Center"
+                                 BoundEvent="UIAccept"
+                                 Visibility="{Binding CurrentPlayer.UIData.InteractableObjects.Count, Converter={StaticResource CountToVisibilityConverter}}" Margin="0,0,0,40"/>
+
+                        <WrapPanel Grid.Row="1" HorizontalAlignment="Center">
+                            <ls:LSButton x:Name="ShowContextMenu" HorizontalAlignment="Center" 
+                                 ContentTemplate="{StaticResource ControllerButtonHint}" 
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='ContextMenu'}"
+                                 Tag="{Binding Source='heb4b592bgc665g4e17ga685g07e2eb5e25db',Converter={StaticResource TranslatedStringConverter}}" 
+                                 Command="{Binding ShowContextMenu}" Arrangement="Left" 
+                                 BoundEvent="ContextMenu"
+                                 Visibility="{Binding CurrentPlayer.UIData.InteractableObjects.Count, Converter={StaticResource CountToVisibilityConverter}}"
+                                 CommandParameter="{Binding FocusedElement, ElementName=ActiveSearch}"/>
+
+                            <!-- Toggle tooltips -->
+                            <ls:LSButton x:Name="ToggleTooltips" HorizontalAlignment="Center" Margin="10,0" EatInput="False" 
+                                 Command="ls:UIWidget.ToggleTooltipOnUIElementCommand"
+                                 CommandParameter="{Binding ElementName=TooltipHolder}"
+                                 ls:LSButton.BoundEvent="UIShowInfo"
+                                 ContentTemplate="{StaticResource ControllerButtonHint}"
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIShowInfo, Converter={StaticResource FindInputEventConverter}}"
+                                 Tag="{Binding Source='hf8dd4c2fg97e0g4ccdgac1ag3cd1fe5060ef', Converter={StaticResource TranslatedStringConverter}}" TapTime="{StaticResource DefaultButtonTapTime}"/>
+
+                            <Control x:Name="CompareToggle" Template="{StaticResource HoldToggleTemplate}" Tag="Checked"/>
+
+                            <ls:LSButton x:Name="CloseUIBtn" 
+                                 ContentTemplate="{StaticResource ControllerButtonHint}" 
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICancel'}" Arrangement="Left"
+                                 Tag="{Binding Converter={StaticResource TranslatedStringConverter}, Source=h8d7a06bcgf023g47cbg95dagd290e0a05142, Mode=OneWay}"
+                                 Command="{Binding CustomEvent}" CommandParameter="CloseWidget" HorizontalAlignment="Center"/>
+                        </WrapPanel>
+                    </Grid>
+                </Grid>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding FocusedElement.DataContext, ElementName=ActiveSearch, Converter={StaticResource NullToBoolFalseConverter}}" Value="False">
+                    <Setter TargetName="TooltipHolder" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DataContext.CurrentPlayer.UIData.InteractableObjects.Count, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="0">
+                    <Setter TargetName="TooltipHolder" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ShowUIElementTooltip, ElementName=ActiveSearch}" Value="True">
+                    <Setter TargetName="ToggleTooltips" Property="Tag" Value="{Binding Source='hb33ec471gd611g4ee3gbbffg699af8f79167', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DataContext.CurrentPlayer.UIData.ActiveState, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="PinnedTooltips">
+                    <Setter TargetName="ActiveSearchPanel" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition  Binding="{Binding DataContext.CurrentPlayer.UIData.ActiveState, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Book" />
+                        <Condition  Binding="{Binding DataContext.Layout, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Left" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ActiveSearchPanel" Property="Visibility" Value="Collapsed"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition  Binding="{Binding DataContext.CurrentPlayer.UIData.ActiveState, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Book" />
+                        <Condition  Binding="{Binding DataContext.Layout, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Right" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="ActiveSearchPanel" Property="Visibility" Value="Collapsed"/>
+                </MultiDataTrigger>
+                
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </ls:UIWidget.ContentTemplate>
+    <b:Interaction.Triggers>
+        <b:EventTrigger EventName="MoveFocusUp">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="MoveFocusDown">
+            <ls:LSPlaySound Sound="UI_Shared_Hover" />
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="Loaded">
+            <ls:LSPlaySound Sound="UI_HUD_Controller_RadialMenu_MoveLeft" />
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="WidgetClosing">
+            <ls:LSPlaySound Sound="UI_HUD_Shared_Close" />
+            <b:InvokeCommandAction Command="{Binding ClearHighlightGameobject}" CommandParameter="{Binding FocusedElement.DataContext, ElementName=ActiveSearch}"/>
+            <b:InvokeCommandAction Command="{Binding SetCameraOnGameObject}" CommandParameter="{Binding CurrentPlayer.SelectedCharacter}" />
+        </b:EventTrigger>
+    </b:Interaction.Triggers>
+</ls:UIWidget>

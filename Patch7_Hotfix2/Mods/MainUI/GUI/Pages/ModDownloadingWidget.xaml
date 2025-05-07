@@ -1,0 +1,231 @@
+<ls:UIWidget x:Name="ModDownloadingWidget"
+             ls:UIWidget.ContextName="ModDownloadingWidget"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+             mc:Ignorable="d"
+             d:DesignHeight="2160" d:DesignWidth="3840"
+             d:DataContext="{d:DesignInstance {x:Type ls:DCModDownloadingWidget}, IsDesignTimeCreatable=True}">
+    <ls:UIWidget.Template>
+        <ControlTemplate>
+            <ControlTemplate.Resources>
+                <BitmapImage x:Key="ModCircleLoadInProgressBg" UriSource="/Core;component/Assets/ModDownloadingWidget/mods_circleLoad_bg_01.png" />
+                <BitmapImage x:Key="ModCircleLoadInProgressCircle" UriSource="/Core;component/Assets/ModDownloadingWidget/mods_circleLoad_complete_01.png" />
+
+                <BitmapImage x:Key="ModCircleLoadFinishedBg" UriSource="/Core;component/Assets/ModDownloadingWidget/mods_circleLoad_bg_02.png" />
+                <BitmapImage x:Key="ModCircleLoadFinishedCircle" UriSource="/Core;component/Assets/ModDownloadingWidget/mods_circleLoad_complete_02.png" />
+
+                <BitmapImage x:Key="ModCircleLoadFailedBg" UriSource="/Core;component/Assets/ModDownloadingWidget/mods_circleLoad_bg_03.png" />
+                <BitmapImage x:Key="ModCircleLoadFailedCircle" UriSource="/Core;component/Assets/ModDownloadingWidget/mods_circleLoad_complete_03.png" />
+
+                <BitmapImage x:Key="ModLoadSpinnerBrown" UriSource="/Core;component/Assets/ModDownloadingWidget/mods_circleLoad_spinner_01.png" />
+                <BitmapImage x:Key="ModLoadSpinnerBlue" UriSource="/Core;component/Assets/ModDownloadingWidget/mods_circleLoad_spinner_02.png" />
+
+                <BitmapImage x:Key="ModCheckIcon" UriSource="/Core;component/Assets/ModDownloadingWidget/tick_update.png" />
+
+                <ControlTemplate x:Key="ModDownloadingWidget">
+                    <Grid x:Name="Root">
+                        <Grid.Tag>
+                            <!-- Store the total amount of processed mods to show as a text later as part of a MultiBinding -->
+                            <MultiBinding Converter="{StaticResource AddMultipleConverter}">
+                                <Binding Path="Data.FinishedMods.Count"/>
+                                <Binding Path="Data.FailedMods.Count"/>
+                            </MultiBinding>
+                        </Grid.Tag>
+                        <b:Interaction.Behaviors>
+                            <ls:CollectionFilterBehavior x:Name="FinishedUpdates" ItemsSource="{Binding Data.FinishedMods}"
+                             Predicate="{Binding ModUpdatePredicate}"/>
+                            <ls:CollectionFilterBehavior x:Name="FinishedDownloads" ItemsSource="{Binding Data.FinishedMods}"
+                             Predicate="{Binding ModDownloadPredicate}"/>
+                        </b:Interaction.Behaviors>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid x:Name="ProgressCircle" Grid.Column="0">
+                            <Image x:Name="ProgressCircleBg" Source="{StaticResource ModCircleLoadInProgressBg}" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Image x:Name="ProgressSpinner" Source="{StaticResource ModLoadSpinnerBrown}" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" Opacity="0" RenderTransformOrigin="0.5, 0.5">
+                                <Image.RenderTransform>
+                                    <RotateTransform/>
+                                </Image.RenderTransform>
+                            </Image>
+                            <TextBlock x:Name="ProgressCount" Text="{Binding Data.RequestedMods.Count}" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource LS_accent100TxtColor}"/>
+                            <Image x:Name="Icon" Source="{StaticResource ModCheckIcon}" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                        </Grid>
+                        <DockPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Name="DownloadInfo1" DockPanel.Dock="Top" Visibility="Collapsed"/>
+                            <TextBlock x:Name="DownloadInfo2" DockPanel.Dock="Bottom" Visibility="Collapsed"/>
+                        </DockPanel>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <!-- When downloading something -->
+                        <DataTrigger Binding="{Binding Data.RequestedMods.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True">
+                            <DataTrigger.EnterActions>
+                                <BeginStoryboard x:Name="spinnerAnim">
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ProgressSpinner" Storyboard.TargetProperty="Opacity">
+                                            <EasingDoubleKeyFrame KeyTime="0:0:0.2" Value="1"/>
+                                        </DoubleAnimationUsingKeyFrames>
+                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ProgressSpinner" Storyboard.TargetProperty="RenderTransform.(RotateTransform.Angle)">
+                                            <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="360"/>
+                                        </DoubleAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </DataTrigger.EnterActions>
+                            <DataTrigger.ExitActions>
+                                <StopStoryboard BeginStoryboardName="spinnerAnim"/>
+                            </DataTrigger.ExitActions>
+                            <Setter TargetName="ProgressSpinner" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="ProgressSpinner" Property="Opacity" Value="1"/>
+                            <Setter TargetName="DownloadInfo1" Property="Text" Value="{Binding Source='h2167b586g0146g4d5egb5a7gd6e8022fd77e', Converter={StaticResource TranslatedStringConverter}}" />
+                            <Setter TargetName="DownloadInfo1" Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <!-- When updating something -->
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Data.RequestedMods.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True"/>
+                                <Condition Binding="{Binding Data.RequestedMods[0].RequestType}" Value="Update"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="ProgressCircleBg" Property="Source" Value="{StaticResource ModCircleLoadFinishedBg}"/>
+                            <Setter TargetName="ProgressSpinner" Property="Source" Value="{StaticResource ModLoadSpinnerBlue}"/>
+                            <Setter TargetName="DownloadInfo1" Property="Text" Value="{Binding Source='h8b3493e7ge681g4bf3gbb91g95b729be9c9c', Converter={StaticResource TranslatedStringConverter}}"/>
+                            <Setter TargetName="DownloadInfo1" Property="Foreground" Value="{StaticResource LS_partyTxtColor}"/>
+                            <Setter TargetName="DownloadInfo1" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="ProgressCount" Property="Foreground" Value="{StaticResource LS_partyTxtColor}"/>
+                        </MultiDataTrigger>
+                        <!-- When finished downloading/updating and there's finished mods-->
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Data.RequestedMods.Count}" Value="0"/>
+                                <Condition Binding="{Binding Data.FinishedMods.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="ProgressCircleBg" Property="Source" Value="{StaticResource ModCircleLoadFinishedCircle}"/>
+                            <Setter TargetName="Icon" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="ProgressCount" Property="Visibility" Value="Collapsed"/>
+                        </MultiDataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Data.RequestedMods.Count}" Value="0"/>
+                                <Condition Binding="{Binding FilteredItems.Count,ElementName=FinishedUpdates, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="DownloadInfo1" Property="Text" >
+                                <Setter.Value>
+                                    <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                        <Binding Source="h019afcb8g7ddbg4e44g9d61g75de2d7a4a5a"/>
+                                        <Binding Path="FilteredItems.Count" ElementName="FinishedUpdates"/>
+                                    </MultiBinding>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter TargetName="DownloadInfo1" Property="Foreground" Value="{StaticResource LS_partyTxtColor}"/>
+                            <Setter TargetName="DownloadInfo1" Property="Visibility" Value="Visible"/>
+                        </MultiDataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Data.RequestedMods.Count}" Value="0"/>
+                                <Condition Binding="{Binding FilteredItems.Count,ElementName=FinishedDownloads, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="DownloadInfo2" Property="Text" >
+                                <Setter.Value>
+                                    <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                        <Binding Source="h4f7e8456g45e4g4c49g9a6fgbbdb609d4c79"/>
+                                        <Binding Path="FilteredItems.Count" ElementName="FinishedDownloads"/>
+                                    </MultiBinding>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter TargetName="DownloadInfo2" Property="Foreground" Value="{StaticResource LS_partyTxtColor}"/>
+                            <Setter TargetName="DownloadInfo2" Property="Visibility" Value="Visible"/>
+                        </MultiDataTrigger>
+                        <!-- When finished downloading/updating and all mods failed-->
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Data.RequestedMods.Count}" Value="0"/>
+                                <Condition Binding="{Binding Data.FinishedMods.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="False"/>
+                                <Condition Binding="{Binding Data.FailedMods.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="ProgressCircleBg" Property="Source" Value="{StaticResource ModCircleLoadFailedCircle}"/>
+                            <Setter TargetName="Icon" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="Icon" Property="Source" Value="{StaticResource redWarningIcon}"/>
+                            <Setter TargetName="ProgressCount" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="DownloadInfo1" Property="Text" >
+                                <Setter.Value>
+                                    <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                        <Binding Source="h2684a2f2g7e7eg4d64gb960g148bd16142ec"/>
+                                        <Binding Path="Data.FailedMods.Count"/>
+                                    </MultiBinding>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter TargetName="DownloadInfo1" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                            <Setter TargetName="DownloadInfo1" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="DownloadInfo1" Property="TextWrapping" Value="Wrap"/>
+                            <Setter TargetName="DownloadInfo2" Property="Visibility" Value="Collapsed"/>
+                        </MultiDataTrigger>
+                        <!-- When finished downloading/updating and just some mods failed-->
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Data.RequestedMods.Count}" Value="0"/>
+                                <Condition Binding="{Binding Data.FinishedMods.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True"/>
+                                <Condition Binding="{Binding Data.FailedMods.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="ProgressCircleBg" Property="Source" Value="{StaticResource ModCircleLoadFailedCircle}"/>
+                            <Setter TargetName="Icon" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="Icon" Property="Source" Value="{StaticResource redWarningIcon}"/>
+                            <Setter TargetName="ProgressCount" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="DownloadInfo1" Property="Text" >
+                                <Setter.Value>
+                                    <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                        <Binding Source="h19197e03g617cg4481g95bag04393b1f7e98"/>
+                                        <Binding Path="Data.FailedMods.Count"/>
+                                        <!-- Total amount of processed mods -->
+                                        <Binding Path="Tag" ElementName="Root"/>
+                                    </MultiBinding>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter TargetName="DownloadInfo1" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                            <Setter TargetName="DownloadInfo1" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="DownloadInfo1" Property="TextWrapping" Value="Wrap"/>
+                            <Setter TargetName="DownloadInfo2" Property="Visibility" Value="Collapsed"/>
+                        </MultiDataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </ControlTemplate.Resources>
+            <Grid>
+                <Control x:Name="DownloadingModsWidget" Template="{StaticResource ModDownloadingWidget}" HorizontalAlignment="Left" VerticalAlignment="Top" Width="700" Height="150" Margin="20,5" Opacity="0"/> 
+            </Grid>
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding Data.RequestedMods.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="fadeInModDownloadWidgetAnimation">
+                            <BeginStoryboard.Storyboard>
+                                <Storyboard FillBehavior="Stop" >
+                                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="DownloadingModsWidget" >
+                                        <EasingDoubleKeyFrame KeyTime="0" Value="0"/>
+                                        <EasingDoubleKeyFrame KeyTime="0:0:0.2" Value="1"/>
+                                    </DoubleAnimationUsingKeyFrames>
+                                </Storyboard>
+                            </BeginStoryboard.Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <BeginStoryboard x:Name="fadeOutModDownloadWidgetAnimation">
+                            <BeginStoryboard.Storyboard>
+                                <Storyboard FillBehavior="Stop" >
+                                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="DownloadingModsWidget">
+                                        <EasingDoubleKeyFrame KeyTime="0" Value="1"/>
+                                        <EasingDoubleKeyFrame KeyTime="0:0:5" Value="1"/>
+                                        <EasingDoubleKeyFrame KeyTime="0:0:5.2" Value="0"/>
+                                    </DoubleAnimationUsingKeyFrames>
+                                </Storyboard>
+                            </BeginStoryboard.Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.ExitActions>
+                    <Setter TargetName="DownloadingModsWidget" Property="Opacity" Value="1"/>
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+</ls:UIWidget>

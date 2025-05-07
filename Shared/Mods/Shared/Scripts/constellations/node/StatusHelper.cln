@@ -1,0 +1,52 @@
+game.states.StatusHelper = State{
+    function()
+        params.Status = {type = EParamType.String, help = [[Status to apply]]}
+    
+        inputs.TurnOn = {help = [[Input socket that's triggered when we want to apply status]]}
+        inputs.TurnOff = {help = [[Input socket that's triggered when we want to remove status]]}
+        inputs.Toggle = {help = [[Toggle the given status from the entity]]}
+
+        outputs.On = { help = [[Triggered when the status has been applied]] }
+        outputs.Off = { help = [[Triggered when the status has been removed]] }
+        
+        helpers.HasStatus = function()
+            return HasAppliedStatus(me, params.Status)
+        end
+
+        helpers.SwitchStatus = function(on, cause)
+            local hasStatus = helpers.HasStatus()
+            if on and not hasStatus then               
+                ApplyStatus(me, params.Status, true, -1.0, cause)
+            elseif not on and hasStatus then
+                RemoveStatus(me, params.Status, cause)
+            end
+        end
+
+        socketEvents.TurnOn = function(ev)
+            helpers.SwitchStatus(true, Entity(ev.Object))
+        end
+
+        socketEvents.TurnOff = function(ev)
+            helpers.SwitchStatus(false, Entity(ev.Object))
+        end
+
+        socketEvents.Toggle = function(ev)
+            helpers.SwitchStatus(not helpers.HasStatus(), Entity(ev.Object))
+        end
+
+        events.StatusApplied = function(ev)
+            if ev.Status.StatusID == params.Status then
+                local cause = ev.CauseEntity and ev.CauseEntity.EntityRef or nil
+                TriggerOutput(outputs.On, cause, nil)
+            end
+        end
+
+        events.StatusRemoved = function(ev)
+            if ev.Status.StatusID == params.Status and not helpers.HasStatus() then
+                local cause = ev.CauseEntity and ev.CauseEntity.EntityRef or nil
+                TriggerOutput(outputs.Off, cause, nil)
+            end
+        end
+
+    end
+}
