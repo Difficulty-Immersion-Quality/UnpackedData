@@ -333,16 +333,36 @@
                     </Grid>
 
                     <!-- Pinned Tooltips -->
-                    <Grid x:Name="ExtendedInfo" Visibility="{Binding ElementName=infoPanel, Path=Visibility,Converter={StaticResource InvertVisibilityConverter}}" ls:TooltipExtender.Owner="{Binding DataContext.CurrentPlayer.SelectedCharacter,RelativeSource={RelativeSource AncestorType=ls:UIWidget}}" ls:TooltipExtender.Context="World">
-	                    <b:Interaction.Triggers>
-		                    <b:EventTrigger EventName="MouseRightButtonDown">
-			                    <b:ChangePropertyAction TargetName="infoPanel" PropertyName="Visibility" Value="Visible"/>
-		                    </b:EventTrigger>
-	                    </b:Interaction.Triggers>
-                        <ls:LSButton BoundEvent="UIPinTooltip" Background="#BB000000" IsEnabled="{Binding ElementName=ExtendedInfo, Path=IsVisible}" Command="{Binding DataContext.ReleaseCursorDataCommand.ActionCommand}" >
+                    <ls:LSInputBinding x:Name="ExamineInput"
+                        BoundEvent="UIPinTooltip"
+                        IsEnabled="{Binding CurrentPlayer.CurrentTarget.IsExaminable, FallbackValue=False}"
+                        Command="{Binding ExamineCommand}"
+                        CommandParameter="{Binding CurrentPlayer.CurrentRegularOrCombatTurnTarget.EntityHandle}"/>
+
+                    <ls:LSInputBinding x:Name="PinInput"
+                        BoundEvent="UIPinTooltip"
+                        IsEnabled="{Binding ElementName=TargetPanel, Path=IsVisible}"
+                        Command="{Binding PinCursorDataCommand.ActionCommand}">
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="LSInputBindingPressed">
+                                <b:ChangePropertyAction TargetName="TTTransform" PropertyName="X" Value="{Binding CurrentPlayer.UIData.Cursor.Position.X}"/>
+                                <b:ChangePropertyAction TargetName="TTTransform" PropertyName="Y" Value="{Binding CurrentPlayer.UIData.Cursor.Position.Y}"/>
+                                <b:ChangePropertyAction TargetName="infoPanel" PropertyName="Visibility" Value="Collapsed"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
+                    </ls:LSInputBinding>
+
+                    <Grid x:Name="ExtendedInfo" Visibility="Collapsed" ls:TooltipExtender.Owner="{Binding CurrentPlayer.SelectedCharacter}" ls:TooltipExtender.Context="World">
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="MouseRightButtonDown">
+                                <b:ChangePropertyAction TargetName="infoPanel" PropertyName="Visibility" Value="Visible"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
+                        <ls:LSButton BoundEvent="UIPinTooltip" Background="#BB000000">
                             <b:Interaction.Triggers>
                                 <b:EventTrigger EventName="Click">
                                     <b:ChangePropertyAction TargetName="infoPanel" PropertyName="Visibility" Value="Visible"/>
+                                    <b:InvokeCommandAction Command="{Binding ReleaseCursorDataCommand.ActionCommand}"/>
                                 </b:EventTrigger>
                             </b:Interaction.Triggers>
                             <ls:LSButton.Template>
@@ -370,25 +390,6 @@
                         </StackPanel>
 
                     </Grid>
-                    <ls:LSInputBinding x:Name="ExamineInput"
-                                       BoundEvent="UIPinTooltip"
-                                       IsEnabled="{Binding CurrentPlayer.CurrentTarget.IsExaminable, FallbackValue=False}"
-                                       Command="{Binding ExamineCommand}"
-                                       CommandParameter="{Binding CurrentPlayer.CurrentRegularOrCombatTurnTarget.EntityHandle}"/>
-
-                    <ls:LSInputBinding x:Name="PinInput"
-                                       BoundEvent="UIPinTooltip"
-                                       IsEnabled="{Binding ElementName=TargetPanel, Path=IsVisible}"
-                                       Command="{Binding PinCursorDataCommand.ActionCommand}">
-                        <b:Interaction.Triggers>
-                            <b:EventTrigger EventName="LSInputBindingPressed">
-                                <b:ChangePropertyAction TargetName="TTTransform" PropertyName="X" Value="{Binding CurrentPlayer.UIData.Cursor.Position.X}"/>
-                                <b:ChangePropertyAction TargetName="TTTransform" PropertyName="Y" Value="{Binding CurrentPlayer.UIData.Cursor.Position.Y}"/>
-                                <b:ChangePropertyAction TargetName="infoPanel" PropertyName="Visibility" Value="Collapsed"/>
-                            </b:EventTrigger>
-                        </b:Interaction.Triggers>
-                    </ls:LSInputBinding>
-
                 </Grid>
 
                 <ControlTemplate.Triggers>
@@ -401,6 +402,13 @@
                         </MultiDataTrigger.Conditions>
                         <Setter TargetName="TargetAmount" Property="Visibility" Value="Visible"/>
                     </MultiDataTrigger>
+
+                    <DataTrigger Binding="{Binding Cloud.HasSurface}" Value="True">
+                        <Setter TargetName="ExtendedInfo" Property="Visibility" Value="Visible"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Surface.HasSurface}" Value="True">
+                        <Setter TargetName="ExtendedInfo" Property="Visibility" Value="Visible"/>
+                    </DataTrigger>
 
                     <!--Change the hover tooltip text color depending on rarity-->
                     <DataTrigger Binding="{Binding CurrentPlayer.CurrentTarget.Rarity}" Value="Uncommon">

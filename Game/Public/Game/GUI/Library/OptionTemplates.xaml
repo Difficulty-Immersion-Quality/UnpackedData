@@ -12,17 +12,17 @@
         <ResourceDictionary Source="OptionTemplates_Shared.xaml"/>
     </ResourceDictionary.MergedDictionaries>
 
-    <DataTemplate x:Key="SliderRepeatButtonTemplate" DataType="{x:Type ls:LSRepeatButton}">
-        <DataTemplate.Resources>
+    <ControlTemplate x:Key="SliderRepeatButtonTemplate" TargetType="{x:Type ls:LSRepeatButton}">
+        <ControlTemplate.Resources>
             <BitmapImage x:Key="DefaultButtonImage" UriSource="pack://application:,,,/Core;component/Assets/CharacterCreation/input_arrow_d.png"/>
-        </DataTemplate.Resources>
+        </ControlTemplate.Resources>
 
         <Grid>
             <Ellipse x:Name="Hitbox" Fill="Transparent" Width="60" Height="60"/>
             <Image x:Name="img" Stretch="None" Source="{StaticResource DefaultButtonImage}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Grid>
 
-        <DataTemplate.Triggers>
+        <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter TargetName="img" Property="Source" Value="pack://application:,,,/Core;component/Assets/CharacterCreation/input_arrow_h.png"/>
             </Trigger>
@@ -30,8 +30,8 @@
             <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="img" Property="Opacity" Value="{StaticResource DisabledOpacity}"/>
             </Trigger>
-        </DataTemplate.Triggers>
-    </DataTemplate>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
 
     <Style x:Key="OptionSliderThumbStyle" TargetType="ls:LSThumb">
         <Setter Property="SnapsToDevicePixels" Value="True"/>
@@ -106,10 +106,15 @@
         </ControlTemplate.Resources>
         <StackPanel Orientation="Horizontal">
             <Grid HorizontalAlignment="Center">
+                <b:Interaction.Triggers>
+                    <b:PropertyChangedTrigger Binding="{Binding Value, RelativeSource={RelativeSource TemplatedParent}}">
+                        <ls:LSPlaySound Sound="UI_HUD_SplitItem_Step"/>
+                    </b:PropertyChangedTrigger>
+                </b:Interaction.Triggers>
                 <ls:LSNineSliceImage x:Name="bg" HorizontalAlignment="Center" VerticalAlignment="Center" ImageSource="{StaticResource SliderBackground}" Width="{Binding Width, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource AddConverter}, ConverterParameter=-100}" Height="80" Slices="106,20"/>
 
-                <ls:LSRepeatButton x:Name="PART_DecreaseRepeatButton" HorizontalAlignment="Left" ContentTemplate="{StaticResource SliderRepeatButtonTemplate}" SoundID="UI_HUD_Shared_Slider_LeftButton" Command="Slider.DecreaseLarge" />
-                <ls:LSRepeatButton x:Name="PART_IncreaseRepeatButton" HorizontalAlignment="Right" ContentTemplate="{StaticResource SliderRepeatButtonTemplate}" SoundID="UI_HUD_Shared_Slider_RightButton"  Command="Slider.IncreaseLarge" RenderTransformOrigin="0.5, 0.5">
+                <ls:LSRepeatButton x:Name="PART_DecreaseRepeatButton" HorizontalAlignment="Left" Template="{StaticResource SliderRepeatButtonTemplate}" SoundID="UI_HUD_Shared_Slider_LeftButton" Command="Slider.DecreaseLarge" />
+                <ls:LSRepeatButton x:Name="PART_IncreaseRepeatButton" HorizontalAlignment="Right" Template="{StaticResource SliderRepeatButtonTemplate}" SoundID="UI_HUD_Shared_Slider_RightButton"  Command="Slider.IncreaseLarge" RenderTransformOrigin="0.5, 0.5">
                     <ls:LSRepeatButton.RenderTransform>
                         <ScaleTransform ScaleX="-1"/>
                     </ls:LSRepeatButton.RenderTransform>
@@ -171,7 +176,15 @@
     </ControlTemplate>
 
     <ControlTemplate x:Key="ComboBoxTemplate">
-        <ls:LSComboBox x:Name="comboBox" ItemsSource="{Binding ComboItems, Mode=OneWay}" SelectedItem="{Binding SelectedItem}" Foreground="{StaticResource LS_specialTxtColor}" Style="{StaticResource ComboBoxStyle}" Text="{Binding SelectedItem.Name, Mode=OneWay}" IsEnabled="{Binding Enabled, Mode=OneWay}" SoundID="UI_HUD_Options_ComboBox"/>
+        <ls:LSComboBox x:Name="comboBox" ItemsSource="{Binding ComboItems, Mode=OneWay}" SelectedItem="{Binding SelectedItem}" Foreground="{StaticResource LS_specialTxtColor}" Style="{StaticResource ComboBoxStyle}"
+                       Text="{Binding SelectedItem.Name, Mode=OneWay}" IsEnabled="{Binding Enabled, Mode=OneWay}" SoundID="UI_HUD_Options_ComboBox"
+                       d:DataContext="{d:DesignInstance {x:Type ls:VMComboBoxSetting}, IsDesignTimeCreatable=True}">
+            <b:Interaction.Triggers>
+                <b:EventTrigger EventName="SelectionChanged">
+                    <b:InvokeCommandAction Command="{Binding DataContext.ValueChanged, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+                </b:EventTrigger>
+            </b:Interaction.Triggers>
+        </ls:LSComboBox>
 
         <ControlTemplate.Triggers>
             <DataTrigger Binding="{Binding ComboItems.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=1}" Value="False">
@@ -181,12 +194,17 @@
     </ControlTemplate>
 
     <ControlTemplate x:Key="TickBoxTemplate">
-        <ls:LSToggleButton x:Name="TickBoxButton" Style="{StaticResource TickBox}" IsChecked="{Binding Value}" Command="{Binding DataContext.OnChangeToggleButton, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" IsEnabled="{Binding Enabled}" SoundID="UI_HUD_Options_ToggleButton"/>
+        <ls:LSToggleButton x:Name="TickBoxButton" Style="{StaticResource TickBox}" IsChecked="{Binding Value}" Command="{Binding DataContext.ValueChanged, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"
+                           CommandParameter="{Binding .}" IsEnabled="{Binding Enabled}" SoundID="UI_HUD_Options_ToggleButton"
+                           d:DataContext="{d:DesignInstance {x:Type ls:VMTickBoxSetting}, IsDesignTimeCreatable=True}"/>
     </ControlTemplate>
 
     <ControlTemplate x:Key="SliderTemplate">
-        <Slider x:Name="element" DataContext="{Binding}" Template="{StaticResource OptionsSliderTemplate}" Value="{Binding Value}" Minimum="{Binding Min}" Maximum="{Binding Max}" IsSnapToTickEnabled="True" Width="{Binding Width, RelativeSource={RelativeSource TemplatedParent}, FallbackValue=868}"
-                SmallChange="{Binding Max, Converter={StaticResource DivideAndRoundConverter}, ConverterParameter='40'}" LargeChange="{Binding Max, Converter={StaticResource DivideAndRoundConverter}, ConverterParameter='10'}" IsEnabled="{Binding Enabled}" TickFrequency="1" >
+        <Slider x:Name="element" DataContext="{Binding}" Template="{StaticResource OptionsSliderTemplate}" Value="{Binding Value}" Minimum="{Binding Min}" Maximum="{Binding Max}" IsSnapToTickEnabled="True"
+                Width="{Binding Width, RelativeSource={RelativeSource TemplatedParent}, FallbackValue=868}"
+                SmallChange="{Binding Max, Converter={StaticResource DivideAndRoundConverter}, ConverterParameter='40'}" LargeChange="{Binding Max, Converter={StaticResource DivideAndRoundConverter}, ConverterParameter='10'}"
+                IsEnabled="{Binding Enabled}" TickFrequency="1"
+                d:DataContext="{d:DesignInstance {x:Type ls:VMSliderSetting}, IsDesignTimeCreatable=True}">
             <b:Interaction.Triggers>
                 <b:EventTrigger EventName="ValueChanged">
                     <b:InvokeCommandAction Command="{Binding DataContext.ValueChanged, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
@@ -511,7 +529,7 @@
 
     <ControlTemplate x:Key="OptionTopButtons">
         <Grid MaxWidth="3840">
-            <ls:LSButton x:Name="CloseButtonTop" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="{StaticResource SmallCloseButtonDefaultMargin}" Style="{StaticResource SmallCloseButton}" SoundID="UI_HUD_Options_Close" Command="{Binding CancelCommand}" BoundEvent="ToggleInGameMenu"/>
+            <ls:LSButton x:Name="CloseButtonTop" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="{StaticResource SmallCloseButtonDefaultMargin}" Style="{StaticResource SmallCloseButton}" SoundID="UI_HUD_Options_Close" Command="{Binding CustomEvent}" CommandParameter="CloseWidget"  BoundEvent="ToggleInGameMenu"/>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,44,0,0">
                 <StackPanel.Resources>
                     <Style TargetType="ls:LSButton" >
@@ -655,7 +673,7 @@
                         </ListBox.Template>
                     </ListBox>
 
-                    <Image Source="{StaticResource Divider}" Stretch="None" VerticalAlignment="Center"/>
+                    <Image Source="{StaticResource Divider}" Stretch="None" VerticalAlignment="Center" Visibility="{Binding Options.Count, Converter={StaticResource CountToVisibilityConverter}, FallbackValue=Collapsed}"/>
 
                     <StackPanel x:Name="Preview" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,60,50,0" Width="1350" Orientation="Vertical" DataContext="{Binding ElementName=Options, Path=SelectedItem}">
 

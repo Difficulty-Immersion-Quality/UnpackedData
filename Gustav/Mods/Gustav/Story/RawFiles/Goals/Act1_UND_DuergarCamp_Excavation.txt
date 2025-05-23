@@ -680,6 +680,7 @@ DB_SelectedDialog((DIALOGRESOURCE)UND_TheDrowNere_Mutiny_27bbde20-f6d3-5c4c-c7ac
 IF
 FlagSet(UND_TheDrowNere_State_KilledGnomeSerene_4842989d-23d1-c137-560b-f0ad880a9576,_,_)
 THEN
+PROC_SceneManager_RemoveFromScene(S_UND_GnomeWorkerSerene_Trapped_0203c8b5-2a34-4bf2-b729-f0f240f26a4f, "PROC_UND_KethericCity_Mutiny_Scene");
 Die(S_UND_GnomeWorkerSerene_Trapped_0203c8b5-2a34-4bf2-b729-f0f240f26a4f,DEATHTYPE.Incinerate,1);
 SetOnStage(S_UND_GnomeWorkerSerene_Trapped_0203c8b5-2a34-4bf2-b729-f0f240f26a4f,0);
 
@@ -688,10 +689,13 @@ FlagSet(UND_TheDrowNere_State_KilledSergeant_46d5a2aa-186a-5f0a-f9f8-7c0048baaa8
 AND
 DialogRemoveActorFromDialog(_Id,S_UND_DuergarLoyalSergeant_0aeb5411-5f13-4263-acb0-87f0689de2e5,1)
 THEN
+PROC_SceneManager_RemoveFromScene(S_UND_DuergarLoyalSergeant_0aeb5411-5f13-4263-acb0-87f0689de2e5,"PROC_UND_KethericCity_Mutiny_Scene");
 Die(S_UND_DuergarLoyalSergeant_0aeb5411-5f13-4263-acb0-87f0689de2e5,DEATHTYPE.Falling,1);
 
 PROC
-PROC_SceneInterrupted(_,_Player,"PROC_UND_KethericCity_Mutiny_Scene","EnteredCombat")
+PROC_SceneInterrupted(_,_Player,"PROC_UND_KethericCity_Mutiny_Scene", _Interruption)
+AND
+DB_GLO_GenericSceneManager_ViolenceReason(_Interruption)
 THEN
 PROC_GlobalSetFlagAndCache((FLAG)UND_DuergarCamp_State_SidedNone_c17245d9-ecb7-4562-a9fe-74a6759ff47b);
 PROC_SceneOver("PROC_UND_KethericCity_Mutiny_Scene");
@@ -736,9 +740,25 @@ THEN
 PROC_GlobalSetFlagAndCache((FLAG)UND_DuergarCamp_State_GnomesHostile_53aab2ec-c119-b4ed-c3b2-7181e4ecbaf7);
 
 IF
+DialogEnded((DIALOGRESOURCE)UND_TheDrowNere_Mutiny_27bbde20-f6d3-5c4c-c7ac-0c7345b29a9a,_) //Dialog ended earlier without a choice but wasnt interrupted
+AND
+NOT QRY_UND_DuergarCamp_AnyMutinySidePicked()
+THEN
+PROC_GlobalSetFlagAndCache((FLAG)UND_DuergarCamp_State_SidedNone_c17245d9-ecb7-4562-a9fe-74a6759ff47b);
+
+IF
 DialogEnded((DIALOGRESOURCE)UND_TheDrowNere_Mutiny_27bbde20-f6d3-5c4c-c7ac-0c7345b29a9a,_) //Default flow without any interrupts
 THEN
 PROC_SceneOver("PROC_UND_KethericCity_Mutiny_Scene");
+
+QRY
+QRY_UND_DuergarCamp_AnyMutinySidePicked()
+AND
+DB_UND_KethericCity_MutinySides(_MutinyStateFlag)
+AND
+GetFlag(_MutinyStateFlag, NULL_00000000-0000-0000-0000-000000000000, 1)
+THEN
+DB_NOOP(1);
 
 PROC
 PROC_SceneOver("PROC_UND_KethericCity_Mutiny_Scene")
@@ -867,7 +887,6 @@ AND
 DB_GlobalFlag((FLAG)UND_DuergarGuards_Excavation_State_PermaDefeated_3f30c825-10f1-4fa5-84b8-073f293e6650)
 THEN
 PROC_DangerZone_Safe("UND_NereConfrontation");
-
 //END_REGION
 
 //REGION Sergeant and get her boots back
@@ -990,6 +1009,7 @@ FlagSet(UND_TheDrowNere_State_GnomesExecuted_7f3f882c-40fb-430e-8df6-c1d6e450aeb
 AND
 DB_UND_GnomeWorkers(_Gnome,_,_,_,_)
 THEN
+PROC_SceneManager_RemoveFromScene(_Gnome, "PROC_UND_KethericCity_Mutiny_Scene");
 Die(_Gnome,DEATHTYPE.Physical,1);
 
 //END_REGION

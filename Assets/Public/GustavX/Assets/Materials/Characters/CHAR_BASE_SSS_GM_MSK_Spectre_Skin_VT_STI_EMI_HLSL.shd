@@ -1,0 +1,111 @@
+[Vertex shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+
+struct VertexInput
+{
+	float3 Position : POSITION0;
+	float4 InstanceMatrix1 : COLOR1;
+	float4 InstanceMatrix2 : COLOR2;
+	float4 InstanceMatrix3 : COLOR3;
+	float2 TexCoords0 : TEXCOORD0;
+};
+
+struct VertexOutput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float2 TexCoords0 : TEXCOORD0;
+};
+
+VertexOutput main(in VertexInput In)
+{
+	VertexOutput Out;
+
+	// Create Instance World Matrix
+	float4x4 noBillboardWorldMatrix = float4x4(In.InstanceMatrix1, In.InstanceMatrix2, In.InstanceMatrix3, float4(0.0f, 0.0f, 0.0f, 1.0f));
+
+	float4 localPositionStatic = float4(In.Position, 1.0f);
+	// World space position
+	float4 worldPosition = mul(noBillboardWorldMatrix, localPositionStatic);
+
+	// Projected position
+	float4 projectedPosition = mul(g_ViewProjectionMat, worldPosition);
+
+	// Pass projected position to pixel shader
+	Out.ProjectedPosition = projectedPosition;
+
+	Out.TexCoords0 = In.TexCoords0;
+
+	return Out;
+}
+
+
+[Fragment shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+
+struct PixelInput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float2 TexCoords0 : TEXCOORD0;
+};
+
+struct PixelOutput
+{
+	float4 Color0 : SV_Target0;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_MaterialConstants : register(b0)
+{
+	float3 Vector3Parameter_GlowColor1;
+	float FloatParameter_GlowColorBlend2;
+	float3 Vector3Parameter_GlowColor2;
+	float FloatParameter_GlowColorBlend3;
+	float3 Vector3Parameter_GlowColor3;
+	float FloatParameter_GlowMultiplier1;
+	float FloatParameter_GlowMultiplier2;
+	float FloatParameter_GlowMultiplier3;
+	float PADDING0_FloatParameter_GlowMultiplier3;
+	float PADDING1_FloatParameter_GlowMultiplier3;
+};
+VK_DESCRIPTOR(DS_Shader, 1) Texture2D Texture2DParameter_MSKglowmap;
+void CalculateMatEmissiveColor(in float2 in_0,
+	out float3 out_0)
+{
+	// Texture2DNode {
+	float4 Local0 = Texture2DParameter_MSKglowmap.Sample(_DefaultWrapSampler, in_0);
+	// [Local0] Get needed components
+	float Local1 = Local0.x;
+	float Local2 = Local0.y;
+	float Local3 = Local0.z;
+	// } Texture2DNode
+	float Local4 = (Local2 * FloatParameter_GlowColorBlend2);
+	float Local5 = (Local1 - Local4);
+	float Local6 = (FloatParameter_GlowColorBlend3 * Local3);
+	float Local7 = (Local5 - Local6);
+	float Local8 = clamp(Local7, 0.0f, 1.0f);
+	float Local9 = (Local8 * FloatParameter_GlowMultiplier1);
+	float3 Local10 = (Vector3Parameter_GlowColor1 * Local9);
+	float Local11 = (Local2 - Local6);
+	float Local12 = clamp(Local11, 0.0f, 1.0f);
+	float Local13 = (Local12 * FloatParameter_GlowMultiplier2);
+	float3 Local14 = (Vector3Parameter_GlowColor2 * Local13);
+	float3 Local15 = max(Local10, Local14);
+	float Local16 = (Local3 * FloatParameter_GlowMultiplier3);
+	float3 Local17 = (Vector3Parameter_GlowColor3 * Local16);
+	float3 Local18 = max(Local15, Local17);
+	out_0 = Local18;
+}
+
+PixelOutput main(in PixelInput In)
+{
+	PixelOutput Out;
+
+	float3 matEmissiveColor;
+	CalculateMatEmissiveColor(In.TexCoords0, matEmissiveColor);
+	Out.Color0 = float4(matEmissiveColor, 1.0f);
+
+	return Out;
+}

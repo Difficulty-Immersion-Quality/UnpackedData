@@ -561,6 +561,30 @@ PROC_Hirelings_Dismiss((CHARACTER)_Hireling)
 THEN
 NOT DB_Hirelings_FoundOwnAvatar(1);
 
+// Dismissed Hireling should have any wildshapes removed before dismissal.
+PROC
+PROC_Hirelings_Dismiss((CHARACTER)_Hireling)
+AND
+HasActiveStatusWithGroup(_Hireling, "SG_Polymorph",1)
+THEN
+DB_Hirelings_WaitForStatusRemoval(1);
+DB_Hirelings_DismissedHireling(_Hireling);
+PROC_RemoveAllPolymorphs(_Hireling);
+
+// Wait for removal of the status before dismissal.
+IF
+StatusRemoved(_Hireling, _Status,_,_)
+AND
+DB_Hirelings_DismissedHireling((CHARACTER)_Hireling)
+AND
+IsStatusFromGroup(_Status, "SG_Polymorph", 1) // check if the removed status from the Hireling is a SG_Polymorph status
+AND
+HasAppliedStatusWithGroup(_Hireling, "SG_Polymorph", 0) // check to make sure that its the last status that's being removed. Future proofing in case there could be more than one SG_Polymorph on the hireling.
+THEN
+NOT DB_Hirelings_WaitForStatusRemoval(1);
+NOT DB_Hirelings_DismissedHireling(_Hireling);
+PROC_Hirelings_Dismiss(_Hireling);
+
 // Dismissed hireling should move their inventory to their current avatar, and have their equipped items saved so we can restore them later when re-hired.
 PROC
 PROC_Hirelings_Dismiss((CHARACTER)_Hireling)
@@ -572,6 +596,8 @@ AND
 DB_QRYRTN_GetBestAvatarForCompanion(_Hireling,_Avatar)
 AND
 NOT DB_Hirelings_FoundOwnAvatar(1)
+AND
+NOT DB_Hirelings_WaitForStatusRemoval(1)
 THEN
 PROC_Hirelings_ClearEquipmentDB(_Hireling);			// clear the DB of equipment for this hireling from previous usage.
 PROC_Hirelings_SaveEquipment(_Hireling);			// save hireling equipment only.
@@ -585,6 +611,8 @@ AND
 NOT DB_Defeated(_Hireling)
 AND
 DB_Hirelings_HACK_Classes((FLAG)_HireFlag,(CHARACTER)_Hireling,(FLAG)_ClassRecruitedFlag)
+AND
+NOT DB_Hirelings_WaitForStatusRemoval(1)
 THEN
 ClearFlag(_ClassRecruitedFlag,NULL_00000000-0000-0000-0000-000000000000,0);
 NOT DB_PartOfTheTeam(_Hireling); // before Remove so that they're not sent to camp

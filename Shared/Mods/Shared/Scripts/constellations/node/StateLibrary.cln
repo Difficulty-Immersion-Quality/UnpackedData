@@ -19,7 +19,8 @@ game.states.AnimationStates = State{
         Could replace these by strings if that helps legibility.]]
         --
 
-        inputs.Activated = {help = [[Input socket that's triggered when the object is triggered and should transition to the next state]]}
+        inputs.Activate = {help = [[Input socket that's triggered when the object is triggered and should transition to the next state]]}
+        inputs.GoToState = {help = [[Input socket to force the object to move to a specific state. Any static states met during the transition will trigger a NewState output.]]}
 
         outputs.NewState = {help = [[Output socket that's triggered when the lever enters one of the static states, i.e. stops moving]]}
 
@@ -51,20 +52,34 @@ game.states.AnimationStates = State{
         end
 
         -- Tries to find the next state of a given type (static or dynamic) and progress the state there.
-        -- Returns true if the current state was of the wrong type.
+        -- Note that the wanted state will get incremented, not the current state. This is to queue states
         helpers.nextTypedState = function(dynamic)
-            StopTimer(me, "Cnst.AnimationState.TimerFallback")
             local wantedState = me.Blackboard.GetFact("Cnst.AnimationState.WantedState")
             wantedState = helpers.nextState(wantedState) --Move to one state further.
             while helpers.isStateDynamic(wantedState) ~= dynamic do
                 wantedState = helpers.nextState(wantedState) -- If this state isn't right, go to next state.
             end
+            helpers.goToState(wantedState)
+        end
+
+        -- Tries to put the object in a specific static (static or dynamic) and progress the state there.
+        -- Note that this will override any potential existing wanted states, clearing any queued states.
+        helpers.goToState = function(wantedState)
+            local currentState = me.Blackboard.GetFact("Cnst.AnimationState.CurrentState")
+            if currentState == wantedState then
+                return
+            end
             me.Blackboard.SetFact("Cnst.AnimationState.WantedState", wantedState)
-            me.Blackboard.SetFact("Cnst.AnimationState.CurrentState", helpers.nextState(me.Blackboard.GetFact("Cnst.AnimationState.CurrentState")))
-            SetAnimationEvent(me, "SetState", me.Blackboard.GetFact("Cnst.AnimationState.CurrentState"))
-            --Start the next state. If it's the right type, at the animation event handler, it will match the wanted state.
-            --Otherwise, it will simply continue.
-            StartTimer(me, "Cnst.AnimationState.TimerFallback", 10.0, 0)
+
+            if not helpers.isStateDynamic(currentState) then -- lever is in a static state, and is not playing an animation
+                StopTimer(me, "Cnst.AnimationState.TimerFallback")
+                local nextState = helpers.nextState(currentState)
+                me.Blackboard.SetFact("Cnst.AnimationState.CurrentState", nextState)
+                SetAnimationEvent(me, "SetState", me.Blackboard.GetFact("Cnst.AnimationState.CurrentState"))
+                --Start the next state. If it's the right type, at the animation event handler, it will match the wanted state.
+                --Otherwise, it will simply continue.
+                StartTimer(me, "Cnst.AnimationState.TimerFallback", 10.0, 0)
+            end
         end
 
         helpers.animationEnded = function()
@@ -77,7 +92,7 @@ game.states.AnimationStates = State{
                 me.Blackboard.SetFact("Cnst.AnimationState.CurrentState", nextState)
 
                 if not helpers.isStateDynamic(nextState) then
-                    TriggerOutput(outputs.NewState, nil)
+                    TriggerOutput(outputs.NewState, nil, nextState)
                 end
 
                 if nextState ~= wantedState then
@@ -95,9 +110,19 @@ game.states.AnimationStates = State{
             end
         end
 
-        socketEvents.Activated = function(ev)
+        socketEvents.Activate = function(ev)
             --local animationState = me.AnimationState.State -- not supported yet
             helpers.nextTypedState(false) -- Move to next static state after the current, passing through any events.
+        end
+
+        socketEvents.GoToState = function(ev)
+            --local animationState = me.AnimationState.State -- not supported yet
+            local nextState = ev.Param
+            if helpers.findStateIndex(nextState) == nil then
+                DebugLog("For item [1], the GoToState event was thrown with Param [2], which is not a valid state included in params.StateSequence", tostring(me), tostring(nextState))
+                return
+            end
+            helpers.goToState(nextState) -- Move to next static state after the current, passing through any events.
         end
 
         events.TimerFinished = function(ev)
@@ -219,120 +244,6 @@ game.states.LogicGate_AND = State{
     end
 }
 
-game.states.Timer = State{
-    function()
-
-        description = "Generic timer that can be turned on and off."
-
-        params.StartActive = {type = EParamType.Bool, default = false, help = [[Does the object timer start running?]]}
-        params.TickLength = {type = EParamType.Number, default = 6.0, help = [[Timer step duration.]]}
-        params.Repeats = {type = EParamType.Int, default = 0.0, help = [[How often this timer repeats]]}
-        params.TargetEntity = { type = EParamType.String, required = true, help = "Object to which the timer is attached."}
-
-        inputs.Start = {help = "Start Timer"}
-        inputs.Stop = {help = "Stop Timer"}
-
-        outputs.Tick = {help = "Timer Tick"}
-
-        helpers.Init = function()
-            if me.Blackboard.GetFact("TargetEntity") == nil then
-                if params.TargetEntity == "me" then
-                    me.Blackboard.SetFact("TargetEntity", me)
-                else
-                    me.Blackboard.SetFact("TargetEntity",FindEntity(params.TargetEntity))
-                end
-            end
-            me.Blackboard.SetFact("Cnst.Timer.TimerOn", params.StartActive and 1 or 0)
-            if params.StartActive then
-                StartTimer(me, "Cnst.Timer.GenTrapTimer", params.TickLength, params.Repeats)
-                if IsInvolvedInFTB(me.Blackboard.GetFact("TargetEntity")) then
-                    PauseTimer(me, "Cnst.Timer.GenTrapTimer")
-                end
-            end
-        end
-
-        self.OnEditorChanges = function()
-            local timerWasOn = me.Blackboard.GetFact("Cnst.Timer.TimerOn")
-
-            -- always stop/restart even if it was running already and needs to keep running
-            -- to handle changes to the ticklength/repeats parameters
-            StopTimer(me, "Cnst.Timer.GenTrapTimer")
-            me.Blackboard.SetFact("Cnst.Timer.TimerOn", params.StartActive and 1 or 0)
-            if params.StartActive and
-               timerWasOn then
-                StartTimer(me, "Cnst.Timer.GenTrapTimer", params.TickLength, params.Repeats)
-            end
-        end
-
-        self.OnInit = function()
-            if me.Blackboard.GetFact("Cnst.Timer.TimerOn") ~= nil then
-                return
-            end
-
-            helpers.Init()
-        end
-
-        events.EnteredForceTurnBased = function(ev)
-            if me.Blackboard.GetFact("Cnst.Timer.TimerOn") == 1 then
-                PauseTimer(me, "Cnst.Timer.GenTrapTimer")
-            end
-        end
-
-        events.LeftForceTurnBased = function(ev)
-            if me.Blackboard.GetFact("Cnst.Timer.TimerOn") == 1 then
-                if me.Blackboard.GetFact("Cnst.Timer.TimerStartBlockedByFTB") == 1 then
-                    StartTimer(me, "Cnst.Timer.GenTrapTimer", params.TickLength, params.Repeats)
-                else
-                    UnpauseTimer(me, "Cnst.Timer.GenTrapTimer")
-                end
-            end
-            me.Blackboard.ClearFact("Cnst.Timer.TimerStartBlockedByFTB")
-        end
-
-        events.ForceTurnBasedPartyTurnEnded  = function(ev)
-            if me.Blackboard.GetFact("TargetEntity") == nil then
-            else
-                if IsInvolvedInFTB(me.Blackboard.GetFact("TargetEntity")) and
-                    ev.FTBZoneId == me.Blackboard.GetFact("TargetEntity").FTBZoneId and
-                me.Blackboard.GetFact("Cnst.Timer.TimerOn") == 1 then
-                    TriggerOutput(outputs.Tick, nil)
-                end
-            end
-        end
-
-        socketEvents.Start = function(ev)
-            if not IsInvolvedInFTB(me.Blackboard.GetFact("TargetEntity")) then
-                if me.Blackboard.GetFact("Cnst.Timer.TimerOn") ~= 1 then
-                    me.Blackboard.SetFact("Cnst.Timer.TimerOn", 1)
-                    StartTimer(me, "Cnst.Timer.GenTrapTimer", params.TickLength, params.Repeats)
-                else
-                    StopTimer(me, "Cnst.Timer.GenTrapTimer")
-                    StartTimer(me, "Cnst.Timer.GenTrapTimer", params.TickLength, params.Repeats)
-                end
-            else
-                me.Blackboard.SetFact("Cnst.Timer.TimerOn", 1)
-                me.Blackboard.SetFact("Cnst.Timer.TimerStartBlockedByFTB", 1)
-            end
-        end
-
-        socketEvents.Stop = function(ev)
-            me.Blackboard.ClearFact("Cnst.Timer.TimerStartBlockedByFTB")
-            if me.Blackboard.GetFact("Cnst.Timer.TimerOn") == 1 then
-                StopTimer(me, "Cnst.Timer.GenTrapTimer")
-                me.Blackboard.SetFact("Cnst.Timer.TimerOn", 0)
-            elseif me.Blackboard.GetFact("Cnst.Timer.TimerOn") == nil then
-                me.Blackboard.SetFact("Cnst.Timer.TimerOn", 0)
-            end
-        end
-
-        events.TimerFinished = function(ev)
-            if ev.TimerName == "Cnst.Timer.GenTrapTimer" then
-                TriggerOutput(outputs.Tick, nil)
-            end
-        end
-
-    end
-}
 
 game.states.StoryInteractionFilter = State{
     function()

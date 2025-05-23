@@ -149,6 +149,10 @@
                     </b:EventTrigger>
                 </b:Interaction.Triggers>
 
+                <b:Interaction.Behaviors>
+                    <ls:RuleSetModifierValueBehavior x:Name="IronManModifier" Modifiers="{Binding Data.CurrentRuleSetModifiers}" ModifierName="IRONMAN_MODE"/>
+                </b:Interaction.Behaviors>
+
                 <Grid x:Name="SplitScreenBg" Visibility="Collapsed" HorizontalAlignment="Stretch" Tag="" VerticalAlignment="Stretch">
                     <Grid.OpacityMask>
                         <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
@@ -507,7 +511,7 @@
                                                 <MultiDataTrigger>
                                                     <MultiDataTrigger.Conditions>
                                                         <Condition Binding="{Binding Tag, RelativeSource={RelativeSource Mode=Self}}" Value="FTB"/>
-                                                        <Condition Binding="{Binding DataContext.CurrentPlayer.SelectedCharacter.CharacterMode, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="InFTB"/>
+                                                        <Condition Binding="{Binding DataContext.CurrentPlayer.SelectedCharacter.CharacterMode, ElementName=shortcutsMenu}" Value="InFTB"/>
                                                     </MultiDataTrigger.Conditions>
                                                     <Setter TargetName="SlotBg" Property="Source" Value="{StaticResource RadialSlotActiveBg}"/>
                                                 </MultiDataTrigger>
@@ -606,7 +610,7 @@
 
                 <StackPanel x:Name="Supplies" Orientation="Horizontal"  VerticalAlignment="Top" HorizontalAlignment="Right" Margin="74,116,74,0">
                     <TextBlock Text="{Binding Source='h0320a4c0g8539g4bc1g9c6bgb2f33eb48140', Converter={StaticResource TranslatedStringConverter}}" TextAlignment="Right" Foreground="{StaticResource LS_baseTxtColor}" VerticalAlignment="Center" FontSize="{StaticResource ScaledDefaultFontSize}" Margin="0,0,12,0" FontWeight="DemiBold"/>
-                    <TextBlock Text="{Binding DataContext.CurrentPlayer.PartySupplies, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" TextAlignment="Right" Foreground="{StaticResource LS_tint100}" VerticalAlignment="Center" Background="Transparent" FontSize="{StaticResource ScaledIntermediateFontSize}" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding DataContext.CurrentPlayer.PartySupplies, ElementName=shortcutsMenu}" TextAlignment="Right" Foreground="{StaticResource LS_tint100}" VerticalAlignment="Center" Background="Transparent" FontSize="{StaticResource ScaledIntermediateFontSize}" FontWeight="Bold"/>
                     <Image x:Name="SuppliesImage" VerticalAlignment="Center" Source="{StaticResource campSuppliesIcon}" Stretch="Uniform" Width="86" Margin="-10,0,0,0"/>
                 </StackPanel>
 
@@ -639,9 +643,9 @@
                      Visibility="Collapsed">
                      <Run Text="{Binding Source='h836ff844g6a45g48edgbfddgf254f3e614de', Converter={StaticResource TranslatedStringConverter}}"/><Run
                           Text="{Binding Source='hb897c56egaa6fg460bg8676g8ebfa0340954', Converter={StaticResource TranslatedStringConverter}}"/><Run 
-                          Text="{Binding DataContext.CurrentPlayer.RequiredPartySupplies, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"/><Run
+                          Text="{Binding DataContext.CurrentPlayer.RequiredPartySupplies, ElementName=shortcutsMenu}"/><Run
                           Text="{Binding Source='hd64bfe4cgadadg4468g8b0ag70330ffc717c', Converter={StaticResource TranslatedStringConverter}}"/><Run
-                          Text="{Binding DataContext.CurrentPlayer.PartySupplies, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"/>
+                          Text="{Binding DataContext.CurrentPlayer.PartySupplies, ElementName=shortcutsMenu}"/>
                     </TextBlock>
                 </StackPanel>
 
@@ -657,8 +661,15 @@
                 </StackPanel>
 
                 <StackPanel x:Name="ButtonHintContainer" Style="{StaticResource ButtonHint.Container.Center}" >
-                    <ls:LSInputBinding x:Name="CloseMenuBinding" Command="{Binding CustomEvent}" CommandParameter="CloseGameMenu" EatInput="False" BoundEvent="UIAccept"
-                             IsEnabled="{Binding SelectedItem.IsEnabled, ElementName=MenuRadial}"/>
+                    <ls:LSInputBinding x:Name="CloseMenuBinding" EatInput="False" BoundEvent="UIAccept"
+                             IsEnabled="{Binding SelectedItem.IsEnabled, ElementName=MenuRadial}">
+                        <b:Interaction.Triggers>
+                            <!-- The opening of the next widget will happen two frames after this input binding has been triggered, so let's delay the closure of this widget one frame to prevent flashes to the player -->
+                            <b:TimerTrigger EventName="LSInputBindingPressed" MillisecondsPerTick="0" TotalTicks="1">
+                                <b:InvokeCommandAction Command="{Binding DataContext.CustomEvent, ElementName=shortcutsMenu}" CommandParameter="CloseGameMenu"/>
+                            </b:TimerTrigger>
+                        </b:Interaction.Triggers>
+                    </ls:LSInputBinding>
 
                     <ls:LSInputBinding x:Name="CloseMenuBindingTrigger" Command="{Binding CustomEvent}" CommandParameter="CloseGameMenu" EatInput="False" BoundEvent="PanelSelect"
                              IsEnabled="{Binding SelectedItem.IsEnabled, ElementName=MenuRadial}"/>
@@ -673,14 +684,14 @@
                        Content="{Binding CurrentPlayer.UIData.InputEvents, ConverterParameter=UIMessageBoxY, Converter={StaticResource FindInputEventConverter}}" Visibility="Collapsed">
                         <b:Interaction.Triggers>
                             <b:EventTrigger EventName="LSButtonPressed">
-                                <b:InvokeCommandAction Command="{Binding DataContext.CustomEvent, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="CloseWidget"/>
+                                <b:InvokeCommandAction Command="{Binding DataContext.CustomEvent, ElementName=shortcutsMenu}" CommandParameter="CloseGameMenu"/>
                             </b:EventTrigger>
                         </b:Interaction.Triggers>
                     </ls:LSButton>
 
                     <ls:LSButton x:Name="QuickLoad" Style="{StaticResource ControllerHoldButtonStyle}"
                        Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIMessageBoxX'}"
-                       Visibility="Collapsed" Command="{Binding DataContext.QuickLoadCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"
+                       Visibility="Collapsed" Command="{Binding DataContext.QuickLoadCommand, ElementName=shortcutsMenu}"
                        Tag="{Binding Source='hcbe72274gae5eg4893g95f5g958f37baa0c9', Converter={StaticResource TranslatedStringConverter}}"  VerticalAlignment="Center"/>
 
                     <ls:LSButton x:Name="PingButton" VerticalAlignment="Center" BoundEvent="JumpToFromTab" Tag="{Binding Source='hfe7d4028g2faag4431g974ag7cbf0c3ef163', Converter={StaticResource TranslatedStringConverter}}"
@@ -688,7 +699,7 @@
                        Visibility="Collapsed" Command="{Binding RequestPingState}">
                         <b:Interaction.Triggers>
                             <b:EventTrigger EventName="LSButtonPressed">
-                                <b:InvokeCommandAction Command="{Binding DataContext.CustomEvent, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="CloseWidget"/>
+                                <b:InvokeCommandAction Command="{Binding DataContext.CustomEvent, ElementName=shortcutsMenu}" CommandParameter="CloseGameMenu"/>
                             </b:EventTrigger>
                         </b:Interaction.Triggers>
                     </ls:LSButton>
@@ -1388,7 +1399,7 @@
                 <DataTrigger Binding="{Binding CurrentPlayer.UIData.CanLoadState}" Value="BlockedUnknown">
                     <Setter TargetName="QuickLoad" Property="IsEnabled" Value="False"/>
                 </DataTrigger>
-                <DataTrigger Binding="{Binding Data.CurrentRuleSetModifiers, Converter={StaticResource RuleSetModifierValueConverter}, ConverterParameter='IRONMAN_MODE'}" Value="True">
+                <DataTrigger Binding="{Binding ModifierEnabled, ElementName=IronManModifier}" Value="True">
                     <Setter TargetName="QuickLoad" Property="Visibility" Value="Collapsed"/>
                 </DataTrigger>
 

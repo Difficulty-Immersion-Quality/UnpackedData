@@ -13,6 +13,12 @@ game.states.SpikeTrap = State{
         outputs.TryActivateInt = {internal = true}
         inputs.ActivatedInt = {internal = true}
 
+        inputs.DisabledInt = {internal = true}
+
+        inputs.EnabledInt = {internal = true}
+
+        outputs.ForceStateInt = {internal = true}
+
         inputs.OverweightInt = {internal=true}
 
         outputs.ExplodeInt = {internal = true}
@@ -106,6 +112,12 @@ game.states.SpikeTrap = State{
             help = "Does the spike trap break on Disarm?"
         }
 
+        params.DefaultState = {
+            type=EParamType.String,
+            default = "Down",
+            help = "Default state of the spikes. Accepts 'Up' or 'Down'",
+        }
+
 
         nodes.PerceptionDisarmOnOff = Proxy{
             game.states.PerceptionDisarmOnOff,
@@ -125,14 +137,17 @@ game.states.SpikeTrap = State{
                       Disable = {outputs.DisableInt},
                       TryActivate = {outputs.TryActivateInt},
                       Reveal = {outputs.TryActivateInt}},
-            outputs = {Activate = {inputs.ActivatedInt}}
+            outputs = {Activate = {inputs.ActivatedInt},
+                       Disabled = {inputs.DisabledInt},
+                       Enabled = {inputs.EnabledInt}}
                     }
 
         nodes.AnimationState = Proxy{
             game.states.AnimationStates,
-            params = {StateSequence = {0,4,2,5,0},
+            params = {StateSequence = {2,5,0,4,2},
                         DynamicStates = {4,5}},
-            inputs = {Activated = {outputs.ToNextStateInt}},
+            inputs = {Activate = {outputs.ToNextStateInt},
+                      GoToState = {outputs.ForceStateInt}},
             outputs = {NewState = {inputs.NextStateReachedInt}},
         }
 
@@ -152,17 +167,43 @@ game.states.SpikeTrap = State{
         socketEvents.OverweightInt = function(ev)
             if me.Blackboard.GetFact("Cnst.AnimationState.CurrentState") == 0 then
                 TriggerOutput(outputs.TryActivateInt, ev.Object, ev.Param)
-                TriggerOutput(outputs.ExplodeInt, ev.Object, ev.Param)
             end
         end
 
         socketEvents.ActivatedInt = function(ev)
+            if me.Blackboard.GetFact("Cnst.AnimationState.CurrentState") == 0 then
+                TriggerOutput(outputs.ExplodeInt, ev.Object, ev.Param)
+            end
             TriggerOutput(outputs.ToNextStateInt, ev.Object, ev.Param)
         end
 
         socketEvents.NextStateReachedInt = function(ev)
             if me.Blackboard.GetFact("Cnst.AnimationState.CurrentState") == 2 then
                 TriggerOutput(outputs.ToNextStateInt, ev.Object, ev.Param) --Go back to disarmed
+            end
+        end
+
+        self.OnInit = function()
+            if me.Blackboard.GetFact("Cnst.SpikeTrap.DidInit") == nil then
+                me.Blackboard.SetFact("Cnst.SpikeTrap.DidInit", 1)
+                if string.lower(params.DefaultState) == "down" then
+                    TriggerOutput(outputs.ForceStateInt, nil, 0)
+                elseif string.lower(params.DefaultState) == "up" then
+                    --Matches default animation state.
+                else
+                    DebugLogCritical("The Spike trap [1]_[2] default state parameter is neither 'up' nor 'down'.", me.Name, me.UUID)
+                end
+            end
+        end
+
+        socketEvents.DisabledInt = function(ev)
+            TriggerOutput(outputs.ForceStateInt, ev.Object, 0)
+        end
+
+        socketEvents.EnabledInt = function(ev)
+            if me.Blackboard.GetFact("Cnst.WeightTrigger.Overweight") == 1 and
+               me.Blackboard.GetFact("Cnst.AnimationState.CurrentState") == 0 then
+                TriggerOutput(outputs.TryActivateInt, ev.Object, ev.Param)
             end
         end
 

@@ -117,13 +117,13 @@
             <Image Grid.Column="1" Source="{StaticResource SliderBackgroundContainerImage}" SnapsToDevicePixels="True" Stretch="Fill" Width="{StaticResource SliderWidth}" Height="{StaticResource SliderHeight}" VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
             <ls:LSNineSliceImage Grid.Column="1" ImageSource="{StaticResource SliderImage}" Slices="3,2" Width="{StaticResource SliderWidth}" Height="{StaticResource SliderHeight}" VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
 
-            <ls:LSRepeatButton x:Name="PART_IncreaseRepeatButton" Grid.Column="2" Style="{StaticResource SliderRepeatButtonStyle}" HorizontalAlignment="Right" Command="Slider.IncreaseLarge" Visibility="Hidden">
+            <ls:LSRepeatButton x:Name="PART_IncreaseRepeatButton" Grid.Column="2" Style="{StaticResource SliderRepeatButtonStyle}" HorizontalAlignment="Right" Command="Slider.IncreaseSmall" Visibility="Hidden" BoundEvent="UIRight">
                 <ls:LSRepeatButton.Content>
                     <Image Stretch="None" Source="{StaticResource OptionArrow_d}"/>
                 </ls:LSRepeatButton.Content>
             </ls:LSRepeatButton>
 
-            <ls:LSRepeatButton x:Name="PART_DecreaseRepeatButton" Grid.Column="0" Style="{StaticResource SliderRepeatButtonStyle}" HorizontalAlignment="Left" Command="Slider.DecreaseLarge" Visibility="Hidden">
+            <ls:LSRepeatButton x:Name="PART_DecreaseRepeatButton" Grid.Column="0" Style="{StaticResource SliderRepeatButtonStyle}" HorizontalAlignment="Left" Command="Slider.DecreaseSmall" Visibility="Hidden" BoundEvent="UILeft">
                 <ls:LSRepeatButton.Content>
                     <Image Stretch="None" Source="{StaticResource OptionArrow_d}">
                         <Image.RenderTransform>
@@ -132,14 +132,6 @@
                     </Image>
                 </ls:LSRepeatButton.Content>
             </ls:LSRepeatButton>
-            <ls:LSRepeatButton Visibility="Collapsed"
-                               Command="Slider.DecreaseSmall"
-                               Focusable="False"
-                               BoundEvent="UILeft"/>
-            <ls:LSRepeatButton Visibility="Collapsed"
-                               Command="Slider.IncreaseSmall"
-                               Focusable="False"
-                               BoundEvent="UIRight"/>
 
             <TextBlock x:Name="SelectedOptionText" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center"
                        Text="{Binding Value, StringFormat='{}{0:0.#}'}"
@@ -177,6 +169,8 @@
     <Style x:Key="OptionsComboBoxStyle" TargetType="{x:Type ls:LSComboBox}">
         <Setter Property="ItemContainerStyle" Value="{StaticResource ComboBoxItemStyle}"/>
         <Setter Property="UseIndexSelection" Value="True"/>
+        <Setter Property="ActionNextEvent" Value="UIRight"/>
+        <Setter Property="ActionPrevEvent" Value="UILeft"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ls:LSComboBox}">
@@ -255,7 +249,16 @@
                                     </Style.Triggers>
                                 </Style>
                             </ListBox.ItemContainerStyle>
+                            <b:Interaction.Behaviors>
+                                <!--We need to stop SelectionChanged from bubbling up because this ListBox is part of a ComboBox and if you hook to that event on the ComboBox you get it twice otherwise-->
+                                <ls:HandleRoutedEventBehavior EventName="SelectionChanged"/>
+                            </b:Interaction.Behaviors>
                         </ListBox>
+
+                        <ls:LSInputBinding BoundEvent="{TemplateBinding ActionPrevEvent}" Command="ls:LSComboBox.PrevCommand" />
+
+                        <ls:LSInputBinding BoundEvent="{TemplateBinding ActionNextEvent}" Command="ls:LSComboBox.NextCommand" />
+
                     </Grid>
                     <ControlTemplate.Triggers>
                         <DataTrigger Binding="{Binding ItemsSource.Count, ElementName=RectList, Converter={StaticResource GreaterThanConverter}, ConverterParameter=10}" Value="True" >
@@ -316,28 +319,39 @@
         <ls:LSComboBox x:Name="comboBox" ItemsSource="{Binding ComboItems}" SelectedItem="{Binding SelectedItem}"
                        Style="{StaticResource OptionsComboBoxStyle}" Text="{Binding SelectedItem.Name, Mode=OneWay}"
                        IsEnabled="{Binding Enabled}" Focusable="False" SoundID="UI_Shared_Hover"
-                       ActionNextEvent="UIRight" ActionPrevEvent="UILeft"/>
+                       d:DataContext="{d:DesignInstance {x:Type ls:VMComboBoxSetting}, IsDesignTimeCreatable=True}"
+                       KeyboardNavigation.DirectionalNavigation="Cycle">
+            <b:Interaction.Triggers>
+                <b:EventTrigger EventName="SelectionChanged">
+                    <b:InvokeCommandAction Command="{Binding DataContext.ValueChanged, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+                </b:EventTrigger>
+            </b:Interaction.Triggers>
+        </ls:LSComboBox>
     </ControlTemplate>
 
     <ControlTemplate x:Key="TickBoxTemplate">
-        <ls:LSTickBox Style="{StaticResource TickBoxStyle}" IsChecked="{Binding Value}"
-                      Command="{Binding DataContext.OnChangeToggleButton, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"
-                      IsEnabled="{Binding Enabled}" Focusable="False" SoundID="UI_Shared_Hover"
-                      ActionNextEvent="UIRight" ActionPrevEvent="UILeft"/>
+        <ls:LSTickBox Style="{StaticResource TickBoxStyle}" IsChecked="{Binding Value}" IsEnabled="{Binding Enabled}"
+                      Focusable="False" SoundID="" ActionNextEvent="UIRight" ActionPrevEvent="UILeft"
+                      d:DataContext="{d:DesignInstance {x:Type ls:VMTickBoxSetting}, IsDesignTimeCreatable=True}">
+            <b:Interaction.Triggers>
+                <b:EventTrigger EventName="Click">
+                    <ls:LSPlaySound Sound="UI_Shared_Hover"/>
+                </b:EventTrigger>
+                <b:EventTrigger EventName="Checked">
+                    <b:InvokeCommandAction Command="{Binding DataContext.ValueChanged, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+                </b:EventTrigger>
+                <b:EventTrigger EventName="Unchecked">
+                    <b:InvokeCommandAction Command="{Binding DataContext.ValueChanged, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+                </b:EventTrigger>
+            </b:Interaction.Triggers>
+        </ls:LSTickBox>
     </ControlTemplate>
 
     <ControlTemplate x:Key="SliderTemplate">
-        <ls:LSSlider DataContext="{Binding}"
-                Style="{StaticResource OptionsSliderStyle}"
-                Template="{StaticResource OptionsSliderTemplate}"
-                Value="{Binding Value}"
-                Minimum="{Binding Min}"
-                Maximum="{Binding Max}"
-                IsSnapToTickEnabled="False"
-                SmallChange="1"
-                LargeChange="{Binding Max, Converter={StaticResource DivideAndRoundConverter}, ConverterParameter='10'}"
-                IsEnabled="{Binding Enabled}"
-                Focusable="False">
+        <ls:LSSlider Style="{StaticResource OptionsSliderStyle}" Template="{StaticResource OptionsSliderTemplate}" Value="{Binding Value}" Minimum="{Binding Min}"
+                     Maximum="{Binding Max}" IsSnapToTickEnabled="False" SmallChange="1" LargeChange="{Binding Max, Converter={StaticResource DivideAndRoundConverter}, ConverterParameter='10'}"
+                     IsEnabled="{Binding Enabled}" Focusable="False"
+                     d:DataContext="{d:DesignInstance {x:Type ls:VMSliderSetting}, IsDesignTimeCreatable=True}">
             <b:Interaction.Triggers>
                 <b:EventTrigger EventName="ValueChanged">
                     <b:InvokeCommandAction Command="{Binding DataContext.ValueChanged, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
@@ -347,26 +361,16 @@
     </ControlTemplate>
 
     <ControlTemplate x:Key="EditBoxTemplate">
-        <ls:LSTextBox Text="{Binding Value}"
-                      IsEnabled="True"
-                      MaxLength="{Binding MaxLength}"
-                      TextImmediateSourceUpdate="True"
-                      Foreground="{StaticResource ValueTextColor}"
-                      FontSize="{StaticResource DefaultFontSize}"
-                      TextAlignment="Center"
-                      Width="540"/>
+        <ls:LSTextBox Text="{Binding Value}" IsEnabled="True" MaxLength="{Binding MaxLength}" TextImmediateSourceUpdate="True" Foreground="{StaticResource ValueTextColor}"
+                      FontSize="{StaticResource DefaultFontSize}" TextAlignment="Center" Width="540"
+                      d:DataContext="{d:DesignInstance {x:Type ls:VMEditBoxSetting}, IsDesignTimeCreatable=True}"/>
     </ControlTemplate>
 
     <ControlTemplate x:Key="PasswordBoxTemplate">
-        <ls:LSPasswordBox Text="{Binding Value}"
-                          IsEnabled="True"
-                          Focusable="False"
-                          MaxLength="{Binding MaxLength}"
-                          Foreground="{StaticResource ValueTextColor}"
-                          FontSize="{StaticResource DefaultFontSize}"
-                          Width="540"/>
+        <ls:LSPasswordBox Text="{Binding Value}" IsEnabled="True" Focusable="False" MaxLength="{Binding MaxLength}" Foreground="{StaticResource ValueTextColor}"
+                          FontSize="{StaticResource DefaultFontSize}" Width="540"
+                          d:DataContext="{d:DesignInstance {x:Type ls:VMEditBoxSetting}, IsDesignTimeCreatable=True}"/>
     </ControlTemplate>
-
 
     <ControlTemplate x:Key="ButtonTemplate">
         <ls:LSButton x:Name="ButtonElement"
@@ -625,44 +629,49 @@
             <Image Source="{StaticResource CarouselBottomImage}" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,-4"/>
 
             <DockPanel HorizontalAlignment="Center">
-                <ls:LSButton ContentTemplate="{StaticResource ControllerButtonHintImageOnly}"
+                <ls:LSButton x:Name="PrevTabBtn" ContentTemplate="{StaticResource ControllerButtonHintImageOnly}"
                              VerticalAlignment="Center"
                              DockPanel.Dock="Left"
                              ls:LSButton.EatInput="False"
                              BoundEvent="UITabPrev"
                              Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UITabPrev'}"/>
-                <ls:LSButton ContentTemplate="{StaticResource ControllerButtonHintImageOnly}"
+                <ls:LSButton x:Name="NextTabBtn" ContentTemplate="{StaticResource ControllerButtonHintImageOnly}"
                              VerticalAlignment="Center"
                              DockPanel.Dock="Right"
                              ls:LSButton.EatInput="False"
                              BoundEvent="UITabNext"
                              Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UITabNext'}"/>
-                <ls:LSListBox x:Name="HeaderCarouselList"
+                <ListBox x:Name="HeaderCarouselList"
                               IsEnabled="{Binding IsEnabled, RelativeSource={RelativeSource Mode=TemplatedParent}}"
                               VerticalAlignment="Center"
-                              ActionPrevEvent="UITabPrev" ActionNextEvent="UITabNext"
                               ItemContainerStyle="{StaticResource CarouselItemContainerStyle}"
                               Margin="40,0">
-                    <ls:LSListBox.ItemsPanel>
+                    <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal"/>
                         </ItemsPanelTemplate>
-                    </ls:LSListBox.ItemsPanel>
+                    </ListBox.ItemsPanel>
                     <b:Interaction.Triggers>
-                        <b:EventTrigger EventName="SelectionChanged">
+                        <b:EventTrigger SourceName="PrevTabBtn" EventName="Click">
+                            <ls:SelectNextListBoxItem Reversed="True" />
+                            <b:InvokeCommandAction Command="{Binding CustomEvent}"
+                                                   CommandParameter="{Binding ElementName=HeaderCarouselList, Path=SelectedItem.DataContext.EventString}"/>
+                        </b:EventTrigger>
+                        <b:EventTrigger SourceName="NextTabBtn" EventName="Click">
+                            <ls:SelectNextListBoxItem />
                             <b:InvokeCommandAction Command="{Binding CustomEvent}"
                                                    CommandParameter="{Binding ElementName=HeaderCarouselList, Path=SelectedItem.DataContext.EventString}"/>
                         </b:EventTrigger>
                     </b:Interaction.Triggers>
 
-                    <ls:LSListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource gameplayOptionInfo}}"/>
-                    <ls:LSListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource keybindingOptionInfo}}" Visibility="Collapsed"/>
-                    <ls:LSListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource controllerOptionInfo}}"/>
-                    <ls:LSListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource videoOptionInfo}}"/>
-                    <ls:LSListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource audioOptionInfo}}"/>
-                    <ls:LSListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource interfaceOptionInfo}}"/>
-                    <ls:LSListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource accessibilityOptionInfo}}"/>
-                </ls:LSListBox>
+                    <ListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource gameplayOptionInfo}}"/>
+                    <ListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource keybindingOptionInfo}}" Visibility="Collapsed"/>
+                    <ListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource controllerOptionInfo}}"/>
+                    <ListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource videoOptionInfo}}"/>
+                    <ListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource audioOptionInfo}}"/>
+                    <ListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource interfaceOptionInfo}}"/>
+                    <ListBoxItem Content="{Binding Label}" DataContext="{Binding Source={StaticResource accessibilityOptionInfo}}"/>
+                </ListBox>
             </DockPanel>
         </Grid>
         <ControlTemplate.Triggers>
@@ -698,6 +707,12 @@
                          Tag="{Binding Source='h0dcd297egde63g4e44g820dg07c21a2346d3',Converter={StaticResource TranslatedStringConverter}}"
                          Command="{Binding DataContext.ResetOptionsToDefaultCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"/>
 
+            <ls:LSButton Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIScroll'}" 
+                         ContentTemplate="{StaticResource ControllerButtonHint}"                                          
+                         Tag="{Binding Source='h29f2b927gf6feg48e8g8bc9gdc391427b51c', Converter={StaticResource TranslatedStringConverter}}" 
+                         VerticalAlignment="Center"
+                         Visibility="{Binding ComputedVerticalScrollBarVisibility, ElementName=PreviewScroll}"/>
+
             <ls:LSButton ContentTemplate="{StaticResource ControllerButtonHint}"
                          Content = "{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICancel'}"
                          BoundEvent="UICancel"
@@ -710,6 +725,12 @@
     </ControlTemplate>
 
     <ControlTemplate x:Key="PreviewOptionsTemplate">
+        <ControlTemplate.Resources>
+            <System:Single x:Key="PreviewOptionsWidth">1380</System:Single>
+            <System:Single x:Key="OptionsHeight">1675</System:Single>
+            <System:Single x:Key="OptionsWidth">2012</System:Single>
+        </ControlTemplate.Resources>
+        
         <Grid Background="{StaticResource LS_PanelBackground}">
             <b:Interaction.Triggers>
                 <b:EventTrigger EventName="MoveFocusUp">
@@ -727,15 +748,16 @@
 
             <Viewbox StretchDirection="DownOnly">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="80,40,80,0">
-                    <StackPanel Orientation="Vertical" VerticalAlignment="Top">
-                        <TextBlock x:Name="ListTitle" FontSize="{StaticResource ScaledHugeFontSize}" Foreground="{StaticResource LS_tint100}" FontWeight="DemiBold" Margin="0,0,0,28"/>
+                    <StackPanel Orientation="Vertical" VerticalAlignment="Top" MinWidth="{Binding Source={StaticResource OptionsWidth}}">
+                        <TextBlock x:Name="ListTitle" FontSize="{StaticResource ScaledHugeFontSize}" Foreground="{StaticResource LS_tint100}" FontWeight="DemiBold" Margin="0,0,0,28"
+                                   Visibility="{Binding ItemsSource.Count, ElementName=Options, Converter={StaticResource CountToVisibilityConverter}}"/>
 
                         <ItemsControl x:Name="Options"
                                       AlternationCount="{Binding Options.Count}"
                                       ItemsSource="{Binding Options}"
                                       ItemContainerStyle="{StaticResource OptionStyle}"
                                       Background="Transparent" BorderBrush="Transparent"
-                                      Height="1600"
+                                      Height="{StaticResource OptionsHeight}"
                                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -753,86 +775,97 @@
                     </StackPanel>
 
                     <!--begin preview-->
-                    <StackPanel x:Name="PreviewHolder" DataContext="{Binding FocusedElement.DataContext, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" VerticalAlignment="Top" Margin="160,0,0,0" Width="1280" Height="1600">
+                    <ls:LSScrollViewer x:Name="PreviewScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" VerticalAlignment="Top" Margin="160,0,0,0" BoundScrollUpEvent="UIScrollUp" BoundScrollDownEvent="UIScrollDown" CanContentScroll="True"
+                                       Width="{Binding Source={StaticResource PreviewOptionsWidth}, Converter={StaticResource AddConverter}, ConverterParameter=100}"
+                                       Height="{Binding Source={StaticResource OptionsHeight}, Converter={StaticResource AddConverter}, ConverterParameter=125}"
+                                       GamepadScrollMultiplier="60" Template="{StaticResource MinimalisticScrollViewerTemplate}">
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger SourceObject="{Binding RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" EventName="FocusChanged">
+                                <ls:ScrollViewerAction TargetName="PreviewScroll" ScrollToTop="True"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
 
-                        <TextBlock Text="{Binding Text}"
+                        <StackPanel x:Name="PreviewHolder" DataContext="{Binding FocusedElement.DataContext, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" >
+
+                            <TextBlock x:Name="PreviewName" Text="{Binding Text}"
                                    HorizontalAlignment="Left" Margin="0,80,0,0"
                                    FontSize="{StaticResource ScaledBigFontSize}"
                                    Foreground="{StaticResource LS_tint100}"
                                    TextAlignment="Left" TextWrapping="Wrap"
-                                   Width="1280"/>
+                                   Width="{StaticResource PreviewOptionsWidth}"/>
 
-                        <TextBlock ls:TextBlockFormatter.SourceText="{Binding Description}"
-                                   HorizontalAlignment="Left" Width="1280" Margin="0,28,0,0"
+                            <TextBlock ls:TextBlockFormatter.SourceText="{Binding Description}"
+                                   HorizontalAlignment="Left" Width="{StaticResource PreviewOptionsWidth}" Margin="0,28,0,0"
                                    FontSize="{StaticResource ScaledDefaultFontSize}"
                                    Foreground="{StaticResource LS_accent75TxtColor}"
                                    TextAlignment="Left" TextWrapping="Wrap"
                                    Visibility="{Binding Description, Converter={StaticResource NullToCollapsedConverter}, ConverterParameter='EmptyString'}"/>
 
-                        <Control Template="{StaticResource OptionPreview}" HorizontalAlignment="Center" Margin="0,40,0,0"/>
+                            <Control Template="{StaticResource OptionPreview}" HorizontalAlignment="Center" Margin="0,40,0,0"/>
 
 
-                        <ListBox ItemsSource="{Binding ComboItems}" SelectedItem="{Binding SelectedItem}" Visibility="{Binding ShowComboItemsDescriptions, Converter={StaticResource BoolToVisibleConverter}}">
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Vertical" Width="1280"/>
-                                </ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
+                            <ListBox ItemsSource="{Binding ComboItems}" SelectedItem="{Binding SelectedItem}" Visibility="{Binding ShowComboItemsDescriptions, Converter={StaticResource BoolToVisibleConverter}}">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Vertical" Width="{StaticResource PreviewOptionsWidth}"/>
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
 
-                            <ListBox.ItemTemplate>
-                                <DataTemplate DataType="{x:Type ls:VMEnumData}">
-                                    <DataTemplate.Resources>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="TextWrapping" Value="Wrap"/>
-                                            <Setter Property="HorizontalAlignment" Value="Left"/>
-                                        </Style>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type ls:VMEnumData}">
+                                        <DataTemplate.Resources>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="TextWrapping" Value="Wrap"/>
+                                                <Setter Property="HorizontalAlignment" Value="Left"/>
+                                            </Style>
 
-                                        <ImageSource x:Key="SelectedOptionIcon">pack://application:,,,/Core;component/Assets/Shared_c/c_bullet_d.png</ImageSource>
-                                    </DataTemplate.Resources>
+                                            <ImageSource x:Key="SelectedOptionIcon">pack://application:,,,/Core;component/Assets/Shared_c/c_bullet_d.png</ImageSource>
+                                        </DataTemplate.Resources>
 
-                                    <StackPanel Orientation="Vertical" HorizontalAlignment="Left" Width="1280">
-                                        <StackPanel Orientation="Horizontal">
-                                            <Image x:Name="SelectedIcon" Source="{StaticResource SelectedOptionIcon}" Stretch="None" Visibility="Collapsed" VerticalAlignment="Center" Margin="-60,0,0,0"/>
-                                            <TextBlock x:Name="Title" ls:TextBlockFormatter.SourceText="{Binding Name}" Foreground="{StaticResource LS_tint100}" FontSize="{StaticResource ScaledIntermediateFontSize}"/>
+                                        <StackPanel Orientation="Vertical" HorizontalAlignment="Left" Width="{StaticResource PreviewOptionsWidth}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Image x:Name="SelectedIcon" Source="{StaticResource SelectedOptionIcon}" Stretch="None" Visibility="Collapsed" VerticalAlignment="Center" Margin="-60,0,0,0"/>
+                                                <TextBlock x:Name="Title" ls:TextBlockFormatter.SourceText="{Binding Name}" Foreground="{StaticResource LS_tint100}" FontSize="{StaticResource ScaledIntermediateFontSize}"/>
+                                            </StackPanel>
+
+                                            <TextBlock ls:TextBlockFormatter.SourceText="{Binding Description}" Foreground="{StaticResource LS_baseTxtColor}" FontSize="{StaticResource ScaledDefaultFontSize}" Margin="0,0,0,40"/>
                                         </StackPanel>
 
-                                        <TextBlock ls:TextBlockFormatter.SourceText="{Binding Description}" Foreground="{StaticResource LS_baseTxtColor}" FontSize="{StaticResource ScaledDefaultFontSize}" Margin="0,0,0,40"/>
-                                    </StackPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Value="True">
+                                                <DataTrigger.Binding>
+                                                    <MultiBinding Converter="{StaticResource EqualConverter}">
+                                                        <Binding Path=""/>
+                                                        <Binding Path="DataContext.SelectedItem" RelativeSource="{RelativeSource AncestorType={x:Type ListBox}}" />
+                                                    </MultiBinding>
+                                                </DataTrigger.Binding>
+                                                <Setter TargetName="SelectedIcon" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
 
-                                    <DataTemplate.Triggers>
-                                        <DataTrigger Value="True">
-                                            <DataTrigger.Binding>
-                                                <MultiBinding Converter="{StaticResource EqualConverter}">
-                                                    <Binding Path=""/>
-                                                    <Binding Path="DataContext.SelectedItem" RelativeSource="{RelativeSource AncestorType={x:Type ListBox}}" />
-                                                </MultiBinding>
-                                            </DataTrigger.Binding>
-                                            <Setter TargetName="SelectedIcon" Property="Visibility" Value="Visible"/>
+                            <StackPanel.Style>
+                                <Style TargetType="{x:Type StackPanel}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasPreview}" Value="False">
+                                            <Setter Property="Visibility" Value="Hidden"/>
                                         </DataTrigger>
-                                    </DataTemplate.Triggers>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-
-                        <StackPanel.Style>
-                            <Style TargetType="{x:Type StackPanel}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasPreview}" Value="False">
-                                        <Setter Property="Visibility" Value="Hidden"/>
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding ListItemType}" Value="None">
-                                        <Setter Property="Visibility" Value="Hidden"/>
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding ListItemType}" Value="Keybinding">
-                                        <Setter Property="Visibility" Value="Hidden"/>
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding ListItemType}" Value="String">
-                                        <Setter Property="Visibility" Value="Hidden"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </StackPanel.Style>
-                    </StackPanel>
+                                        <DataTrigger Binding="{Binding ListItemType}" Value="None">
+                                            <Setter Property="Visibility" Value="Hidden"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding ListItemType}" Value="Keybinding">
+                                            <Setter Property="Visibility" Value="Hidden"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding ListItemType}" Value="String">
+                                            <Setter Property="Visibility" Value="Hidden"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                        </StackPanel>
+                    </ls:LSScrollViewer>
                 </StackPanel>
             </Viewbox>
             <Control Template="{StaticResource OptionBottomButtons}"/>

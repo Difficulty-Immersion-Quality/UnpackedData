@@ -1409,6 +1409,7 @@ DB_DEN_AttackOnDen_Raiders(_Raider, _, _, _)
 AND
 NOT DB_Defeated(_Raider)			
 THEN
+SetCombatGroupID(_Raider, "");
 RemoveHarmfulStatuses(_Raider);
 LeaveCombat(_Raider);
 PurgeOsirisQueue(_Raider);
@@ -2767,6 +2768,24 @@ DB_DEN_AttackOnDen_Raiders(_Raider,_,_,_)
 THEN
 SetEntityEvent(_Raider,"GOB_DrowCommander_LeftGoblinCamp");
 
+IF
+RelationChanged((FACTION)ACT1_DEN_AttackRaiders_Fighters_bfdc773b-6521-4fd1-3784-3d1404f1b2f5, _PlayerFaction, 0, _)
+AND
+QRY_IsPlayerFaction(_PlayerFaction)
+THEN
+SetImmortal(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, 0);
+PROC_SetRelationMutual((FACTION)ACT1_DEN_AttackRaiders_Fighters_bfdc773b-6521-4fd1-3784-3d1404f1b2f5, (FACTION)Hero_a1542c81-6895-929e-4522-10ce218bb360, 0);
+PROC_SetRelationMutual((FACTION)ACT1_DEN_AttackRaiders_Standby_aca56eff-f292-1b69-8f22-ec96197b8d25, (FACTION)Hero_a1542c81-6895-929e-4522-10ce218bb360, 0);
+
+IF
+RelationChanged((FACTION)ACT1_DEN_AttackRaiders_Standby_aca56eff-f292-1b69-8f22-ec96197b8d25, _PlayerFaction, 0, _)
+AND
+QRY_IsPlayerFaction(_PlayerFaction)
+THEN
+SetImmortal(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, 0);
+PROC_SetRelationMutual((FACTION)ACT1_DEN_AttackRaiders_Fighters_bfdc773b-6521-4fd1-3784-3d1404f1b2f5, (FACTION)Hero_a1542c81-6895-929e-4522-10ce218bb360, 0);
+PROC_SetRelationMutual((FACTION)ACT1_DEN_AttackRaiders_Standby_aca56eff-f292-1b69-8f22-ec96197b8d25, (FACTION)Hero_a1542c81-6895-929e-4522-10ce218bb360, 0);
+
 //END_REGION
 
 //REGION After Cave Combat
@@ -2924,6 +2943,7 @@ AND
 QRY_OnlyOnce("DEN_AttackOnDen_DefenselessCombat")
 THEN
 PROC_SetRelationMutual((FACTION)ACT1_DEN_AttackOnDen_Defenseless_0d52984d-82c0-44b3-861c-5f8107982525,(FACTION)ACT1_DEN_AttackRaiders_Fighters_bfdc773b-6521-4fd1-3784-3d1404f1b2f5, 0);
+
 
 //END_REGION
 
@@ -3136,6 +3156,19 @@ IF
 DB_DEN_CurrentDefenderLeader(_Leader)
 THEN
 SetDualEntityEvent(_Leader, S_DEN_LeaderVictoryPos_04e4c483-3125-40bc-9bfe-e9bfa589b6d7, "DEN_AttackOnDen_VictoryPosition");
+
+PROC
+PROC_DEN_AttackOnDen_VictoryInvitation()
+AND
+DB_DEN_NPC(_Character, _, _)
+AND
+DB_Players(_Player)
+AND
+GetAttitudeTowardsPlayer(_Character, _Player, _Attitude)
+AND
+_Attitude < 0
+THEN
+PROC_SetAttitude(_Character, _Player, 0);
 
 PROC
 PROC_DEN_AttackOnDen_VictoryInvitation()
@@ -3776,6 +3809,20 @@ NOT DB_GLO_DefeatCounter(_Raider, "DEN_AttackOnDen_RaiderCombat");
 NOT DB_GLO_DefeatCounter_Target("DEN_AttackOnDen_RaiderCombat", _Target);
 DB_GLO_DefeatCounter_Target("DEN_AttackOnDen_RaiderCombat", _ActualTarget);
 PROC_GLO_DefeatCounter_CheckFinished("DEN_AttackOnDen_RaiderCombat");
+
+//END_REGION
+
+//REGION Defeat counter character set off stage for some reason
+
+IF
+DB_DEN_AttackOnDen_TieflingDefeatCounters(_DefeatCounter)
+AND
+DB_GLO_DefeatCounter_State(_Character, _DefeatCounter, "Active")
+AND
+DB_OffStage(_Character)
+THEN
+NOT DB_GLO_DefeatCounter(_Character, _DefeatCounter);
+PROC_GLO_DefeatCounter_CheckFinished(_DefeatCounter);
 
 //END_REGION
 

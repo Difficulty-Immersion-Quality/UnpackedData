@@ -2,8 +2,8 @@ Version 1
 SubGoalCombiner SGC_AND
 INITSECTION
 //Documentation on Confluence:
-// -https://larianstudios.atlassian.net/wiki/spaces/GUS/pages/25198642/Player+Dialogs
-// -https://larianstudios.atlassian.net/wiki/spaces/GUS/pages/48922800/Camp+Rest
+// -[Link Redacted]
+// -[Link Redacted]
 
 //Any camp must be defined using DB_Camp(_CampName,_Campfire,_AreaTrigger,_EntranceTrigger)
 NOT DB_Camp_PersonalCornerGear("",(CHARACTER)NULL_00000000-0000-0000-0000-000000000000,(ITEM)NULL_00000000-0000-0000-0000-000000000000);
@@ -470,6 +470,16 @@ AND
 NOT DB_Camp_NightMode(1)
 THEN
 PROC_Camp_Leave(_MyPlayer);
+
+// All players leave camp
+PROC
+PROC_Camp_AllPlayersLeave()
+AND
+NOT DB_Camp_NightMode(1)
+AND
+DB_PlayerInCamp(_Player)
+THEN
+PROC_Camp_Leave(_Player);
 //END_REGION
 
 //REGION Camp Buttons - `End The Day` Button Pressed
@@ -797,7 +807,7 @@ DB_GoingToCamp(1);
 DB_Camp_ForceNextLongRest(1);
 NOT DB_OnlyOnce("GLO_Camp_GoToNight_Fade_Out_FORCED");
 PROC_Camp_EnterNight_PreFadeout_Hook();
-SetJoinBlock(JOINBLOCKTYPE.BlockAll); //Do not let new players join while in night mode, too many fragile systems would break. (This is automatically turned on again in code on long rest).
+SetJoinBlock(JOINBLOCKTYPE.BlockNew); //Do not let new players join while in night mode, too many fragile systems would break. (This is automatically turned on again in code on long rest).
 PROC_Camp_ForceEndTheDay_SetCampOverride(_CampOverride);
 PROC_Camp_ForceEndTheDay_Fadeout();
 
@@ -898,7 +908,7 @@ PROC_Camp_EnterNightMode()
 THEN
 PROC_Camp_EnterNight_PreFadeout_Hook();
 NOT DB_OnlyOnce("GLO_Camp_GoToNight_Fade_Out");
-SetJoinBlock(JOINBLOCKTYPE.BlockAll); //Do not let new players join while in night mode, too many fragile systems would break. (This is automatically turned on again in code on long rest).
+SetJoinBlock(JOINBLOCKTYPE.BlockNew); //Do not let new players join while in night mode, too many fragile systems would break. (This is automatically turned on again in code on long rest).
 
 PROC
 PROC_Camp_EnterNightMode()
@@ -1101,8 +1111,7 @@ AND
 DB_Camp_Faded(_Player,_Reason)
 THEN
 ApplyStatus(_Player,"LONG_REST",-1.0,1,NULL_00000000-0000-0000-0000-000000000000);
-NOT DB_Camp_Faded(_Player,_Reason);
-ClearScreenFade(_Player,1.0,_Reason);
+PROC_Camp_ClearFade(_Player,_Reason);
 
 PROC
 PROC_Camp_TeleportAllToCamp()
@@ -1169,8 +1178,7 @@ PROC_CampRelationshipDialog(_,_,_,_,_)
 AND
 DB_Camp_Faded(_Player,_Reason)
 THEN
-NOT DB_Camp_Faded(_Player,_Reason);
-ClearScreenFade(_Player,1.0,_Reason);
+PROC_Camp_ClearFade(_Player,_Reason);
 
 IF
 DialogActorJoined(_,_Inst,_Player,_)
@@ -1185,16 +1193,14 @@ DB_Camp_Faded((CHARACTER)_Player2,_Reason)
 AND
 GetReservedUserID(_Player2,_UserID)
 THEN
-NOT DB_Camp_Faded(_Player2,_Reason);
-ClearScreenFade(_Player2,1.0,_Reason);
+PROC_Camp_ClearFade(_Player2,_Reason);
 
 PROC
 PROC_Camp_NoEveningDialogs()
 AND
 DB_Camp_Faded(_Player,_Reason)
 THEN
-NOT DB_Camp_Faded(_Player,_Reason);
-ClearScreenFade(_Player,1.0,_Reason);
+PROC_Camp_ClearFade(_Player,_Reason);
 
 //Fallback camp + no queued camp nights + no required talks?
 //Throw the players out of camp and let the region swap happen
@@ -1227,7 +1233,7 @@ AND
 GetReservedUserID(_Player,_UserID)
 THEN
 DebugBreak("Camp Error #3: Remnant DB_Camp_Faded.");
-NOT DB_Camp_Faded(_Player,_Reason);
+PROC_Camp_ClearFade(_Player,_Reason);
 
 IF
 DB_Camp_Faded(_Player,_Reason)
@@ -1248,15 +1254,22 @@ ObjectTimerFinished(_,"GLO_Camp_Fade_EmergencyTimeout")
 AND
 DB_Camp_Faded(_Player,_Reason)
 THEN
-NOT DB_Camp_Faded(_Player,_Reason);
-ClearScreenFade(_Player,1.0,_Reason);
-PROC_CAMP_SafeFadeOutDone(_Reason);
+PROC_Camp_ClearFade(_Player,_Reason);
 
 IF
 ScreenFadeDone(_,_Reason)
 AND
 DB_Camp_Faded(_Player,_Reason)
 THEN
+PROC_CAMP_SafeFadeOutDone(_Reason);
+
+PROC
+PROC_Camp_ClearFade((CHARACTER)_Player,(STRING)_Reason)
+AND
+DB_Camp_Faded(_Player,_Reason)
+THEN
+ClearScreenFade(_Player,1.0,_Reason);
+NOT DB_Camp_Faded(_Player,_Reason);
 PROC_CAMP_SafeFadeOutDone(_Reason);
 
 //END_REGION
@@ -2142,6 +2155,16 @@ ApplyStatus(_Player,"HUNGOVER",60.0,0,_Player);
 
 //Edge case handling first: For some reason, character does not have a return position
 
+//Attempt 0: Clear invalid return position
+PROC
+PROC_Camp_Leave((CHARACTER)_Player)
+AND
+DB_LeaveCamp_ReturnPos(_Player,_X,_Y,_Z)
+AND
+NOT FindValidPosition(_X,_Y,_Z,15.0,_Player,1,_,_,_)
+THEN
+NOT DB_LeaveCamp_ReturnPos(_Player,_X,_Y,_Z);
+
 //Attempt 1: Steal assigned avatar's position
 PROC
 PROC_Camp_Leave((CHARACTER)_Player)
@@ -2403,8 +2426,7 @@ PROC_Camp_EveryoneAwake()
 AND
 DB_Camp_Faded(_Player,_Any)
 THEN
-NOT DB_Camp_Faded(_Player,_Any);
-ClearScreenFade(_Player,1.0,_Any); 
+PROC_Camp_ClearFade(_Player,_Any);
 
 PROC
 PROC_Camp_EveryoneAwake()

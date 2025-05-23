@@ -139,11 +139,10 @@ DB_QRYRTN_CRIME_Guards_InvestigationRelocationPos(_Guard, _RelocationPos);
 //END_REGION
 
 //REGION Non-tadpoled/Minthara enter alone
-
 IF
 EnteredTrigger((CHARACTER)_TadpoledPlayer, (TRIGGER)_MoonriseTrigger)
 AND
-DB_MOO_InMOOTriggers(_MoonriseTrigger)
+QRY_UnwelcomeVisitors_IsInMOO(_TadpoledPlayer)
 AND
 DB_PartyMembers(_TadpoledPlayer)
 AND
@@ -160,7 +159,7 @@ DB_MOO_UnwelcomeVisitors_Visitors((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4
 AND
 DB_MOO_UnwelcomeVisitors_EntryTriggers(_Trigger)
 AND
-NOT QRY_MOO_Crimes_IsAccompaniedByEscort(_Trigger, S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b)
+NOT QRY_MOO_Crimes_IsAccompaniedByEscort(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b)
 AND
 NOT DB_MOO_UnwelcomeVisitors_Warned(1)
 AND
@@ -182,7 +181,7 @@ DB_MOO_UnwelcomeVisitors_Visitors(_Character)
 AND
 _Character != S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b
 AND
-NOT QRY_MOO_Crimes_IsAccompaniedByEscort(_Trigger, _Character)
+NOT QRY_MOO_Crimes_IsAccompaniedByEscort(_Character)
 AND
 NOT DB_MOO_UnwelcomeVisitors_Warned(1)
 AND
@@ -194,11 +193,11 @@ DB_MOO_UnwelcomeVisitors_Warned(1);
 ClearFlag((FLAG)MOO_Crimes_State_UnwelcomeVisitorAccompanied_dad21e7c-6d9b-4211-9032-e90c6b71b4d1);
 
 QRY
-QRY_MOO_Crimes_IsAccompaniedByEscort((TRIGGER)_Trigger, (CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b)
+QRY_MOO_Crimes_IsAccompaniedByEscort((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b)
 AND
 DB_PartyMembers((CHARACTER)_Character)
 AND
-IsInTrigger(_Character, _Trigger, 1)
+QRY_UnwelcomeVisitors_IsInMOO(_Character)
 AND
 NOT DB_MOO_UnwelcomeVisitors_Visitors(_Character)
 AND
@@ -212,13 +211,13 @@ ApplyStatus(_Character, "MOO_UNWELCOMEVISITORS_AURA_SAFEEXPLORATION", -1.0, 1);
 SetFlag((FLAG)MOO_Crimes_State_UnwelcomeVisitorAccompanied_dad21e7c-6d9b-4211-9032-e90c6b71b4d1);
 
 QRY
-QRY_MOO_Crimes_IsAccompaniedByEscort((TRIGGER)_Trigger, (CHARACTER)_Visitor)
+QRY_MOO_Crimes_IsAccompaniedByEscort((CHARACTER)_Visitor)
 AND
 _Visitor != S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b 
 AND
 DB_PartyMembers((CHARACTER)_Character)
 AND
-DB_InRegion(_Character, _Trigger)
+QRY_UnwelcomeVisitors_IsInMOO(_Character)
 AND
 NOT DB_MOO_UnwelcomeVisitors_Visitors(_Character)
 AND
@@ -258,7 +257,7 @@ DB_MOO_UnwelcomeVisitors_Visitors(_Char)
 AND
 _Player != _Char
 AND
-DB_MOO_PlayerInMOO(_Player)
+QRY_UnwelcomeVisitors_IsInMOO(_Player)
 AND
 GetDistanceTo(_Char, _Player, _Dist)
 AND
@@ -273,13 +272,17 @@ THEN
 DB_MOO_UnwelcomeVisitors_Warned(1);
 
 IF
-DB_InRegion((CHARACTER)_Visitor, (TRIGGER)_MoonriseRegion)
+DB_InRegion((CHARACTER)_Visitor, _)
 AND
 DB_MOO_UnwelcomeVisitors_Visitors(_Visitor)
 AND
-DB_MOO_InMOOTriggers(_MoonriseRegion)
-AND
 DB_PartyMembers(_Visitor)
+AND
+DB_MOO_UnwelcomeVisitors_Warned(1)
+AND
+QRY_UnwelcomeVisitors_IsInMOO(_Visitor)
+AND
+DB_ActiveLevel("SCL_MAIN_A")
 AND
 HasAppliedStatus(_Visitor, "MOO_UNWELCOMEVISITORS_BLOCKVISITORCRIMES", 0)
 THEN
@@ -292,11 +295,9 @@ HasAppliedStatus(_Visitor,"MOO_UNWELCOMEVISITORS_BLOCKVISITORCRIMES",0)
 AND
 DB_PartyMembers(_Visitor)
 AND
-DB_InRegion(_Visitor, (TRIGGER)_MoonriseRegion)
-AND
 DB_MOO_UnwelcomeVisitors_Visitors(_Visitor)
 AND
-DB_MOO_InMOOTriggers(_MoonriseRegion)
+QRY_UnwelcomeVisitors_IsInMOO(_Visitor)
 THEN
 PROC_CharacterRegisterCrime(_Visitor, "MOO_Trespass_UnaccompaniedIntruder", NULL_00000000-0000-0000-0000-000000000000, _Visitor, 0);
 
@@ -313,10 +314,8 @@ THEN
 CharacterStopCrimeWithID(_Visitor, _CrimeID);
 NOT DB_MOO_UnwelcomeVisitors_VisitorCrimeRegistered(_Visitor, _CrimeID);
 
-IF
-DB_MOO_Crimes_CurrentFloor(_Visitor, _NotMoonrise)
-AND
-NOT DB_MOO_Crimes_Floors(_NotMoonrise)
+PROC
+PROC_MOO_PlayerLeftMOO(_Visitor)
 AND
 DB_MOO_UnwelcomeVisitors_VisitorCrimeRegistered(_Visitor, _CrimeID)
 THEN
@@ -345,24 +344,47 @@ NOT DB_OnlyOnce("MOO_Crimes_EndIntruderCrimes")
 THEN
 DB_MOO_UnwelcomeVisitors_Visitors((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b);
 
+//Player
 IF
-TeleportedToCamp((CHARACTER)_Character)
+Teleported((CHARACTER)_Character, _, _, _, _, _, _, _, _)
+AND
+NOT QRY_UnwelcomeVisitors_IsInMOO(_Character)
 AND
 HasActiveStatus(_Character, "MOO_UNWELCOMEVISITORS_AURA_SAFEEXPLORATION", 1)
 THEN
 RemoveStatus(_Character, "MOO_UNWELCOMEVISITORS_AURA_SAFEEXPLORATION", _Character);
 
+//Unwelcome Visitor
+IF
+Teleported((CHARACTER)_Character, _, _, _, _, _, _, _, _)
+AND
+DB_MOO_UnwelcomeVisitors_Visitors(_Character)
+AND
+DB_PartyMembers(_Character)
+AND
+NOT QRY_UnwelcomeVisitors_IsInMOO(_Character)
+THEN
+PROC_MOO_PlayerLeftMOO(_Character);
+
+//Unwelcome Visitor from Moonrise Camp
 IF
 TeleportedFromCamp((CHARACTER)_Character)
 AND
 DB_MOO_UnwelcomeVisitors_Visitors(_Character)
 AND
+DB_PartyMembers(_Character)
+AND
 DB_ActiveCamp("MOONRISE")
+AND
+QRY_UnwelcomeVisitors_IsInMOO(_Character)
+AND
+HasActiveStatus(_Character, "MOO_UNWELCOMEVISITORS_BLOCKVISITORCRIMES", 0)
 THEN
 ApplyStatus(_Character, "MOO_UNWELCOMEVISITORS_BLOCKVISITORCRIMES", 6.0, 1, _Character);
+PROC_MOO_PlayerLeftMOO(_Character);
 
 IF
-DB_InRegion(_Character, (TRIGGER)S_COL_ColonyArea_NoOubliette_e35841eb-e9ae-4c13-8b46-832184d1ec5b)
+EnteredTrigger(_Character, (TRIGGER)S_COL_ColonyArea_NoOubliette_e35841eb-e9ae-4c13-8b46-832184d1ec5b)
 AND
 HasActiveStatus(_Character, "MOO_UNWELCOMEVISITORS_AURA_SAFEEXPLORATION", 1)
 THEN
@@ -409,6 +431,24 @@ AND
 HasActiveStatus(_Character, "MOO_UNWELCOMEVISITORS_AURA_SAFEEXPLORATION", 1)
 THEN
 RemoveStatus(_Character, "MOO_UNWELCOMEVISITORS_AURA_SAFEEXPLORATION", _Character);
+
+QRY
+QRY_UnwelcomeVisitors_IsInMOO((CHARACTER)_Visitor)
+AND
+DB_MOO_InMOOTriggers((TRIGGER)_MOOTrigger)
+AND
+IsInTrigger(_Visitor, _MOOTrigger, 1)
+THEN
+DB_NOOP(1);
+
+QRY
+QRY_UnwelcomeVisitors_IsInMOO((CHARACTER)_Visitor)
+AND
+DB_MOO_InsideMoonriseTowerTriggers((TRIGGER)_MOOTrigger)
+AND
+IsInTrigger(_Visitor, _MOOTrigger, 1)
+THEN
+DB_NOOP(1);
 
 //END_REGION
 EXITSECTION

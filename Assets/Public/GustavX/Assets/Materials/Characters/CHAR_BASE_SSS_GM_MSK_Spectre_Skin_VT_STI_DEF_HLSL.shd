@@ -1,0 +1,402 @@
+[Vertex shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+
+struct VertexInput
+{
+	float3 Position : POSITION0;
+	float4 InstanceMatrix1 : COLOR1;
+	float4 InstanceMatrix2 : COLOR2;
+	float4 InstanceMatrix3 : COLOR3;
+	float2 TexCoords0 : TEXCOORD0;
+	float4 LocalQTangent : NORMAL0;
+};
+
+struct VertexOutput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float2 TexCoords0 : TEXCOORD0;
+	float3 WorldNormal : TEXCOORD1;
+	float3 WorldBinormal : TEXCOORD2;
+	float3 WorldTangent : TEXCOORD3;
+	float3 LocalNormal : TEXCOORD4;
+	float3 LocalPosition : TEXCOORD5;
+};
+
+VertexOutput main(in VertexInput In)
+{
+	VertexOutput Out;
+
+	// Create Instance World Matrix
+	float4x4 noBillboardWorldMatrix = float4x4(In.InstanceMatrix1, In.InstanceMatrix2, In.InstanceMatrix3, float4(0.0f, 0.0f, 0.0f, 1.0f));
+
+	float4 localPositionStatic = float4(In.Position, 1.0f);
+	// World space position
+	float4 worldPosition = mul(noBillboardWorldMatrix, localPositionStatic);
+
+	// Projected position
+	float4 projectedPosition = mul(g_ViewProjectionMat, worldPosition);
+
+	// Pass projected position to pixel shader
+	Out.ProjectedPosition = projectedPosition;
+
+	Out.TexCoords0 = In.TexCoords0;
+	// Compute localTangentFrame tangent frame
+	float3x3 localTangentFrame = GetTangentFrame(In.LocalQTangent);
+
+	float3 localNormal = localTangentFrame[2];
+
+	// World space Normal
+	float3 worldNormal = mul((float3x3)(noBillboardWorldMatrix), localNormal);
+
+	// Normalize World Normal
+	float3 worldNormalNormalized = normalize(worldNormal);
+
+	Out.WorldNormal = worldNormalNormalized;
+
+	float3 localBinormal = localTangentFrame[1];
+
+	// World space Binormal
+	float3 worldBinormal = mul((float3x3)(noBillboardWorldMatrix), localBinormal);
+
+	// Normalize World Binormal
+	float3 worldBinormalNormalized = normalize(worldBinormal);
+
+	Out.WorldBinormal = worldBinormalNormalized;
+
+	float3 localTangent = localTangentFrame[0];
+
+	// World space Tangent
+	float3 worldTangent = mul((float3x3)(noBillboardWorldMatrix), localTangent);
+
+	// Normalize World Tangent
+	float3 worldTangentNormalized = normalize(worldTangent);
+
+	Out.WorldTangent = worldTangentNormalized;
+
+	// Pass Local Normal to PS
+	Out.LocalNormal = localNormal;
+
+	// Pass local position to pixel shader
+	Out.LocalPosition = In.Position;
+
+
+	return Out;
+}
+
+
+[Fragment shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+#include "Shaders/HLSL/VirtualTexturing.shdh"
+#include "Shaders/HLSL/PBR.shdh"
+
+struct PixelInput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float2 TexCoords0 : TEXCOORD0;
+	float3 WorldNormal : TEXCOORD1;
+	float3 WorldBinormal : TEXCOORD2;
+	float3 WorldTangent : TEXCOORD3;
+	float3 LocalNormal : TEXCOORD4;
+	float3 LocalPosition : TEXCOORD5;
+};
+
+struct PixelOutput
+{
+	float4 Color0 : SV_Target0;
+	float4 Color1 : SV_Target1;
+	float4 Color2 : SV_Target2;
+	float4 Color3 : SV_Target3;
+	float4 VTColor : SV_Target4;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_EngineParams : register(b0)
+{
+	float4 VirtualTexture_CB_Texture[2];
+	uint VirtualTexture_TilesetDataIndex;
+	uint LightChannel;
+	uint DiffusionProfileIndex;
+	uint PADDING_DiffusionProfileIndex;
+};
+VK_DESCRIPTOR(DS_Shader, 1) cbuffer CB_MaterialConstants : register(b1)
+{
+	float3 Vector3Parameter_Color_01;
+	float FloatParameter_DetailNormalStrength;
+	float3 Vector3Parameter_Color_02;
+	float FloatParameter_DetailNormalTiling;
+	float3 Vector3Parameter_Color_03;
+	float FloatParameter_Blood_AO_Sharpness;
+	float3 Vector3Parameter_Blood_Color;
+	float FloatParameter_Blood;
+	float FloatParameter_Reflectance;
+	float PADDING0_FloatParameter_Reflectance;
+	float PADDING1_FloatParameter_Reflectance;
+	float PADDING2_FloatParameter_Reflectance;
+};
+VK_DESCRIPTOR(DS_Shader, 2) SamplerState _DefaultBorderSampler;
+VK_DESCRIPTOR(DS_Shader, 3) Texture2D VirtualTexture_Pagetable;
+VK_DESCRIPTOR(DS_Shader, 4) Texture2DArray VirtualTexture_Cache1;
+VK_DESCRIPTOR(DS_Shader, 5) Texture2D Texture2DParameter_DetailNormalMask;
+VK_DESCRIPTOR(DS_Shader, 6) Texture2D Texture2DParameter_DetailNormalMap;
+VK_DESCRIPTOR(DS_Shader, 7) Texture2DArray VirtualTexture_Cache0;
+VK_DESCRIPTOR(DS_Shader, 8) Texture2DArray VirtualTexture_Cache2;
+VK_DESCRIPTOR(DS_Shader, 9) Texture2D Texture2DParameter_MSKcloth;
+VK_DESCRIPTOR(DS_Shader, 10) Texture2D Texture2DParameter_2765e27052ce6f45eddfd0451042b54c;
+void CalculateMatNormal(in float2 in_0,
+	out float3 out_0,
+	out float4 VTFeedback)
+{
+	// VirtualTextureNode {
+	float4 Local0 = SampleVirtualTexture(in_0, VirtualTexture_Pagetable, VirtualTexture_Cache1, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 1, VTFeedback);
+	// [Local0] Convert normalmaps to tangent space vectors
+	Local0.xyzw = Local0.wzyx;
+	Local0.xyz = ((Local0.xyz * 2.0f) - 1.0f);
+	Local0.z = -(Local0.z);
+	Local0.xyz = normalize(Local0.xyz);
+	// } VirtualTextureNode
+	float3 Local1 = Local0.xyz;
+	// Texture2DNode {
+	float4 Local2 = Texture2DParameter_DetailNormalMask.Sample(_DefaultWrapSampler, in_0);
+	// [Local2] Get needed components
+	float Local3 = Local2.x;
+	// } Texture2DNode
+	// UVNode {
+	// } UVNode
+	float2 Local4 = (in_0 * FloatParameter_DetailNormalTiling);
+	// Texture2DNode {
+	float4 Local5 = Texture2DParameter_DetailNormalMap.Sample(_DefaultWrapSampler, Local4);
+	// [Local5] Convert normalmaps to tangent space vectors
+	Local5.xyzw = Local5.wzyx;
+	Local5.xyz = ((Local5.xyz * 2.0f) - 1.0f);
+	Local5.z = -(Local5.z);
+	Local5.xyz = normalize(Local5.xyz);
+	// [Local5] Get needed components
+	float3 Local6 = Local5.xyz;
+	// } Texture2DNode
+	float3 Local7 = (FloatParameter_DetailNormalStrength * Local6);
+	float3 Local8 = (Local3 * Local7);
+	float3 Local9 = (float3(1.0f, 0.0f, 1.0f) * Local8);
+	float3 Local10 = (Local1 + Local9);
+	// NormalizeNode {
+	float3 Local11 = normalize(Local10);
+	// } NormalizeNode
+	out_0 = Local11;
+}
+
+void CalculateMatBaseColor(in float2 in_0,
+	in float3 in_1,
+	in float3 in_2,
+	out float3 out_0,
+	out float4 VTFeedback)
+{
+	// VirtualTextureNode {
+	float4 Local0 = SampleVirtualTexture(in_0, VirtualTexture_Pagetable, VirtualTexture_Cache0, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 0, VTFeedback);
+	float4 Local1 = SampleVirtualTexture(in_0, VirtualTexture_Pagetable, VirtualTexture_Cache1, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 1, VTFeedback);
+	// [Local1] Convert normalmaps to tangent space vectors
+	Local1.xyzw = Local1.wzyx;
+	Local1.xyz = ((Local1.xyz * 2.0f) - 1.0f);
+	Local1.z = -(Local1.z);
+	Local1.xyz = normalize(Local1.xyz);
+	float4 Local2 = SampleVirtualTexture(in_0, VirtualTexture_Pagetable, VirtualTexture_Cache2, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 2, VTFeedback);
+	float Local3 = Local2.z;
+	// } VirtualTextureNode
+	float3 Local4 = Local0.xyz;
+	// Texture2DNode {
+	float4 Local5 = Texture2DParameter_MSKcloth.Sample(_DefaultWrapSampler, in_0);
+	// [Local5] Get needed components
+	float3 Local6 = Local5.xyz;
+	// } Texture2DNode
+	float3 Local7 = (((Vector3Parameter_Color_01 * Local6.x) + (Vector3Parameter_Color_02 * Local6.y)) + (Vector3Parameter_Color_03 * Local6.z));
+	float3 Local8 = (Local7 * Local4);
+	// DotNode {
+	float Local9 = dot(Local6, float3(1.0f, 1.0f, 1.0f));
+	// } DotNode
+	float Local10 = clamp(Local9, 0.0f, 1.0f);
+	float3 Local11 = lerp(Local4, Local8, float3(Local10, Local10, Local10));
+	// Texture2DNode {
+	float4 Local12 = Texture2DParameter_2765e27052ce6f45eddfd0451042b54c.Sample(_DefaultWrapSampler, in_0);
+	// [Local12] Get needed components
+	float Local13 = Local12.z;
+	// } Texture2DNode
+	// LocalNormal {
+	// } LocalNormal
+	// LocalPosition {
+	// } LocalPosition
+	float2 Local14 = (((step(float3(0.5f, 0.5f, 0.5f), (pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local13 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)) / dot(pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local13 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)), float3(1.0f, 1.0f, 1.0f)))).x * (float3(1.0f, -1.0f, 1.0f) * ((float3(0.0f, 0.0f, 0.0f) + in_2) * 2.8f)).zy) + (step(float3(0.5f, 0.5f, 0.5f), (pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local13 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)) / dot(pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local13 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)), float3(1.0f, 1.0f, 1.0f)))).z * (float3(1.0f, -1.0f, 1.0f) * ((float3(0.0f, 0.0f, 0.0f) + in_2) * 2.8f)).xy)) + (step(float3(0.5f, 0.5f, 0.5f), (pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local13 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)) / dot(pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local13 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)), float3(1.0f, 1.0f, 1.0f)))).y * (float3(1.0f, -1.0f, 1.0f) * ((float3(0.0f, 0.0f, 0.0f) + in_2) * 2.8f)).xz));
+	float3 Local15 = step(float3(0.5f, 0.5f, 0.5f), (pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local13 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)) / dot(pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local13 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)), float3(1.0f, 1.0f, 1.0f))));
+	// Texture2DNode {
+	float4 Local16 = Texture2DParameter_2765e27052ce6f45eddfd0451042b54c.Sample(_DefaultWrapSampler, Local14);
+	// [Local16] Get needed components
+	float3 Local17 = Local16.xyz;
+	float Local18 = Local16.z;
+	// } Texture2DNode
+	float2 Local19 = Local17.yx;
+	float Local20 = Local1.z;
+	float Local21 = clamp(Local20, 0.0f, 1.0f);
+	float Local22 = pow(Local3, FloatParameter_Blood_AO_Sharpness);
+	float Local23 = (1.0f - Local22);
+	float Local24 = (Local21 + Local23);
+	float Local25 = clamp(Local24, 0.0f, 1.0f);
+	float Local26 = (1.0f - Local25);
+	float Local27 = (Local18 - 0.7f);
+	float Local28 = max(1E-05f, Local27);
+	float Local29 = (Local26 + Local28);
+	float Local30 = step(Local29, FloatParameter_Blood);
+	float2 Local31 = (Local19 * Local30);
+	float Local32 = Local31.y;
+	float3 Local33 = lerp(Local11, Vector3Parameter_Blood_Color, float3(Local32, Local32, Local32));
+	out_0 = Local33;
+}
+
+void CalculateMatMetalMask(in float2 in_0,
+	out float out_0,
+	out float4 VTFeedback)
+{
+	// VirtualTextureNode {
+	float4 Local0 = SampleVirtualTexture(in_0, VirtualTexture_Pagetable, VirtualTexture_Cache2, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 2, VTFeedback);
+	float Local1 = Local0.x;
+	// } VirtualTextureNode
+	out_0 = Local1;
+}
+
+void CalculateMatReflectance(out float out_0)
+{
+	out_0 = FloatParameter_Reflectance;
+}
+
+void CalculateMatOcclusion(in float2 in_0,
+	out float out_0,
+	out float4 VTFeedback)
+{
+	// VirtualTextureNode {
+	float4 Local0 = SampleVirtualTexture(in_0, VirtualTexture_Pagetable, VirtualTexture_Cache2, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 2, VTFeedback);
+	float Local1 = Local0.z;
+	// } VirtualTextureNode
+	out_0 = Local1;
+}
+
+void CalculateMatRoughness(in float2 in_0,
+	in float3 in_1,
+	in float3 in_2,
+	out float out_0,
+	out float4 VTFeedback)
+{
+	// Texture2DNode {
+	float4 Local0 = Texture2DParameter_2765e27052ce6f45eddfd0451042b54c.Sample(_DefaultWrapSampler, in_0);
+	// [Local0] Get needed components
+	float Local1 = Local0.z;
+	// } Texture2DNode
+	// LocalNormal {
+	// } LocalNormal
+	// LocalPosition {
+	// } LocalPosition
+	float2 Local2 = (((step(float3(0.5f, 0.5f, 0.5f), (pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local1 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)) / dot(pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local1 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)), float3(1.0f, 1.0f, 1.0f)))).x * (float3(1.0f, -1.0f, 1.0f) * ((float3(0.0f, 0.0f, 0.0f) + in_2) * 2.8f)).zy) + (step(float3(0.5f, 0.5f, 0.5f), (pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local1 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)) / dot(pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local1 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)), float3(1.0f, 1.0f, 1.0f)))).z * (float3(1.0f, -1.0f, 1.0f) * ((float3(0.0f, 0.0f, 0.0f) + in_2) * 2.8f)).xy)) + (step(float3(0.5f, 0.5f, 0.5f), (pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local1 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)) / dot(pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local1 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)), float3(1.0f, 1.0f, 1.0f)))).y * (float3(1.0f, -1.0f, 1.0f) * ((float3(0.0f, 0.0f, 0.0f) + in_2) * 2.8f)).xz));
+	float3 Local3 = step(float3(0.5f, 0.5f, 0.5f), (pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local1 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)) / dot(pow(abs(((float3(0.0f, 0.5f, 1.0f) * ((2.0f * (Local1 + -0.5f)) * 0.3f)) + in_1)), float3(160.0f, 160.0f, 160.0f)), float3(1.0f, 1.0f, 1.0f))));
+	// Texture2DNode {
+	float4 Local4 = Texture2DParameter_2765e27052ce6f45eddfd0451042b54c.Sample(_DefaultWrapSampler, Local2);
+	// [Local4] Get needed components
+	float3 Local5 = Local4.xyz;
+	float Local6 = Local4.z;
+	// } Texture2DNode
+	float2 Local7 = Local5.yx;
+	// VirtualTextureNode {
+	float4 Local8 = SampleVirtualTexture(in_0, VirtualTexture_Pagetable, VirtualTexture_Cache1, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 1, VTFeedback);
+	// [Local8] Convert normalmaps to tangent space vectors
+	Local8.xyzw = Local8.wzyx;
+	Local8.xyz = ((Local8.xyz * 2.0f) - 1.0f);
+	Local8.z = -(Local8.z);
+	Local8.xyz = normalize(Local8.xyz);
+	float4 Local9 = SampleVirtualTexture(in_0, VirtualTexture_Pagetable, VirtualTexture_Cache2, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 2, VTFeedback);
+	float Local10 = Local9.z;
+	// } VirtualTextureNode
+	float Local11 = Local8.z;
+	float Local12 = clamp(Local11, 0.0f, 1.0f);
+	float Local13 = pow(Local10, FloatParameter_Blood_AO_Sharpness);
+	float Local14 = (1.0f - Local13);
+	float Local15 = (Local12 + Local14);
+	float Local16 = clamp(Local15, 0.0f, 1.0f);
+	float Local17 = (1.0f - Local16);
+	float Local18 = (Local6 - 0.7f);
+	float Local19 = max(1E-05f, Local18);
+	float Local20 = (Local17 + Local19);
+	float Local21 = step(Local20, FloatParameter_Blood);
+	float2 Local22 = (Local7 * Local21);
+	float Local23 = Local22.y;
+	out_0 = Local23;
+}
+
+void CalculateMatSubsurfaceMask(in float2 in_0,
+	out float out_0,
+	out float4 VTFeedback)
+{
+	// VirtualTextureNode {
+	float4 Local0 = SampleVirtualTexture(in_0, VirtualTexture_Pagetable, VirtualTexture_Cache2, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 2, VTFeedback);
+	// } VirtualTextureNode
+	float Local1 = Local0.w;
+	float Local2 = floor(Local1);
+	float Local3 = (1.0f - Local2);
+	out_0 = Local3;
+}
+
+void CalculateMatThickness(in float2 in_0,
+	out float out_0,
+	out float4 VTFeedback)
+{
+	// VirtualTextureNode {
+	float4 Local0 = SampleVirtualTexture(in_0, VirtualTexture_Pagetable, VirtualTexture_Cache2, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 2, VTFeedback);
+	// } VirtualTextureNode
+	float Local1 = Local0.w;
+	out_0 = Local1;
+}
+
+PixelOutput main(in PixelInput In)
+{
+	PixelOutput Out;
+
+	float4 VTFeedback = float4(1.0f, 1.0f, 1.0f, 1.0f);
+
+	float3 matNormal;
+	CalculateMatNormal(In.TexCoords0, matNormal, VTFeedback);
+	float3x3 NBT_WS = float3x3(In.WorldTangent, In.WorldNormal, In.WorldBinormal);
+
+	matNormal = mul((float3x3)(g_ViewMat), normalize(mul(matNormal, NBT_WS)));
+
+	float3 matBaseColor;
+	// Normalize Local Normal
+	float3 localNormalNormalized = normalize(In.LocalNormal);
+
+	CalculateMatBaseColor(In.TexCoords0, localNormalNormalized, In.LocalPosition.xyz, matBaseColor, VTFeedback);
+	float matMetalMask;
+	CalculateMatMetalMask(In.TexCoords0, matMetalMask, VTFeedback);
+	float matReflectance;
+	CalculateMatReflectance(matReflectance);
+	float matOcclusion;
+	CalculateMatOcclusion(In.TexCoords0, matOcclusion, VTFeedback);
+	float matRoughness;
+	CalculateMatRoughness(In.TexCoords0, localNormalNormalized, In.LocalPosition.xyz, matRoughness, VTFeedback);
+	float matSubsurfaceMask;
+	CalculateMatSubsurfaceMask(In.TexCoords0, matSubsurfaceMask, VTFeedback);
+	matSubsurfaceMask = saturate(matSubsurfaceMask);
+	float matThickness;
+	CalculateMatThickness(In.TexCoords0, matThickness, VTFeedback);
+	matThickness = saturate(matThickness);
+	GBufferData gBufferData;
+	gBufferData.ViewSpaceNormal = matNormal;
+	gBufferData.BaseColor = matBaseColor;
+	gBufferData.Occlusion = matOcclusion;
+	gBufferData.Roughness = matRoughness;
+	gBufferData.Reflectance = matReflectance;
+	gBufferData.MetalMask = matMetalMask;
+	gBufferData.ShadingModel = 3;
+	gBufferData.LightChannel = LightChannel;
+	gBufferData.CanReceiveDeferredDecals = 0;
+	gBufferData.UseFuzzyShadows = false;
+	gBufferData.Custom = float4(((float)(DiffusionProfileIndex) / 255.0f), matSubsurfaceMask, matThickness, 1.0f);
+	EncodeGBufferData(gBufferData, Out.Color0, Out.Color1, Out.Color2, Out.Color3);
+	Out.VTColor = VTFeedback;
+
+	return Out;
+}

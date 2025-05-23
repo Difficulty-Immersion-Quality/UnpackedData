@@ -1,0 +1,156 @@
+[Vertex shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+#include "Shaders/HLSL/SkinningHelpers.shdh"
+
+struct VertexInput
+{
+	float3 Position : POSITION0;
+	uint VertexID : SV_VertexID;
+	float4 LocalQTangent : NORMAL0;
+};
+
+struct VertexOutput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float3 ViewNormal : TEXCOORD0;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_EngineParams : register(b0)
+{
+	float4x4 WorldOffsetMatrix;
+	uint TransformedVerticesOffset;
+	uint LightChannel;
+	uint PADDING0_LightChannel;
+	uint PADDING1_LightChannel;
+};
+VK_DESCRIPTOR(DS_Shader, 1) cbuffer CB_MaterialConstants : register(b1)
+{
+	float3 Vector3Parameter_WPO_Strenght;
+	float FloatParameter_WPO_Size;
+	float3 _WorldExtents;
+	float PADDING__WorldExtents;
+};
+void CalculateMatWorldPositionOffset(in float3 in_0,
+	in float4x4 in_1,
+	out float3 out_0)
+{
+	// LocalPosition {
+	// } LocalPosition
+	float Local0 = in_0.y;
+	float Local1 = (_WorldExtents.y * FloatParameter_WPO_Size);
+	float Local2 = (Local0 / Local1);
+	float Local3 = (g_CurrentTime + Local2);
+	//  TriangleWaveNode {
+	// TriangleWave
+	float Local4 = abs(((frac((Local3 + 0.5f)) * 2.0f) - 1.0f));
+	// Smooth TriangleWave
+	float Local5 = ((Local4 * Local4) * (3.0f - (2.0f * Local4)));
+	//  } TriangleWaveNode
+	float3 Local6 = (Vector3Parameter_WPO_Strenght * Local5);
+	// TransformDirectionNode {
+	float3 Local7 = mul((float3x3)(in_1), Local6);
+	// } TransformDirectionNode
+	out_0 = Local7;
+}
+
+VertexOutput main(in VertexInput In)
+{
+	VertexOutput Out;
+
+	float3 matWorldPositionOffset;
+	CalculateMatWorldPositionOffset(In.Position.xyz, WorldOffsetMatrix, matWorldPositionOffset);
+	float3 localPositionStatic = In.Position;
+	[branch]
+	if ((TransformedVerticesOffset > 0))
+	{
+		// Skinned vertex
+		localPositionStatic = GetSkinnedPosition(In.VertexID, TransformedVerticesOffset);
+	}
+	// World space offset
+	float3 worldOffset = mul(WorldOffsetMatrix, float4(localPositionStatic, 1.0f)).xyz;
+
+	worldOffset = (worldOffset + matWorldPositionOffset);
+
+	// Projected position
+	float4 projectedPosition = mul(g_OffsetViewProjectionMat, float4(worldOffset, 1.0f));
+
+	// Pass projected position to pixel shader
+	Out.ProjectedPosition = projectedPosition;
+
+	float4 transformedQTangent = In.LocalQTangent;
+	[branch]
+	if ((TransformedVerticesOffset > 0))
+	{
+		// Skinned QTangent
+		transformedQTangent = GetSkinnedQTangent(In.VertexID, TransformedVerticesOffset);
+	}
+	// Compute transformedTangentFrame tangent frame
+	float3x3 transformedTangentFrame = GetTangentFrame(transformedQTangent);
+
+	float3 transformedNormal = transformedTangentFrame[2];
+
+	// World space Normal
+	float3 worldNormal = mul((float3x3)(WorldOffsetMatrix), transformedNormal);
+
+	float3 viewSpaceNormal = mul((float3x3)(g_ViewMat), worldNormal);
+
+	Out.ViewNormal = viewSpaceNormal;
+
+
+	return Out;
+}
+
+
+[Fragment shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+#include "Shaders/HLSL/PBR.shdh"
+
+struct PixelInput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float3 ViewNormal : TEXCOORD0;
+};
+
+struct PixelOutput
+{
+	float4 Color0 : SV_Target0;
+	float4 Color1 : SV_Target1;
+	float4 Color2 : SV_Target2;
+	float4 Color3 : SV_Target3;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_EngineParams : register(b0)
+{
+	float4x4 WorldOffsetMatrix;
+	uint TransformedVerticesOffset;
+	uint LightChannel;
+	uint PADDING0_LightChannel;
+	uint PADDING1_LightChannel;
+};
+PixelOutput main(in PixelInput In)
+{
+	PixelOutput Out;
+
+	float3 viewNormalNormalized = normalize(In.ViewNormal);
+
+	float matOcclusion = 1.0f;
+	GBufferData gBufferData;
+	gBufferData.ViewSpaceNormal = viewNormalNormalized;
+	gBufferData.BaseColor = float3(0.0f, 0.0f, 0.0f);
+	gBufferData.Occlusion = matOcclusion;
+	gBufferData.Roughness = 0.5f;
+	gBufferData.Reflectance = 0.5f;
+	gBufferData.MetalMask = 0.0f;
+	gBufferData.ShadingModel = 0;
+	gBufferData.LightChannel = LightChannel;
+	gBufferData.CanReceiveDeferredDecals = 0;
+	gBufferData.UseFuzzyShadows = false;
+	gBufferData.Custom = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	EncodeGBufferData(gBufferData, Out.Color0, Out.Color1, Out.Color2, Out.Color3);
+
+	return Out;
+}

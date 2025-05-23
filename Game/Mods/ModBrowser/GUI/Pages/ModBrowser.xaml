@@ -11,7 +11,9 @@
              ls:UIWidget.ContextName="ModBrowserDownload"
              Template="{StaticResource ModBrowserBackgroundTemplate}"
              d:DataContext="{d:DesignInstance Type=ls:DCModBrowser, IsDesignTimeCreatable=True}"
-             d:DesignWidth="3840" d:DesignHeight="2160">
+             d:DesignWidth="3840" d:DesignHeight="2160"
+             Tag="{StaticResource TrueValue}">
+    <!-- Tag will store whether to show sort and filter options -->
     <ls:UIWidget.ContentTemplate>
         <DataTemplate>
             <DataTemplate.Resources>
@@ -56,7 +58,7 @@
                     <Image Grid.Column="0" Grid.ColumnSpan="3" Source="{StaticResource ModBrowserSubheaderBg}" Stretch="Fill" VerticalAlignment="Top"/>
 
                     <ls:LSToggleButton x:Name="SortAndFilterSwapper" Grid.Column="0"
-                                       IsChecked="{Binding ShowSortAndFilterOptions, Mode=TwoWay}"
+                                       IsChecked="{Binding Tag, ElementName=ModBrowser, Mode=TwoWay}"
                                        VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,0,0"
                                        Template="{StaticResource ToggleIconButtonTemplate}">
                         <ls:LSToggleButton.ToolTip>
@@ -170,6 +172,8 @@
 
                 <Control x:Name="ModListUpdateSpinner" Template="{StaticResource SearchingModsTemplate}" Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding IsUpdatingModList, Converter={StaticResource BoolToVisibleConverter}}"/>
 
+                <Control x:Name="ModListPermissionsSpinner" Grid.Row="3" Template="{StaticResource BusyElement}" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,0,12,0" Visibility="Collapsed"/>
+
                 <Grid x:Name="ModListRoot" Grid.Row="3" HorizontalAlignment="Center" Visibility="{Binding IsUpdatingModList, Converter={StaticResource BoolToCollapsedConverter}}">
                     <Grid.OpacityMask>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -192,16 +196,20 @@
                         </ListBox.ItemsPanel>
                         <ListBox.Template>
                             <ControlTemplate>
-                                <ScrollViewer x:Name="ModScrollViewer" HorizontalContentAlignment="Center" Template="{StaticResource ScrollViewerTemplate}" Background="Transparent">
+                                <ScrollViewer x:Name="PART_ScrollViewer" HorizontalContentAlignment="Center" Template="{StaticResource ScrollViewerTemplate}" Background="Transparent">
                                     <ScrollViewer.Resources>
                                         <Style TargetType="ScrollBar" BasedOn="{StaticResource GoldScrollBar}"/>
                                         <GridLength x:Key="Top">50</GridLength>
                                         <GridLength x:Key="Bottom">50</GridLength>
                                     </ScrollViewer.Resources>
+
                                     <ItemsPresenter HorizontalAlignment="Center"/>
                                 </ScrollViewer>
                             </ControlTemplate>
                         </ListBox.Template>
+                        <b:Interaction.Behaviors>
+                            <ls:ResetScrollOnItemsChangedBehavior/>
+                        </b:Interaction.Behaviors>
                     </ListBox>
                 </Grid>
 
@@ -324,6 +332,17 @@
                                                 </ls:LSToggleButton>
                                             </TreeViewItem.Header>
                                         </TreeViewItem>
+                                        <TreeViewItem>
+                                            <TreeViewItem.Header>
+                                                <ls:LSToggleButton x:Name="ExternalDependenciesButton" Content="{Binding Source=h1b37a6fcg1771g407fg9187gb0ac1a152876, Converter={StaticResource TranslatedStringConverter}}" IsChecked="{Binding ShowExternalDependenciesEnabled, Mode=TwoWay}" Style="{StaticResource FilterToggleButtonStyle}">
+                                                    <b:Interaction.Triggers>
+                                                        <b:PropertyChangedTrigger Binding="{Binding IsChecked, ElementName=ExternalDependenciesButton}">
+                                                            <b:InvokeCommandAction Command="{Binding UpdateSearchCommand}"/>
+                                                        </b:PropertyChangedTrigger>
+                                                    </b:Interaction.Triggers>
+                                                </ls:LSToggleButton>
+                                            </TreeViewItem.Header>
+                                        </TreeViewItem>
                                     </TreeViewItem>
                                 </TreeView>
 
@@ -400,7 +419,7 @@
                 <!-- Animation for >= 16/9 ARs -->
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
-                        <Condition Binding="{Binding ShowSortAndFilterOptions}" Value="True"/>
+                        <Condition Binding="{Binding Tag, ElementName=ModBrowser}" Value="{StaticResource TrueValue}"/>
                         <Condition Binding="{Binding HorizontalAlignment, ElementName=SideBar}" Value="Center"/>
                     </MultiDataTrigger.Conditions>
                     <Setter TargetName="SideBar" Property="Visibility" Value="Visible"/>
@@ -445,7 +464,7 @@
                 <!-- Animation for < 16/9 ARs -->
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
-                        <Condition Binding="{Binding ShowSortAndFilterOptions}" Value="True"/>
+                        <Condition Binding="{Binding Tag, ElementName=ModBrowser}" Value="{StaticResource TrueValue}"/>
                         <Condition Binding="{Binding HorizontalAlignment, ElementName=SideBar}" Value="Left"/>
                     </MultiDataTrigger.Conditions>
                     <Setter TargetName="SideBar" Property="Visibility" Value="Visible"/>
@@ -509,6 +528,30 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsUpdatingModListWithNewFilter}" Value="True">
                     <Setter TargetName="PageSelectionControl" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsWaitingOnPermissionsChanged}" Value="True">
+                    <Setter TargetName="UGCDisabled" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="NoResultsWarning" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ModListPermissionsSpinner" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ModDetailsControl" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="PageSelectionControl" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ModList" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ConnectionWarning" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="SearchTopBar" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ActiveFiltersContainer" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="SideBar" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsWaitingOnPermissionsRequest}" Value="True">
+                    <Setter TargetName="UGCDisabled" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="NoResultsWarning" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ModListPermissionsSpinner" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ModDetailsControl" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="PageSelectionControl" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ModList" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ConnectionWarning" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="SearchTopBar" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ActiveFiltersContainer" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="SideBar" Property="Visibility" Value="Collapsed"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>

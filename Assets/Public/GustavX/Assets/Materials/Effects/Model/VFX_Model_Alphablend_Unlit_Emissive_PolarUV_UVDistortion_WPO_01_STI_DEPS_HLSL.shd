@@ -1,0 +1,373 @@
+[Vertex shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+
+struct VertexInput
+{
+	float2 TexCoords0 : TEXCOORD0;
+	float4 InstanceDynamicParameter : COLOR5;
+	float4 LocalQTangent : NORMAL0;
+	float4 InstanceMatrix1 : COLOR1;
+	float4 InstanceMatrix2 : COLOR2;
+	float4 InstanceMatrix3 : COLOR3;
+	float3 Position : POSITION0;
+	float4 VertexColor : COLOR0;
+	float4 InstanceColor : COLOR4;
+};
+
+struct VertexOutput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float4 VertexColor : COLOR0;
+	float4 InstanceColor : COLOR1;
+	float2 TexCoords0 : TEXCOORD0;
+	float4 InstanceDynamicParameter : COLOR2;
+	float Depth : TEXCOORD1;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_EngineParams : register(b0)
+{
+	float4x4 WorldOffsetMatrix;
+};
+VK_DESCRIPTOR(DS_Shader, 1) cbuffer CB_MaterialConstants : register(b1)
+{
+	float2 Vector2Parameter_UV_Stretch;
+	float2 Vector2Parameter_UV_Center;
+	float2 Vector2Parameter_DistortionTiling;
+	float2 Vector2Parameter_DistortionScrollingSpeed;
+	float2 Vector2Parameter_Tiling;
+	float2 Vector2Parameter_ScrollingSpeed;
+	float2 Vector2Parameter_MaskTiling;
+	float2 Vector2Parameter_MaskScrollingSpeed;
+	float2 Vector2Parameter_FadeInMiddle_SmoothStep;
+	float2 Vector2Parameter_Opacity_BordersMask_SmoothStep;
+	float FloatParameter_PolarUVExp;
+	float FloatParameter_ToggleInvertUV;
+	float FloatParameter_DistortionIntensity;
+	float FloatParameter__Use_RGBFromMainTexture;
+	float FloatParameter_WPO_Multiply;
+	float FloatParameter_MaskIntensity;
+	float FloatParameter__Use_DistortionMapOnMaskToo;
+	float FloatParameter_MaskFadeOutExp;
+	float FloatParameter_Switch_UseFadeInMiddle;
+	float FloatParameter_BackgroundExp;
+	float FloatParameter_BackgroundIntensity;
+	float FloatParameter_Opacity_Power;
+	float FloatParameter_OpacityPower_UseDynParam;
+	float FloatParameter_Opacity_BordersMask_Switch;
+	float FloatParameter_AlphaClip;
+	float FloatParameter_Opacity;
+	float FloatParameter_DepthDifferenceBlendDistance;
+	float PADDING0_FloatParameter_DepthDifferenceBlendDistance;
+	float PADDING1_FloatParameter_DepthDifferenceBlendDistance;
+	float PADDING2_FloatParameter_DepthDifferenceBlendDistance;
+};
+VK_DESCRIPTOR(DS_Shader, 2) Texture2D Texture2DParameter_DistortionTexture;
+VK_DESCRIPTOR(DS_Shader, 3) Texture2D Texture2DParameter_MainTexture;
+void CalculateMatWorldPositionOffset(in float2 in_0,
+	in float4 in_1,
+	in float3 in_2,
+	out float3 out_0)
+{
+	// UVNode {
+	// } UVNode
+	float2 Local0 = (in_0 * Vector2Parameter_UV_Stretch);
+	float2 Local1 = (Local0 + Vector2Parameter_UV_Center);
+	float2 Local2 = (float2(-1.0f, -1.0f) + (((Local1 - 0.0f) * (1.0f - -1.0f)) / max(abs((1.0f - 0.0f)), 1E-05f)));
+	float2 Local3 = Local2;
+	float Local4 = length(Local3);
+	float Local5 = (1.0f - Local4);
+	float Local6 = pow(Local5, FloatParameter_PolarUVExp);
+	float Local7 = (1.0f - Local6);
+	float Local8 = Local2.y;
+	float Local9 = Local2.x;
+	float Local10 = atan2(Local8, Local9);
+	float Local11 = (0.0f + (((Local10 - -3.14159f) * (1.0f - 0.0f)) / max(abs((3.14159f - -3.14159f)), 1E-05f)));
+	float2 Local12 = float2(Local7, Local11);
+	float2 Local13 = Local12.yx;
+	float2 Local14 = lerp(Local12, Local13, float2(FloatParameter_ToggleInvertUV, FloatParameter_ToggleInvertUV));
+	float2 Local15 = float2(Local4, Local11);
+	float2 Local16 = (Local15 * Vector2Parameter_DistortionTiling);
+	float2 Local17 = (g_CurrentTime * Vector2Parameter_DistortionScrollingSpeed);
+	float2 Local18 = frac(Local17);
+	// DynamicParameterNode {
+	// } DynamicParameterNode
+	float2 Local19 = (Vector2Parameter_DistortionScrollingSpeed * in_1.x);
+	float2 Local20 = lerp(Local18, Local19, float2(in_1.y, in_1.y));
+	float2 Local21 = (Local16 + Local20);
+	// Texture2DNode {
+	float4 Local22 = Texture2DParameter_DistortionTexture.SampleLevel(_DefaultWrapSampler, Local21, 0.0f);
+	// [Local22] Get needed components
+	float Local23 = Local22.x;
+	// } Texture2DNode
+	float Local24 = (Local23 * FloatParameter_DistortionIntensity);
+	float2 Local25 = (Local14 + float2(Local24, Local24));
+	float2 Local26 = (Local25 * Vector2Parameter_Tiling);
+	float2 Local27 = (g_CurrentTime * Vector2Parameter_ScrollingSpeed);
+	float2 Local28 = frac(Local27);
+	// DynamicParameterNode {
+	// } DynamicParameterNode
+	float2 Local29 = (Vector2Parameter_ScrollingSpeed * in_1.x);
+	float2 Local30 = lerp(Local28, Local29, float2(in_1.y, in_1.y));
+	float2 Local31 = (Local26 + Local30);
+	// Texture2DNode {
+	float4 Local32 = Texture2DParameter_MainTexture.SampleLevel(_DefaultWrapSampler, Local31, 0.0f);
+	// [Local32] Get needed components
+	float3 Local33 = Local32.xyz;
+	float Local34 = Local32.x;
+	// } Texture2DNode
+	float3 Local35 = lerp(float3(Local34, Local34, Local34), Local33, float3(FloatParameter__Use_RGBFromMainTexture, FloatParameter__Use_RGBFromMainTexture, FloatParameter__Use_RGBFromMainTexture));
+	float3 Local36 = (Local35 * FloatParameter_WPO_Multiply);
+	// WorldNormalNode {
+	// } WorldNormalNode
+	float3 Local37 = (Local36 * in_2);
+	out_0 = Local37;
+}
+
+VertexOutput main(in VertexInput In)
+{
+	VertexOutput Out;
+
+	float3 matWorldPositionOffset;
+	// Create Instance Dynamic Parameter
+	// Compute localTangentFrame tangent frame
+	float3x3 localTangentFrame = GetTangentFrame(In.LocalQTangent);
+
+	float3 localNormal = localTangentFrame[2];
+
+	// Create Instance WorldOffset Matrix
+	float4x4 noBillboardWorldOffsetMatrix = mul(WorldOffsetMatrix, float4x4(In.InstanceMatrix1, In.InstanceMatrix2, In.InstanceMatrix3, float4(0.0f, 0.0f, 0.0f, 1.0f)));
+
+	// World space Normal
+	float3 worldNormal = mul((float3x3)(noBillboardWorldOffsetMatrix), localNormal);
+
+	// Normalize World Normal
+	float3 worldNormalNormalized = normalize(worldNormal);
+
+	CalculateMatWorldPositionOffset(In.TexCoords0, In.InstanceDynamicParameter, worldNormalNormalized, matWorldPositionOffset);
+	float3 localPositionStatic = In.Position;
+	// World space offset
+	float3 worldOffset = mul(noBillboardWorldOffsetMatrix, float4(localPositionStatic, 1.0f)).xyz;
+
+	worldOffset = (worldOffset + matWorldPositionOffset);
+
+	// Projected position
+	float4 projectedPosition = mul(g_OffsetViewProjectionMat, float4(worldOffset, 1.0f));
+
+	// Pass projected position to pixel shader
+	Out.ProjectedPosition = projectedPosition;
+
+	Out.VertexColor = In.VertexColor;
+	// Create Instance Color
+	Out.InstanceColor = In.InstanceColor;
+	Out.TexCoords0 = In.TexCoords0;
+	Out.InstanceDynamicParameter = In.InstanceDynamicParameter;
+	// View space position
+	float3 viewPosition = mul((float3x3)(g_ViewMat), worldOffset);
+
+	// Depth
+	float depth = viewPosition.z;
+
+	// Pass depth to pixel shader
+	Out.Depth = depth;
+
+
+	return Out;
+}
+
+
+[Fragment shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+#include "Shaders/HLSL/Global/DS_ForwardMaterials.shdh"
+
+struct PixelInput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float4 VertexColor : COLOR0;
+	float4 InstanceColor : COLOR1;
+	float2 TexCoords0 : TEXCOORD0;
+	float4 InstanceDynamicParameter : COLOR2;
+	float Depth : TEXCOORD1;
+};
+
+struct PixelOutput
+{
+};
+
+VK_DESCRIPTOR(DS_Shader, 1) cbuffer CB_MaterialConstants : register(b1)
+{
+	float2 Vector2Parameter_UV_Stretch;
+	float2 Vector2Parameter_UV_Center;
+	float2 Vector2Parameter_DistortionTiling;
+	float2 Vector2Parameter_DistortionScrollingSpeed;
+	float2 Vector2Parameter_Tiling;
+	float2 Vector2Parameter_ScrollingSpeed;
+	float2 Vector2Parameter_MaskTiling;
+	float2 Vector2Parameter_MaskScrollingSpeed;
+	float2 Vector2Parameter_FadeInMiddle_SmoothStep;
+	float2 Vector2Parameter_Opacity_BordersMask_SmoothStep;
+	float FloatParameter_PolarUVExp;
+	float FloatParameter_ToggleInvertUV;
+	float FloatParameter_DistortionIntensity;
+	float FloatParameter__Use_RGBFromMainTexture;
+	float FloatParameter_WPO_Multiply;
+	float FloatParameter_MaskIntensity;
+	float FloatParameter__Use_DistortionMapOnMaskToo;
+	float FloatParameter_MaskFadeOutExp;
+	float FloatParameter_Switch_UseFadeInMiddle;
+	float FloatParameter_BackgroundExp;
+	float FloatParameter_BackgroundIntensity;
+	float FloatParameter_Opacity_Power;
+	float FloatParameter_OpacityPower_UseDynParam;
+	float FloatParameter_Opacity_BordersMask_Switch;
+	float FloatParameter_AlphaClip;
+	float FloatParameter_Opacity;
+	float FloatParameter_DepthDifferenceBlendDistance;
+	float PADDING0_FloatParameter_DepthDifferenceBlendDistance;
+	float PADDING1_FloatParameter_DepthDifferenceBlendDistance;
+	float PADDING2_FloatParameter_DepthDifferenceBlendDistance;
+};
+VK_DESCRIPTOR(DS_Shader, 2) Texture2D Texture2DParameter_DistortionTexture;
+VK_DESCRIPTOR(DS_Shader, 3) Texture2D Texture2DParameter_MainTexture;
+VK_DESCRIPTOR(DS_Shader, 4) Texture2D Texture2DParameter_MaskTexture;
+void CalculateMatOpacity(in float4 in_0,
+	in float4 in_1,
+	in float2 in_2,
+	in float4 in_3,
+	in float2 in_4,
+	in float in_5,
+	out float out_0)
+{
+	float Local0 = (in_0.w * in_1.w);
+	float Local1 = clamp(FloatParameter_MaskIntensity, 0.0f, 1.0f);
+	float Local2 = (1.0f - Local1);
+	// UVNode {
+	// } UVNode
+	float2 Local3 = (in_2 * Vector2Parameter_UV_Stretch);
+	float2 Local4 = (Local3 + Vector2Parameter_UV_Center);
+	float2 Local5 = (float2(-1.0f, -1.0f) + (((Local4 - 0.0f) * (1.0f - -1.0f)) / max(abs((1.0f - 0.0f)), 1E-05f)));
+	float2 Local6 = Local5;
+	float Local7 = length(Local6);
+	float Local8 = (1.0f - Local7);
+	float Local9 = pow(Local8, FloatParameter_PolarUVExp);
+	float Local10 = (1.0f - Local9);
+	float Local11 = Local5.y;
+	float Local12 = Local5.x;
+	float Local13 = atan2(Local11, Local12);
+	float Local14 = (0.0f + (((Local13 - -3.14159f) * (1.0f - 0.0f)) / max(abs((3.14159f - -3.14159f)), 1E-05f)));
+	float2 Local15 = float2(Local10, Local14);
+	float2 Local16 = float2(Local7, Local14);
+	float2 Local17 = (Local16 * Vector2Parameter_DistortionTiling);
+	float2 Local18 = (g_CurrentTime * Vector2Parameter_DistortionScrollingSpeed);
+	float2 Local19 = frac(Local18);
+	// DynamicParameterNode {
+	// } DynamicParameterNode
+	float2 Local20 = (Vector2Parameter_DistortionScrollingSpeed * in_3.x);
+	float2 Local21 = lerp(Local19, Local20, float2(in_3.y, in_3.y));
+	float2 Local22 = (Local17 + Local21);
+	// Texture2DNode {
+	float4 Local23 = Texture2DParameter_DistortionTexture.SampleLevel(_DefaultWrapSampler, Local22, 0.0f);
+	// [Local23] Get needed components
+	float Local24 = Local23.x;
+	// } Texture2DNode
+	float Local25 = (Local24 * FloatParameter_DistortionIntensity);
+	float2 Local26 = (Local15 + float2(Local25, Local25));
+	float2 Local27 = lerp(Local15, Local26, float2(FloatParameter__Use_DistortionMapOnMaskToo, FloatParameter__Use_DistortionMapOnMaskToo));
+	float2 Local28 = (Local27 * Vector2Parameter_MaskTiling);
+	float2 Local29 = (g_CurrentTime * Vector2Parameter_MaskScrollingSpeed);
+	float2 Local30 = frac(Local29);
+	// DynamicParameterNode {
+	// } DynamicParameterNode
+	float2 Local31 = (Vector2Parameter_MaskScrollingSpeed * in_3.x);
+	float2 Local32 = lerp(Local30, Local31, float2(in_3.y, in_3.y));
+	float2 Local33 = (Local28 + Local32);
+	// Texture2DNode {
+	float4 Local34 = Texture2DParameter_MaskTexture.SampleLevel(_DefaultWrapSampler, Local33, 0.0f);
+	// [Local34] Get needed components
+	float Local35 = Local34.x;
+	// } Texture2DNode
+	float Local36 = (Local2 + Local35);
+	float Local37 = clamp(Local36, 0.0f, 1.0f);
+	float2 Local38 = Local15.yx;
+	float2 Local39 = lerp(Local15, Local38, float2(FloatParameter_ToggleInvertUV, FloatParameter_ToggleInvertUV));
+	float2 Local40 = (Local39 + float2(Local25, Local25));
+	float2 Local41 = (Local40 * Vector2Parameter_Tiling);
+	float2 Local42 = (g_CurrentTime * Vector2Parameter_ScrollingSpeed);
+	float2 Local43 = frac(Local42);
+	// DynamicParameterNode {
+	// } DynamicParameterNode
+	float2 Local44 = (Vector2Parameter_ScrollingSpeed * in_3.x);
+	float2 Local45 = lerp(Local43, Local44, float2(in_3.y, in_3.y));
+	float2 Local46 = (Local41 + Local45);
+	// Texture2DNode {
+	float4 Local47 = Texture2DParameter_MainTexture.SampleLevel(_DefaultWrapSampler, Local46, 0.0f);
+	// [Local47] Get needed components
+	float3 Local48 = Local47.xyz;
+	float Local49 = Local47.x;
+	// } Texture2DNode
+	float3 Local50 = lerp(float3(Local49, Local49, Local49), Local48, float3(FloatParameter__Use_RGBFromMainTexture, FloatParameter__Use_RGBFromMainTexture, FloatParameter__Use_RGBFromMainTexture));
+	float3 Local51 = (Local37 * Local50);
+	float Local52 = clamp(Local7, 0.0f, 1.0f);
+	float Local53 = (1.0f - Local52);
+	float Local54 = pow(Local53, FloatParameter_MaskFadeOutExp);
+	float Local55 = clamp(Local7, 0.0f, 1.0f);
+	float Local56 = Vector2Parameter_FadeInMiddle_SmoothStep.x;
+	float Local57 = Vector2Parameter_FadeInMiddle_SmoothStep.y;
+	float Local58 = smoothstep(Local56, Local57, Local55);
+	float Local59 = (Local54 * Local58);
+	float Local60 = lerp(Local54, Local59, FloatParameter_Switch_UseFadeInMiddle);
+	float3 Local61 = (Local51 * Local60);
+	float Local62 = pow(Local53, FloatParameter_BackgroundExp);
+	float Local63 = smoothstep(0.0f, 1.0f, Local62);
+	float Local64 = (Local63 * FloatParameter_BackgroundIntensity);
+	float3 Local65 = (Local61 + float3(Local64, Local64, Local64));
+	float3 Local66 = clamp(Local65, 0.0f, 1.0f);
+	float Local67 = lerp(FloatParameter_Opacity_Power, in_3.z, FloatParameter_OpacityPower_UseDynParam);
+	float3 Local68 = pow(Local66, float3(Local67, Local67, Local67));
+	// UVNode {
+	// } UVNode
+	//  TriangleWaveNode {
+	// TriangleWave
+	float2 Local69 = abs(((frac((in_2 + float2(0.5f, 0.5f))) * 2.0f) - 1.0f));
+	//  } TriangleWaveNode
+	float Local70 = Vector2Parameter_Opacity_BordersMask_SmoothStep.x;
+	float Local71 = Vector2Parameter_Opacity_BordersMask_SmoothStep.y;
+	float2 Local72 = smoothstep(Local70, Local71, Local69);
+	float Local73 = Local72.x;
+	float Local74 = Local72.y;
+	float Local75 = min(Local73, Local74);
+	float Local76 = clamp(Local75, 0.0f, 1.0f);
+	float3 Local77 = (Local68 * Local76);
+	float3 Local78 = lerp(Local68, Local77, float3(FloatParameter_Opacity_BordersMask_Switch, FloatParameter_Opacity_BordersMask_Switch, FloatParameter_Opacity_BordersMask_Switch));
+	clip((Local78 - FloatParameter_AlphaClip));
+	float3 Local79 = (Local78 * FloatParameter_Opacity);
+	float3 Local80 = clamp(Local79, 0.0f, 1.0f);
+	// DepthDifferenceBlend
+	float Local81 = (_LinearDepth.Sample(_PointMirrorSampler, in_4).x * g_FarPlane);
+	float Local82 = (Local81 - in_5);
+	float Local83 = Local82;
+	float Local84 = saturate((Local83 / max(FloatParameter_DepthDifferenceBlendDistance, 0.0001f)));
+	// ~DepthDifferenceBlend
+
+	float3 Local85 = (Local80 * Local84);
+	float3 Local86 = (Local0 * Local85);
+	out_0 = Local86.x;
+}
+
+PixelOutput main(in PixelInput In)
+{
+	PixelOutput Out;
+
+	float matOpacity;
+	// UV position
+	float2 Local0 = (In.ProjectedPosition.xy * float2(g_RTInvWidth, g_RTInvHeight));
+
+	CalculateMatOpacity(In.VertexColor, In.InstanceColor, In.TexCoords0, In.InstanceDynamicParameter, Local0, In.Depth, matOpacity);
+	clip((matOpacity - 0.5f));
+
+
+	return Out;
+}

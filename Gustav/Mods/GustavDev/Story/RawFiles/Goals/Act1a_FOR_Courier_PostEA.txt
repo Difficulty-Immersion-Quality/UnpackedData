@@ -392,6 +392,8 @@ DB_GlobalFlag((FLAG)CAMP_Courier_Dog_Moved2Camp_7dcb7732-1c76-463a-bec9-251f3086
 AND
 NOT DB_PermaDefeated(S_FOR_Courier_Dog_3059f69c-068d-4e28-8491-55953c027901)
 AND
+NOT DB_GlobalFlag((FLAG)GLO_CourierDog_State_UnavailableForSummon_0fef1fa5-9216-4833-94c1-5fe1da7da7c7)
+AND
 DB_FOR_Courier_Fetch_Tags(_Tag)
 AND
 IsTagged(_ThrownObject, _Tag, 1)
@@ -399,6 +401,18 @@ AND
 QRY_OnlyOnce("FOR_Courier_BallThrown")
 THEN
 PROC_FOR_Courier_BallThrown(_Player, _ThrownObject);
+
+// Scratch's ball is thrown when Scratch is captured
+IF
+OnThrown(S_FOR_Courier_Ball_c9602f79-27a8-4f79-b0f2-3aba300bd80f, _, _Player, _, _, _, _)
+AND
+DB_Players((CHARACTER)_Player)
+AND
+DB_GlobalFlag((FLAG)CAMP_Courier_Dog_Moved2Camp_7dcb7732-1c76-463a-bec9-251f30860e6c)
+AND
+DB_GlobalFlag((FLAG)GLO_CourierDog_State_UnavailableForSummon_0fef1fa5-9216-4833-94c1-5fe1da7da7c7)
+THEN
+PROC_TryStartAD(Scratch_SummonUnavailable_PAD_84aafd7d-0e0c-74d8-7be4-791021a771a4, _Player);
 
 // Scratch's ball is thrown when Scratch is PermaDefeated
 IF
@@ -701,7 +715,22 @@ GetPosition(_Scratch, _X, _Y, _Z)
 AND
 FindValidPosition(_X, _Y, _Z, 20.0, _ThrownObject, 0, _X_Safe, _Y_Safe, _Z_Safe)
 THEN
+DB_FOR_Courier_DropItemPositionSent(1);
 TeleportToPosition(_ThrownObject, _X_Safe, _Y_Safe, _Z_Safe);
+PROC_FOR_CourierDog_ResetOwnershipIfItem(_ThrownObject);
+
+//FindValidPosition fallback
+PROC
+PROC_FOR_CourierDog_DropObjectIfNeeded((CHARACTER)_Scratch, (GUIDSTRING)_ThrownObject)
+AND
+NOT DB_FOR_Courier_DropItemPositionSent(1)
+AND
+IsInInventoryOf(_ThrownObject, _Scratch, 1)
+AND
+GetPosition(_Scratch, _X, _Y, _Z)
+THEN
+DB_FOR_Courier_DropItemPositionSent(1);
+TeleportToPosition(_ThrownObject, _X, _Y, _Z);
 PROC_FOR_CourierDog_ResetOwnershipIfItem(_ThrownObject);
 
 // If the object is an item, and it is dropped before Scratch returns it, reset ownership so it doesn't belong to Scratch
@@ -710,6 +739,7 @@ PROC_FOR_CourierDog_ResetOwnershipIfItem((GUIDSTRING)_ThrownItem)
 AND
 DB_FOR_CourierDog_Fetching_ItemOwner((ITEM)_ThrownItem, _Owner)
 THEN
+NOT DB_FOR_Courier_DropItemPositionSent(1);
 SetOwner((ITEM)_ThrownItem, _Owner);
 
 // reset DB of fetch, clear any remaining story move on Scratch

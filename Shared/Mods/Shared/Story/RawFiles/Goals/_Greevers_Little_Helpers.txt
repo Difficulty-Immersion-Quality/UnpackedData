@@ -2599,8 +2599,8 @@ PROC_OneTimeEventFlag((FLAG)_Flag);*/
 //END_REGION
 
 //REGION Flags set in dialog that should trigger after dialog end
-// DB_FlagReactionAfterDialog((DIALOGGUID)_Dialog,(STRING)_Flag)
-// DB_FlagReactionAfterDialog((GUIDSTRING)_Object,(DIALOGGUID)_Dialog,(STRING)_Flag)
+// DB_FlagReactionAfterDialog((FLAG)_Dialog,(DIALOGRESOURCE)_Flag)
+// DB_FlagReactionAfterDialog((GUIDSTRING)_Object,(FLAG)_Dialog,(DIALOGRESOURCE)_Dialog)
 IF
 FlagSet((FLAG)_Flag, _Object, _DialogID) // flagType: Object
 AND
@@ -2927,33 +2927,65 @@ IntegerProduct(_Value, -1, _Absolute)
 THEN
 DB_QRYRTN_IntegerAbs(_Absolute);
 
+QRY
+QRY_RealAbs((REAL)_)
+AND
+DB_QRYRTN_RealAbs(_Value)
+THEN
+NOT DB_QRYRTN_RealAbs(_Value);
+
+QRY
+QRY_RealAbs((REAL)_Value)
+AND
+_Value >= 0.0
+THEN
+DB_QRYRTN_RealAbs(_Value);
+
+QRY
+QRY_RealAbs((REAL)_Value)
+AND
+_Value < 0
+AND
+RealProduct(_Value, -1.0, _Absolute)
+THEN
+DB_QRYRTN_RealAbs(_Absolute);
+
 //END_REGION
 
 //REGION Angle normalisation
+// Supports ranges -360 to postive infinite and normalises the angle to a postive angle.
 QRY
-QRY_NormaliseAngle((INTEGER)_Angle)
+QRY_NormaliseAngle((REAL)_Angle)
 AND
-DB_NormaliseAngle_Result(_Result)
+DB_QRYRTN_NormaliseAngle((REAL)_Result)
 THEN
-NOT DB_NormaliseAngle_Result(_Result);
+NOT DB_QRYRTN_NormaliseAngle(_Result);
 
 QRY
-QRY_NormaliseAngle((INTEGER)_Angle)
+QRY_NormaliseAngle((REAL)_Angle)
 AND
-_Angle < 0
+_Angle < -0.01 // prevent rounding errors from returning 360 instead of 0
 AND
-IntegerSum(_Angle, 360, _NormalisedAngle)
+RealSum(_Angle, 360.0, _NormalisedAngle)
 THEN
-DB_NormaliseAngle_Result(_NormalisedAngle);
+DB_QRYRTN_NormaliseAngle(_NormalisedAngle);
 
 QRY
-QRY_NormaliseAngle((INTEGER)_Angle)
+QRY_NormaliseAngle((REAL)_Angle)
 AND
-_Angle >= 0
+_Angle >= -0.01
 AND
-IntegerModulo(_Angle, 360, _NormalisedAngle)
+RealDivide(_Angle, 360.0, _Times360)
+AND
+RealToInteger(_Times360, _Times360ToRound)
+AND
+IntegerToReal(_Times360ToRound, _Times360Rounded)
+AND
+RealProduct(_Times360Rounded, 360.0, _ToSubtract)
+AND
+RealSubtract(_Angle, _ToSubtract, _NormalisedAngle)
 THEN
-DB_NormaliseAngle_Result(_NormalisedAngle);
+DB_QRYRTN_NormaliseAngle(_NormalisedAngle);
 //END_REGION
 
 //REGION Clear a party flag on all players and potential companions
@@ -4186,6 +4218,8 @@ PROC_SetOnStage(_Corpse,0);
 PROC
 PROC_CorpseCleanup_CreateLootbag((CHARACTER)_Corpse)
 AND
+DB_ActiveLevel(_)
+AND
 NOT DB_Origins(_Corpse)
 AND
 IsInventoryEmpty(_Corpse,0) 
@@ -4200,6 +4234,8 @@ DB_CorpseCleanup_Lootbag(_BackPack);
 PROC
 PROC_CorpseCleanup_CreateLootbag((CHARACTER)_Corpse)
 AND
+DB_ActiveLevel(_)
+AND
 DB_Origins(_Corpse)
 AND
 IsInventoryEmpty(_Corpse,0) 
@@ -4211,14 +4247,69 @@ THEN
 DB_CorpseCleanup_DeferredWait(_Corpse,_BackPack);
 DB_CorpseCleanup_Lootbag(_BackPack);
 
+PROC
+PROC_CorpseCleanup_CreateLootbag((CHARACTER)_Corpse)
+AND
+NOT DB_ActiveLevel(_)
+THEN
+DB_CorpseCleanup_WaitForCorpse(_Corpse);
+
+IF
+DB_ActiveLevel(_Level)
+AND
+DB_CorpseCleanup_WaitForCorpse(_Corpse)
+AND
+Exists(_Corpse, 1)
+AND
+GetRegion(_Corpse, _Level)
+THEN
+PROC_CorpseCleanup_CreateLootbag((CHARACTER)_Corpse);
+
 IF
 EntityEvent((ITEM)_BackPack,"CorpseCleanup_LootbagReady")
 AND
 DB_CorpseCleanup_DeferredWait(_Corpse,_BackPack)
 THEN
+PROC_CorpseCleanup_SetupBackpack(_Corpse, _Backpack);
+
+PROC
+PROC_CorpseCleanup_SetupBackpack((CHARACTER)_Corpse, (ITEM)_Backpack)
+THEN
 SetOwner(_BackPack,_Corpse);
 MoveAllLootableItemsTo(_Corpse,_BackPack,1,1,1,0);
 NOT DB_CorpseCleanup_DeferredWait(_Corpse,_BackPack);
+NOT DB_CorpseCleanup_WaitForCorpse(_Corpse);
+
+PROC
+PROC_CorpseCleanup_SetupBackpack((CHARACTER)_Corpse, (ITEM)_)
+AND
+DB_CorpseCleanup_DeferredWait_ForLevel(_Corpse,_BackPack)
+THEN
+NOT DB_CorpseCleanup_DeferredWait_ForLevel(_Corpse,_BackPack);
+
+IF
+DB_CorpseCleanup_DeferredWait(_Corpse,_BackPack)
+AND
+NOT DB_ActiveLevel(_)
+THEN
+DB_CorpseCleanup_DeferredWait_ForLevel(_Corpse,_BackPack);
+NOT DB_CorpseCleanup_DeferredWait(_Corpse,_BackPack);
+
+IF
+DB_ActiveLevel(_Level)
+AND
+DB_CorpseCleanup_DeferredWait_ForLevel(_Corpse,_BackPack)
+AND
+Exists(_Corpse, 1)
+AND
+GetRegion(_Corpse, _Level)
+AND
+Exists(_Backpack, 1)
+AND
+GetRegion(_Backpack, _Level)
+THEN
+NOT DB_CorpseCleanup_DeferredWait_ForLevel(_Corpse,_BackPack);
+PROC_CorpseCleanup_SetupBackpack((CHARACTER)_Corpse, (ITEM)_Backpack);
 
 //Finally remove all entries from the database, whether they were converted to a lootbag or not. Checking once is enough.
 PROC
@@ -5060,7 +5151,7 @@ AND
 DB_ExecuteInLevel_AfterLongRest((STRING)_Identifier,(STRING)_Level)
 THEN
 NOT DB_ExecuteInLevel_AfterLongRest(_Identifier,_Level);
-PROC_ExecuteInLevel((STRING)_Identifier,(STRING)_Level);
+DB_ExecuteInLevel((STRING)_Identifier,(STRING)_Level);
 
 PROC
 PROC_ExecuteInLevel((STRING)_Identifier,(STRING)_Level)
@@ -5505,6 +5596,20 @@ PROC_TeleportToPositionAndOffStage((GUIDSTRING)_SourceObject,(REAL)_X,(REAL)_Y,(
 THEN
 TeleportToPosition(_SourceObject,_X,_Y,_Z,_Event,_TeleportedLinkedCharacters,_TeleportPartyFollowers,_TeleportSummons,_LeaveCombat,_SnapToGround);
 
+//END_REGION
+
+//REGION Global Flag Set Or Null
+QRY
+QRY_GlobalFlagSetOrNull((FLAG)_GlobalFlag)
+AND
+DB_GlobalFlag(_GlobalFlag)
+THEN
+DB_NOOP(1);
+
+QRY
+QRY_GlobalFlagSetOrNull((FLAG)NULL_00000000-0000-0000-0000-000000000000)
+THEN
+DB_NOOP(1);
 //END_REGION
 EXITSECTION
 

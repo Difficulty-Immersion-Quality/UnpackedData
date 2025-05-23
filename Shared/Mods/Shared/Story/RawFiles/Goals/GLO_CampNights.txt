@@ -2,8 +2,8 @@ Version 1
 SubGoalCombiner SGC_AND
 INITSECTION
 //Documentation on Confluence:
-// -https://larianstudios.atlassian.net/wiki/spaces/GUS/pages/25198642/Player+Dialogs
-// -https://larianstudios.atlassian.net/wiki/spaces/GUS/pages/48922800/Camp+Rest
+// -[Link Redacted]
+// -[Link Redacted]
 
 NOT DB_Camp_CustomSleepCutscene("",(DIALOGRESOURCE)NULL_00000000-0000-0000-0000-000000000000);
 
@@ -887,7 +887,27 @@ NOT DB_ORI_WasDating(_Avatar, _Character)
 AND
 QRY_CampNight_MeetsRequirements_StartDating_RomanceNight((FLAG)_NightFlag, (CHARACTER)_Avatar) //Make sure that if there's a romance night, that romance night can actually be queued for the same Avatar.
 AND
+QRY_CampNight_MeetsRequirements_StartDating_Approval((FLAG)_NightFlag, _Character, _Avatar)
+AND
 NOT QRY_PreventMPDialogue(_Character, _Avatar)
+THEN
+DB_NOOP(1);
+
+QRY
+QRY_CampNight_MeetsRequirements_StartDating_Approval((FLAG)_NightFlag, (CHARACTER)_Character, (CHARACTER)_Avatar)
+AND
+NOT DB_CampNight_Requirement_Approval((FLAG)_NightFlag, (CHARACTER)_Character, _)
+THEN
+DB_NOOP(1);
+
+QRY
+QRY_CampNight_MeetsRequirements_StartDating_Approval((FLAG)_NightFlag, (CHARACTER)_Character, (CHARACTER)_Avatar)
+AND
+DB_CampNight_Requirement_Approval((FLAG)_NightFlag, (CHARACTER)_Character, _MinApproval)
+AND
+DB_ApprovalRating(_Character, _Avatar, _Approval)
+AND
+_Approval > _MinApproval
 THEN
 DB_NOOP(1);
 
@@ -3141,6 +3161,17 @@ AND
 DB_Dead(_Character)
 THEN
 Resurrect(_Character);
+PROC_FallbackCamp_EnsureResurrectedInCamp(_Character);
+
+PROC
+PROC_FallbackCamp_EnsureResurrectedInCamp((CHARACTER)_Character)
+AND
+NOT DB_InCamp(_Character)
+AND
+DB_PartOfTheTeam(_Character)
+THEN
+SetEntityEvent((CHARACTER)_Character,"Origin_RestoreDialog",1);
+//Teleports them to camp as if dismissed, but skips disappear out of sight
 
 //END_REGION Forced Camp - Camp Night Queue
 
@@ -3148,9 +3179,26 @@ Resurrect(_Character);
 
 //Left fallback camp
 PROC
-PROC_CAMP_LeftCamp(_Player)
+PROC_CAMP_LeftCamp(_)
+AND
+DB_FallbackCamp_InCamp((STRING)_ReadyCheckID)
 AND
 DB_Players(_Player)
+AND
+GetPosition(_Player, _X, _Y, _Z)
+AND
+DB_ActiveCamp(_Camp)
+AND
+DB_Camp(_Camp, _, _Trigger, _)
+AND
+PositionIsInTrigger(_X, _Y, _Z, _Trigger, 0)
+AND
+NOT DB_Camp_NightMode(1)//Trying to force quit the camp night during night mode will break the camp night flow one way or the other.
+THEN
+PROC_FallbackCamp_PlayerLeft();
+
+PROC
+PROC_FallbackCamp_PlayerLeft()
 AND
 DB_FallbackCamp_InCamp((STRING)_ReadyCheckID)
 THEN
@@ -3159,9 +3207,7 @@ PROC_FallbackCamp_LeftCamp(_ReadyCheckID);
 
 //Continue region swap teleport
 PROC
-PROC_CAMP_LeftCamp(_PlayerLeft)
-AND
-DB_Players(_PlayerLeft)
+PROC_FallbackCamp_PlayerLeft()
 AND
 NOT DB_FallbackCamp_DebugIgnoreTransition(1)
 AND
@@ -3173,9 +3219,7 @@ PROC_GLO_LevelSwap_CheckSwap(_Player,_ReadyCheckID,_CurrentLevel);
 
 //Continue waypoint travel
 PROC
-PROC_CAMP_LeftCamp(_PlayerLeft)
-AND
-DB_Players(_PlayerLeft)
+PROC_FallbackCamp_PlayerLeft()
 AND
 NOT DB_FallbackCamp_DebugIgnoreTransition(1)
 AND
@@ -3187,20 +3231,16 @@ NOT DB_WaypointTravel_RegionswapDestination(_Trigger,_WaypointID);
 PROC_TeleportPartiesTo(_Trigger,"");
 
 PROC
-PROC_CAMP_LeftCamp(_PlayerLeft)
-AND
-DB_Players(_PlayerLeft)
+PROC_FallbackCamp_PlayerLeft()
 AND
 DB_FallbackCamp_DebugIgnoreTransition(1)
 AND
 DB_FallbackCamp_QueuedLevelswap((CHARACTER)_Player,(STRING)_ReadyCheckID,(STRING)_CurrentLevel)
 THEN
-DebugText(_PlayerLeft,"Debug skipped level transition");
+DebugText(_Player,"Debug skipped level transition");
 
 PROC
-PROC_CAMP_LeftCamp(_PlayerLeft)
-AND
-DB_Players(_PlayerLeft)
+PROC_FallbackCamp_PlayerLeft()
 AND
 DB_FallbackCamp_DebugIgnoreTransition(1)
 AND
@@ -3209,9 +3249,7 @@ THEN
 NOT DB_WaypointTravel_RegionswapDestination(_Trigger,_WaypointID);
 
 PROC
-PROC_CAMP_LeftCamp(_PlayerLeft)
-AND
-DB_Players(_PlayerLeft)
+PROC_FallbackCamp_PlayerLeft()
 AND
 DB_FallbackCamp_QueuedLevelswap((CHARACTER)_Player,(STRING)_ReadyCheckID,(STRING)_CurrentLevel)
 THEN

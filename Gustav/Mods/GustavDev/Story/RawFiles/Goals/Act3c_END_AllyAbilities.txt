@@ -198,7 +198,7 @@ DB_END_AllyAbilities_PlayerSummonAllyAD("Target_END_AllyAbilities_FlamingFistSum
 DB_END_AllyAbilities_PlayerSummonAllyAD("Target_END_AllyAbilities_KeeneSummon", (DIALOGRESOURCE)END_GatherYourAllies_AD_PlayerSummonKeeneAlly_7a588fcb-68b3-ef4d-af9d-a2add93b6848);
 DB_END_AllyAbilities_PlayerSummonAllyAD("Target_END_AllyAbilties_ShadowAdepts", (DIALOGRESOURCE)END_GatherYourAllies_AD_PlayerSummonShadowheartAlly_39a674c0-4708-4874-1f9b-af2d8292a5a5);
 DB_END_AllyAbilities_PlayerSummonAllyAD("Target_END_AllyAbility_PhasmSummon", (DIALOGRESOURCE)NULL_00000000-0000-0000-0000-000000000000);
-DB_END_AllyAbilities_PlayerSummonAllyAD("Target_END_AllyAbilities_KuoToaSummon", (DIALOGRESOURCE)END_GatherYourAllies_AD_PlayerSummonKuoToaAlly_7b7201ba-7014-24b2-9047-5768792d295b);
+DB_END_AllyAbilities_PlayerSummonAllyAD("Target_END_AllyAbilities_KuoToaSummon", (DIALOGRESOURCE)NULL_00000000-0000-0000-0000-000000000000);
 
 //DB_END_AllyAbilities_SummonedAllyAD((CHARACTER)_Summon, (DIALOGRESOURCE)_SummonAD)
 DB_END_AllyAbilities_SummonedAllyAD((CHARACTER)S_END_HarperSummon001_97e7a9d6-4f11-4de9-bda2-7197d5647971, (DIALOGRESOURCE)END_GatherYourAllies_AD_HarperSummonResponse_8f09c7ba-ab04-e68a-a8c9-2626300d3422);
@@ -222,6 +222,7 @@ DB_END_AllyAbilities_SummonedAllyAD((CHARACTER)S_LOW_Guildhall_NineFingers_ef1b7
 DB_END_AllyAbilities_SummonedAllyAD((CHARACTER)S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679, (DIALOGRESOURCE)END_GatherYourAllies_AD_ShadowheartSummonResponse_2d406f61-3750-f0f7-fac8-f0606721befa);
 DB_END_AllyAbilities_SummonedAllyAD((CHARACTER)S_GLO_GithKnight_2adce2df-0799-49dc-b867-ba7ca21e9aea, (DIALOGRESOURCE)END_GatherYourAllies_AD_VossSummonResponse_af641fbc-1a7e-eb05-7d5d-2b853304bbdd);
 DB_END_AllyAbilities_SummonedAllyAD((CHARACTER)S_END_KuotoaPointOfContact_265239be-2489-496d-936d-e78240ce2165, (DIALOGRESOURCE)END_GatherYourAllies_AD_KuoToaSummonResponse_f136e5c2-3b5f-9293-59ee-3bd02a952597);
+
 KBSECTION
 //REGION Debug
 IF
@@ -376,6 +377,33 @@ DB_END_AllyAbilities_Abilities(END_VossEncounter_Event_GithReinforcementsAwarded
 THEN
 PROC_END_AllyAbilities_PlayerHaveAllyContainer(_GrantedSpell);
 
+//Add flags that were missed somehow because actors failed to join dialog.
+IF
+DialogEnded(END_GatherYourAllies_GatheredAllies_52f087e3-36b0-8372-d473-837bb6a78079, _ID)
+AND
+DB_END_GatherYourAllies_PresentCharacter(_Character)
+AND
+DB_END_GatherYourAllies_AllyAwardFlags(_Flag, _Character)
+AND
+NOT DB_GlobalFlag(_Flag)
+THEN
+SetFlag(_Flag, NULL_00000000-0000-0000-0000-000000000000, 0);
+
+IF
+DialogEnded(END_GatherYourAllies_GatheredAllies_52f087e3-36b0-8372-d473-837bb6a78079, _ID)
+AND
+DB_PartyMembers(_Character)
+AND
+DB_END_GatherYourAllies_PotentialCharacter(_Character, _, _RequiredFlag)
+AND
+DB_GlobalFlag(_RequiredFlag)
+AND
+DB_END_GatherYourAllies_AllyAwardFlags(_AwardFlag, _Character)
+AND
+NOT DB_GlobalFlag(_AwardFlag)
+THEN
+SetFlag(_AwardFlag, NULL_00000000-0000-0000-0000-000000000000, 0);
+
 IF
 DB_END_GatherYourAllies_GrantedAwards((FLAG)_AllyAbility)
 AND
@@ -509,6 +537,22 @@ SetCombatGroupID(_Summon, "");
 AppearAtPosition(_Summon, _ValidX, _ValidY, _ValidZ, 1, _Animation, "END_AllyAbility_TeleportedTargetSummon", 0);
 PROC_END_AllyAbilities_TryStartSummonsAD(_Summon);
 
+//FindValidPosition fallback
+PROC
+PROC_END_AllyAbilities_SpawnAllyAtPosition((CHARACTER)_Caster, (STRING)_CastedSpell, (REAL)_SpawnX, (REAL)_SpawnY, (REAL)_SpawnZ)
+AND
+DB_END_AllyAbilities_Abilities(_, _CastedSpell, 1, _)
+AND
+DB_END_AllyAbilities_Summons(_CastedSpell, _, (CHARACTER)_Summon, (ANIMATION)_Animation)
+AND
+NOT DB_END_AllyAbilities_QueuedSummonOwner(_Caster, _Summon)
+THEN
+AddPartyFollower(_Summon, _Caster);
+DB_END_AllyAbilities_QueuedSummonOwner(_Caster, _Summon);
+SetCombatGroupID(_Summon, "");
+AppearAtPosition(_Summon, _SpawnX, _SpawnY, _SpawnZ, 1, _Animation, "END_AllyAbility_TeleportedTargetSummon", 0);
+PROC_END_AllyAbilities_TryStartSummonsAD(_Summon);
+
 //Spawn the allies
 PROC
 PROC_END_AllyAbilities_SpawnAllyAtPosition((CHARACTER)_Caster, (STRING)_CastedSpell, (REAL)_SpawnX, (REAL)_SpawnY, (REAL)_SpawnZ)
@@ -524,6 +568,24 @@ THEN
 DB_END_AllyAbilities_Caster(_Caster);
 SetCombatGroupID(_Character, "");
 AppearAtPosition(_Character, _ValidX, _ValidY, _ValidZ, 1, _Animation, "END_AllyAbility_TeleportedMultipleSummons", 0);
+PlayEffect(_Character, (EFFECTRESOURCE)VFX_Spells_Cast_Intent_Utility_TargetJump_MistyStep_Root_Textkey_02_3725b5c2-8274-a2fe-3148-d071c77ffcaa);
+PROC_END_AllyAbilities_TryStartSummonsAD(_Character);
+
+//FindValidPosition fallback
+PROC
+PROC_END_AllyAbilities_SpawnAllyAtPosition((CHARACTER)_Caster, (STRING)_CastedSpell, (REAL)_SpawnX, (REAL)_SpawnY, (REAL)_SpawnZ)
+AND
+NOT DB_END_AllyAbilities_Caster(_Caster)
+AND
+DB_END_AllyAbilities_Abilities(_, _CastedSpell, _NumUnits, _)
+AND
+_NumUnits > 1
+AND
+DB_END_AllyAbilities_Summons(_CastedSpell, _, (CHARACTER)_Character, (ANIMATION)_Animation)
+THEN
+DB_END_AllyAbilities_Caster(_Caster);
+SetCombatGroupID(_Character, "");
+AppearAtPosition(_Character, _SpawnX, _SpawnY, _SpawnZ, 1, _Animation, "END_AllyAbility_TeleportedMultipleSummons", 0);
 PlayEffect(_Character, (EFFECTRESOURCE)VFX_Spells_Cast_Intent_Utility_TargetJump_MistyStep_Root_Textkey_02_3725b5c2-8274-a2fe-3148-d071c77ffcaa);
 PROC_END_AllyAbilities_TryStartSummonsAD(_Character);
 
@@ -546,7 +608,25 @@ GetPosition(_Caster, _CasterX, _CasterY, _CasterZ)
 AND
 FindValidPosition(_CasterX, _CasterY, _CasterZ, 30.0, _Caster, 1, _ValidX, _ValidY, _ValidZ)
 THEN
+DB_END_AllyAbilities_FallbackTeleport(_Character);
 AppearAtPosition(_Character, _ValidX, _ValidY, _ValidZ, 1, _Animation, "END_AllyAbility_TeleportedMultipleSummons", 0);
+PlayEffect(_Character, (EFFECTRESOURCE)VFX_Spells_Cast_Intent_Utility_TargetJump_MistyStep_Root_Textkey_02_3725b5c2-8274-a2fe-3148-d071c77ffcaa);
+SetFaction(_Character, (FACTION)ACT3_END_AllyAbilities_Summon_ab4018cf-9f02-48aa-9c52-469b279c651a);
+
+//FindValidPosition fallback
+IF
+AppearTeleportFailed((CHARACTER)_Character, "END_AllyAbility_TeleportedMultipleSummons")
+AND
+NOT DB_END_AllyAbilities_FallbackTeleport(_Character)
+AND
+DB_END_AllyAbilities_Summons(_, _, _Character, _Animation)
+AND
+DB_END_AllyAbilities_Caster(_Caster)
+AND
+GetPosition(_Caster, _CasterX, _CasterY, _CasterZ)
+THEN
+DB_END_AllyAbilities_FallbackTeleport(_Character);
+AppearAtPosition(_Character, _CasterX, _CasterY, _CasterZ, 1, _Animation, "END_AllyAbility_TeleportedMultipleSummons", 0);
 PlayEffect(_Character, (EFFECTRESOURCE)VFX_Spells_Cast_Intent_Utility_TargetJump_MistyStep_Root_Textkey_02_3725b5c2-8274-a2fe-3148-d071c77ffcaa);
 SetFaction(_Character, (FACTION)ACT3_END_AllyAbilities_Summon_ab4018cf-9f02-48aa-9c52-469b279c651a);
 
@@ -646,9 +726,18 @@ IF
 Died((CHARACTER)_Summon)
 AND
 DB_END_AllyAbilities_Summons((STRING)_AllyAbility, (STRING)_InterdictingStatus, _Summon, (ANIMATION)_Animation)
+AND
+CharacterGetOwner((CHARACTER)_Summon,_Character)
+THEN
+RemovePartyFollower(_Summon, _Character);
+
+IF
+Died((CHARACTER)_Summon)
+AND
+DB_END_AllyAbilities_Summons((STRING)_AllyAbility, (STRING)_InterdictingStatus, _Summon, (ANIMATION)_Animation)
 THEN
 NOT DB_END_AllyAbilities_Summons(_AllyAbility, _InterdictingStatus, _Summon, _Animation);
-PROC_END_AllyAbilities_SummonsRemaining(_AllyAbility);
+PROC_END_AllyAbilities_SummonsRemaining(_AllyAbility, _InterdictingStatus);
 SetCombatGroupID(_Summon, "");
 
 IF
@@ -676,7 +765,7 @@ ApplyStatus(_Player, "END_ALLYABILITIES_MIZORAALLYCONSUMED", -1.0, 1, _Player);
 //REGION Clear Ally Ability If All Summons died
 //Permanently greyed out
 PROC
-PROC_END_AllyAbilities_SummonsRemaining((STRING)_AllyAbility)
+PROC_END_AllyAbilities_SummonsRemaining((STRING)_AllyAbility, _)
 AND
 NOT DB_END_AllyAbilities_Summons(_AllyAbility, _, _, _)
 AND
@@ -685,6 +774,17 @@ AND
 DB_END_AllyAbility_PermanentAbilityRemoval(_AllyAbility, (STRING)_PermanentBlockingStatus)
 THEN
 ApplyStatus(_Character, _PermanentBlockingStatus, -1.0, 1, _Character);
+
+PROC
+PROC_END_AllyAbilities_SummonsRemaining((STRING)_AllyAbility, (STRING)_InterdictingStatus)
+AND
+NOT DB_END_AllyAbilities_Summons(_AllyAbility, _, _, _)
+AND
+DB_PartyMembers((CHARACTER)_Character)
+AND
+HasActiveStatus(_Character, _InterdictingStatus, 1)
+THEN
+RemoveStatus(_Character, _InterdictingStatus, _Character);
 
 IF
 StatusApplied(_, (STRING)_PermanentBlockingStatus, _, _ID)

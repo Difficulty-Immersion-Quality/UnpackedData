@@ -186,7 +186,27 @@ GetPosition(_AstarionPos, _X, _Y, _Z)
 AND
 FindValidPosition(_X, _Y, _Z, 2.5, S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255, 0, _ValidX, _ValidY, _ValidZ)
 THEN
+DB_LOW_VampireAmbush_AstarionTeleported(1);
 TeleportToPosition(S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255, _ValidX, _ValidY, _ValidZ);
+SetFlag(LOW_VampireAmbush_State_CannotBeKidnapped_11d1273c-6c66-4621-abad-02b9cd4367cd); // if he is not in the active party, then the spaws just want to defeat the party
+
+// Astarion in camp, but not in the party
+//FindValidPosition Fallback
+PROC
+PROC_LOW_VampireAmbush_TeleportPlayers()
+AND
+NOT DB_LOW_VampireAmbush_AstarionTeleported(1)
+AND
+NOT DB_Players((CHARACTER)S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255)
+AND
+DB_ActiveCamp(_Camp)
+AND
+DB_LOW_VampireAmbush_Players_FallbackPos(_Camp, _AstarionPos)
+AND
+GetPosition(_AstarionPos, _X, _Y, _Z)
+THEN
+DB_LOW_VampireAmbush_AstarionTeleported(1);
+TeleportToPosition(S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255, _X, _Y, _Z);
 SetFlag(LOW_VampireAmbush_State_CannotBeKidnapped_11d1273c-6c66-4621-abad-02b9cd4367cd); // if he is not in the active party, then the spaws just want to defeat the party
 
 PROC
@@ -206,6 +226,32 @@ FindValidPosition(_X, _Y, _Z, 2.5, _Player, 0, _ValidX, _ValidY, _ValidZ)
 THEN
 DB_LOW_VampireAmbush_TakenPos((CHARACTER)_Player, (TRIGGER)_Pos);
 TeleportToPosition(_Player, _ValidX, _ValidY, _ValidZ);
+
+//FindValidPosition Fallback
+PROC
+PROC_LOW_VampireAmbush_TeleportPlayers()
+AND
+DB_ActiveCamp(_Camp)
+AND
+DB_Players(_Player)
+AND
+QRY_LOW_VampireAmbush_TakeFreePlayerPos(_Camp)
+AND
+DB_QRYRTN_LOW_VampireAmbush_TakenPos(_Pos)
+AND
+NOT DB_LOW_VampireAmbush_TakenPos((CHARACTER)_Player, (TRIGGER)_Pos)
+AND
+GetPosition(_Pos, _X, _Y, _Z)
+THEN
+DB_LOW_VampireAmbush_TakenPos((CHARACTER)_Player, (TRIGGER)_Pos);
+TeleportToPosition(_Player, _X, _Y, _Z);
+
+PROC
+PROC_LOW_VampireAmbush_TeleportPlayers()
+AND
+DB_LOW_VampireAmbush_TakenPos((CHARACTER)_Player, (TRIGGER)_Pos)
+THEN
+NOT DB_LOW_VampireAmbush_TakenPos(_Player, _Pos);
 
 QRY
 QRY_LOW_VampireAmbush_TakeFreePlayerPos((STRING)_Camp)

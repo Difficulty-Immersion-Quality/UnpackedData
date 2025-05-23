@@ -37,6 +37,11 @@ DB_UND_BroodingSovereign_Home((TRIGGER)S_UND_MyconidCircle_BroodingSovereign_Hom
 DB_UND_BroodingSpovereign_FollowingRegions((TRIGGER)S_UND_MyconidCircle_UnderdarkRegion_Main_fdf3b75f-4488-449d-bced-a936b0590bf1);
 DB_UND_BroodingSpovereign_FollowingRegions(S_UND_MyconidCircle_UnderdarkRegion_KuoToa_d5626641-d631-4983-b5a5-77d5c07c872a);
 
+DB_UND_BroodingSpovereign_UnderdarkWaypoints("WAYP_UND_Beach");
+DB_UND_BroodingSpovereign_UnderdarkWaypoints("WAYP_UND_Sussur");
+DB_UND_BroodingSpovereign_UnderdarkWaypoints("WAYP_UND_Fort");
+DB_UND_BroodingSpovereign_UnderdarkWaypoints("WAYP_UND_Myconid");
+
 DB_UND_BroodingSovereign_ExitPoints((ITEM)S_SHA_TempleAccess_StairsDownstairs_3780fa8f-9257-4998-81c4-1b28c293b26e);
 DB_UND_BroodingSovereign_ExitPoints(S_UND_Elevator_ToCaravanserai_b0bafa5b-ca00-4c94-af1c-12ced8562b4e);
 DB_UND_BroodingSovereign_ExitPoints(S_UND_FairyRings_Main_MushroomRing_ToSwamp_b71a59f4-52c6-4ed2-9d91-8c76815280e6);
@@ -89,16 +94,43 @@ TriggerRegisterForCharacter(_Trigger,S_UND_Myconid_BroodingSovereign_82af0858-d7
 
 //REGION Following
 
+// local object in world
 QRY
-QRY_UND_BroodingSovereign_StillUND((GUIDSTRING)_Waypoint)
+QRY_UND_BroodingSovereign_StillUND((CHARACTER)_Object)
+AND
+DB_CurrentLevel("WLD_Main_A")
+AND
+NOT DB_InCamp(_Object)
 AND
 DB_UND_BroodingSpovereign_FollowingRegions(_Trigger)
 AND
-GetPosition(_Waypoint,_X,_Y,_Z)
-AND
-PositionIsInTrigger(_X,_Y,_Z,_Trigger,1)
+IsInTrigger(_Object,_Trigger,1)
 THEN
 DB_NOOP(1);
+
+QRY
+QRY_UND_BroodingSovereign_StillUND((CHARACTER)_Object)
+AND
+DB_CurrentLevel("WLD_Main_A")
+AND
+DB_ActiveCamp("WLDUND")
+AND
+DB_InCamp(_Object)
+THEN
+DB_NOOP(1);
+
+// waypoint
+QRY
+QRY_UND_BroodingSovereign_WaypointInUND((TRIGGER)_Waypoint)
+AND
+DB_CurrentLevel("WLD_Main_A")
+AND
+DB_WaypointInfo("Act1",_Id,_,_Waypoint)
+AND
+DB_UND_BroodingSpovereign_UnderdarkWaypoints(_Id)
+THEN
+DB_NOOP(1);
+
 
 IF
 DB_UND_BroodingSovereign_Leader(_Player)
@@ -151,12 +183,34 @@ NOT DB_PermaDefeated(_Corpse)
 THEN
 AddPartyFollower(_Corpse,(CHARACTER)_Player);
 
-PROC
-PROC_UND_BroodingSovereign_LeaveDialog((DIALOGRESOURCE)_Dialog,(CHARACTER)_Player,(CHARACTER)_Leader)
+QRY
+QRY_UND_BroodingSovereign_LeaveDialog((DIALOGRESOURCE)_Dialog,(CHARACTER)_Player,(CHARACTER)_Leader)
+AND
+QRY_SpeakerIsAvailableAndInDialogRange(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46, _Player)
 AND
 QRY_StartDialog_Fixed(_Dialog,(CHARACTER)S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46,_Player)
 THEN
 DB_UND_BroodingSoveign_PrepareLeave_Leader((CHARACTER)_Leader);
+
+IF
+DialogEnded(UND_Myconid_BroodingSovereign_Raft_f6f33683-5889-e6b0-e6a9-0810856ec3ea,_)
+AND
+DB_UND_BroodingSoveign_PrepareLeave_Leader(_Player)
+THEN
+NOT DB_UND_BroodingSoveign_PrepareLeave_Leader(_Player);
+
+IF
+DialogEnded(UND_MyconidCircle_BroodingSovereign_Leave_d7968940-c47a-7f64-28d6-6cd9a6c0aaca,_)
+AND
+DB_UND_BroodingSoveign_PrepareLeave_Leader(_Player)
+THEN
+NOT DB_UND_BroodingSoveign_PrepareLeave_Leader(_Player);
+
+
+QRY
+QRY_UND_BroodingSovereign_GoHomeQRY((CHARACTER)_Leader)
+THEN
+PROC_UND_BroodingSovereign_GoHome(_Leader);
 
 IF
 DB_PermaDefeated(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46)
@@ -264,20 +318,50 @@ THEN
 TriggerUnregisterForCharacter(
     _Trigger,
     _Player);
+//END_REGION
 
-
-
+//REGION Leaving if left in a wrong region
 //just in case
 IF
 LeftTrigger(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46,_)
 AND
-NOT QRY_UND_BroodingSovereign_StillUND(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46)
-AND
 DB_UND_BroodingSovereign_Leader((CHARACTER)_Player)
+AND
+NOT QRY_UND_BroodingSovereign_StillUND(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46)
 THEN
 PROC_UND_BroodingSovereign_QuestUpdate_LeftUND(_Player);
 PROC_UND_BroodingSovereign_GoHome(_Player);
 
+// Swapping camps case
+IF
+LeftTrigger(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46,_)
+AND
+NOT DB_UND_BroodingSovereign_Leader(_)
+AND
+DB_UND_BroodingSovereign_WaitingForLeader(_Player)
+AND
+NOT QRY_UND_BroodingSovereign_StillUND(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46)
+THEN
+PROC_UND_BroodingSovereign_QuestUpdate_LeftUND(_Player);
+PROC_UND_BroodingSovereign_GoHome(_Player); // shouldnt be needed, but at this point its better to do it anyway
+ClearFlag(UND_MyconidCircle_BroodingSovereign_State_WaitingForParty_acaea6bf-9bf1-436f-ab41-c2f77ded4a41,NULL_00000000-0000-0000-0000-000000000000,0);
+NOT DB_UND_BroodingSovereign_WaitingForLeader(_Player);
+PROC_BroodingSovereign_TeleportHome();
+
+PROC
+PROC_BroodingSovereign_TeleportHome()
+AND
+DB_UND_BroodingSovereign_Home(_HomePos)
+AND
+GetDistanceTo(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46, _HomePos, _Distance)
+AND
+_Distance > 10.0
+AND
+GetPosition(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46, _X, _Y, _Z)
+THEN
+PlayEffectAtPosition(VFX_Script_Stub_Poof_01_f0cf792a-0f74-d17e-ad0d-6052a6131416, _X, _Y, _Z);
+TeleportTo(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46, _HomePos);
+PlayEffect(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46,VFX_Script_Stub_Poof_01_f0cf792a-0f74-d17e-ad0d-6052a6131416);
 //END_REGION
 
 //REGION Corpses
@@ -581,34 +665,24 @@ AND
 NOT DB_GlobalFlag(UND_MyconidCircle_BroodingSovereign_Event_BetrayGlut_bc02af6d-dc65-7322-a28c-9e68dc4ea875)
 THEN
 SetFaction(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46, Act1_UND_BroodingSovereign_Refused_25b89bcf-68ce-4327-820f-780d714b398f);
+
+PROC
+PROC_GlobalFlagReactionAfterDialog(UND_BroodingSovereign_State_RefusedCircle_d0237569-b266-24c9-60f8-06eda3131892, UND_MyconidCircle_BroodingSovereign_4a1577b3-2d32-68a1-3092-e9014053b35c)
+AND
+DB_UND_BroodingSovereign_Leader(_Player)
+THEN
+PROC_UND_BroodingSovereign_GoHome(_Player);
+
+PROC
+PROC_GlobalFlagReactionAfterDialog(UND_BroodingSovereign_State_RefusedCircle_d0237569-b266-24c9-60f8-06eda3131892, UND_MyconidCircle_BroodingSovereign_4a1577b3-2d32-68a1-3092-e9014053b35c)
+AND
+DB_UND_BroodingSovereign_WaitingForLeader(_Leader)
+THEN
+ClearFlag(UND_MyconidCircle_BroodingSovereign_State_WaitingForParty_acaea6bf-9bf1-436f-ab41-c2f77ded4a41,NULL_00000000-0000-0000-0000-000000000000,0);
+NOT DB_UND_BroodingSovereign_WaitingForLeader(_Leader);
 //END_REGION
 
 //REGION waypoints and preventing players from leaving und
-//Glut will teleport with players to waypoints in UND
-
-PROC
-PROC_WaypointTeleported((CHARACTER)_Player,(TRIGGER)_)
-AND
-DB_UND_BroodingSovereign_Leader((CHARACTER)_Player)
-THEN
-DB_UND_BroodingSovereign_WaypointWait((CHARACTER)_Player);
-TimerLaunch("UND_BroodingSovereign_Waypoint_Teleport",500);
-
-IF
-TimerFinished("UND_BroodingSovereign_Waypoint_Teleport")
-AND
-DB_UND_BroodingSovereign_WaypointWait((CHARACTER)_Player)
-AND
-QRY_UND_BroodingSovereign_StillUND((CHARACTER)_Player)
-THEN
-TeleportTo(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46,_Player,"UND_BroodingSovereign_Event_WaypointTeleport");
-
-IF
-TimerFinished("UND_BroodingSovereign_Waypoint_Teleport")
-AND
-DB_UND_BroodingSovereign_WaypointWait((CHARACTER)_Player)
-THEN
-NOT DB_UND_BroodingSovereign_WaypointWait((CHARACTER)_Player);
 
 //prevent players from leaving underdark
 //custom dialog for raft
@@ -622,10 +696,12 @@ AND
 CharacterGetOwner(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46, _Leader)
 AND
 QRY_UND_BroodingSovereign_NeedsToStopPlayer(_Player,_Leader)
+AND
+QRY_UND_BroodingSovereign_GoHomeQRY(_Leader)
+AND
+QRY_UND_BroodingSovereign_LeaveDialog(UND_Myconid_BroodingSovereign_Raft_f6f33683-5889-e6b0-e6a9-0810856ec3ea,_Player,_Leader)
 THEN
 DB_CustomUseItemResponse(_Player,_Item,0);
-PROC_UND_BroodingSovereign_GoHome(_Leader);
-PROC_UND_BroodingSovereign_LeaveDialog(UND_Myconid_BroodingSovereign_Raft_f6f33683-5889-e6b0-e6a9-0810856ec3ea,_Player,_Leader);
 
 //multi-purpose dialog for other cases
 PROC
@@ -638,10 +714,12 @@ AND
 CharacterGetOwner(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46, _Leader)
 AND
 QRY_UND_BroodingSovereign_NeedsToStopPlayer(_Player,_Leader)
+AND
+QRY_UND_BroodingSovereign_GoHomeQRY(_Leader)
+AND
+QRY_UND_BroodingSovereign_LeaveDialog(UND_MyconidCircle_BroodingSovereign_Leave_d7968940-c47a-7f64-28d6-6cd9a6c0aaca,_Player,_Leader)
 THEN
 DB_CustomUseItemResponse(_Player,_Item,0);
-PROC_UND_BroodingSovereign_GoHome(_Leader);
-PROC_UND_BroodingSovereign_LeaveDialog(UND_MyconidCircle_BroodingSovereign_Leave_d7968940-c47a-7f64-28d6-6cd9a6c0aaca,_Player,_Leader);
 
 // If Waypoint user is actually the BroodingSovereign humself, or another one of his Leader's minions.
 QRY
@@ -649,16 +727,19 @@ QRY_GLO_BlockTeleportToWaypoint(_Player,_Waypoint)
 AND
 DB_GlobalFlag(UND_MyconidCircle_BroodingSovereign_State_InParty_a2571718-2bbd-48f7-8ea6-d3ef4c5b5210)
 AND
-NOT QRY_UND_BroodingSovereign_StillUND((TRIGGER)_Waypoint)
+NOT QRY_UND_BroodingSovereign_WaypointInUND(_Waypoint)
 AND
 CharacterGetOwner(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46, _Leader)
 AND
 QRY_UND_BroodingSovereign_HimselfOrLeadersMinion(_Player, _Leader)
 AND
 QRY_UND_BroodingSovereign_NeedsToStopPlayer(NULL_00000000-0000-0000-0000-000000000000, (CHARACTER)_Leader)
+AND
+QRY_UND_BroodingSovereign_GoHomeQRY(_Leader)
+AND
+QRY_UND_BroodingSovereign_LeaveDialog(UND_MyconidCircle_BroodingSovereign_Leave_d7968940-c47a-7f64-28d6-6cd9a6c0aaca,_Leader,_Leader)
 THEN
-PROC_UND_BroodingSovereign_GoHome(_Leader);
-PROC_UND_BroodingSovereign_LeaveDialog(UND_MyconidCircle_BroodingSovereign_Leave_d7968940-c47a-7f64-28d6-6cd9a6c0aaca,_Leader,_Leader);
+DB_NOOP(1);
 
 //can't use QRY_REALLY_BlockFastTravel because I want sovereign to teleport around UND, but not out
 QRY
@@ -666,18 +747,32 @@ QRY_GLO_BlockTeleportToWaypoint(_Player,_Waypoint)
 AND
 DB_GlobalFlag(UND_MyconidCircle_BroodingSovereign_State_InParty_a2571718-2bbd-48f7-8ea6-d3ef4c5b5210)
 AND
-NOT QRY_UND_BroodingSovereign_StillUND((TRIGGER)_Waypoint)
+NOT QRY_UND_BroodingSovereign_WaypointInUND(_Waypoint)
 AND
 CharacterGetOwner(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46, _Leader)
 AND
 NOT QRY_UND_BroodingSovereign_HimselfOrLeadersMinion(_Player, _Leader)
 AND
 QRY_UND_BroodingSovereign_NeedsToStopPlayer((CHARACTER)_Player, (CHARACTER)_Leader)
+AND
+QRY_UND_BroodingSovereign_GoHomeQRY(_Leader)
+AND
+QRY_UND_BroodingSovereign_LeaveDialog(UND_MyconidCircle_BroodingSovereign_Leave_d7968940-c47a-7f64-28d6-6cd9a6c0aaca,_Player,_Leader)
 THEN
-PROC_UND_BroodingSovereign_GoHome(_Leader);
-PROC_UND_BroodingSovereign_LeaveDialog(UND_MyconidCircle_BroodingSovereign_Leave_d7968940-c47a-7f64-28d6-6cd9a6c0aaca,_Player,_Leader);
+DB_NOOP(1);
 
-
+// Teleporting to a new region without Glut being in the party
+// we dont need this for WLD_Main_A because the IsInUND check will work there
+PROC
+PROC_RegionSwapReadyCheckPassed(_Player, _)
+AND
+DB_UND_BroodingSovereign_WaitingForLeader(_Player)
+THEN
+PROC_UND_BroodingSovereign_QuestUpdate_LeftUND(_Player);
+PROC_UND_BroodingSovereign_GoHome(_Player); // shouldnt be needed, but at this point its better to do it anyway
+ClearFlag(UND_MyconidCircle_BroodingSovereign_State_WaitingForParty_acaea6bf-9bf1-436f-ab41-c2f77ded4a41,NULL_00000000-0000-0000-0000-000000000000,0);
+NOT DB_UND_BroodingSovereign_WaitingForLeader(_Player);
+PROC_BroodingSovereign_TeleportHome();
 
 // Check to make sure its not himself or his own minion
 QRY
@@ -708,7 +803,24 @@ DB_UND_BroodingSovereign_WaitingForLeader(_Leader);
 PROC_UND_BroodingSovereign_GoHome(_Leader);
 
 IF
-TeleportedFromCamp(_Player)
+CharacterLeftParty(_Leader)
+AND
+DB_UND_BroodingSovereign_WaitingForLeader(_Leader)
+THEN
+ClearFlag(UND_MyconidCircle_BroodingSovereign_State_WaitingForParty_acaea6bf-9bf1-436f-ab41-c2f77ded4a41,NULL_00000000-0000-0000-0000-000000000000,0);
+NOT DB_UND_BroodingSovereign_WaitingForLeader(_Leader);
+
+IF
+DB_PermaDefeated(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46)
+AND
+DB_UND_BroodingSovereign_WaitingForLeader(_Leader)
+THEN
+ClearFlag(UND_MyconidCircle_BroodingSovereign_State_WaitingForParty_acaea6bf-9bf1-436f-ab41-c2f77ded4a41,NULL_00000000-0000-0000-0000-000000000000,0);
+NOT DB_UND_BroodingSovereign_WaitingForLeader(_Leader);
+
+//Re-join after leaving the camp
+PROC
+PROC_CAMP_LeftCamp(_Player)
 AND
 DB_GlobalFlag(UND_MyconidCircle_BroodingSovereign_State_WaitingForParty_acaea6bf-9bf1-436f-ab41-c2f77ded4a41)
 AND
@@ -731,8 +843,8 @@ PlayEffect(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46,
 TeleportTo(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46,_Player,"UND_BroodingSovereign_Event_WaypointTeleport");
 PlayEffect(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e6760e22e46,VFX_Script_Stub_Poof_01_f0cf792a-0f74-d17e-ad0d-6052a6131416);
 
-IF
-TeleportedFromCamp(_Player)
+PROC
+PROC_CAMP_LeftCamp(_Player)
 AND
 DB_GlobalFlag(UND_MyconidCircle_BroodingSovereign_State_WaitingForParty_acaea6bf-9bf1-436f-ab41-c2f77ded4a41)
 AND
@@ -742,8 +854,8 @@ NOT QRY_UND_BroodingSovereign_StillUND(_Player)
 THEN
 PROC_UND_BroodingSovereign_QuestUpdate_LeftUND(_Player);
 
-IF
-TeleportedFromCamp(_Player)
+PROC
+PROC_CAMP_LeftCamp(_Player)
 AND
 DB_UND_BroodingSovereign_WaitingForLeader(_Player)
 THEN
@@ -898,7 +1010,6 @@ SetDualEntityEvent(S_UND_Myconid_BroodingSovereign_82af0858-d739-4c9d-84c8-5e676
 //END_REGION
 
 //REGION journal
-
 PROC
 PROC_UND_BroodingSovereign_QuestUpdate_LeftUND((CHARACTER)_Player)
 AND

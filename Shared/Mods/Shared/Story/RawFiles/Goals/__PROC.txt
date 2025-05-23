@@ -1192,6 +1192,35 @@ THEN
 DB_NOOP(1);
 //END_REGION
 
+//REGION Helpers for PROC_CharacterMoveTo/PROC_DisappearoutOfSight
+QRY
+QRY_ReactToMoveDisappearAssault((CHARACTER)_Char,(CHARACTER)_SourceOwner,(CHARACTER)_Source,(INTEGER)_DamageAmount,(STRING)_DamageSource,(INTEGER)_StoryActionID)
+AND
+NOT QRY_IsOriginPartOfTheTeam(_Char)
+AND
+QRY_CRIME_CountsAsAssaultOutOfCombat(_Char,_SourceOwner,_Source,_DamageAmount,_DamageSource,_StoryActionID)
+AND
+NOT QRY_CRIME_IsNonEnemyAssaultZeroDamage(_Char,_Source,_DamageSource,_DamageAmount,_StoryActionID)
+AND
+CanFight(_Char,1)
+AND
+CanJoinCombat(_Char,1)
+AND
+QRY_GetCharacterOwnerIfItemSummon(_SourceOwner,_Source)
+AND
+DB_QRYRTN_GetCharacterOwnerIfItemSummon(_Attacker)
+AND
+NOT QRY_CRIME_StoryActionHandled(_Attacker,"Assault",_StoryActionID,NULL_00000000-0000-0000-0000-000000000000,_Char,-1)
+AND
+QRY_CanSeeAttackers(_Char,(CHARACTER)_SourceOwner,_Source)
+AND
+DB_SawAttacker(_Target)
+THEN
+NOT DB_SawAttacker(_Target);
+SysClear("DB_QRYRN_ReactToMoveDisappearAssault",1);
+DB_QRYRN_ReactToMoveDisappearAssault(_Attacker);
+//END_REGION
+
 //REGION Move to changes 
 PROC
 CharacterMoveTo((CHARACTER)_Character,(GUIDSTRING)_Target,(STRING)_MovementSpeed,(STRING)_Event)
@@ -1494,21 +1523,13 @@ NOT DB_StoryMoving(_Char,1);
 PROC_InternalMoveRestoreDialogState(_Char);
 
 IF
-AttackedBy((CHARACTER)_Char,(CHARACTER)_SourceOwner,(CHARACTER)_Source,_,_,_DamageSource, _)
+AttackedBy((CHARACTER)_Char,(CHARACTER)_SourceOwner,(CHARACTER)_Source,_,_DamageAmount,_DamageSource, _StoryActionID)
 AND
 DB_StoryMoving(_Char,1)
 AND
-NOT DB_Is_InCombat(_Char,_)
+QRY_ReactToMoveDisappearAssault(_Char,_SourceOwner,_Source,_DamageAmount,_DamageSource,_StoryActionID)
 AND
-NOT QRY_IsOriginPartOfTheTeam(_Char)
-AND
-NOT QRY_IgnoreDamageSource(_DamageSource)
-AND
-QRY_IsPartyMember(_Source, 0)
-AND
-QRY_GetCharacterOwnerIfItemSummon(_SourceOwner,_Source)
-AND
-DB_QRYRTN_GetCharacterOwnerIfItemSummon(_Attacker)
+DB_QRYRN_ReactToMoveDisappearAssault(_Attacker)
 THEN
 PROC_MakeNPCHostile(_Attacker,_Char);
 
@@ -2238,36 +2259,21 @@ THEN
 DB_SawAttacker(_Src);
 
 IF
-AttackedBy((CHARACTER)_Char,(GUIDSTRING)_Src,(GUIDSTRING)_SrcSummon,_,_,_DamageSource,_)
+AttackedBy((CHARACTER)_Char,(CHARACTER)_Src,(CHARACTER)_SrcSummon,_,_DamageAmount,_DamageSource,_StoryActionID)
 AND
 NOT DB_StoppedOutOfSight(_Char)
 AND
-NOT QRY_IgnoreDamageSource(_DamageSource)
-AND
-NOT QRY_IsOriginPartOfTheTeam(_Char)
-AND
-QRY_IsPartyMember(_Src, 1)
-AND
-IsOnStage(_Char,1)
-AND
 DB_DisappearedOutOfSight(_Char,_,_,_,_,_,1)
 AND
-IsTagged(_Char,(TAG)BEAST_890b5a2a-e773-48df-b191-c887d87bec16,0)
+QRY_ReactToMoveDisappearAssault(_Char,_Src,_SrcSummon,_DamageAmount,_DamageSource,_StoryActionID)
 AND
-CanFight(_Char,1)
+DB_QRYRN_ReactToMoveDisappearAssault(_Attacker)
 AND
-CanJoinCombat(_Char,1)
-AND
-IsCharacter(_Src,1)
-AND
-QRY_CanSeeAttackers(_Char,(CHARACTER)_Src,_SrcSummon)
-AND
-DB_SawAttacker(_Target)
+IsOnStage(_Char,1)
 THEN
 DB_StoppedOutOfSight(_Char);
 PurgeOsirisQueue(_Char,0);
-PROC_SetRelationTemporaryHostile(_Char,_Target);
-NOT DB_SawAttacker(_Target);
+PROC_SetRelationTemporaryHostile(_Char,_Attacker);
 
 PROC
 PROC_StateSet_Dominated(_Char)

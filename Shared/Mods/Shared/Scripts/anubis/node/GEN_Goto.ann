@@ -3,6 +3,7 @@ game.states.genMoveTo = State{function ()
     local genMoveToParameters = {}
     local genMoveToForceupdating = false
     local genMoveToForceupdate = false
+    local genMoveToTries = 0
 
     self.Valid = function()
         return (#genMoveToParameters > 0)
@@ -26,6 +27,7 @@ game.states.genMoveTo = State{function ()
         SetEntityEventToken(me, genMoveToParameters[1].waitToken, genMoveToParameters[1].arriveEvent)
         table.remove(genMoveToParameters, 1)
         helpers.UpdateForceUpdate()
+        genMoveToTries = 0
     end
 
     helpers.IntToBool = function(Int) -- This allows Osiris to submit 0 or 1 ints, but Anubis to use Bools.
@@ -80,7 +82,6 @@ game.states.genMoveTo = State{function ()
     end
 
     events.EntityEvent = function(e)
-        local destination
         if  e.TargetEntity ~= me then
             return
         end
@@ -100,7 +101,8 @@ game.states.genMoveTo = State{function ()
         elseif string.lower(e.Event) == "gen_anubismovetocancel" and e.TargetEntity == me then
             genMoveToParameters = {}
             helpers.UpdateForceUpdate()
-        --[[elseif string.lower(e.Event) == "gen_anubismovetocanceldialog" and e.TargetEntity == me then
+            genMoveToTries = 0
+            --[[elseif string.lower(e.Event) == "gen_anubismovetocanceldialog" and e.TargetEntity == me then
             SetEntityEventToken(me, e.WaitToken, "MoveToCancelled")
             genMoveToParameters = {}
             helpers.UpdateForceUpdate()]]
@@ -113,6 +115,14 @@ game.states.genMoveTo = State{function ()
             helpers.UpdateForceUpdate()
         end,
         function()
+            genMoveToTries = genMoveToTries + 1
+            -- avoid getting stuck here forever; the caller can call this routine
+            -- again if moving to the target is still valid
+            if genMoveToTries > 10 then
+                helpers.CleanupGoTo()
+                return
+            end
+
             try
                 MoveTo(genMoveToParameters[1].destination, genMoveToParameters[1].movementSpeed, genMoveToParameters[1].shouldArrive, genMoveToParameters[1].longPath, genMoveToParameters[1].minDistance, genMoveToParameters[1].maxDistance)
                 helpers.CleanupGoTo()

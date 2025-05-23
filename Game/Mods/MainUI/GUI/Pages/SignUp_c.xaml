@@ -196,10 +196,6 @@
                                     <b:InvokeCommandAction Command="{Binding EnableTooltipOnUIElementCommand, ElementName=SignUp_c}" CommandParameter="{Binding ElementName=PasswordEdit}"/>
                                     <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=SignUp_c}" CommandParameter="{Binding ElementName=PasswordEdit}"/>
                                 </b:DataTrigger>
-                                <!--Password's Text property doesn't get automatically updated from its binding, so we directly update the password when it's cleaned. I do it this way because a normal DataTrigger-Setter on Text removes the Binding for some reason-->
-                                <b:DataTrigger Binding="{Binding Password}" Value="">
-                                    <b:InvokeCommandAction Command="{Binding ClearPassword, ElementName=PasswordEdit}"/>
-                                </b:DataTrigger>
                             </b:Interaction.Triggers>
                         </StackPanel>
                         <ControlTemplate.Triggers>
@@ -294,10 +290,6 @@
                                 <b:DataTrigger Binding="{Binding LastError}" Value="Unknown">
                                     <b:InvokeCommandAction Command="{Binding EnableTooltipOnUIElementCommand, ElementName=SignUp_c}" CommandParameter="{Binding ElementName=UsernameEdit}"/>
                                     <b:InvokeCommandAction Command="{Binding ShowTooltipOnUIElementCommand, ElementName=SignUp_c}" CommandParameter="{Binding ElementName=UsernameEdit}"/>
-                                </b:DataTrigger>
-                                <!--Password's Text property doesn't get automatically updated from its binding, so we directly update the password when it's cleaned. I do it this way because a normal DataTrigger-Setter on Text removes the Binding for some reason-->
-                                <b:DataTrigger Binding="{Binding ConfirmPassword}" Value="">
-                                    <b:InvokeCommandAction Command="{Binding ClearPassword, ElementName=ConfirmPasswordEdit}"/>
                                 </b:DataTrigger>
                             </b:Interaction.Triggers>
                             <TextBlock x:Name="Title" Style="{StaticResource TitleText}"
@@ -482,6 +474,22 @@
                                 </b:Interaction.Triggers>
                             </ls:LSButton>
                         </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding CurrentPlayer.UIData.PreviousState}" Value="ModBrowserDownload"/>
+                                    <Condition Binding="{Binding Data.ModAccountState}" Value="LarianConnected"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="ContinueBtn" Property="CommandParameter" Value="OpenModioSignIn"/>
+                            </MultiDataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding CurrentPlayer.UIData.PreviousState}" Value="ModBrowserInstalled"/>
+                                    <Condition Binding="{Binding Data.ModAccountState}" Value="LarianConnected"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="ContinueBtn" Property="CommandParameter" Value="OpenModioSignIn"/>
+                            </MultiDataTrigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
 
                     <ControlTemplate x:Key="AccountCreated">
@@ -539,18 +547,16 @@
                     <TextBlock x:Name="RequiredField" HorizontalAlignment="Left" Style="{StaticResource  BodyText}" Visibility="Collapsed" Margin="{StaticResource ButtonHint.Margin.Left}" VerticalAlignment="Bottom"
                                Text="{Binding Source='h7000d355g30c0g425aga3a5gf0b07b6c7d83', Converter={StaticResource TranslatedStringConverter}}" />
 
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" HorizontalAlignment="Center">
-                        <ls:LSButton x:Name="CancelBackBtn" Style="{StaticResource ControllerButton}" Visibility="Collapsed" Margin="{StaticResource ButtonHint.Margin.Right}" VerticalAlignment="Bottom"
-                                     DataContext="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICancel'}"
-                                     Content="{Binding Source='h01d5c470g61bfg498cgb17eg7be425444fa5',Converter={StaticResource TranslatedStringConverter}}"
-                                     Command="{Binding DataContext.CancelBack, RelativeSource={RelativeSource AncestorType=ls:UIWidget}}"
-                                     SoundID="UI_Shared_Cancel"/>
-
-                        <ls:LSButton x:Name="SelectBtn" Style="{StaticResource ControllerButton}" Visibility="Collapsed" TapTime="{StaticResource DefaultButtonTapTime}" Margin="{StaticResource ButtonHint.Margin}" VerticalAlignment="Bottom"
-                                     DataContext="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIAccept'}"
-                                     Content="{Binding Source='hd0c08193ga7f2g4a7eg8225g63748c7b3096',Converter={StaticResource TranslatedStringConverter}}"
+                    <StackPanel Orientation="Horizontal" Style="{StaticResource ButtonHint.Container.Center}">
+                        <ls:LSButton x:Name="SelectBtn" BoundEvent="UIAccept" ContentTemplate="{StaticResource ControllerButtonHint}" Visibility="Collapsed"
+                                     Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIAccept'}"
+                                     Tag="{Binding Source='hd0c08193ga7f2g4a7eg8225g63748c7b3096',Converter={StaticResource TranslatedStringConverter}}"
                                      Command="{Binding Path=FocusedElement.Command ,ElementName=SignUp_c}"
                                      CommandParameter="{Binding Path=FocusedElement.CommandParameter ,ElementName=SignUp_c}"/>
+                        <ls:LSButton x:Name="CancelBackBtn" BoundEvent="UICancel" ContentTemplate="{StaticResource ControllerButtonHint}" Visibility="Collapsed"
+                                     Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UICancel'}"
+                                     Tag="{Binding Source='h01d5c470g61bfg498cgb17eg7be425444fa5',Converter={StaticResource TranslatedStringConverter}}"
+                                     Command="{Binding DataContext.CancelBack, RelativeSource={RelativeSource AncestorType=ls:UIWidget}}"/>
                     </StackPanel>
                 </Grid>
 
@@ -607,7 +613,7 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding CurrentScreen}" Value="Login">
                     <Setter TargetName="SelectBtn" Property="Visibility" Value="Visible"/>
-                    <Setter TargetName="RequiredField" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="RequiredField" Property="Visibility" Value="Collapsed"/>
                     <Setter TargetName="CancelBackBtn" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="CurrentTab" Property="Template" Value="{StaticResource Login}"/>
                 </DataTrigger>

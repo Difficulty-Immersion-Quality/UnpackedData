@@ -15,10 +15,20 @@
              FocusDown="UIDown" FocusLeft="UILeft" FocusRight="UIRight" FocusUp="UIUp">
     <ls:UIWidget.ContentTemplate>
         <DataTemplate>
-            <Grid HorizontalAlignment="Center" x:Name="root" Margin="0,-44,0,0" Tag="None">
-                <b:Interaction.Behaviors>
-                    <ls:CollectionSortBehavior x:Name="ModSorted" ItemsSource="{Binding Data.AvailableMods}" Comparer="{Binding SortModsComparer}"/>
-                </b:Interaction.Behaviors>
+            <!-- Tag will store the focused element when the details view is opened, so we can go back to it after closing the details view -->
+            <Grid HorizontalAlignment="Center" x:Name="root" Margin="0,-44,0,0" Tag="{x:Null}">
+                <b:Interaction.Triggers>
+                    <b:DataTrigger Binding="{Binding Path=InDetailsView}" Value="True">
+                        <!-- Save current focused element -->
+                        <b:ChangePropertyAction TargetName="root" PropertyName="Tag" Value="{Binding FocusedElement, ElementName=ModBrowserInstalled_c}"/>
+                    </b:DataTrigger>
+                    <b:DataTrigger Binding="{Binding Path=InDetailsView}" Value="False">
+                        <!-- Restore focused element -->
+                        <ls:SetMoveFocusAction TargetName="ModBrowserInstalled_c" FocusElement="{Binding Tag, ElementName=root}" DeferFocusAction="True"/>
+                        <b:ChangePropertyAction TargetName="root" PropertyName="Tag" Value="{x:Null}"/>
+                    </b:DataTrigger>
+                </b:Interaction.Triggers>
+
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="1440"/>
                     <ColumnDefinition Width="70"/>
@@ -48,10 +58,11 @@
                 <TextBlock x:Name="availableModsLabel" Grid.Row="1" Grid.Column="0" Text="{Binding Source='h26846b3cgd238g4eb4g913ag60e5dce34ddc', Converter={StaticResource TranslatedStringConverter}}"
                            FontSize="{StaticResource IntermediateFontSize}" Margin="160,0,0,0" Foreground="{StaticResource LS_extraspecialTxtColor}" FontWeight="DemiBold"/>
 
-                <Grid x:Name="ModListRoot" Grid.Column="0" Grid.Row="2" HorizontalAlignment="Center" IsEnabled="{Binding ShowSortAndFilterOptions, Converter={StaticResource InvertBoolConverter}}" Visibility="{Binding IsUpdatingModList, Converter={StaticResource BoolToCollapsedConverter}}" Margin="0,0,0,40">
+                <Grid x:Name="ModListRoot" Grid.Column="0" Grid.Row="2" HorizontalAlignment="Center" Visibility="{Binding IsUpdatingModList, Converter={StaticResource BoolToCollapsedConverter}}" Margin="0,0,0,40">
 
                     <!-- Tag is used to store last selected item, so we can go back to it -->
-                    <ListBox x:Name="ModList" ItemsSource="{Binding ElementName=ModSorted, Path=SortedItems}" HorizontalAlignment="Left" Height="{Binding ActualHeight, ElementName=ModListRoot}" AlternationCount="{Binding ElementName=ModSorted, Path=SortedItems.Count}" SelectedIndex="0" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel" Tag="None" ls:MoveFocus.IsMoveFocusScope="True">
+                    <ListBox x:Name="ModList" ItemsSource="{Binding Data.AvailableMods}" HorizontalAlignment="Left" Height="{Binding ActualHeight, ElementName=ModListRoot}" AlternationCount="{Binding Data.AvailableMods.Count}"
+                             SelectedIndex="0" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel" Tag="None" ls:MoveFocus.IsMoveFocusScope="True">
                         <b:Interaction.Behaviors>
                             <ls:AutoScrollBehavior ScrollIntoView="{Binding SelectedIndex, ElementName=ModList}" BringSelectionIntoView="True"/>
                         </b:Interaction.Behaviors>
@@ -79,22 +90,15 @@
                                                            FontSize="{StaticResource ScaledDefaultFontSize}" HorizontalAlignment="Left"  VerticalAlignment="Center" FontWeight="DemiBold"/>
 
                                                 <ContentControl x:Name="contentHolder" Style="{StaticResource FocusableContentControlStyleBold}" Margin="58,0,0,0" ls:MoveFocus.FocusMovementModeRight="MainAxis" ls:MoveFocus.FocusMovementModeUp="MainAxisTunnel" HorizontalAlignment="Stretch" Tag="noEdit" BorderThickness="2">
-
-                                                    <b:Interaction.Triggers>
-                                                        <b:DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=contentHolder}" Value="True">
-                                                            <b:ChangePropertyAction TargetName="root" PropertyName="Tag" Value="{Binding Path=FocusedElement, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"/>
-                                                        </b:DataTrigger>
-                                                    </b:Interaction.Triggers>
-
                                                     <!-- Mod image and text/tag -->
-                                                    <ContentPresenter x:Name="modPreview" HorizontalAlignment="Left" ContentTemplate="{StaticResource ModPreviewTemplate}" Content="{Binding .}" Width="996" Tag=""/>
+                                                    <ContentPresenter x:Name="modPreview" HorizontalAlignment="Left" ContentTemplate="{StaticResource ModPreviewTemplate}" Content="{Binding .}" Width="1060" Tag=""/>
                                                 </ContentControl>
 
                                                 <!--Mod Details-->
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,40,0" HorizontalAlignment="Right"  VerticalAlignment="Center">
                                                     <Image x:Name="updateIcon" VerticalAlignment="Center" Source="{StaticResource updateIcon_c}" Stretch="None" Visibility="Hidden"/>
-                                                    <Image x:Name="modWarning" Source="{StaticResource IconWarningSoft}" Stretch="None" Visibility="Hidden"/>
-                                                    <ls:LSCheckBox x:Name="modEnableCheckBox" IsChecked="{Binding IsEnabled, Mode=OneWay}" Margin="0,-7,0,0">
+                                                    
+                                                    <ls:LSCheckBox x:Name="modEnableCheckBox" IsChecked="{Binding EnabledCurrent, Mode=OneWay}" Margin="0,-7,0,0">
                                                         <CheckBox.Template>
                                                             <ControlTemplate TargetType="CheckBox">
                                                                 <Image x:Name="iconEnabled" VerticalAlignment="Center" Source="{StaticResource disabledIcon_c}" Stretch="None" />
@@ -112,17 +116,14 @@
                                                 <DataTrigger Binding="{Binding Path=Tag, ElementName=ModList}" Value="EditModeOn">
                                                     <Setter TargetName="contentHolder" Property="ls:MoveFocus.Focusable" Value="False"/>
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsOutdated}" Value="True">
+                                                <DataTrigger Binding="{Binding VersionState}" Value="Older">
                                                     <Setter TargetName="updateIcon" Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                                    <Setter TargetName="modPreview" Property="Tag" Value="Disabled"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsOfficial}" Value="False">
-                                                    <Setter TargetName="modWarning" Property="Visibility" Value="Visible"/>
+                                                <DataTrigger Binding="{Binding EnabledCurrent}" Value="False">
+                                                    <Setter TargetName="modPreviewPanel" Property="Tag" Value="Disabled"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), ElementName=contentHolder}" Value="True">
-                                                    <Setter TargetName="modPreview" Property="Tag" Value="Focused"/>
+                                                    <Setter TargetName="modPreviewPanel" Property="Tag" Value="Focused"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding DataContext.Data.IsUGCDisabled, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="True">
                                                     <Setter TargetName="updateIcon" Property="Visibility" Value="Collapsed"/>
@@ -138,6 +139,11 @@
                                 <ls:SetMoveFocusAction TargetName="ModBrowserInstalled_c" FocusElement="{Binding ElementName=ModList}"/>
                                 <b:InvokeCommandAction Command="{Binding UpdateSelectedModDetails}" CommandParameter="{Binding Path=SelectedItem, ElementName=ModList}"/>
                             </b:EventTrigger>
+
+                            <b:DataTrigger Binding="{Binding SelectedMod, Converter={StaticResource NullToBoolTrueConverter}}" Value="True">
+                                <ls:SelectNextListBoxItem Reversed="False" TargetName="ModList" ForceSelect="True" ForceMode="Cycle"/>
+                            </b:DataTrigger>
+
                             <b:PropertyChangedTrigger Binding="{Binding FocusedElement, ElementName=ModBrowserInstalled_c}">
                                 <b:Interaction.Behaviors>
                                     <b:ConditionBehavior>

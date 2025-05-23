@@ -1289,7 +1289,7 @@ DB_GlobalFlag((FLAG)END_General_State_Started_a0fd5f91-e4b3-4d01-84d3-9ff484139e
 AND
 QRY_OnlyOnce("END_BlockNewPlayers")
 THEN
-SetJoinBlock(JOINBLOCKTYPE.BlockAll);
+SetJoinBlock(JOINBLOCKTYPE.BlockNew);
 DB_BUGFIX_Marker("GUS-307052");
 
 //END_REGION GUS-307052
@@ -1651,6 +1651,48 @@ DB_BUGFIX_Marker("GUSX-7174");
 
 //END_REGION GUSX-7174
 
+//REGION GUS-7480
+
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SavegameIsOlderThan("Release Patch 7")
+AND
+DB_CurrentLevel("END_Main")
+AND
+IsDead(S_END_MindBrain_f8bb04a3-22e5-41b0-aed7-5dcf852343d1, 1)
+AND
+NOT DB_END_BrainBattle_BlockChainGameOver(1)
+AND
+DB_Is_InCombat(S_END_MindBattleHelper_be50f7cd-c14a-4131-82d3-29337f3a4759, _ID)
+THEN
+DB_BUGFIX_Marker("GUS-7480");
+PROC_END_MindBattle_MindDeathSetup(_ID);
+
+IF
+Died(S_END_MindBattleHelper_be50f7cd-c14a-4131-82d3-29337f3a4759)
+AND 
+DB_BUGFIX_Marker("GUS-7480")
+AND
+DB_END_BrainBattle_DominationCharacter(_DominationCharacter)
+THEN
+PROC_END_BrainBattle_QueueFullRestore(_DominationCharacter);
+DB_END_BrainBattle_DominationCompletedReady(1);
+
+//END_REGION
+
+//REGION GUSX-7668
+
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SavegameIsOlderThan("Release Patch 8")
+THEN
+DB_ORI_Gale_GoalForceFlag(0, 0, (FLAG)ORI_Gale_Event_ForceSetUnwillingToDie_5b3fd6a1-0942-42c1-9913-90efa3588315);
+DB_BUGFIX_Marker("GUSX-7668");
+
+//END_REGION GUSX-7668
+
 //REGION GUSX-440
 PROC
 PROC_ApplySavegamePatches()
@@ -1664,7 +1706,34 @@ DB_GlobalFlag(END_HighHallInterior_State_NautiloidLeft_ed57695e-adb6-4a4e-8f84-4
 THEN
 QuestMessageHide("END_HighHallInterior_ReachNetherbrainID");
 DB_BUGFIX_Marker("GUSX-440");
-//END_REGION
+//END_REGION GUSX-440
+
+//REGION GUSX-7959
+
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+NOT DB_Level_InaccessibleAfterLoading("IRN_Main_A","END_Main")
+THEN
+DB_Level_InaccessibleAfterLoading("IRN_Main_A","END_Main");
+
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_LevelLoadedOnce("END_Main")
+AND
+DB_LevelLoadedOnce("IRN_Main_A")
+AND
+NOT QRY_LevelCache_BlockDelete("IRN_Main_A")
+THEN
+DeleteLevelCache("IRN_Main_A");
+DB_BUGFIX_Marker("GUSX-7959");
+
+//END_REGION GUSX-7959
 
 //REGION GUSX-8077
 //Remove endgame ally from Steel watcher DB that handles all other watchers in the game
@@ -1690,6 +1759,42 @@ SetFaction(S_END_SteelWatcherAlly_cb20c38a-38f7-46f7-840d-b64b4d363674, (FACTION
 PROC_SpotPlayers_StopSpotting((CHARACTER)S_END_SteelWatcherAlly_cb20c38a-38f7-46f7-840d-b64b4d363674, "GLO_BrainEscalation_SteelWatcherHostility");
 DB_BUGFIX_Marker("GUSX-8077b");
 //END_REGION GUSX-8077
+
+//REGION GUSX-7812
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_GlobalFlag((FLAG)ORI_Gale_State_IsGod_ec94f9a4-b032-ce25-f4eb-ecf4ed37d65d)
+THEN
+DB_BUGFIX_Marker("GUSX-7812");
+DB_BUGFIX_GaleNotGodFlags((FLAG)ORI_Gale_State_ChallengedMystra_d6dfa722-f85e-e191-a7e0-776d19c9f18a);
+DB_BUGFIX_GaleNotGodFlags((FLAG)ORI_Gale_Event_GaveCrownToMystra_3375fd8b-4958-421d-2d51-ff9af5beaaa0);
+DB_BUGFIX_GaleNotGodFlags((FLAG)ORI_Gale_State_MystrasChosen_dd2611c4-62e6-9a05-c2a4-f797c9e2692f);
+DB_BUGFIX_GaleNotGodFlags((FLAG)ORI_Gale_State_InElysium_d6c53ee8-ce94-4016-73ee-74d44d309837);
+PROC_END_BUGFIX_GameFinale_GodGaleFix();
+
+PROC
+PROC_END_BUGFIX_GameFinale_GodGaleFix()
+AND
+DB_BUGFIX_GaleNotGodFlags(_Flag)
+AND
+DB_GlobalFlag(_Flag)
+AND
+DB_GlobalFlag(CURRENTREGION_EPI_Main_A_49a342c4-59f2-4861-9048-8fe63a7b7cde)
+THEN
+ClearFlag((FLAG)ORI_Gale_State_IsGod_ec94f9a4-b032-ce25-f4eb-ecf4ed37d65d);
+RemoveStatus(S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, "EPI_GALEGOD", NULL_00000000-0000-0000-0000-000000000000);
+RemoveStatus(S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, "EPI_GALEGOD_BUFF_AURA", NULL_00000000-0000-0000-0000-000000000000);
+RemoveStatus((CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, "INVULNERABLE_NOT_SHOWN", NULL_00000000-0000-0000-0000-000000000000);
+RemoveTransforms(S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604);
+SetLevel(S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, 12);
+NOT DB_BUGFIX_GaleNotGodFlags((FLAG)ORI_Gale_State_ChallengedMystra_d6dfa722-f85e-e191-a7e0-776d19c9f18a);
+NOT DB_BUGFIX_GaleNotGodFlags((FLAG)ORI_Gale_Event_GaveCrownToMystra_3375fd8b-4958-421d-2d51-ff9af5beaaa0);
+NOT DB_BUGFIX_GaleNotGodFlags((FLAG)ORI_Gale_State_MystrasChosen_dd2611c4-62e6-9a05-c2a4-f797c9e2692f);
+NOT DB_BUGFIX_GaleNotGodFlags((FLAG)ORI_Gale_State_InElysium_d6c53ee8-ce94-4016-73ee-74d44d309837);
+//END_REGION GUSX-7812
 
 //REGION GUSX-9543
 PROC
@@ -1724,6 +1829,170 @@ DB_Is_InCombat(S_GLO_Emperor_73d49dc5-8b8b-45dc-a98c-927bb4e3169b, _ID)
 THEN
 NOT DB_Is_InCombat(S_GLO_Emperor_73d49dc5-8b8b-45dc-a98c-927bb4e3169b, _ID);
 DB_BUGFIX_Marker("GUSX-9543");
+//END_REGION
+
+//REGION GUSX-10197
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+NOT DB_END_General_MakeUnavailableFlag((CHARACTER)S_Player_Karlach_2c76687d-93a2-477b-8b18-8a14b549304c, (FLAG)ORI_Karlach_State_AvernusAlone_c5ffd6ad-7749-6eb8-992e-48d66766f6b6, 1)
+THEN
+DB_BUGFIX_Marker("GUSX-10197");
+ClearFlag((FLAG)END_GameFinale_Event_KarlachChoseDeath_f9900bec-33dc-44db-ac8c-666dd5b8eec1);
+DB_END_General_MakeUnavailableFlag((CHARACTER)S_Player_Karlach_2c76687d-93a2-477b-8b18-8a14b549304c, (FLAG)ORI_Karlach_State_AvernusAlone_c5ffd6ad-7749-6eb8-992e-48d66766f6b6, 1);
+NOT DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithAstarion_30819c8d-b39d-42e7-acd1-2a8c2c309994, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Astarion_73fb7151-e772-cae7-8d7a-bb5eb8e8860a, (CHARACTER)S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255);
+NOT DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithGale_e008e20d-d642-42ed-9008-297b6273aa21, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Gale_81fc2269-0613-259c-b950-c0dcebbb7934, (CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604);
+NOT DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithHalsin_7b53fe60-bb16-48a9-ae5c-9bce1dfac1a9, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Halsin_a853d059-2572-04c4-88db-d737e4a264f7, (CHARACTER)S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323);
+NOT DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithHalsinSecondary_6af0be74-d032-4a20-876a-11bab5f86db2, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Halsin_a853d059-2572-04c4-88db-d737e4a264f7, (CHARACTER)S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323);
+NOT DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithLaezel_d169a786-6e56-4f0d-a2eb-33c48d8d1160, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Laezel_523b1bb2-0443-79bf-cf3e-8f435ff5f2e9, (CHARACTER)S_Player_Laezel_58a69333-40bf-8358-1d17-fff240d7fb12);
+NOT DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithMinthara_39ac48fa-b440-47e6-a436-6dc9b10058d8, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Minthara_699ad056-06a4-db4f-53c4-6706dbb7c544, (CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b);
+NOT DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithShadowheart_3808ae35-ad4e-465b-800b-63d32b77211e, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Shadowheart_b9ebb9af-ad65-4e64-6015-105e831d49c0, (CHARACTER)S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679);
+NOT DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithWyll_5db4c1b6-3c42-43ae-aa85-1844acbf5a1d, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Wyll_32de9167-3489-9257-e3c1-e430f2f455ab, (CHARACTER)S_Player_Wyll_c774d764-4a17-48dc-b470-32ace9ce447d);
+NOT DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithKarlach_d9ff60fa-0af9-45d7-99b4-bd7c3f80ed12, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Karlach_091af35d-0d30-a4bf-b056-9eda505138b5, (CHARACTER)S_Player_Karlach_2c76687d-93a2-477b-8b18-8a14b549304c);
+DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithHalsinSecondary_6af0be74-d032-4a20-876a-11bab5f86db2, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Halsin_a853d059-2572-04c4-88db-d737e4a264f7, (CHARACTER)S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323);
+DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithHalsin_7b53fe60-bb16-48a9-ae5c-9bce1dfac1a9, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Halsin_a853d059-2572-04c4-88db-d737e4a264f7, (CHARACTER)S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323);
+DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithAstarion_30819c8d-b39d-42e7-acd1-2a8c2c309994, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Astarion_73fb7151-e772-cae7-8d7a-bb5eb8e8860a, (CHARACTER)S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255);
+DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithGale_e008e20d-d642-42ed-9008-297b6273aa21, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Gale_81fc2269-0613-259c-b950-c0dcebbb7934, (CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604);
+DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithLaezel_d169a786-6e56-4f0d-a2eb-33c48d8d1160, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Laezel_523b1bb2-0443-79bf-cf3e-8f435ff5f2e9, (CHARACTER)S_Player_Laezel_58a69333-40bf-8358-1d17-fff240d7fb12);
+DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithMinthara_39ac48fa-b440-47e6-a436-6dc9b10058d8, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Minthara_699ad056-06a4-db4f-53c4-6706dbb7c544, (CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b);
+DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithShadowheart_3808ae35-ad4e-465b-800b-63d32b77211e, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Shadowheart_b9ebb9af-ad65-4e64-6015-105e831d49c0, (CHARACTER)S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679);
+DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithWyll_5db4c1b6-3c42-43ae-aa85-1844acbf5a1d, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Wyll_32de9167-3489-9257-e3c1-e430f2f455ab, (CHARACTER)S_Player_Wyll_c774d764-4a17-48dc-b470-32ace9ce447d);
+DB_END_GameFinale_CharacterPartneredDialogs((FLAG)ORI_State_PartneredWithKarlach_d9ff60fa-0af9-45d7-99b4-bd7c3f80ed12, (DIALOGRESOURCE)END_GameFinale_RomanceFates_Karlach_091af35d-0d30-a4bf-b056-9eda505138b5, (CHARACTER)S_Player_Karlach_2c76687d-93a2-477b-8b18-8a14b549304c);
+//END_REGION
+
+//REGION GUSX-7672
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_GlobalFlag((FLAG)END_General_State_Started_a0fd5f91-e4b3-4d01-84d3-9ff484139e99)
+AND
+NOT DB_GlobalFlag((FLAG)SCE_IsobelNightsongReunion_JoiningCamp_cea17782-fc15-19d3-e658-7f2f955ebd9f)
+AND
+DB_GlobalFlag((FLAG)LOW_SorcerousSundries_State_PlayersSideWithNightsong_992ec758-9536-40ce-9a45-72193c81ec1b)
+THEN
+//DB_BUGFIX_END_NightsongIsobel((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b, "Target_END_AllyAbility_NightsongSummon", 1, "END_ALLYABILITIES_NIGHTSONGSUMMON");
+//DB_BUGFIX_END_NightsongIsobel((CHARACTER)S_GLO_Isobel_263bfbfc-6160-46f4-a9e1-1089cdb5c211, "Target_END_AllyAbility_IsobelHeal", 0, "END_ALLYABILITIES_ISOBELHEAL");
+DB_BUGFIX_END_NightsongIsobel((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b);
+DB_BUGFIX_END_NightsongIsobel((CHARACTER)S_GLO_Isobel_263bfbfc-6160-46f4-a9e1-1089cdb5c211);
+DB_END_GatherYourAllies_PotentialCharacter((CHARACTER)S_GLO_Isobel_263bfbfc-6160-46f4-a9e1-1089cdb5c211, (TRIGGER)S_END_IsobelGroupPoint_f8db4a96-c2c1-4e74-9423-5753754babfc, (FLAG)LOW_SorcerousSundries_State_PlayersSideWithNightsong_992ec758-9536-40ce-9a45-72193c81ec1b);
+DB_END_GatherYourAllies_PotentialCharacter((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b, (TRIGGER)S_END_NightsongGroupPoint_494f1aa2-c0a0-4cce-9b65-7234391f4caf, (FLAG)LOW_SorcerousSundries_State_PlayersSideWithNightsong_992ec758-9536-40ce-9a45-72193c81ec1b);
+PROC_BUGFIX_END_GiveNightsongIsobel();
+
+//In the ally house post dialogue
+PROC
+PROC_BUGFIX_END_GiveNightsongIsobel()
+AND
+DB_Players(_Player)
+AND
+DB_WasInRegion(_Player, S_END_GatherYourAllies_SUB_6651c6b2-90b2-4380-90f1-7cfd4f5f5c47)
+AND
+NOT DB_WasInRegion(_Player, S_END_AlliesExitArea_d70ddde8-3aa6-4167-b9d7-eeea5d7f0fc8)
+AND
+DB_InRegion(_Player, S_END_AlliesHouse_SUB_bc061ec6-3f6f-4057-93ec-bcd1340c79f6)
+AND
+HasSpell(_Player, "Target_END_AllyAbility_NightsongSummon", 0)
+THEN
+PROC_BUGFIX_END_SetupNightsongIsobelAllyHouse();
+PROC_BUGFIX_END_AddAllyAbility();
+
+//Post Allies House
+PROC
+PROC_BUGFIX_END_GiveNightsongIsobel()
+AND
+DB_Players(_Player)
+AND
+DB_WasInRegion(_Player, S_END_AlliesExitArea_d70ddde8-3aa6-4167-b9d7-eeea5d7f0fc8)
+AND
+HasSpell(_Player, "Target_END_AllyAbility_NightsongSummon", 0)
+THEN
+PROC_BUGFIX_END_AddAllyAbility();
+
+//Post Loading zone, pre allies house
+PROC
+PROC_BUGFIX_END_GiveNightsongIsobel()
+AND
+DB_Players(_Player)
+AND
+NOT DB_InRegion(_Player, S_END_AlliesHouse_SUB_bc061ec6-3f6f-4057-93ec-bcd1340c79f6)
+AND
+HasSpell(_Player, "Target_END_AllyAbility_NightsongSummon", 0)
+THEN
+PROC_BUGFIX_END_SetupNightsongIsobelAllyHouse();
+
+PROC
+PROC_BUGFIX_END_AddAllyAbility()
+AND
+NOT DB_PermaDefeated(S_GLO_Isobel_263bfbfc-6160-46f4-a9e1-1089cdb5c211)
+THEN
+PROC_AllyAbilities_SummonsDBIteration("Target_END_AllyAbility_NightsongSummon", 1);
+SetFlag((FLAG)END_GatherYourAllies_Event_IsobelReinforcementsAwarded_e514a07c-81fe-6c48-6f90-2333b475d201);
+SetFlag((FLAG)END_GatherYourAllies_Event_NightsongReinforcementsAwarded_e6d46345-982d-4450-8a35-0b958746f119);
+
+PROC
+PROC_BUGFIX_END_AddAllyAbility()
+AND
+DB_PermaDefeated(S_GLO_Isobel_263bfbfc-6160-46f4-a9e1-1089cdb5c211)
+THEN
+PROC_AllyAbilities_SummonsDBIteration("Target_END_AllyAbility_NightsongSummon", 1);
+SetFlag((FLAG)END_GatherYourAllies_Event_NightsongReinforcementsAwarded_e6d46345-982d-4450-8a35-0b958746f119);
+
+PROC
+PROC_BUGFIX_END_SetupNightsongIsobelAllyHouse()
+AND
+DB_BUGFIX_END_NightsongIsobel(_Character)
+AND
+DB_END_GatherYourAllies_PotentialCharacter(_Character, _Trigger, _)
+AND
+DB_END_GatherYourAllies_FollowUpDialogue(_Character, _Dialog, _AnubisConfig)
+THEN
+PROC_END_GatherYourAllies_SetupCharacter(_Character, _Trigger, _Dialog, _AnubisConfig);
+//END_REGION
+
+//REGION GUSX-9342
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+NOT DB_END_BrainBattle_Thralls((TAG)NULL_00000000-0000-0000-0000-000000000000, QUEST_END_Thrall_Fallback_ef0ef83b-56af-4203-a984-28a74975adf5, "END_SUPERTHRALL_FALLBACK", "EQP_END_Thrall_Fallback")
+THEN
+DB_BUGFIX_Marker("GUSX-9342");
+DB_END_BrainBattle_Thralls((TAG)NULL_00000000-0000-0000-0000-000000000000, QUEST_END_Thrall_Fallback_ef0ef83b-56af-4203-a984-28a74975adf5, "END_SUPERTHRALL_FALLBACK", "EQP_END_Thrall_Fallback");
+//END_REGION  GUSX-12147
+
+//REGION GUSX-12147
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "END_Main", "GUSX-12147");
+
+PROC
+PROC_ApplySavegamePatchInLevel("END_Main", "GUSX-12147")
+AND
+NOT DB_END_General_InterjectionDialog((DIALOGRESOURCE)END_BrainBattle_FinalDecision_e5feae67-c6f1-1827-e9d6-a6b34647c8ea, (FLAG)END_FinalDecision_State_HasCompanions_71509891-35c2-4e80-a107-e7c21a0028db, 4, 13)
+THEN
+DB_END_General_InterjectionDialog((DIALOGRESOURCE)END_BrainBattle_FinalDecision_e5feae67-c6f1-1827-e9d6-a6b34647c8ea, (FLAG)END_FinalDecision_State_HasCompanions_71509891-35c2-4e80-a107-e7c21a0028db, 4, 13);
+DB_END_General_InterjectionDialog((DIALOGRESOURCE)END_BrainBattle_CombatOver_8cb159d3-3390-4e58-a0ae-8414628bb813, (FLAG)END_CombatOver_State_HasCompanions_d4e1d74a-ac07-7d10-07dc-3dbd24d3d260, 3, 12);
+DB_END_General_InterjectionDialog((DIALOGRESOURCE)END_GameFinale_DeathofKarlach_e419b950-b6ba-64bc-f041-1d07a602dfc4, (FLAG)END_DeathOfKarlach_State_HasCompanions_c60948cb-3c9b-491b-bccf-618a7c5bdc26, 1, 10);
+DB_END_General_InterjectionDialog((DIALOGRESOURCE)END_BrainBattle_FinalDecision_Nested_EvilAvatar_e0069683-63a6-f619-cf62-5dc4105a11ba, (FLAG)END_FinalDecision_State_EvilAvatarHasCompanions_a894824a-ad1b-41a4-841e-0f9745c325bf, 2, 11); 
+//END_REGION  GUSX-12147
+
+//REGION GUSX-10684
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8 Beta Hotfix 2")
+AND
+DB_GlobalFlag((FLAG)END_General_State_Started_a0fd5f91-e4b3-4d01-84d3-9ff484139e99)
+AND
+NOT DB_END_AllyAbilities_PlayerSummonAllyAD("Target_END_AllyAbilities_KuoToaSummon", (DIALOGRESOURCE)NULL_00000000-0000-0000-0000-000000000000)
+THEN
+DB_BUGFIX_Marker("GUSX-10718");
+DB_END_AllyAbilities_PlayerSummonAllyAD("Target_END_AllyAbilities_KuoToaSummon", (DIALOGRESOURCE)NULL_00000000-0000-0000-0000-000000000000);
 //END_REGION
 EXITSECTION
 

@@ -1,0 +1,71 @@
+[Vertex shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+#include "Shaders/HLSL/SkinningHelpers.shdh"
+
+struct VertexInput
+{
+	float3 Position : POSITION0;
+	uint VertexID : SV_VertexID;
+};
+
+struct VertexOutput
+{
+	float4 ProjectedPosition : SV_Position0;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_EngineParams : register(b0)
+{
+	float4x4 WorldMatrix;
+	uint TransformedVerticesOffset;
+	uint PADDING0_TransformedVerticesOffset;
+	uint PADDING1_TransformedVerticesOffset;
+	uint PADDING2_TransformedVerticesOffset;
+};
+VertexOutput main(in VertexInput In)
+{
+	VertexOutput Out;
+
+	float4 localPositionStatic = float4(In.Position, 1.0f);
+	[branch]
+	if ((TransformedVerticesOffset > 0))
+	{
+		// Skinned vertex
+		localPositionStatic.xyz = GetSkinnedPosition(In.VertexID, TransformedVerticesOffset);
+	}
+	// World space position
+	float4 worldPosition = mul(WorldMatrix, localPositionStatic);
+
+	// Projected position
+	float4 projectedPosition = mul(g_ViewProjectionMat, worldPosition);
+
+	// Pass projected position to pixel shader
+	Out.ProjectedPosition = projectedPosition;
+
+
+	return Out;
+}
+
+
+[Fragment shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+
+struct PixelInput
+{
+	float4 ProjectedPosition : SV_Position0;
+};
+
+struct PixelOutput
+{
+};
+
+PixelOutput main(in PixelInput In)
+{
+	PixelOutput Out;
+
+
+	return Out;
+}
