@@ -222,7 +222,7 @@
                             <Condition Binding="{Binding Lobby, Converter={StaticResource NullToBoolFalseConverter}}" Value="True"/>
                         </MultiDataTrigger.Conditions>
                         <Setter TargetName="JoinBtn" Property="Visibility" Value="Visible"/>
-                        <Setter TargetName="JoinBtn" Property="IsEnabled" Value="True"/>
+                        <Setter TargetName="JoinBtn" Property="IsEnabled" Value="{Binding DataContext.IsUpdating, ElementName=Friendslist, Converter={StaticResource InvertBoolConverter}}"/>
                         <Setter TargetName="JoinBtnTT" Property="Content" Value="{Binding Source='h9a9113b9geb0ag4d7agad37g51c5ec1ec635', Converter={StaticResource TranslatedStringConverter}}"/>
                         <Setter TargetName="ConnectionStatus" Property="Source" Value="{StaticResource OnlineStatusAvailable}"/>
                         <Setter TargetName="ConnectionStatusTT" Property="Content" Value="{Binding Source='h3295a3a4g56bfg4d88g9b29gaa60c7b6536b', Converter={StaticResource TranslatedStringConverter}}"/>
@@ -240,6 +240,7 @@
                     <MultiDataTrigger>
                         <MultiDataTrigger.Conditions>
                             <Condition Binding="{Binding Online}" Value="True"/>
+                            <Condition Binding="{Binding DataContext.Data.IsUsingCrossplay, ElementName=Friendslist}" Value="True"/>
                             <Condition Binding="{Binding Lobby, Converter={StaticResource NullToBoolFalseConverter}}" Value="True"/>
                             <Condition Binding="{Binding DataContext.HasServer, ElementName=Friendslist}" Value="True"/>
                         </MultiDataTrigger.Conditions>
@@ -250,6 +251,7 @@
                     <MultiDataTrigger>
                         <MultiDataTrigger.Conditions>
                             <Condition Binding="{Binding Online}" Value="True"/>
+                            <Condition Binding="{Binding DataContext.Data.IsUsingCrossplay, ElementName=Friendslist}" Value="True"/>
                             <Condition Binding="{Binding CrossplayEnabled}" Value="True"/>
                             <Condition Binding="{Binding Lobby, Converter={StaticResource NullToBoolFalseConverter}}" Value="False"/>
                             <Condition Binding="{Binding DataContext.HasServer, ElementName=Friendslist}" Value="True"/>
@@ -321,6 +323,18 @@
                         <Setter TargetName="LobbyInfo" Property="Visibility" Value="Collapsed"/>
                     </DataTrigger>
                     <DataTrigger Binding="{Binding DataContext.Data.CrossplayIsEnabled, ElementName=Friendslist}" Value="False">
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="InviteBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LeaveBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LobbyInfo" Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding DataContext.Data.IsUsingCrossplay, ElementName=Friendslist}" Value="False">
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="InviteBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LeaveBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LobbyInfo" Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding DataContext.Data.IsMultiplayerAllowedInGame, ElementName=Friendslist}" Value="False">
                         <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
                         <Setter TargetName="InviteBtn" Property="Visibility" Value="Collapsed"/>
                         <Setter TargetName="LeaveBtn" Property="Visibility" Value="Collapsed"/>
@@ -875,6 +889,10 @@
                                      Content="{Binding Source='he50e998fgba3cg404fg8c6aged7aeba0c447', Converter={StaticResource TranslatedStringConverter}}"
                                      Command="{Binding OpenMessageBox}" CommandParameter="{DynamicResource InviteByIdMessageBox}"/>
 
+                        <StackPanel x:Name="OnlineDisabledMessage" Grid.Row="3" Visibility="{Binding Data.IsMultiplayerAllowedInGame, Converter={StaticResource BoolToCollapsedConverter}}">
+                            <TextBlock Text="{Binding Source='h13ec606eg8048g492cg956bgf8b9c75b629e', Converter={StaticResource TranslatedStringConverter}}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource LS_warning50TxtColor}" FontSize="{StaticResource ScaledMediumFontSize}" Margin="40,20"/>
+                        </StackPanel>
+
                         <StackPanel x:Name="EnableCrossplayHolder" Grid.Row="3" Visibility="{Binding Data.CrossplayIsEnabled, Converter={StaticResource BoolToCollapsedConverter}}" Margin="0,32,0,40">
                             <TextBlock Text="{Binding Source='h2af5b0a6gb77bg4239gae9dg26bdbf6c51a2', Converter={StaticResource TranslatedStringConverter}}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource LS_warning50TxtColor}" FontSize="{StaticResource ScaledMediumFontSize}"/>
                             <TextBlock Text="{Binding Source='h08829171g8400g436agbab2gef2d8499cdc8', Converter={StaticResource TranslatedStringConverter}}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource LS_warning50TxtColor}" FontSize="{StaticResource ScaledMediumFontSize}" Margin="0,10,0,20"/>
@@ -893,10 +911,21 @@
                 </ls:LSNineSliceImage>
             </Grid>
             <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding Data.CrossplayIsEnabled}" Value="False">
+                    <Setter TargetName="LobbyInvitesList" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Data.IsMultiplayerAllowedInGame}" Value="False">
+                    <Setter TargetName="LobbyInvitesList" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="OnlineDisabledMessage" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+
                 <!-- We can only invite by ID if the lobby visibility is set to Private (invitation only) or Friends (friends-only) -->
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
                         <Condition Binding="{Binding HasServer}" Value="True"/>
+                        <Condition Binding="{Binding Data.CrossplayIsEnabled}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsUsingCrossplay}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsMultiplayerAllowedInGame}" Value="True"/>
                         <Condition Binding="{Binding Data.LobbyVisibility}" Value="Private"/>
                     </MultiDataTrigger.Conditions>
                     <Setter TargetName="InviteByIdBtn" Property="Visibility" Value="Visible"/>
@@ -904,6 +933,9 @@
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
                         <Condition Binding="{Binding HasServer}" Value="True"/>
+                        <Condition Binding="{Binding Data.CrossplayIsEnabled}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsUsingCrossplay}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsMultiplayerAllowedInGame}" Value="True"/>
                         <Condition Binding="{Binding Data.LobbyVisibility}" Value="Friends"/>
                     </MultiDataTrigger.Conditions>
                     <Setter TargetName="InviteByIdBtn" Property="Visibility" Value="Visible"/>
@@ -966,8 +998,10 @@
                     <Setter TargetName="PlatformTitle" Property="Text" Value="{Binding Source='h9ac38bb2gfb4eg407ega000gf8732870e4dc', Converter={StaticResource TranslatedStringConverter}}"/>
                     <Setter TargetName="PlatformWarning" Property="Text" Value="{Binding Source='hcd703274gd362g4669gb5a5gcdc51069f3d5', Converter={StaticResource TranslatedStringConverter}}"/>
                 </DataTrigger>
-                
-                
+
+                <DataTrigger Binding="{Binding IsMainMenu}" Value="False">
+                    <Setter TargetName="EnableCrossplayHolder" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
             </ControlTemplate.Triggers>
         </ControlTemplate>
     </ls:UIWidget.Template>
