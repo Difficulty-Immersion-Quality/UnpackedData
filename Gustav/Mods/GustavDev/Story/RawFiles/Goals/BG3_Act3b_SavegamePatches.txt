@@ -13111,6 +13111,102 @@ DB_BUGFIX_Marker("GUSX-9352");
 //END_REGION GUSX-9352
 
 
+
+//REGION GUSX-15663
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8 Hotfix 2")
+AND
+DB_LevelLoadedOnce("CTY_Main_A")
+AND
+NOT DB_LevelUnreachable("CTY_Main_A")
+AND
+NOT DB_GlobalFlag((FLAG)NIGHT_Shadowheart_DaughterTears_f9b1fa94-deef-4927-ad7d-3e1b0c393c13)
+AND
+NOT DB_Camp_QueuedNight((FLAG)NIGHT_Shadowheart_DaughterTears_f9b1fa94-deef-4927-ad7d-3e1b0c393c13)
+THEN
+NOT DB_CampNight_Requirement((FLAG)NIGHT_Shadowheart_DaughterTears_f9b1fa94-deef-4927-ad7d-3e1b0c393c13, (FLAG)ORI_Shadowheart_State_ConcludedGrotto_438098b7-3b50-48d6-ac53-6960b2849e10);
+DB_CampNight_Requirement((FLAG)NIGHT_Shadowheart_DaughterTears_f9b1fa94-deef-4927-ad7d-3e1b0c393c13, (FLAG)ORI_Shadowheart_State_ConcludedGrotto_438098b7-3b50-48d6-ac53-6960b2849e10, (FLAG)SHADOWHEART_8d98083d-b6ba-449e-a47a-be130a93d780);
+DB_BUGFIX_Marker("GUSX-15663_BeforeNightStarted");
+
+//If camp night got queued up with shadowheart dead and/or not in camp, but haven't gone to sleep yet -> Resurrect shadowheart and bring her to camp
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8 Hotfix 2")
+AND
+DB_Camp_QueuedNight((FLAG)NIGHT_Shadowheart_DaughterTears_f9b1fa94-deef-4927-ad7d-3e1b0c393c13)
+AND
+DB_PartOfTheTeam((CHARACTER)S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679)
+AND
+NOT DB_GlobalFlag((FLAG)SHADOWHEART_8d98083d-b6ba-449e-a47a-be130a93d780)
+THEN
+DB_GUSX_15663_WaitForLevelGameplayReady(1);
+
+//LevelGameplayStarted is too early - results in Shadowheart being stuck in GameplayController instead of CharacterInputController
+IF
+LevelGameplayReady("CTY_Main_A", 0)
+AND
+DB_GUSX_15663_WaitForLevelGameplayReady(1)
+THEN
+NOT DB_GUSX_15663_WaitForLevelGameplayReady(1);
+TimerLaunch("GUSX_15663_ExtraResurrectDelayTimer", 1000); //Timer needed as currently there is a desync between client and server in Shipping builds resulting in Shadowheart being stuck after being resurrected too early
+
+IF
+TimerFinished("GUSX_15663_ExtraResurrectDelayTimer")
+THEN
+Resurrect((CHARACTER)S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679);
+DB_BUGFIX_GUSX_15663_Resurrecting(1);
+
+IF
+Resurrected((CHARACTER)S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679)
+AND
+DB_BUGFIX_GUSX_15663_Resurrecting(1)
+THEN
+NOT DB_BUGFIX_GUSX_15663_Resurrecting(1);
+PROC_BUGFIX_GUSX_15663_TeleportSHToCamp();
+
+PROC
+PROC_BUGFIX_GUSX_15663_TeleportSHToCamp()
+AND
+QRY_Camp_GetCamperPos((CHARACTER)S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679)
+AND
+DB_QRYRTN_Camp_GetCamperPos(S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679,(TRIGGER)_CampPos)
+THEN
+TeleportTo(S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679, _CampPos, "GUSX-15663_TeleportSHToCamp", 0, 0, 0, 1, 1);
+
+IF
+EntityEvent(_Shadowheart, "GUSX-15663_TeleportSHToCamp")
+AND
+NOT DB_Camp_LongRest_CodeIsWaiting(1)
+THEN
+DB_BUGFIX_Marker("GUSX-15663_DuringNightBeforeSleep");
+
+//Stuck before dialog has played
+IF
+EntityEvent(_Shadowheart, "GUSX-15663_TeleportSHToCamp")
+AND
+DB_Camp_LongRest_CodeIsWaiting(1)
+AND
+DB_Camp_QueuedSoloDream(_, CAMP_Shadowheart_DaughterTears_SD_c0f0d040-7590-fbd6-26fd-760874706059)
+THEN
+NOT DB_CampNight_Completed((FLAG)NIGHT_Shadowheart_DaughterTears_f9b1fa94-deef-4927-ad7d-3e1b0c393c13);
+PROC_CampNight_TryStartSleepMoment((FLAG)NIGHT_Shadowheart_DaughterTears_f9b1fa94-deef-4927-ad7d-3e1b0c393c13);
+DB_BUGFIX_Marker("GUSX-15663_StuckDuringSleepBeforeDialog");
+
+//Stuck after dialog has played - no idea how they managed to trigger the dialog with Shadowheart dead outside of camp, but it happened in a savegame
+IF
+EntityEvent(_Shadowheart, "GUSX-15663_TeleportSHToCamp")
+AND
+DB_Camp_LongRest_CodeIsWaiting(1)
+AND
+NOT DB_Camp_QueuedSoloDream(_, CAMP_Shadowheart_DaughterTears_SD_c0f0d040-7590-fbd6-26fd-760874706059)
+THEN
+DB_Camp_SleepMomentsDone((CHARACTER)S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679); //Night will not continue until all players are in this DB, but Shadowheart is not added to it when the players got stuck
+PROC_CampNight_StartSleepMoments();
+DB_BUGFIX_Marker("GUSX-15663_StuckDuringSleepAfterDialog");
+//END_REGION
 EXITSECTION
 
 ENDEXITSECTION

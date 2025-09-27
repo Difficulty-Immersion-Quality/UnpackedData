@@ -266,6 +266,7 @@
     <BitmapImage x:Key="SegNewImg" UriSource="pack://application:,,,/Core;component/Assets/Radials/c_radial_segment_h_new.png"/>
     <BitmapImage x:Key="SegBonusImg" UriSource="pack://application:,,,/Core;component/Assets/Radials/c_radial_segment_bonus.png"/>
     <BitmapImage x:Key="SegBothActionsImg" UriSource="pack://application:,,,/Core;component/Assets/Radials/c_radial_segment_action.png"/>
+    <BitmapImage x:Key="SegPassive" UriSource="pack://application:,,,/Core;component/Assets/Radials/c_radial_segment_passive.png"/>
 
     <BitmapImage x:Key="PassiveToggleOffImg" UriSource="pack://application:,,,/Core;component/Assets/Radials/c_passiveToggleOff_d.png"/>
     <BitmapImage x:Key="SegDisabled" UriSource="pack://application:,,,/Core;component/Assets/Radials/c_radial_segment_disabled.png"/>
@@ -296,7 +297,7 @@
     </ControlTemplate>
 
     <Style x:Key="RadialSegmentBG" TargetType="Image">
-        <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Radials/c_radial_segment_action.png"/>
+        <Setter Property="Source" Value="{StaticResource SegBothActionsImg}"/>
         <Setter Property="Margin" Value="0,0,0,14"/>
         <Setter Property="Stretch" Value="None"/>
         <Setter Property="Opacity" Value="0.8"/>
@@ -306,32 +307,6 @@
                     <RotateTransform Angle="-90"/>
             </Setter.Value>
         </Setter>
-
-        <Style.Triggers>
-            <DataTrigger Binding="{Binding Content.IsMetamagic, FallbackValue=True}" Value="False">
-                <Setter Property="Source" Value="pack://application:,,,/Core;component/Assets/Radials/c_radial_segment_passive.png"/>
-                <Setter Property="Opacity" Value="1"/>
-            </DataTrigger>
-
-            <DataTrigger Binding="{Binding Content.IsMetamagic, FallbackValue=False}" Value="True">
-                <Setter Property="Source" Value="{StaticResource SegMetaMagicImg}"/>
-            </DataTrigger>
-
-            <DataTrigger Binding="{Binding Content.MainCost, FallbackValue=''}" Value="BonusAction">
-                <Setter Property="Source" Value="{StaticResource SegBonusImg}"/>
-                <Setter Property="Opacity" Value="0.6"/>
-            </DataTrigger>
-
-            <DataTrigger Binding="{Binding Content.MainCost, FallbackValue=''}" Value="BonusAction">
-                <Setter Property="Source" Value="{StaticResource SegBonusImg}"/>
-            </DataTrigger>
-
-            <DataTrigger Binding="{Binding Content.MainCost, FallbackValue=''}" Value="BothActions">
-                <Setter Property="Source" Value="{StaticResource SegBothActionsImg}"/>
-            </DataTrigger>
-
-
-        </Style.Triggers>
     </Style>
 
     <Style x:Key="ControllerMenuItemStyle" TargetType="ls:LSRadialListItem" BasedOn="{StaticResource {x:Type ls:LSRadialListItem}}">
@@ -588,6 +563,11 @@
                         </Grid>
                     </Grid>
                     <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding Content.IsMetamagic, FallbackValue=True}" Value="False">
+                            <Setter TargetName="SlotBg" Property="Source" Value="{StaticResource SegPassive}"/>
+                            <Setter TargetName="SlotBg" Property="Opacity" Value="1"/>
+                        </DataTrigger>
+
                         <DataTrigger Binding="{Binding Content.IsModified}" Value="True">
                             <Setter TargetName="metaMagicSlotBgHolder" Property="Visibility" Value="Visible"/>
                         </DataTrigger>
@@ -657,8 +637,7 @@
                             </MultiDataTrigger.ExitActions>
                         </MultiDataTrigger>
 
-
-                        <DataTrigger Binding="{Binding Content.IsMetamagic}" Value="True">
+                        <DataTrigger Binding="{Binding Content.IsMetamagic, FallbackValue=False}" Value="True">
                             <DataTrigger.EnterActions>
                                 <BeginStoryboard x:Name="ActiveMetaMagicAnimationSwirl">
                                     <BeginStoryboard.Storyboard>
@@ -671,11 +650,16 @@
                             <DataTrigger.ExitActions>
                                 <StopStoryboard BeginStoryboardName="ActiveMetaMagicAnimationSwirl"/>
                             </DataTrigger.ExitActions>
+                            <Setter TargetName="SlotBg" Property="Source" Value="{StaticResource SegMetaMagicImg}"/>
                         </DataTrigger>
+
                         <EventTrigger RoutedEvent="Unloaded">
                             <StopStoryboard BeginStoryboardName="ActiveMetaMagicAnimationSwirl"/>
                         </EventTrigger>
 
+                        <DataTrigger Binding="{Binding Content.MainCost, FallbackValue=''}" Value="BonusAction">
+                            <Setter TargetName="SlotBg" Property="Source" Value="{StaticResource SegBonusImg}"/>
+                        </DataTrigger>
 
                         <MultiDataTrigger>
                             <MultiDataTrigger.Conditions>
@@ -840,11 +824,16 @@
 
                             <b:Interaction.Triggers>
                                 <b:EventTrigger EventName="LocalFocusChanged">
+                                    <b:ChangePropertyAction TargetName="ActionRadials" PropertyName="Tag" Value="{x:Null}"/>
+                                    <b:InvokeCommandAction Command="{Binding DataContext.CreateFocusedTooltipDataCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{x:Null}"/>
+                                    <b:InvokeCommandAction Command="{Binding DataContext.HighlightResourcesCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{x:Null}"/>
+                                    <ls:LSPlaySound Sound="UI_HUD_Controller_RadialMenu_SlotHover" />
+                                </b:EventTrigger>
+                                <b:TimerTrigger  EventName="LocalFocusChanged" MillisecondsPerTick="70" TotalTicks="1">
                                     <b:ChangePropertyAction TargetName="ActionRadials" PropertyName="Tag" Value="{Binding LocalFocus.DataContext, ElementName=SingleBar}"/>
                                     <b:InvokeCommandAction Command="{Binding DataContext.CreateFocusedTooltipDataCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding LocalFocus.DataContext, ElementName=SingleBar}"/>
                                     <b:InvokeCommandAction Command="{Binding DataContext.HighlightResourcesCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding LocalFocus.DataContext, ElementName=SingleBar}"/>
-                                    <ls:LSPlaySound Sound="UI_HUD_Controller_RadialMenu_SlotHover" />
-                                </b:EventTrigger>
+                                </b:TimerTrigger>
                             </b:Interaction.Triggers>
                         </ls:Radial>
                         <b:Interaction.Triggers>
@@ -973,11 +962,16 @@
 
                                 <b:Interaction.Triggers>
                                     <b:EventTrigger EventName="LocalFocusChanged">
+                                        <b:ChangePropertyAction TargetName="ActionRadials" PropertyName="Tag" Value="{x:Null}"/>
+                                        <b:InvokeCommandAction Command="{Binding DataContext.CreateFocusedTooltipDataCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{x:Null}"/>
+                                        <b:InvokeCommandAction Command="{Binding DataContext.HighlightResourcesCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{x:Null}"/>
+                                        <ls:LSPlaySound Sound="UI_HUD_Controller_RadialMenu_SlotHover" />
+                                    </b:EventTrigger>
+                                    <b:TimerTrigger  EventName="LocalFocusChanged" MillisecondsPerTick="70" TotalTicks="1">
                                         <b:ChangePropertyAction TargetName="ActionRadials" PropertyName="Tag" Value="{Binding LocalFocus.DataContext, ElementName=HotBarRadial}"/>
                                         <b:InvokeCommandAction Command="{Binding DataContext.CreateFocusedTooltipDataCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding LocalFocus.DataContext,  ElementName=HotBarRadial}"/>
                                         <b:InvokeCommandAction Command="{Binding DataContext.HighlightResourcesCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding LocalFocus.DataContext, ElementName=HotBarRadial}"/>
-                                        <ls:LSPlaySound Sound="UI_HUD_Controller_RadialMenu_SlotHover" />
-                                    </b:EventTrigger>
+                                    </b:TimerTrigger>
                                     <b:DataTrigger Binding="{Binding Path=(ls:MoveFocus.IsFocused), RelativeSource={RelativeSource Mode=TemplatedParent}}" Value="True">
                                         <b:ChangePropertyAction TargetName="HotBarList" PropertyName="Tag" Value="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
                                     </b:DataTrigger>
@@ -1190,8 +1184,8 @@
                     <Setter Property="Template" Value="{StaticResource InventoryCellTemplate}" />
                     <Setter Property="BorderBrush" Value="Transparent" />
                     <Setter Property="Background" Value="Transparent" />
-                    <Setter Property="Width" Value="{DynamicResource InvSlotSize}" />
-                    <Setter Property="Height" Value="{DynamicResource InvSlotSize}" />
+                    <Setter Property="Width" Value="{StaticResource InvSlotSize}" />
+                    <Setter Property="Height" Value="{StaticResource InvSlotSize}" />
                     <Setter Property="Padding" Value="0" />
                     <Setter Property="BorderThickness" Value="0" />
                     <Setter Property="VerticalContentAlignment" Value="Top"/>
@@ -1960,8 +1954,21 @@
        
         <ControlTemplate.Triggers>
             <DataTrigger Binding="{Binding Tag.Content.Name, ElementName=ActionRadials, Converter={StaticResource NullToBoolFalseConverter}, ConverterParameter='EmptyString'}" Value="True">
+                <DataTrigger.EnterActions>
+                    <BeginStoryboard x:Name="ShowActionDetailsPanelAnimation">
+                        <BeginStoryboard.Storyboard>
+                            <Storyboard Duration="0:0:0.3">
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Visibility" Storyboard.TargetName="ActionDetailsPanel">
+                                    <DiscreteObjectKeyFrame KeyTime="0:0:0.3" Value="{x:Static Visibility.Visible}"/>
+                                </ObjectAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </BeginStoryboard.Storyboard>
+                    </BeginStoryboard>
+                </DataTrigger.EnterActions>
+                <DataTrigger.ExitActions>
+                    <StopStoryboard BeginStoryboardName="ShowActionDetailsPanelAnimation"/>
+                </DataTrigger.ExitActions>
                 <Setter TargetName="ActionButton" Property="Visibility" Value="Visible"/>
-                <Setter TargetName="ActionDetailsPanel" Property="Visibility" Value="Visible"/>
                 <Setter TargetName="ActionButtonDescription" Property="Text" Value="{Binding Tag.Content.Name, ElementName=ActionRadials}"/>
                 <Setter TargetName="ActionButtonTooltipDescription" Property="Text" Value="{Binding Tag.Content.Name, ElementName=ActionRadials}"/>
             </DataTrigger>
@@ -2297,6 +2304,7 @@
             </EventTrigger>
             <EventTrigger RoutedEvent="FrameworkElement.Unloaded">
                 <StopStoryboard BeginStoryboardName="WidgetFadeInAnim"/>
+                <StopStoryboard BeginStoryboardName="ShowActionDetailsPanelAnimation"/>
             </EventTrigger>
 
 
