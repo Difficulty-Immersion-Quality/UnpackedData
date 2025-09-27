@@ -1,0 +1,112 @@
+<ls:UIWidget x:Name="PassiveRoll"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             
+             mc:Ignorable="d"
+             d:DesignHeight="2160" d:DesignWidth="3840">
+
+    <ls:UIWidget.Resources>
+        <ResourceDictionary>
+            <!-- Common Passive Roll text block style -->
+            <Style x:Key="PassiveRollTextBlock" TargetType="TextBlock">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource LS_tint100}"/>
+                <Setter Property="noesis:Text.Stroke" Value="{StaticResource LS_tint00}"/>
+                <Setter Property="noesis:Text.StrokeThickness" Value="12"/>
+            </Style>
+
+            <!-- Fade out animation of the Passive Roll -->
+            <Storyboard x:Key="FadeOutAnimation" FillBehavior="Stop">
+                <DoubleAnimation From="1.0" To="0.0" BeginTime="0:0:5" Duration="0:0:1" Storyboard.TargetName="PassiveRollGrid" Storyboard.TargetProperty="Opacity"/>
+            </Storyboard>
+
+            <!-- Passive Roll -->
+            <DataTemplate x:Key="PassiveRollTemplate">
+                <Grid x:Name="PassiveRollGrid" Height="80" Opacity="0">
+                    <Grid.Triggers>
+                        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                            <EventTrigger.Actions>
+                                <BeginStoryboard Storyboard="{StaticResource FadeOutAnimation}"/>
+                            </EventTrigger.Actions>
+                        </EventTrigger>
+                    </Grid.Triggers>
+                
+                    <b:Interaction.Triggers>
+                        <b:TimerTrigger EventName="Loaded" MillisecondsPerTick="6000" TotalTicks="1">
+                            <b:InvokeCommandAction Command="{Binding DataContext.CurrentPlayer.RemovePassiveRollCommand.ActionCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
+                        </b:TimerTrigger>
+                    </b:Interaction.Triggers>
+
+                    <Image Source="pack://application:,,,/Core;component/Assets/DiceRoll/fleur_single_R.png" Stretch="Uniform"/>
+                
+                    <StackPanel Margin="0,16,0,0" Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock Style="{StaticResource PassiveRollTextBlock}">
+                            <Run Text="{Binding SkillOrAbility}"/>
+                            <Run Text="{Binding Source='h8454f8a0gadbbg4a67gb8f2g27a760883346',Converter={StaticResource TranslatedStringConverter}, Mode=OneWay}"/>
+                        </TextBlock>
+
+                        <Image Margin="0,-18,0,0" Source="pack://application:,,,/Core;component/Assets/DiceRoll/ico_d20.png" Stretch="Uniform" Width="72"/>
+                    
+                        <TextBlock Style="{StaticResource PassiveRollTextBlock}">
+                            <Run>
+                                <Run.Style>
+                                    <Style TargetType="Run">
+                                        <Setter Property="Text" Value="{Binding Source='ha81a7198g8adag4775g8bceg7376da401478',Converter={StaticResource TranslatedStringConverter}, Mode=OneWay}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Success}" Value="True">
+                                                <Setter Property="Text" Value="{Binding Source='h820e2fcag316bg4939gb2e1g2a41ce286d4b',Converter={StaticResource TranslatedStringConverter}, Mode=OneWay}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Run.Style>
+                            </Run>
+                            <Run Text=", "/>
+                            <Run Text="{Binding RollResult}"/>
+                            <Run Text="("/>
+                            <Run Text="{Binding SkillOrAbility}"/>
+                            <Run Text=")"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+        </ResourceDictionary>
+    </ls:UIWidget.Resources>
+
+    <Grid VerticalAlignment="Bottom" HorizontalAlignment="Right">
+        <Grid.Style>
+            <Style TargetType="Grid">
+                <Setter Property="Visibility" Value="Collapsed"/>
+                <Setter Property="Margin" Value="0,0,20,440"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding CurrentPlayer.PassiveRolls.Count}" Value="0">
+                        <Setter Property="Visibility" Value="Hidden"/>
+                    </DataTrigger>
+
+                    <DataTrigger Binding="{Binding CurrentPlayer.UIData.CombatLogSize}" Value="Expanded">
+                        <Setter Property="Margin" Value="0,0,20,690"/>
+                    </DataTrigger>
+
+                    <DataTrigger Binding="{Binding CurrentPlayer.UIData.CombatLogSize}" Value="SuperExpanded">
+                        <Setter Property="Margin" Value="0,0,20,1050"/>
+                    </DataTrigger>
+
+                    <DataTrigger Binding="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.ActiveDialogue, Converter={StaticResource NullToBoolFalseConverter}}" Value="True">
+                        <Setter Property="Visibility" Value="Visible"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Style>
+        <ItemsControl ItemsSource="{Binding CurrentPlayer.PassiveRolls}" ItemTemplate="{StaticResource PassiveRollTemplate}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Vertical"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+        </ItemsControl>
+    </Grid>
+</ls:UIWidget>

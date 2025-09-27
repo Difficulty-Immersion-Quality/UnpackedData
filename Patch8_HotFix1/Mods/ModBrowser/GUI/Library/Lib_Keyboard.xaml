@@ -1,0 +1,1625 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:ls="clr-namespace:ls;assembly=Code"
+                    xmlns:System="clr-namespace:System;assembly=mscorlib"
+                    xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+                    xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+                    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                    mc:Ignorable="d">
+
+    <!-- Adding in the header tab templates -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="pack://application:,,,/Core;component/Library/NavButtons_k.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <Storyboard x:Key="ShowSidePanel" FillBehavior="Stop">
+        <ThicknessAnimation Storyboard.TargetProperty="Margin" Storyboard.TargetName="ModInfoSidePanel" Duration="0:0:0.5" To="0,0,-350,0">
+            <ThicknessAnimation.EasingFunction>
+                <SineEase EasingMode="EaseInOut"/>
+            </ThicknessAnimation.EasingFunction>
+        </ThicknessAnimation>
+    </Storyboard>
+
+    <Storyboard x:Key="HideSidePanel" FillBehavior="Stop">
+        <ThicknessAnimation Storyboard.TargetProperty="Margin" Storyboard.TargetName="ModInfoSidePanel" Duration="0:0:0.5" To="0,0,-1410,0">
+            <ThicknessAnimation.EasingFunction>
+                <SineEase EasingMode="EaseInOut"/>
+            </ThicknessAnimation.EasingFunction>
+        </ThicknessAnimation>
+    </Storyboard>
+
+    <DataTemplate x:Key="NavigationButtonTemplate" DataType="ls:LSButton">
+        <Grid VerticalAlignment="Top">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="27"/>
+                <ColumnDefinition Width="58"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="19"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="92"/>
+            </Grid.RowDefinitions>
+            <Image x:Name="iconEnabled" Grid.Column="1" Source="{StaticResource navigationIconDefault}" Stretch="Uniform"/>
+            <Image x:Name="iconDisabled" Grid.Column="1" Source="{StaticResource navigationIconDefault}" Stretch="Uniform" Visibility="Collapsed"/>
+            <TextBlock x:Name="label" Grid.Column="2" Text="{Binding .,Converter={StaticResource TranslatedStringConverter}}" MaxWidth="280" FontSize="{StaticResource SmallFontSize}" FontWeight="Bold"
+                       Foreground="{StaticResource LS_accent75TxtColor}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" noesis:Text.StrokeThickness="4" noesis:Text.Stroke="{StaticResource LS_tint00}"/>
+        </Grid>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding Path=IsEnabled, RelativeSource={RelativeSource Mode=Self}}" Value="False">
+                <Setter Property="Foreground" Value="{StaticResource LS_extraspecialTxtColor}" TargetName="label"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="iconEnabled"/>
+                <Setter Property="Visibility" Value="Visible" TargetName="iconDisabled"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ls:LSButton}}}" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource LS_accent100TxtColor}" TargetName="label"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding CommandParameter, RelativeSource={RelativeSource AncestorType={x:Type ls:LSButton}}}" Value="OpenModBrowserHome">
+                <Setter Property="Source" Value="{StaticResource homeIconEnabled}" TargetName="iconEnabled"/>
+                <Setter Property="Source" Value="{StaticResource homeIconDisabled}" TargetName="iconDisabled"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding CommandParameter, RelativeSource={RelativeSource AncestorType={x:Type ls:LSButton}}}" Value="OpenModBrowserDownload">
+                <Setter Property="Source" Value="{StaticResource browseIconEnabled}" TargetName="iconEnabled"/>
+                <Setter Property="Source" Value="{StaticResource browseIconDisabled}" TargetName="iconDisabled"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding CommandParameter, RelativeSource={RelativeSource AncestorType={x:Type ls:LSButton}}}" Value="OpenModBrowserInstalled">
+                <Setter Property="Source" Value="{StaticResource installedIconEnabled}" TargetName="iconEnabled"/>
+                <Setter Property="Source" Value="{StaticResource installedIconDisabled}" TargetName="iconDisabled"/>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <ControlTemplate x:Key="BrowserTopButtons">
+        <Grid HorizontalAlignment="Stretch">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Rectangle Height="164" Width="Auto" Grid.Column="0" Grid.ColumnSpan="3" VerticalAlignment="Top" Fill="Black" />
+
+            <Image Grid.Column="0" Source="{StaticResource NavButtonsBgSide}" HorizontalAlignment="Right" VerticalAlignment="Top" Height="162" Stretch="None"/>
+
+            <Grid Grid.Column="2" HorizontalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Image Grid.Column="0" Grid.ColumnSpan="4" Source="{StaticResource NavButtonsBgSideRight}" HorizontalAlignment="Left" VerticalAlignment="Top" Height="162" Stretch="None" />
+
+                <Control Grid.Column="0" x:Name="ModMemoryWidget" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0, 0, 20, 0">
+                    <Control.Template>
+                        <ControlTemplate>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" x:Name="ModMemoryWidgetTitle" Text="{Binding Source='hb12566a0g9c86g497fgb496gded088e143b0', Converter={StaticResource TranslatedStringConverter}}" Foreground="{StaticResource LS_accent100TxtColor}" FontSize="{StaticResource ScaledSmallishFontSize}" HorizontalAlignment="Right" TextWrapping="Wrap"/>
+                                <StackPanel Grid.Row="1" x:Name="ModMemoryWidgetContentComplete" Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Image x:Name="ModMemoryWidgetImageComplete" Source="{StaticResource detailsFileSize}" Stretch="None"/>
+                                    <TextBlock x:Name="MemoryTextComplete" FontWeight="DemiBold">
+                                    <Run x:Name="CurrentMemoryComplete" Text="{Binding Data.UsedModDiskSpace, Converter={StaticResource FileSizeConverter}}"/>
+                                    <Run Text="{Binding Source='hd64bfe4cgadadg4468g8b0ag70330ffc717c', Converter={StaticResource TranslatedStringConverter}}"/>
+                                    <Run Text="{Binding Data.TotalModDiskSpace, Converter={StaticResource FileSizeConverter}}"/>
+                                    </TextBlock>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" x:Name="ModMemoryWidgetContentSimple" Orientation="Horizontal" HorizontalAlignment="Right" Visibility="Collapsed">
+                                    <Image Source="{StaticResource detailsFileSize}" Stretch="None"/>
+                                    <TextBlock x:Name="MemoryTextSimple" FontWeight="DemiBold">
+                                        <TextBlock.Text>
+                                            <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                                <Binding Source="h9fed80b2g8f32g401dg8e1eg40bfbb55593e"/>
+                                                <Binding Path="Data.UsedModDiskSpace" Converter="{StaticResource FileSizeConverter}"/>
+                                            </MultiBinding>
+                                        </TextBlock.Text>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <!-- Some platforms can't get TotalModDiskSpace. Hide ModMemoryWidgetContentComplete and show ModMemoryWidgetContentSimple instead. -->
+                                <DataTrigger Binding="{Binding Data.IsTotalModDiskSpaceValid}" Value="False">
+                                    <Setter TargetName="ModMemoryWidgetContentComplete" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="ModMemoryWidgetContentSimple" Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+
+                                <!-- Show image and text as red if not enough space -->
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding Data.IsTotalModDiskSpaceValid}" Value="True"/>
+                                        <Condition Binding="{Binding ActiveTabID}" Value="Browse"/>
+                                        <Condition Binding="{Binding InDetailsView}" Value="True"/>
+                                        <Condition Binding="{Binding SelectedMod.InstallState}" Value="Uninstalled"/>
+                                        <Condition Value="False">
+                                            <Condition.Binding>
+                                                <MultiBinding Converter="{StaticResource LessThanOrEqualMultiConverter}">
+                                                    <Binding Path="PotentialUsedModDiskSpace"/>
+                                                    <Binding Path="Data.TotalModDiskSpace"/>
+                                                </MultiBinding>
+                                            </Condition.Binding>
+                                        </Condition>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="ModMemoryWidgetImageComplete" Property="Source" Value="{StaticResource detailsFileSizeRed}"/>
+                                    <Setter TargetName="MemoryTextComplete" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                                </MultiDataTrigger>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding Data.IsTotalModDiskSpaceValid}" Value="True"/>
+                                        <Condition Binding="{Binding ActiveTabID}" Value="Browse"/>
+                                        <Condition Binding="{Binding InDetailsView}" Value="True"/>
+                                        <Condition Binding="{Binding SelectedMod.VersionState}" Value="Older"/>
+                                        <Condition Value="False">
+                                            <Condition.Binding>
+                                                <MultiBinding Converter="{StaticResource LessThanOrEqualMultiConverter}">
+                                                    <Binding Path="PotentialUsedModDiskSpace"/>
+                                                    <Binding Path="Data.TotalModDiskSpace"/>
+                                                </MultiBinding>
+                                            </Condition.Binding>
+                                        </Condition>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="ModMemoryWidgetImageComplete" Property="Source" Value="{StaticResource detailsFileSizeRed}"/>
+                                    <Setter TargetName="MemoryTextComplete" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                                </MultiDataTrigger>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding Data.IsTotalModDiskSpaceValid}" Value="True"/>
+                                        <Condition Binding="{Binding ActiveTabID}" Value="Installed"/>
+                                        <Condition Binding="{Binding SelectedMod.VersionState}" Value="Older"/>
+                                        <Condition Value="False">
+                                            <Condition.Binding>
+                                                <MultiBinding Converter="{StaticResource LessThanOrEqualMultiConverter}">
+                                                    <Binding Path="PotentialUsedModDiskSpace"/>
+                                                    <Binding Path="Data.TotalModDiskSpace"/>
+                                                </MultiBinding>
+                                            </Condition.Binding>
+                                        </Condition>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="ModMemoryWidgetImageComplete" Property="Source" Value="{StaticResource detailsFileSizeRed}"/>
+                                    <Setter TargetName="MemoryTextComplete" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                                </MultiDataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Control.Template>
+                </Control>
+
+                <ls:LSButton x:Name="accountButton" Grid.Column="1" VerticalAlignment="Center" Command="{Binding CustomEvent}" CommandParameter="OpenAccountManagement">
+                    <ls:LSButton.Template>
+                        <ControlTemplate TargetType="ls:LSButton">
+                            <StackPanel Orientation="Vertical" Background="Transparent">
+                                <TextBlock x:Name="accountStateLabel" ls:TextBlockFormatter.SourceText="{Binding Source=hb9ff318ag5054g4b96gb5cfg1f05349b6174, Converter={StaticResource TranslatedStringConverter}}"
+                                           Foreground="{StaticResource LS_baseTxtColor}" FontSize="{StaticResource ScaledSmallishFontSize}" TextWrapping="Wrap" TextAlignment="Right" Margin="0,0,12,-4"/>
+                                <TextBlock x:Name="accountName" Text="{Binding Data.LarianNetUserName}" Foreground="{StaticResource LS_extraspecialTxtColor}" HorizontalAlignment="Right" Margin="0,0,12,0" TextAlignment="Right"/>
+                            </StackPanel>
+                            <ControlTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Data.ModAccountState}" Value="Offline">
+                                    <Setter TargetName="accountStateLabel" Property="ls:TextBlockFormatter.SourceText"
+                                            Value="{Binding Source=h9f4ad432g31dfg43e5gad49gffbf79873345, Converter={StaticResource TranslatedStringConverter}}"/>
+                                    <Setter TargetName="accountName" Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Data.ModAccountState}" Value="OnlineNoAccountConnected">
+                                    <Setter TargetName="accountName" Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Data.ModAccountState}" Value="LarianConnected">
+                                    <Setter TargetName="accountStateLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source=h27e58bb5g18d9g4044ga4f4ga166113693ab, Converter={StaticResource TranslatedStringConverter}}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Data.ModAccountState}" Value="ModioConnected">
+                                    <Setter TargetName="accountStateLabel" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source=hfa041695g2655g4540g91aege61c49fd327b, Converter={StaticResource TranslatedStringConverter}}"/>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </ls:LSButton.Template>
+                </ls:LSButton>
+                <ls:LSButton x:Name="avatarButton" Grid.Column="2" Margin="5,0,0,0" Command="{Binding CustomEvent}" CommandParameter="OpenAccountManagement">
+                    <ls:LSButton.Template>
+                        <ControlTemplate TargetType="ls:LSButton">
+                            <Grid Background="Transparent">
+                                <Image x:Name="avatarFrame" Source="{StaticResource accountFrameDefault}" Stretch="None"/>
+                                <Rectangle x:Name="avatarIcon" Width="{StaticResource avatarIconSize}" Height="{StaticResource avatarIconSize}" Fill="{Binding CurrentPlayer.CommunityIcon}"/>
+                                <Image x:Name="defaultIcon" Width="{StaticResource avatarIconSize}" Height="{StaticResource avatarIconSize}" Stretch="Fill" Source="{StaticResource accountUnknownPortrait}" Visibility="Collapsed"/>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="avatarFrame" Property="Source" Value="{StaticResource accountFrameHighlight}"/>
+                                </Trigger>
+                                <DataTrigger Binding="{Binding Data.ModAccountState}" Value="Offline">
+                                    <Setter TargetName="avatarIcon" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="defaultIcon" Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Data.ModAccountState}" Value="OnlineNoAccountConnected">
+                                    <Setter TargetName="avatarIcon" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="defaultIcon" Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </ls:LSButton.Template>
+                </ls:LSButton>
+                <ls:LSButton x:Name="closeButtonTop" Grid.Column="3" VerticalAlignment="Top" Margin="{StaticResource SmallCloseButtonDefaultMargin}" Style="{StaticResource SmallCloseButton}"
+                         SoundID="UI_HUD_Options_Close" Command="{Binding CustomEvent}" CommandParameter="CloseWidget" BoundEvent="UICancel">
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="MouseEnter">
+                            <b:InvokeCommandAction Command="{Binding DataContext.PlaySoundEvent, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="UI_Shared_Hover"/>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+                </ls:LSButton>
+            </Grid>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,-68,0,0" >
+                <ls:LSButton x:Name="browseButton" Content="{Binding Source='h355d15dag71c4g4c86g941bg0cc9388a89d2', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding CustomEvent}" CommandParameter="OpenModBrowserDownload" Template="{StaticResource NavButtonTemplate}" Style="{StaticResource ShortNavButtonStyle}"/>
+
+                <ls:LSButton x:Name="installedButton" Content="{Binding Source='h22d04d59g92cdg4f7ag8185g50d6e34d2e3a', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding CustomEvent}" CommandParameter="OpenModBrowserInstalled" Template="{StaticResource NavButtonTemplate}" Style="{StaticResource ShortNavButtonStyle}"/>
+            </StackPanel>
+
+            <StackPanel x:Name="zoomOutPanel" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,600,25" Visibility="Collapsed">
+                <TextBlock x:Name="zoomOutHint" Text="{Binding Source=hce6efd68gaa45g4da2gaf87g58a6d03bb3f7, Converter={StaticResource TranslatedStringConverter}}" VerticalAlignment="Center"
+                               Foreground="{StaticResource LS_extraspecialTxtColor}" FontSize="{StaticResource ScaledLargeFontSize}"/>
+                <ls:LSButton x:Name="zoomOutButton" Margin="10,0,0,0" Style="{StaticResource CloseButton}"
+                             SoundID="UI_HUD_Options_Close" Command="{Binding ToggleScreenshotZoomCommand}" BoundEvent="UICancel">
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="MouseEnter">
+                            <b:InvokeCommandAction Command="{Binding DataContext.PlaySoundEvent, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="UI_Shared_Hover"/>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+                </ls:LSButton>
+            </StackPanel>
+        </Grid>
+
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding ActiveTabID}" Value="Browse">
+                <Setter TargetName="browseButton" Property="Style" Value="{StaticResource ShortSelectedNavButtonStyle}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding ActiveTabID}" Value="Installed">
+                <Setter TargetName="installedButton" Property="Style" Value="{StaticResource ShortSelectedNavButtonStyle}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding InScreenshotZoom}" Value="True">
+                <Setter TargetName="closeButtonTop" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="accountButton" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="avatarButton" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="ModMemoryWidget" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="zoomOutPanel" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="installedButton" Property="IsEnabled" Value="False"/>
+                <Setter TargetName="browseButton" Property="IsEnabled" Value="False"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Data.ModAccountState}" Value="Offline">
+                <Setter TargetName="accountButton" Property="CommandParameter" Value="OpenSignUp"/>
+                <Setter TargetName="avatarButton" Property="CommandParameter" Value="OpenSignUp"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Data.ModAccountState}" Value="OnlineNoAccountConnected">
+                <Setter TargetName="accountButton" Property="CommandParameter" Value="OpenSignUp"/>
+                <Setter TargetName="avatarButton" Property="CommandParameter" Value="OpenSignUp"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="WarningLabelTemplateWide" TargetType="Control">
+        <StackPanel Orientation="Horizontal" Margin="-16,0,0,0">
+            <Rectangle Fill="{TemplateBinding Background}" VerticalAlignment="Top" MinHeight="{StaticResource MinimumWarningIconSize}" MinWidth="{StaticResource MinimumWarningIconSize}"/>
+            <TextBlock VerticalAlignment="Top" ls:TextBlockFormatter.SourceText="{Binding Tag, RelativeSource={RelativeSource Mode=TemplatedParent}}" MaxWidth="1900" Foreground="{TemplateBinding Foreground}" Style="{StaticResource TooltipStringBodyStyle}" Margin="4,2,0,0"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <DataTemplate x:Key="ModPreviewTemplate" DataType="{x:Type ls:VMModPreview}">
+        <Grid x:Name="modPreviewRoot" HorizontalAlignment="Stretch" Background="Transparent">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <!-- Mod Image -->
+            <Rectangle x:Name="modScreenshot" Grid.Column="0" Fill="{Binding MainScreenshot.Screenshot}" Margin="9,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Left" Width="242">
+                <Rectangle.Height>
+                    <MultiBinding Converter="{StaticResource KeepAspectRatioConverter}" ConverterParameter="FromWidth">
+                        <Binding Path="ActualWidth" ElementName="modScreenshot"/>
+                        <Binding Path="Fill.ImageSource.Width" ElementName="modScreenshot"/>
+                        <Binding Path="Fill.ImageSource.Height" ElementName="modScreenshot"/>
+                    </MultiBinding>
+                </Rectangle.Height>
+            </Rectangle>
+
+            <Grid Margin="20,0,20,0" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+                <!-- Mod Title -->
+                <TextBlock x:Name="modTitle" Grid.Row="0" HorizontalAlignment="Left" Width="Auto" FontSize="{StaticResource ScaledLargeFontSize}" Foreground="{StaticResource LS_modsTextColor}" Text="{Binding Name}"
+                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                <!-- Mod Main Tag -->
+                <TextBlock x:Name="modMainTag" Grid.Row="1" FontSize="{StaticResource ScaledLargeFontSize}" Foreground="{StaticResource LS_modsTextColor}" Text="{Binding Tags[0].Name}"
+                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Visibility="{Binding Text, RelativeSource={RelativeSource Self}, Converter={StaticResource NullToCollapsedConverter}, ConverterParameter='EmptyString'}"/>
+            </Grid>
+        </Grid>
+
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource TemplatedParent}}" Value="True">
+                <Setter TargetName="modTitle" Property="Foreground" Value="{StaticResource LS_tint100}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding MainScreenshot.HasScreenshotTexture}" Value="False">
+                <Setter TargetName="modScreenshot" Property="Fill" Value="{StaticResource ugcDisabledMaskSmall}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding DataContext.Data.IsUGCDisabled, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="True">
+                <Setter TargetName="modScreenshot" Property="Fill" Value="{StaticResource ugcDisabledMaskSmall}"/>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <ControlTemplate x:Key="ModBrowserBackgroundTemplate">
+        <Grid x:Name="HudRoot" Background="{StaticResource LS_PanelBackground}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Image x:Name="MenuBackground" Grid.Row="0" Grid.RowSpan="2" Source="{StaticResource OptionsBackground}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="UniformToFill"/>
+
+            <Rectangle Grid.Row="1" Height="1280" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Fill="{StaticResource BottomToTopDarkGradientBrush}" />
+
+            <Control Grid.Row="0" Template="{StaticResource BrowserTopButtons}" HorizontalAlignment="Stretch" VerticalAlignment="Top"/>
+
+            <ContentPresenter Grid.Row="1" x:Name="HudRootPresenter" Margin="0,-10,0,0"/>
+        </Grid>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="SubscribeButtonTemplate">
+        <ls:LSButton x:Name="subscribeButton" Style="{StaticResource BigBrownButtonStyle}" Content="{Binding Source='h143b56a0g1c2eg4522g83abg5e2d25798282', Converter={StaticResource TranslatedStringConverter}}"
+                     Command="{Binding DataContext.SubscribeModCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}"/>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="SubscribeButtonTemplateBrowse">
+        <ls:LSButton x:Name="subscribeButton" Style="{StaticResource SmallBrownButtonStyle}" Content="{Binding Source='h143b56a0g1c2eg4522g83abg5e2d25798282', Converter={StaticResource TranslatedStringConverter}}"
+                     Command="{Binding DataContext.SubscribeModCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}" Width="460"/>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="AlreadySubscribedButtonTemplate">
+        <TextBlock Text="{Binding Source='hf3bbce24gd050g434bg9600g167a0c64da09', Converter={StaticResource TranslatedStringConverter}}" Foreground="{StaticResource LS_modsContentSubscribedColor}" TextAlignment="Center" Margin="0,0,0,6" />
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="DownloadButtonTemplate">
+        <ls:LSButton x:Name="downloadButton" Style="{StaticResource BigBrownButtonStyle}" Content="{Binding Source='h0c9f422cga55cg4d2agb342ga095b82caa58', Converter={StaticResource TranslatedStringConverter}}"
+                 Command="{Binding DataContext.DownloadModCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}" />
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="DownloadButtonTemplateBrowse">
+        <ls:LSButton x:Name="downloadButton" Style="{StaticResource SmallBrownButtonStyle}" Content="{Binding Source='h0c9f422cga55cg4d2agb342ga095b82caa58', Converter={StaticResource TranslatedStringConverter}}"
+                 Command="{Binding DataContext.DownloadModCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}" Width="460"/>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="UpdateButtonTemplate">
+        <ls:LSButton x:Name="updateButton" Style="{StaticResource BigBrownButtonStyle}" Content="{Binding Source='h99003f95g016bg4254g9fe4g6a731fc37383', Converter={StaticResource TranslatedStringConverter}}"
+                 Command="{Binding DataContext.UpdateModVersionCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}" />
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="DowndateButtonTemplate">
+        <ls:LSButton x:Name="downdateButton" Style="{StaticResource BigBrownButtonStyle}" Content="{Binding Source='h36dc087egdc23g4b24gb7e7gf098613f1651', Converter={StaticResource TranslatedStringConverter}}"
+                 Command="{Binding DataContext.UpdateModVersionCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}" />
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="AlreadyDownloadedButtonTemplate">
+        <TextBlock x:Name="alreadydownloadedButton" Text="{Binding Source='hef4ffa0ag1cabg4591g9d22gb787a3ba177f', Converter={StaticResource TranslatedStringConverter}}" Foreground="{StaticResource LS_modsContentSubscribedColor}" TextAlignment="Center" Margin="0,0,0,6" />
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="DownloadingBarTemplate">
+        <Border x:Name="downloadBorder" BorderThickness="2" BorderBrush="{StaticResource LS_modsDownloadBarBorderColor}" Width="360" VerticalAlignment="Center" ClipToBounds="True" Background="{StaticResource LS_modsDownloadBarBgColor}" Effect="{StaticResource ShadowEffectSmall}">
+            <Rectangle x:Name="runningBar" Fill="{StaticResource LS_modsDownloadBarColor}" Width="200" Height="8"/>
+        </Border>
+        <ControlTemplate.Triggers>
+            <EventTrigger RoutedEvent="Loaded" SourceName="runningBar">
+                <BeginStoryboard x:Name="IndefiniteLoading">
+                    <Storyboard>
+                        <ThicknessAnimation Storyboard.TargetProperty="Margin" Storyboard.TargetName="runningBar" Duration="0:0:1" From="0,0,200,0" To="0,0,-200,0" AutoReverse="True" RepeatBehavior="Forever">
+                            <ThicknessAnimation.EasingFunction>
+                                <SineEase EasingMode="EaseInOut"/>
+                            </ThicknessAnimation.EasingFunction>
+                        </ThicknessAnimation>
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+            <EventTrigger RoutedEvent="Unloaded" SourceName="runningBar">
+                <StopStoryboard BeginStoryboardName="IndefiniteLoading"/>
+            </EventTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!--The following Enable templates should be merged and a LSToggleButton used in its stead-->
+    <ControlTemplate x:Key="ModEnableButtonTemplate">
+        <ls:LSButton x:Name="modEnableCheckBox" Command="{Binding DataContext.ToggleModEnabledStateCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"
+                     CommandParameter="{Binding .}">
+            <ls:LSButton.Template>
+                <ControlTemplate TargetType="ls:LSButton">
+                    <Grid x:Name="toggleRoot" Background="Transparent">
+                        <Image x:Name="bgImg" VerticalAlignment="Center" Source="{StaticResource enableCheckBoxDefault}" Stretch="None"/>
+                        <Image x:Name="icon" VerticalAlignment="Center" Source="{StaticResource enabledIcon}" Stretch="None" Visibility="Hidden"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding EnabledCurrent}" Value="True">
+                            <Setter TargetName="icon" Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsMouseOver, ElementName=toggleRoot}" Value="False"/>
+                                <Condition Binding="{Binding EnabledCurrent}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="bgImg" Property="Source" Value="{StaticResource disableCheckBoxDefault}"/>
+                        </MultiDataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsMouseOver, ElementName=toggleRoot}" Value="True"/>
+                                <Condition Binding="{Binding EnabledCurrent}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="bgImg" Property="Source" Value="{StaticResource disableCheckBoxHighlight}"/>
+                        </MultiDataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </ls:LSButton.Template>
+        </ls:LSButton>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="ModEnableAllButtonTemplate" TargetType="ls:LSToggleButton">
+        <Grid x:Name="toggleRoot" Background="Transparent">
+            <Image x:Name="bgImg" VerticalAlignment="Center" Source="{StaticResource enableCheckBoxDefault}" Stretch="None"/>
+            <Image x:Name="icon" VerticalAlignment="Center" Source="{StaticResource enabledIcon}" Stretch="None" Visibility="Hidden"/>
+        </Grid>
+
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="icon" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="bgImg" Property="Source" Value="{StaticResource disableCheckBoxHighlight}"/>
+            </Trigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding IsMouseOver, ElementName=toggleRoot}" Value="False"/>
+                    <Condition Binding="{Binding IsChecked}" Value="False"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="bgImg" Property="Source" Value="{StaticResource disableCheckBoxDefault}"/>
+            </MultiDataTrigger>
+            <DataTrigger Binding="{Binding IsMouseOver, ElementName=toggleRoot}" Value="True">
+                <Setter TargetName="bgImg" Property="Source" Value="{StaticResource disableCheckBoxHighlight}"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- Mod Browse Element-->
+    <Style x:Key="SingleModStyle" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+        <Setter Property="Margin" Value="0,0,0,0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <ls:LSButton Command="{Binding DataContext.ToggleDetailsCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding .}" Width="512" Height="516">
+                        <ls:LSButton.Content>
+                            <Border x:Name="rootBorder" BorderThickness="2" BorderBrush="{StaticResource LS_modsSurroundColor}" CornerRadius="24,24,24,24" Width="496" Height="496">
+                                <Grid>
+                                    <StackPanel x:Name="modPreviewPanel" Orientation="Vertical">
+                                        <!-- Mod Image-->
+                                        <Rectangle x:Name="Screenshot" Fill="{Binding MainScreenshot.Screenshot}" Width="488" RadiusX="20" RadiusY="20" Effect="{StaticResource ShadowEffectSmall}" Margin="2,2">
+                                            <Rectangle.Height>
+                                                <MultiBinding Converter="{StaticResource KeepAspectRatioConverter}" ConverterParameter="FromWidth">
+                                                    <Binding Path="ActualWidth" ElementName="Screenshot"/>
+                                                    <Binding Path="Fill.ImageSource.Width" ElementName="Screenshot"/>
+                                                    <Binding Path="Fill.ImageSource.Height" ElementName="Screenshot"/>
+                                                </MultiBinding>
+                                            </Rectangle.Height>
+                                        </Rectangle>
+
+                                        <!-- Mod Title-->
+                                        <TextBlock x:Name="modTitle" FontSize="{StaticResource ScaledSmallFontSize}" Foreground="{StaticResource LS_modsTextColor}" Text="{Binding Name}" Margin="18,14,20,6" TextTrimming="CharacterEllipsis" Width="470"/>
+
+                                        <!-- Mod Details -->
+                                        <StackPanel Orientation="Horizontal" Margin="18,0" >
+
+                                            <!-- Mod Downloads -->
+                                            <Path x:Name="downloadIcon" Data="{StaticResource ico_downloads}" Fill="{StaticResource LS_accent25TxtColor}" VerticalAlignment="Center" Margin="0,0,8,6" />
+                                            <TextBlock x:Name="downloadValue" Text="{Binding TotalDownloads, Converter={StaticResource AbbreviateNumberConverter}}" Style="{StaticResource modsStatsStyle}" Margin="0,10,20,10"/>
+
+                                            <!-- Mod Size -->
+                                            <Path x:Name="sizeIcon" Data="{StaticResource ico_fileSize}" Fill="{StaticResource LS_accent25TxtColor}" Margin="0,0,12,4" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="sizeValue" Text="{Binding FileSize, Converter={StaticResource FileSizeConverter}}" Style="{StaticResource modsStatsStyle}" Margin="0,10,20,10"/>
+
+                                            <!-- Mod Likes -->
+                                            <Path x:Name="likeIcon" Data="{StaticResource ico_likes}" Fill="{StaticResource LS_accent25TxtColor}" Margin="0,0,4,6" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="likeValue" Text="{Binding PositiveRating, Converter={StaticResource AbbreviateNumberConverter}}" Style="{StaticResource modsStatsStyle}" Margin="5,10"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <Rectangle x:Name="MouseOver" Fill="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                                    <!-- Mod Subscribe -->
+                                    <Control x:Name="modStateControl" Template="{StaticResource DownloadButtonTemplateBrowse}" Margin="20,0,20,12" VerticalAlignment="Bottom" HorizontalAlignment="Stretch"/>
+                                </Grid>
+                            </Border>
+                        </ls:LSButton.Content>
+                    </ls:LSButton>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" SourceName="MouseOver" Value="True">
+                            <Setter TargetName="rootBorder" Property="BorderBrush" Value="{StaticResource LS_modsSurroundColorSelected}"/>
+                            <Setter TargetName="rootBorder" Property="Background" Value="{StaticResource LS_modsBackgroundColor}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" SourceName="modStateControl" Value="True">
+                            <Setter TargetName="rootBorder" Property="BorderBrush" Value="{StaticResource LS_modsSurroundColorSelected}"/>
+                            <Setter TargetName="rootBorder" Property="Background" Value="{StaticResource LS_modsBackgroundColor}" />
+                        </Trigger>
+                        <DataTrigger Binding="{Binding InstallState}" Value="Downloading">
+                            <Setter TargetName="modStateControl" Property="Template" Value="{StaticResource DownloadingBarTemplate}"/>
+                            <Setter TargetName="modStateControl" Property="Margin" Value="0,20,0,40"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsInstalled}" Value="True">
+                            <Setter TargetName="modStateControl" Property="Template" Value="{StaticResource AlreadyDownloadedButtonTemplate}"/>
+                            <Setter TargetName="rootBorder" Property="BorderBrush" Value="{StaticResource LS_modsSurroundSubscribedColor}" />
+                            <Setter TargetName="rootBorder" Property="Background" Value="{StaticResource LS_modsBackgroundSubscribedColor}" />
+                            <Setter TargetName="likeValue" Property="Foreground" Value="{StaticResource LS_modsContentSubscribedColor}" />
+                            <Setter TargetName="sizeValue" Property="Foreground" Value="{StaticResource LS_modsContentSubscribedColor}" />
+                            <Setter TargetName="downloadValue" Property="Foreground" Value="{StaticResource LS_modsContentSubscribedColor}" />
+                            <Setter TargetName="likeIcon" Property="Fill" Value="{StaticResource LS_modsContentSubscribedColor}" />
+                            <Setter TargetName="sizeIcon" Property="Fill" Value="{StaticResource LS_modsContentSubscribedColor}" />
+                            <Setter TargetName="downloadIcon" Property="Fill" Value="{StaticResource LS_modsContentSubscribedColor}" />
+                        </DataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding InstallState}" Value="Uninstalled"/>
+                                <Condition Binding="{Binding DataContext.Data.ModAccountState, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="ModioConnected"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="modStateControl" Property="Template" Value="{StaticResource SubscribeButtonTemplateBrowse}"/>
+                        </MultiDataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding InstallState}" Value="Subscribed"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="modStateControl" Property="Template" Value="{StaticResource AlreadySubscribedButtonTemplate}"/>
+                        </MultiDataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsInstalled}" Value="True"/>
+                                <Condition Binding="{Binding ElementName=MouseOver, Path=IsMouseOver}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="rootBorder" Property="BorderBrush" Value="{StaticResource LS_modsContentSubscribedColor}"/>
+                            <Setter TargetName="rootBorder" Property="Background" Value="{StaticResource LS_modsBackgroundSubscribedColorSelected}" />
+                            <Setter TargetName="MouseOver" Property="Panel.ZIndex" Value="100"/>
+                        </MultiDataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <ControlTemplate x:Key="DisableModButtonTemplate" TargetType="ls:LSButton">
+        <Grid Background="Transparent" Width="550">
+            <Image x:Name="bgImg" VerticalAlignment="Center" Source="{StaticResource disableButtonDefault}" Stretch="None"/>
+            <Image x:Name="icon" VerticalAlignment="Center" Source="{StaticResource enabledIcon}" Stretch="None" HorizontalAlignment="Left" Margin="15,0,0,0"/>
+            <TextBlock x:Name="disableModBtn" Text="{Binding Source='h054025c0gd806g418agb58dg6b325823b7cd', Converter={StaticResource TranslatedStringConverter}}" Foreground="{StaticResource LS_bonusTxtColor}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bgImg" Property="Source" Value="{StaticResource disableButtonHighlight}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="disableModBtn" Property="Text" Value="{Binding Source='he79bc68eg0d72g4553g836cg0784a84470a0', Converter={StaticResource TranslatedStringConverter}}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="UpdateModButtonTemplate">
+        <ls:LSButton x:Name="updateModButton" Command="{Binding DataContext.UpdateModCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"
+                     CommandParameter="{Binding SelectedMod}">
+            <ls:LSButton.Template>
+                <ControlTemplate TargetType="ls:LSButton">
+                    <Grid Background="Transparent" Width="550">
+                        <Image x:Name="bgImg" VerticalAlignment="Center" Source="{StaticResource updateButtonDefault}" Stretch="None"/>
+                        <Image x:Name="icon" VerticalAlignment="Center" Source="{StaticResource updateIcon}" Stretch="None" HorizontalAlignment="Left" Margin="15,0,0,0"/>
+                        <TextBlock Text="{Binding Source='h99003f95g016bg4254g9fe4g6a731fc37383', Converter={StaticResource TranslatedStringConverter}}" Foreground="{StaticResource LS_partyTxtColor}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bgImg" Property="Source" Value="{StaticResource updateButtonHighlight}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </ls:LSButton.Template>
+        </ls:LSButton>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="EnableModButtonTemplate" TargetType="ls:LSButton">
+        <Grid Background="Transparent" Width="550">
+            <ls:LSNineSliceImage x:Name="bgImg" ImageSource="{StaticResource enableButtonDefault}" VerticalAlignment="Center" Margin="8,0,4,0"  Slices="90,36,30,36"/>
+            <TextBlock x:Name="enableModBtn" Text="{Binding Source='h5af0e4c5g6634g4ccbg886dg0c5dbd83b026', Converter={StaticResource TranslatedStringConverter}}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource LS_baseTxtColor}"/>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bgImg" Property="ImageSource" Value="{StaticResource enableButtonHighlight}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="enableModBtn" Property="Text" Value="{Binding Source='he79bc68eg0d72g4553g836cg0784a84470a0', Converter={StaticResource TranslatedStringConverter}}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="OrderModButtonUpTemplate" TargetType="ls:LSButton">
+        <Grid>
+            <Image x:Name="img" Source="{StaticResource btn_priority_02_d}" Stretch="None"/>
+            <Image x:Name="icon" Source="{StaticResource arrowOrderUp_d}" Stretch="None" RenderTransformOrigin="0.5,0.5" />
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Source" Value="{StaticResource btn_priority_02_h}" TargetName="img"/>
+                <Setter Property="Source" Value="{StaticResource arrowOrderUp_h}" TargetName="icon"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Source" Value="{StaticResource btn_priority_02_h}" TargetName="img"/>
+                <Setter Property="Source" Value="{StaticResource arrowOrderUp_h}" TargetName="icon"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.5" TargetName="img"/>
+                <Setter Property="Opacity" Value="0.5" TargetName="icon"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="OrderModButtonDownTemplate" TargetType="ls:LSButton">
+        <Grid>
+            <Image x:Name="img" Source="{StaticResource btn_priority_02_d}" Stretch="None"/>
+            <Image x:Name="icon" Source="{StaticResource arrowOrderDown_d}" Stretch="None" RenderTransformOrigin="0.5,0.5" />
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Source" Value="{StaticResource btn_priority_02_h}" TargetName="img"/>
+                <Setter Property="Source" Value="{StaticResource arrowOrderDown_h}" TargetName="icon"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Source" Value="{StaticResource btn_priority_02_h}" TargetName="img"/>
+                <Setter Property="Source" Value="{StaticResource arrowOrderDown_h}" TargetName="icon"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.5" TargetName="img"/>
+                <Setter Property="Opacity" Value="0.5" TargetName="icon"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="SidePanelModTemplate">
+        <Grid x:Name="rootPanel" Height="1920">
+            <Grid.RowDefinitions>
+                <RowDefinition />
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid x:Name="sideContentPanel" Grid.Row="0" VerticalAlignment="Stretch" SnapsToDevicePixels="True">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto" MinHeight="580"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="modName" Grid.Row="0" Text="{Binding SelectedMod.Name}" FontSize="{StaticResource ScaledBigFontSize}" Foreground="{StaticResource LS_tint100}" Margin="46,116,0,0" FontWeight="DemiBold" />
+
+                <Rectangle x:Name="modImage" Grid.Row="1" Width="1024" Fill="{Binding SelectedMod.MainScreenshot.Screenshot}" Margin="0,24,0,0" RenderTransformOrigin="0.5,0.5">
+                    <Rectangle.Height>
+                        <MultiBinding Converter="{StaticResource KeepAspectRatioConverter}" ConverterParameter="FromWidth">
+                            <Binding Path="ActualWidth" ElementName="modImage"/>
+                            <Binding Path="Fill.ImageSource.Width" ElementName="modImage"/>
+                            <Binding Path="Fill.ImageSource.Height" ElementName="modImage"/>
+                        </MultiBinding>
+                    </Rectangle.Height>
+                </Rectangle>
+
+                <Control x:Name="imageSpinner" Template="{StaticResource BusyElement}" VerticalAlignment="Center" Grid.Row="1" HorizontalAlignment="Center" Visibility="Collapsed"/>
+
+                <StackPanel Orientation="Vertical" Grid.Row="2" Margin="0,24,0,0">
+                    <ls:LSButton x:Name="enableModButton" CommandParameter="{Binding ElementName=ModList, Path=SelectedItem}" Template="{StaticResource DisableModButtonTemplate}"
+                             Command="{Binding DataContext.ToggleModEnabledStateCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"
+                             IsEnabled="{Binding Data.IsUGCDisabled, Converter={StaticResource InvertBoolConverter}}"/>
+                    <!-- Mod Update -->
+                    <Control x:Name="modUpdateControl" Template="{StaticResource UpdateModButtonTemplate}" Visibility="Collapsed"/>
+
+                    <Image Source="{StaticResource sidePanelDivider}" Width="800" Margin="0,40,0,0" RenderTransformOrigin="0.5,0.5" />
+                </StackPanel>
+
+                <ScrollViewer x:Name="ModDependenciesScrollViewer" Grid.Row="3" HorizontalContentAlignment="Left" Template="{StaticResource NoForcedStyleScrollViewerTemplate}" Background="Transparent"
+							  HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Auto" Width="988" Margin="0,12,0,20">
+                    <ScrollViewer.Resources>
+                        <Style x:Key="ScrollBarStyle" TargetType="ScrollBar" BasedOn="{StaticResource DecorativeGoldScrollBar}"/>
+                        <GridLength x:Key="Top">50</GridLength>
+                        <GridLength x:Key="Bottom">50</GridLength>
+                    </ScrollViewer.Resources>
+                    <StackPanel>
+                        <TextBlock x:Name="modDescription" Text="{Binding SelectedMod.Description}" Width="880" Foreground="{StaticResource LS_extraspecialTxtColor}"
+                                   Margin="50,30,0,20" TextWrapping="Wrap" TextAlignment="Left" HorizontalAlignment="Left" Visibility="{Binding SelectedMod.Description, Converter={StaticResource StringToVisibilityConverter}}"
+                                   FontSize="{StaticResource ScaledMediumFontSize}"/>
+                        <StackPanel x:Name="deprecatedWarning" Orientation="Horizontal" Margin="50,5,0,0" Visibility="Collapsed">
+                            <Image Source="{StaticResource IconWarningSoft}" Stretch="None"/>
+                            <TextBlock>
+                                <TextBlock.Text>
+                                    <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                        <Binding Source="h7173cd4dg1cc0g41f2g8f89g5ecc6d1c049c"/>
+                                        <Binding Source="hb464e905g27afg4274g8b67g39e1b330862a" Converter="{StaticResource TranslatedStringConverter}"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <TextBlock x:Name="dependenciesTitle" Margin="50,12,0,12" Visibility="{Binding SelectedMod.Dependencies.Count, Converter={StaticResource CountToVisibilityConverter}}" FontSize="{StaticResource ScaledMediumFontSize}" Foreground="{StaticResource LS_accent100TxtColor}">
+                            <TextBlock.Text>
+                                <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                    <Binding Source="h42f01947gd74eg48e6ga156gc5cb9ad93dfe"/>
+                                    <Binding  Path="SelectedMod.Dependencies.Count"/>
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                        <ItemsControl x:Name="modDependencies" ItemsSource="{Binding SelectedMod.Dependencies}" Margin="0,10,0,0" Visibility="{Binding SelectedMod.Dependencies.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Vertical"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="50,0,0,0" Orientation="Horizontal">
+                                        <Rectangle x:Name="modDependenciesScreenshot" Fill="{Binding MainScreenshot.Screenshot}" VerticalAlignment="Center"  HorizontalAlignment="Left" Width="180">
+                                            <Rectangle.Height>
+                                                <MultiBinding Converter="{StaticResource KeepAspectRatioConverter}" ConverterParameter="FromWidth">
+                                                    <Binding Path="ActualWidth" ElementName="modDependenciesScreenshot"/>
+                                                    <Binding Path="Fill.ImageSource.Width" ElementName="modDependenciesScreenshot"/>
+                                                    <Binding Path="Fill.ImageSource.Height" ElementName="modDependenciesScreenshot"/>
+                                                </MultiBinding>
+                                            </Rectangle.Height>
+                                        </Rectangle>
+                                        <TextBlock Text="{Binding Name}" Padding="10,5,10,5" VerticalAlignment="Center" Foreground="{StaticResource LS_accent100TxtColor}" TextWrapping="Wrap" Width="900"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+            <StackPanel VerticalAlignment="Bottom" Grid.Row="1" Margin="0,0,0,56">
+                <StackPanel x:Name="ButtonsHolder" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,35">
+                    <ls:LSButton x:Name="unsubscribeButton" Style="{StaticResource BigBrownButtonStyle}" Content="{Binding Source='h07287a93g6ca8g4d72g9554g452d6c2431f5', Converter={StaticResource TranslatedStringConverter}}"
+                                 Command="{Binding UninstallModCommand}" CommandParameter="{Binding SelectedMod}" />
+                    <ls:LSButton x:Name="reportButton" Style="{StaticResource BigBrownButtonStyle}" Content="{Binding Source='h3eb3aeabg68fcg418cga213ge00d639e4507', Converter={StaticResource TranslatedStringConverter}}"
+                                 Command="{Binding ReportModCommand}"/>
+                </StackPanel >
+
+                <ls:LSButton x:Name="detailsButton" Style="{StaticResource BigBlueButtonStyle}" Content="{Binding Source=hed33453fg7adfg4057g98c8g7ed6447c7475, Converter={StaticResource TranslatedStringConverter}}"
+                         Command="{Binding ToggleDetailsCommand}" CommandParameter="{Binding SelectedMod}" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding ElementName=ModList, Path=SelectedItem.EnabledCurrent}" Value="False">
+                <Setter TargetName="enableModButton" Property="Template" Value="{StaticResource EnableModButtonTemplate}"/>
+            </DataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding SelectedMod.InstallState}" Value="Subscribed"/>
+                    <Condition Binding="{Binding Data.ModAccountState}" Value="ModioConnected"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="unsubscribeButton" Property="Content" Value="{Binding Source='h75fcf9abgbe78g4aa3g835bgc8f319c8942c', Converter={StaticResource TranslatedStringConverter}}"/>
+                <Setter TargetName="unsubscribeButton" Property="Command" Value="{Binding UnsubscribeModCommand}"/>
+            </MultiDataTrigger>
+
+            <DataTrigger Binding="{Binding SelectedMod.MainScreenshot.HasScreenshotTexture}" Value="False">
+                <Setter TargetName="imageSpinner" Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding SelectedMod.VersionState}" Value="Older" />
+                    <Condition Binding="{Binding Data.IsUGCDisabled}" Value="False" />
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="modUpdateControl" Property="Visibility" Value="Visible"/>
+            </MultiDataTrigger>
+            <DataTrigger Binding="{Binding SelectedMod.InstallState}" Value="Downloading">
+                <Setter TargetName="modUpdateControl" Property="Template" Value="{StaticResource DownloadingBarTemplate}"/>
+                <Setter TargetName="modUpdateControl" Property="Margin" Value="0,20,0,0"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SelectedMod.IsAvailable}" Value="False">
+                <Setter TargetName="detailsButton" Property="IsEnabled" Value="False"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Data.IsUGCDisabled}" Value="True">
+                <Setter TargetName="modUpdateControl" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="dependenciesTitle" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="modDependencies" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="modImage" Property="Fill" Value="{StaticResource ugcDisabledMaskBig}"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <Style x:Key="splashScreenBackground" TargetType="ls:LSNineSliceImage" BasedOn="{StaticResource {x:Type ls:LSNineSliceImage}}">
+        <Setter Property="ImageSource" Value="{StaticResource splashScreenBg}" />
+        <Setter Property="Slices" Value="100, 520, 100, 40" />
+        <Setter Property="Width" Value="880" />
+        <Setter Property="Padding" Value="48,48,48,48" />
+        <Setter Property="MinHeight" Value="560" />
+        <Setter Property="Focusable" Value="False" />
+    </Style>
+
+    <ControlTemplate x:Key="PageSelectionTemplate">
+        <ControlTemplate.Resources>
+            <BitmapImage x:Key="pageButtonNormal" UriSource="pack://application:,,,/GustavNoesisGUI;component/Assets/Buttons/btnTinySquare_01_d_unselected.png"/>
+            <BitmapImage x:Key="pageButtonHighlight" UriSource="pack://application:,,,/GustavNoesisGUI;component/Assets/Buttons/btnTinySquare_01_d.png" />
+            <BitmapImage x:Key="pageButtonPressed" UriSource="pack://application:,,,/GustavNoesisGUI;component/Assets/Buttons/btnTinySquare_01_p.png" />
+            <System:Int32 x:Key="firstPageValue">1</System:Int32>
+
+            <ControlTemplate x:Key="PageButtonTemplate" TargetType="ListBoxItem">
+                <ls:LSButton x:Name="PageButton" Command="{Binding DataContext.SelectPageCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding PageNumber}">
+                    <ls:LSButton.Template>
+                        <ControlTemplate TargetType="ls:LSButton">
+                            <Grid>
+                                <Image x:Name="bg" Source="{StaticResource pageButtonNormal}" Stretch="None"  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="pageNumber" Text="{Binding DataContext.PageNumber, RelativeSource={RelativeSource Mode=TemplatedParent}}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,5,0,0" Foreground="{StaticResource LS_specialTxtColor}" FontWeight="Medium" FontSize="{StaticResource ScaledMediumFontSize}">
+                                    <TextBlock.Effect>
+                                        <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="1" Color="#0d2225"/>
+                                    </TextBlock.Effect>
+                                </TextBlock>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="bg" Property="Source" Value="{StaticResource pageButtonHighlight}" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="bg" Property="Source" Value="{StaticResource pageButtonPressed}" />
+                                    <Setter TargetName="pageNumber" Property="Margin" Value="0,8,0,0"/>
+                                </Trigger>
+                                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True">
+                                    <Setter TargetName="bg" Property="Source" Value="{StaticResource pageButtonHighlight}"/>
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                    <Setter TargetName="pageNumber" Property="Foreground" Value="{StaticResource LS_extraspecialTxtColor}"/>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </ls:LSButton.Template>
+                </ls:LSButton>
+            </ControlTemplate>
+            <ControlTemplate x:Key="DotsTemplate" TargetType="ListBoxItem">
+                <TextBlock Text="{Binding Source='hbf484ef4g6e44g4aa7gb5dbgd8439bbd1d79',Converter={StaticResource TranslatedStringConverter}}" VerticalAlignment="Bottom" IsEnabled="False" Margin="0,10,0,0" TextAlignment="Center" Width="40"/>
+            </ControlTemplate>
+        </ControlTemplate.Resources>
+        <ListBox x:Name="PageControlsRoot" ItemsSource="{Binding Pages, Mode=OneWay}" Visibility="Collapsed" HorizontalAlignment="Center" SelectedItem="{Binding CurrentPage}" AlternationCount="{Binding Pages.Count}">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Template" Value="{StaticResource PageButtonTemplate}"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding PageNumber}" Value="-1">
+                            <Setter Property="Template" Value="{StaticResource DotsTemplate}"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ListBox.ItemContainerStyle>
+        </ListBox>
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding PageCount, Converter={StaticResource GreaterThanConverter}, ConverterParameter=1}" Value="True">
+                <Setter TargetName="PageControlsRoot" Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="SideSearchPanelTreeViewItemTemplate" TargetType="TreeViewItem">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel x:Name="Root" Orientation="Horizontal" Grid.Row="0" HorizontalAlignment="Left" Margin="0,32,0,10">
+                <ls:LSToggleButton x:Name="Expander" ClickMode="Press" IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=TreeViewItem}}" SoundID="UI_Shared_Select" VerticalAlignment="Center" MinWidth="700" MinHeight="40">
+                    <ls:LSToggleButton.Template>
+                        <ControlTemplate TargetType="ls:LSToggleButton">
+                            <Border Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" >
+                                <Path x:Name="Arrow" Data="M 7 0 L 21 14 L 7 28 Z" Fill="{StaticResource LS_accent75TxtColor}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="30,0,0,0"/>
+                            </Border>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Arrow" Property="Fill" Value="{StaticResource LS_accent100TxtColor}"></Setter>
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Arrow" Property="Data" Value="M 0 0 L 14 14 L 28 0 Z"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </ls:LSToggleButton.Template>
+                </ls:LSToggleButton>
+
+                <!-- Header will be over the expander button so on clicking on it, we will be reaching the button as well -->
+                <ContentPresenter x:Name="PART_Header" ContentSource="Header" VerticalAlignment="Center" Margin="-620,0,0,0" IsHitTestVisible="False"/>
+            </StackPanel>
+
+            <ItemsPresenter x:Name="TreeItemsHost" Grid.Row="1" Margin="0"/>
+        </Grid>
+
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsExpanded" Value="False">
+                <Setter TargetName="TreeItemsHost" Property="Visibility" Value="Collapsed"/>
+            </Trigger>
+            <Trigger Property="ls:AttachedProperties.InheritedTag" Value="FirstFilter">
+                <Setter TargetName="Root" Property="Margin" Value="0,0,0,10"/>
+            </Trigger>
+            <Trigger Property="HasItems" Value="False">
+                <!-- If there's no expander to show, hide it and restore header values to the default ones -->
+                <Setter TargetName="Expander" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="Root" Property="Margin" Value="0,0,0,0"/>
+                <Setter TargetName="PART_Header" Property="Margin" Value="0"/>
+                <Setter TargetName="PART_Header" Property="IsHitTestVisible" Value="True"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <Style x:Key="FilterTextStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource ScaledSmallFontSize}"/>
+        <Setter Property="Foreground" Value="{StaticResource LS_accent75TxtColor}"/>
+    </Style>
+
+    <Style x:Key="FilterTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource FilterTextStyle}">
+        <Setter Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
+    </Style>
+
+    <Style x:Key="FilterToggleButtonStyle" TargetType="ls:LSToggleButton" BasedOn="{StaticResource {x:Type ls:LSToggleButton}}">
+        <Style.Resources>
+            <ImageSource x:Key="BgNormal">pack://application:,,,/ModBrowser;component/Assets/filters_pane_li_01.png</ImageSource>
+            <ImageSource x:Key="BgHighlight">pack://application:,,,/ModBrowser;component/Assets/filters_pane_li_02.png</ImageSource>
+
+            <ImageSource x:Key="TickBoxBgNormal">pack://application:,,,/Core;component/Assets/Options/checkBox_d.png</ImageSource>
+            <ImageSource x:Key="TickBoxBgHighlight">pack://application:,,,/Core;component/Assets/Options/checkBox_h.png</ImageSource>
+            <ImageSource x:Key="TickBoxBgPressed">pack://application:,,,/Core;component/Assets/Options/checkBox_p.png</ImageSource>
+            <ImageSource x:Key="TickBoxBgDisabled">pack://application:,,,/Core;component/Assets/Options/checkBox_disabled.png</ImageSource>
+            <ImageSource x:Key="TickBoxIconNormal">pack://application:,,,/Core;component/Assets/Options/ico_check_d.png</ImageSource>
+            <ImageSource x:Key="TickBoxIconHighlight">pack://application:,,,/Core;component/Assets/Options/ico_check_h.png</ImageSource>
+        </Style.Resources>
+        <Setter Property="Foreground" Value="{StaticResource LS_tint100}"/>
+        <Setter Property="Margin" Value="0,-5"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Grid Background="Transparent">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Image x:Name="bg" Grid.Column="0" Grid.ColumnSpan="2" Stretch="Fill" Source="{StaticResource BgNormal}" IsHitTestVisible="False"/>
+
+                        <Grid Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="60,5,10,5" IsHitTestVisible="False">
+                            <Image x:Name="img" HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="None" Source="{StaticResource TickBoxBgNormal}"/>
+                            <Image x:Name="check" HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="None" Source="{StaticResource TickBoxIconHighlight}" Visibility="Hidden"/>
+                        </Grid>
+
+                        <TextBlock x:Name="Content" Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center" Text="{TemplateBinding Content}" TextWrapping="Wrap" Style="{StaticResource FilterTextStyle}"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="check" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="Content" Property="Foreground" Value="{StaticResource LS_specialTxtColor}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="img" Property="Source" Value="{StaticResource TickBoxBgDisabled}"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bg" Property="Source" Value="{StaticResource BgHighlight}"/>
+                            <Setter TargetName="img" Property="Source" Value="{StaticResource TickBoxBgHighlight}"/>
+                            <Setter TargetName="check" Property="Source" Value="{StaticResource TickBoxIconHighlight}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed"  Value="True">
+                            <Setter TargetName="img" Property="Source" Value="{StaticResource TickBoxBgPressed}"/>
+                            <Setter TargetName="check" Property="Source" Value="{StaticResource TickBoxIconHighlight}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Enabled}" Value="False">
+                <Setter Property="Opacity" Value="{StaticResource DisabledOpacity}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <ControlTemplate x:Key="SearchActionButtonTemplate" TargetType="{x:Type Button}">
+        <ls:LSNineSliceImage x:Name="bg" ImageSource="{StaticResource ModBrowserClearButton_d}" Slices="54,30,34,30" Padding="8,0,20,0" Height="64">
+            <StackPanel Orientation="Horizontal">
+                <Border Width="32" Height="32" Margin="8,0,0,0">
+                    <Image x:Name="icon" Source="{DynamicResource IconNormal}" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+
+                <TextBlock Text="{TemplateBinding Content}" VerticalAlignment="Center" Margin="12,0" FontSize="{StaticResource ScaledSmallFontSize}"/>
+            </StackPanel>
+        </ls:LSNineSliceImage>
+
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bg" Property="ImageSource" Value="{StaticResource ModBrowserClearButton_h}"/>
+                <Setter TargetName="icon" Property="Source" Value="{DynamicResource IconHighlighted}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="bg" Property="ImageSource" Value="{StaticResource ModBrowserClearButton_h}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="ArrowButtonTemplate" TargetType="ls:LSButton">
+        <Grid>
+            <Image x:Name="img" Source="{StaticResource roundButtonDefault}" Stretch="None"/>
+            <Image x:Name="icon" Source="{StaticResource arrowIconDefault}" Stretch="None" RenderTransformOrigin="0.5,0.5">
+                <Image.RenderTransform>
+                    <RotateTransform Angle="180"/>
+                </Image.RenderTransform>
+            </Image>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Source" Value="{StaticResource roundButtonMouseOver}" TargetName="img"/>
+                <Setter Property="Source" Value="{StaticResource arrowIconHighlighted}" TargetName="icon"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Source" Value="{StaticResource roundButtonPressed}" TargetName="img"/>
+                <Setter Property="Source" Value="{StaticResource arrowIconHighlighted}" TargetName="icon"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Source" Value="{StaticResource roundButtonDisabled}" TargetName="img"/>
+                <Setter Property="Source" Value="{StaticResource arrowIconDisabled}" TargetName="icon"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <DataTemplate x:Key="TagButtonTemplate">
+        <Grid>
+            <ls:LSNineSliceImage x:Name="img" ImageSource="{StaticResource ModBrowserTagsBg_d}" Slices="32,36,32,36" Height="72"
+                                 Width="{Binding ElementName=txt, Path=ActualWidth, Converter={StaticResource AddConverter}, ConverterParameter=80}"/>
+            <TextBlock x:Name="txt" HorizontalAlignment="Center" VerticalAlignment="Center" Text="{Binding .}" Style="{StaticResource BtnTextGlow}" Foreground="{StaticResource LS_extraspecialTxtColor}" FontSize="{StaticResource ScaledMediumFontSize}"/>
+        </Grid>
+        <DataTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="img" Property="ImageSource" Value="{StaticResource ModBrowserTagsBg_h}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="img" Property="ImageSource" Value="{StaticResource ModBrowserTagsBg_d}"/>
+            </Trigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <DataTemplate x:Key="VoteButtonTemplate">
+        <Grid>
+            <ls:LSNineSliceImage x:Name="img" ImageSource="{StaticResource ModBrowserTagsBg_d}" Slices="32,24,32,24" Height="80" Width="270"/>
+            <StackPanel x:Name="content" VerticalAlignment="Center" HorizontalAlignment="Center" Orientation="Horizontal">
+                <Rectangle x:Name="icon" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{DynamicResource IconNormal}" Width="{DynamicResource IconWidth}" Height="{DynamicResource IconHeight}"/>
+                <TextBlock x:Name="txt" VerticalAlignment="Center" Text="{Binding .}" Style="{StaticResource BtnTextGlow}"/>
+            </StackPanel>
+        </Grid>
+        <DataTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="img" Property="ImageSource" Value="{StaticResource ModBrowserTagsBg_h}"/>
+                <Setter TargetName="icon" Property="Fill" Value="{DynamicResource IconHighlight}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="img" Property="ImageSource" Value="{StaticResource ModBrowserTagsBg_d}"/>
+                <Setter TargetName="icon" Property="Fill" Value="{DynamicResource IconDisabled}"/>
+                <Setter TargetName="icon" Property="Opacity" Value="{DynamicResource IconDisabledOpacity}"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding DataContext.SelectedMod.IsUpvoted, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="True">
+                <Setter TargetName="img" Property="ImageSource" Value="{StaticResource ModBrowserTagsBg_d}"/>
+                <Setter TargetName="icon" Property="Fill" Value="{DynamicResource IconUpvoted}"/>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <DataTemplate x:Key="ReportButtonTemplate">
+        <Grid>
+            <ls:LSNineSliceImage x:Name="img" ImageSource="{StaticResource ModBrowserTagsBg_d}" Slices="32,24,32,24" Height="80" Width="270"/>
+            <StackPanel x:Name="content" VerticalAlignment="Center" HorizontalAlignment="Center" Orientation="Horizontal">
+                <Rectangle x:Name="icon" VerticalAlignment="Center" Margin="0,0,10,0" Fill="{DynamicResource IconNormal}" Width="{DynamicResource IconWidth}" Height="{DynamicResource IconHeight}"/>
+                <TextBlock x:Name="txt" VerticalAlignment="Center" Text="{Binding .}" Style="{StaticResource BtnTextGlow}"/>
+            </StackPanel>
+        </Grid>
+        <DataTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="img" Property="ImageSource" Value="{StaticResource ModBrowserTagsBg_h}"/>
+                <Setter TargetName="icon" Property="Fill" Value="{DynamicResource IconHighlight}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="img" Property="ImageSource" Value="{StaticResource ModBrowserTagsBg_d}"/>
+                <Setter TargetName="icon" Property="Fill" Value="{DynamicResource IconDisabled}"/>
+                <Setter TargetName="icon" Property="Opacity" Value="{DynamicResource IconDisabledOpacity}"/>
+            </Trigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <ControlTemplate x:Key="ModDetailsTemplate">
+        <Grid x:Name="detailsRoot" VerticalAlignment="Top">
+            <Image x:Name="headerBg" HorizontalAlignment="Stretch" VerticalAlignment="Top" Stretch="None" Source="{StaticResource ModBrowserSubheaderBg}" Margin="0,-10,0,0"/>
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Top">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1176"/>
+                    <ColumnDefinition Width="880"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="130"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Title Strip-->
+                <Grid x:Name="titlePanel" HorizontalAlignment="Stretch" Height="130" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Top">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition />
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ls:LSButton x:Name="buttonBack" Grid.Column="0" HorizontalAlignment="Left" Template="{StaticResource ArrowButtonTemplate}" Command="{Binding ToggleDetailsCommand}" VerticalAlignment="Center"/>
+                    <Border HorizontalAlignment="Stretch" Grid.Column="1">
+                        <TextBlock x:Name="modTitle" Text="{Binding SelectedMod.Name}" VerticalAlignment="Center" Margin="20,0,0,0" FontSize="{StaticResource ScaledMassiveFontSize}" HorizontalAlignment="Left" Foreground="{StaticResource LS_extraspecialTxtColor}" FontWeight="DemiBold" TextWrapping="Wrap"/>
+                    </Border>
+                    <TextBlock x:Name="browseButtonsHint" HorizontalAlignment="Right" Grid.Column="2" Text="{Binding Source='h12a757a0g2f44g4ab1g9702g82dae4cd732e', Converter={StaticResource TranslatedStringConverter}}" VerticalAlignment="Center" FontSize="{StaticResource ScaledMassiveFontSize}" FontWeight="DemiBold"/>
+                    <ls:LSButton x:Name="buttonPrevMod" Grid.Column="3" Template="{StaticResource ArrowButtonTemplate}" Margin="20,0,0,0" VerticalAlignment="Center" Command="{Binding PrevModDetailsCommand}" CommandParameter="{Binding SelectedMod}"/>
+                    <ls:LSButton x:Name="buttonNextMod" Grid.Column="4" Template="{StaticResource ArrowButtonTemplate}" RenderTransformOrigin="0.5,0.5" VerticalAlignment="Center" Command="{Binding NextModDetailsCommand}" CommandParameter="{Binding SelectedMod}">
+                        <ls:LSButton.RenderTransform>
+                            <RotateTransform Angle="180"/>
+                        </ls:LSButton.RenderTransform>
+                    </ls:LSButton>
+                </Grid>
+
+                <Grid Grid.Row="1" Grid.Column="0" VerticalAlignment="Stretch" Height="1800">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" MinHeight="633"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+
+                    <Rectangle x:Name="imageMod" Grid.Column="0" Grid.Row="0" Width="1176" Fill="{Binding SelectedMod.MainScreenshot.Screenshot}">
+                        <Rectangle.Height>
+                            <MultiBinding Converter="{StaticResource KeepAspectRatioConverter}" ConverterParameter="FromWidth">
+                                <Binding Path="ActualWidth" ElementName="imageMod"/>
+                                <Binding Path="Fill.ImageSource.Width" ElementName="imageMod"/>
+                                <Binding Path="Fill.ImageSource.Height" ElementName="imageMod"/>
+                            </MultiBinding>
+                        </Rectangle.Height>
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger EventName="MouseLeftButtonDown">
+                                <b:InvokeCommandAction Command="{Binding ToggleScreenshotZoomCommand}"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
+                    </Rectangle>
+
+                    <Control x:Name="imageSpinner" Template="{StaticResource BusyElement}" VerticalAlignment="Center" Grid.Column="0" Grid.Row="0" HorizontalAlignment="Center" Visibility="Collapsed"/>
+
+                    <ListBox x:Name="extraImages" Grid.Column="0" Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Top" ItemsSource="{Binding SelectedMod.Screenshots}" SelectedIndex="0" Margin="0,20,0,0">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                <Setter Property="Margin" Value="10,0,10,10"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Grid>
+                                                <Rectangle x:Name="modScreenshot" Fill="{Binding Screenshot}" Width="278" Opacity="0.5">
+                                                    <Rectangle.Height>
+                                                        <MultiBinding Converter="{StaticResource KeepAspectRatioConverter}" ConverterParameter="FromWidth">
+                                                            <Binding Path="ActualWidth" ElementName="modScreenshot"/>
+                                                            <Binding Path="Fill.ImageSource.Width" ElementName="modScreenshot"/>
+                                                            <Binding Path="Fill.ImageSource.Height" ElementName="modScreenshot"/>
+                                                        </MultiBinding>
+                                                    </Rectangle.Height>
+                                                </Rectangle>
+                                                <Border x:Name="rootBorder" BorderThickness="4" BorderBrush="{StaticResource LS_PanelBackground}" Width="270" Height="147" Visibility="Collapsed" />
+                                                <Border x:Name="rootBorderInner" BorderThickness="2" BorderBrush="White" Width="278" Height="155" Visibility="Collapsed"/>
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="rootBorder" Property="Visibility" Value="Visible"/>
+                                                    <Setter TargetName="rootBorderInner" Property="Visibility" Value="Visible"/>
+                                                    <Setter TargetName="modScreenshot" Property="Opacity" Value="1"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.Template>
+                            <ControlTemplate>
+                                <ScrollViewer x:Name="ModScrollViewer" HorizontalContentAlignment="Left" Template="{StaticResource ScrollViewerTemplate}" ls:ScrollViewerHelper.MouseWheelScrollsHorizontally="True" Background="Transparent" Margin="-10,0,0,0" VerticalScrollBarVisibility="Hidden">
+                                    <ItemsPresenter HorizontalAlignment="Center"/>
+                                </ScrollViewer>
+                            </ControlTemplate>
+                        </ListBox.Template>
+                        <b:Interaction.Triggers>
+                            <b:PropertyChangedTrigger Binding="{Binding SelectedMod.Screenshots.Count}">
+                                <b:Interaction.Behaviors>
+                                    <b:ConditionBehavior>
+                                        <b:ConditionalExpression>
+                                            <b:ComparisonCondition LeftOperand="{Binding SelectedMod.Screenshots.Count}" Operator="LessThanOrEqual" RightOperand="{Binding ElementName=extraImages, Path=SelectedIndex}"/>
+                                        </b:ConditionalExpression>
+                                    </b:ConditionBehavior>
+                                </b:Interaction.Behaviors>
+                                <b:ChangePropertyAction PropertyName="SelectedIndex" Value="0"/>
+                            </b:PropertyChangedTrigger>
+                        </b:Interaction.Triggers>
+                    </ListBox>
+
+                    <ScrollViewer Template="{StaticResource NoForcedStyleScrollViewerTemplate}" Background="Transparent" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Auto" Grid.Column="0" Grid.Row="2" HorizontalAlignment="Stretch">
+                        <ScrollViewer.Resources>
+                            <Style x:Key="ScrollBarStyle" TargetType="ScrollBar" BasedOn="{StaticResource DecorativeGoldScrollBar}"/>
+                            <GridLength x:Key="Top">50</GridLength>
+                            <GridLength x:Key="Bottom">50</GridLength>
+                        </ScrollViewer.Resources>
+                        
+                        <StackPanel Width="1140" HorizontalAlignment="Left">
+                            <StackPanel x:Name="authorPanel" Orientation="Horizontal" HorizontalAlignment="Left"
+                                        Visibility="{Binding SelectedMod.Author, Converter={StaticResource NullToCollapsedConverter}, ConverterParameter='EmptyString'}" Margin="0,40,0,0">
+                                <TextBlock x:Name="authorHint" Text="{Binding Source='h8f3af77fg0f4fg4c04gb590gef77c7728195', Converter={StaticResource TranslatedStringConverter}}" VerticalAlignment="Center" Foreground="{StaticResource LS_extraspecialTxtColor}"/>
+                                <ls:LSButton x:Name="authorName" Content="{Binding SelectedMod.Author}" ContentTemplate="{StaticResource TagButtonTemplate}" IsEnabled="False"
+                                 VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <ItemsControl x:Name="modTags" HorizontalAlignment="Left" ItemsSource="{Binding SelectedMod.Tags}" Margin="0,12,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" MaxWidth="1170" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <ls:LSButton x:Name="tagName" Content="{Binding Name}" ContentTemplate="{StaticResource TagButtonTemplate}" VerticalAlignment="Center"
+                                     Command="{Binding DataContext.TagSelectedCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"
+                                     CommandParameter="{Binding .}" IsEnabled="False" Margin="-14,-8,-8,-8"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Grid Margin="0,28,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock x:Name="lastUpdatedHint" HorizontalAlignment="Left" Text="{Binding Source=h32193011g8e1dg40e8g9e0bg6aafe5908c4a, Converter={StaticResource TranslatedStringConverter}}"/>
+                                    <TextBlock x:Name="lastUpdatedValue" HorizontalAlignment="Left" Text="{Binding SelectedMod.LastUpdatedDate}" Foreground="{StaticResource LS_accent100TxtColor}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock x:Name="orgiginalUploadHint" HorizontalAlignment="Left" Text="{Binding Source=h018b47ddg5491g49c5ga170g1f7ece03beb3, Converter={StaticResource TranslatedStringConverter}}"/>
+                                    <TextBlock x:Name="orgiginalUploadValue" HorizontalAlignment="Left" Text="{Binding SelectedMod.OriginalUploadDate}" Foreground="{StaticResource LS_accent100TxtColor}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock x:Name="VersionHint" HorizontalAlignment="Left" Text="{Binding Source=hbbc4fb50ga17ag467dgb3b8g8db652071022, Converter={StaticResource TranslatedStringConverter}}"/>
+                                    <TextBlock x:Name="VersionValue" HorizontalAlignment="Left" Text="{Binding SelectedMod.Version}" Foreground="{StaticResource LS_accent100TxtColor}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock x:Name="modDescription" HorizontalAlignment="Stretch" Margin="0,40,0,0" Foreground="{StaticResource LS_extraspecialTxtColor}" TextWrapping="Wrap" Text="{Binding SelectedMod.Description}" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                </Grid>
+
+                <!-- Controls Column-->
+                <Grid Grid.Column="1" Grid.Row="1" Margin="20,0,0,0" VerticalAlignment="Stretch" Height="1800">
+                    <Image x:Name="controlsBgImage" Source="{StaticResource detailsBackground}" Stretch="None" Margin="0,-20,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                    <Grid Margin="0,20,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="200" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition />
+                        </Grid.RowDefinitions>
+
+                        <ls:LSButton x:Name="subscribeButton" Grid.Row="0" Margin="0,40,0,0" Style="{StaticResource BigBrownButtonTextAndIconStyle}"
+                         Content="{Binding Source='h0c9f422cga55cg4d2agb342ga095b82caa58', Converter={StaticResource TranslatedStringConverter}}"
+                         Command="{Binding DownloadModCommand}"
+                         CommandParameter="{Binding SelectedMod}" HorizontalAlignment="Center" VerticalAlignment="Top" Width="550" Visibility="Collapsed">
+                            <ls:LSButton.Resources>
+                                <ImageBrush x:Key="IconNormal" ImageSource="{StaticResource detailsSubscribe}" Stretch="Fill"/>
+                                <ImageBrush x:Key="IconPressed" ImageSource="{StaticResource detailsSubscribe}" Stretch="Fill"/>
+                                <ImageBrush x:Key="IconHighlight" ImageSource="{StaticResource detailsSubscribe}" Stretch="Fill"/>
+                                <ImageBrush x:Key="IconDisabled" ImageSource="{StaticResource detailsSubscribe}" Stretch="Fill"/>
+                                <System:Double x:Key="IconWidth">54</System:Double>
+                                <System:Double x:Key="IconHeight">54</System:Double>
+                            </ls:LSButton.Resources>
+                        </ls:LSButton>
+
+                        <Control x:Name="unsubscribedDownloadingControl" Grid.Row="0" Margin="0,60,0,0" Template="{StaticResource DownloadingBarTemplate}" Visibility="Collapsed"
+                     HorizontalAlignment="Center" VerticalAlignment="Top"/>
+
+                        <ls:LSButton x:Name="enableModButton" Grid.Row="0" Margin="0,40,0,0" HorizontalAlignment="Center" VerticalAlignment="Top"
+                         CommandParameter="{Binding SelectedMod}" Template="{StaticResource DisableModButtonTemplate}" Command="{Binding ToggleModEnabledStateCommand}" Visibility="Collapsed"/>
+
+                        <Control x:Name="modUpdateControl" Grid.Row="0" Margin="0,100,0,0" HorizontalAlignment="Center" VerticalAlignment="Top" Template="{StaticResource UpdateModButtonTemplate}" Visibility="Collapsed" Height="100"/>
+
+                        <StackPanel x:Name="statsPanel" HorizontalAlignment="Center" Orientation="Horizontal" Grid.Row="1" VerticalAlignment="Top" Margin="0,20,0,0">
+                            <Image Stretch="None" Source="{StaticResource detailsDownloads}"/>
+                            <TextBlock Text="{Binding SelectedMod.TotalDownloads, Converter={StaticResource AbbreviateNumberConverter}}" Margin="20,0,0,0"/>
+                            <Image Stretch="None" Source="{StaticResource detailsFileSize}" Margin="60,0,0,0"/>
+                            <TextBlock Text="{Binding SelectedMod.FileSize, Converter={StaticResource FileSizeConverter}}" Margin="20,0,0,0"/>
+                        </StackPanel>
+
+                        <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Grid.Row="2" VerticalAlignment="Top">
+                            <ls:LSButton x:Name="endorseButton" Content="{Binding SelectedMod.PositiveRating, Converter={StaticResource AbbreviateNumberConverter}}"
+                                         ContentTemplate="{StaticResource VoteButtonTemplate}"
+                         VerticalAlignment="Top" Command="{Binding EndorseModCommand}" CommandParameter="{Binding SelectedMod}"  Visibility="Collapsed">
+                                <ls:LSButton.Resources>
+                                    <ImageBrush x:Key="IconNormal" ImageSource="{StaticResource detailsLike}"/>
+                                    <ImageBrush x:Key="IconHighlight" ImageSource="{StaticResource detailsLike}"/>
+                                    <ImageBrush x:Key="IconDisabled" ImageSource="{StaticResource detailsLike}"/>
+                                    <ImageBrush x:Key="IconUpvoted" ImageSource="{StaticResource detailsLikeUpvoted}"/>
+                                    <System:Double x:Key="IconWidth">48</System:Double>
+                                    <System:Double x:Key="IconHeight">48</System:Double>
+                                </ls:LSButton.Resources>
+                            </ls:LSButton>
+                            <ls:LSButton x:Name="reportButton" Content="{Binding Source='h3eb3aeabg68fcg418cga213ge00d639e4507', Converter={StaticResource TranslatedStringConverter}}"
+                         ContentTemplate="{StaticResource ReportButtonTemplate}" Command="{Binding ReportModCommand}" VerticalAlignment="Top">
+                                <ls:LSButton.Resources>
+                                    <ImageBrush x:Key="IconNormal" ImageSource="{StaticResource reportIcon}"/>
+                                    <ImageBrush x:Key="IconHighlight" ImageSource="{StaticResource reportIcon}"/>
+                                    <ImageBrush x:Key="IconDisabled" ImageSource="{StaticResource reportIcon}"/>
+                                    <System:Double x:Key="IconWidth">48</System:Double>
+                                    <System:Double x:Key="IconHeight">48</System:Double>
+                                </ls:LSButton.Resources>
+                            </ls:LSButton>
+                        </StackPanel>
+
+                        <StackPanel x:Name="explicitContentPanel" Grid.Row="3" VerticalAlignment="Top" Margin="0,24,0,0" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="{Binding SelectedMod.IsMatureContent, Converter={StaticResource BoolToVisibleConverter}}">
+                            <Image Source="{StaticResource IconWarningSoft}" Stretch="None" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Source=h044356fcgc4a6g44bfgaa75gc26eb46ae649, Converter={StaticResource TranslatedStringConverter}}" Foreground="{StaticResource LS_warning50TxtColor}" Margin="6,3,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <StackPanel x:Name="externalDependenciesContentPanel" Grid.Row="4" VerticalAlignment="Top" Margin="0,24,0,0" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="{Binding SelectedMod.IsExternalDependency, Converter={StaticResource BoolToVisibleConverter}}">
+                            <Image Source="{StaticResource IconWarningSoft}" Stretch="None" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Source=h1b37a6fcg1771g407fg9187gb0ac1a152876, Converter={StaticResource TranslatedStringConverter}}" Foreground="{StaticResource LS_warning50TxtColor}" Margin="6,3,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <Image x:Name="dependenciesDivider" Grid.Row="5" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                               Source="{StaticResource detailsDivider}" Stretch="None" Margin="0,60,0,0"/>
+
+                        <StackPanel Orientation="Vertical" Grid.Row="6"  Margin="0,10">
+                            <ls:LSButton x:Name="detailUninstallButton" Visibility="Hidden" Style="{StaticResource SmallBrownButtonStyle}"
+                                         Content="{Binding Source='h07287a93g6ca8g4d72g9554g452d6c2431f5', Converter={StaticResource TranslatedStringConverter}}"
+                                         Command="{Binding DataContext.UninstallModCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"
+                                         CommandParameter="{Binding SelectedMod}" Width="460"/>
+
+                            <TextBlock x:Name="dependenciesTitle" Margin="60,25,0,0"
+                                       Visibility="{Binding SelectedMod.Dependencies.Count, Converter={StaticResource CountToVisibilityConverter}}"
+                                       FontSize="{StaticResource ScaledIntermediateFontSize}" Foreground="{StaticResource LS_accent100TxtColor}" >
+                                <TextBlock.Text>
+                                    <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                        <Binding Source="h42f01947gd74eg48e6ga156gc5cb9ad93dfe"/>
+                                        <Binding  Path="SelectedMod.Dependencies.Count"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <ScrollViewer x:Name="modDependencies" Grid.Row="7" HorizontalContentAlignment="Left" Template="{StaticResource ScrollViewerTemplate}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="Transparent" Margin="-10,0,0,0" VerticalAlignment="Stretch">
+                            <ScrollViewer.Resources>
+                                <Style x:Key="ScrollBarStyle" TargetType="ScrollBar" BasedOn="{StaticResource DecorativeGoldScrollBar}"/>
+                                <GridLength x:Key="Top">50</GridLength>
+                                <GridLength x:Key="Bottom">50</GridLength>
+                            </ScrollViewer.Resources>
+
+                            <ItemsControl ItemsSource="{Binding SelectedMod.Dependencies}" Visibility="{Binding SelectedMod.Dependencies.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Vertical"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="60,10,0,0" Orientation="Horizontal">
+                                            <Image x:Name="dependencyState" Source="{x:Null}" Stretch="None"/>
+                                            <Rectangle x:Name="dependencyScreenshot" Fill="{Binding MainScreenshot.Screenshot}" Margin="9,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Left" Width="180">
+                                                <Rectangle.Height>
+                                                    <MultiBinding Converter="{StaticResource KeepAspectRatioConverter}" ConverterParameter="FromWidth">
+                                                        <Binding Path="ActualWidth" ElementName="dependencyScreenshot"/>
+                                                        <Binding Path="Fill.ImageSource.Width" ElementName="dependencyScreenshot"/>
+                                                        <Binding Path="Fill.ImageSource.Height" ElementName="dependencyScreenshot"/>
+                                                    </MultiBinding>
+                                                </Rectangle.Height>
+                                            </Rectangle>
+                                            <TextBlock Text="{Binding Name}" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource LS_accent100TxtColor}" FontSize="{StaticResource ScaledIntermediateFontSize}" TextWrapping="Wrap" Width="800"/>
+                                        </StackPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding EnabledCurrent}" Value="True">
+                                                <Setter TargetName="dependencyState" Property="Source" Value="{StaticResource enabledIcon}"/>
+                                                <Setter TargetName="dependencyState" Property="Margin" Value="15,0,0,0"/>
+                                                <Setter TargetName="dependencyScreenshot" Property="Margin" Value="15,0,0,0"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding VersionState}" Value="Older">
+                                                <Setter TargetName="dependencyState" Property="Source" Value="{StaticResource updateIcon}"/>
+                                                <Setter TargetName="dependencyState" Property="Margin" Value="15,0,0,0"/>
+                                                <Setter TargetName="dependencyScreenshot" Property="Margin" Value="14,0,0,0"/>
+                                            </DataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsInstalled}" Value="True"/>
+                                                    <Condition Binding="{Binding EnabledCurrent}" Value="False"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter TargetName="dependencyState" Property="Source" Value="{StaticResource IconWarningSoft}"/>
+                                                <Setter TargetName="dependencyState" Property="Margin" Value="15,0,0,0"/>
+                                                <Setter TargetName="dependencyScreenshot" Property="Margin" Value="22,0,0,0"/>
+                                            </MultiDataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Grid>
+            </Grid>
+            <Grid x:Name="zoomedScreenshotRoot" Visibility="{Binding InScreenshotZoom, Converter={StaticResource BoolToVisibleConverter}}">
+                <ls:LSNineSliceImage x:Name="zoomedScreenshotBackgroundFade"  ImageSource="{StaticResource backgroundFade}" Slices="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+
+                <StackPanel Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Center">
+                    <Border BorderThickness="10" BorderBrush="{StaticResource LS_extraspecialTxtColor}">
+                        <Rectangle x:Name="zoomedImageMod" Width="2800" Fill="{Binding ElementName=imageMod, Path=Fill}">
+                            <Rectangle.Height>
+                                <MultiBinding Converter="{StaticResource KeepAspectRatioConverter}" ConverterParameter="FromWidth">
+                                    <Binding Path="ActualWidth" ElementName="zoomedImageMod"/>
+                                    <Binding Path="Fill.ImageSource.Width" ElementName="imageMod"/>
+                                    <Binding Path="Fill.ImageSource.Height" ElementName="imageMod"/>
+                                </MultiBinding>
+                            </Rectangle.Height>
+                        </Rectangle>
+                    </Border>
+                    <StackPanel Orientation="Horizontal" Margin="0,50,0,0" HorizontalAlignment="Center" Visibility="{Binding SelectedMod.Screenshots.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                        <ls:LSButton x:Name="buttonPrevScreenshot" Template="{StaticResource ArrowButtonTemplate}" VerticalAlignment="Center"/>
+
+                        <TextBlock x:Name="screenshotNumber" HorizontalAlignment="Center" FontSize="{StaticResource ScaledLargeFontSize}" Foreground="{StaticResource LS_extraspecialTxtColor}"
+                                   Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="{}{0}/{1}">
+                                    <Binding Path="SelectedIndex" ElementName="extraImages" Converter="{StaticResource AddConverter}" ConverterParameter="1"/>
+                                    <Binding Path="SelectedMod.Screenshots.Count"/>
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                        <ls:LSButton x:Name="buttonNextScreenshot" Template="{StaticResource ArrowButtonTemplate}" RenderTransformOrigin="0.5,0.5" VerticalAlignment="Center" Margin="10,0,0,0">
+                            <ls:LSButton.RenderTransform>
+                                <RotateTransform Angle="180"/>
+                            </ls:LSButton.RenderTransform>
+                        </ls:LSButton>
+                        <b:Interaction.Triggers>
+                            <b:EventTrigger SourceName="buttonPrevScreenshot" EventName="Click">
+                                <ls:SelectNextListBoxItem Reversed="True" TargetObject="{Binding ElementName=extraImages}" ForceSelect="True" ForceMode="Cycle"/>
+                            </b:EventTrigger>
+                            <b:EventTrigger SourceName="buttonNextScreenshot" EventName="Click">
+                                <ls:SelectNextListBoxItem TargetObject="{Binding ElementName=extraImages}" ForceSelect="True" ForceMode="Cycle"/>
+                            </b:EventTrigger>
+                        </b:Interaction.Triggers>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding SelectedMod.Screenshots.Count}" Value="0">
+                <Setter TargetName="extraImages" Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding ElementName=extraImages, Path=Visibility}" Value="Visible">
+                <Setter TargetName="imageMod" Property="Fill" Value="{Binding ElementName=extraImages, Path=SelectedItem.Screenshot}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SelectedMod.MainScreenshot.HasScreenshotTexture}" Value="False">
+                <Setter TargetName="imageSpinner" Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SelectedMod.LastUpdatedDate}" Value="">
+                <Setter TargetName="lastUpdatedValue" Property="Text" Value="{Binding Source=hcdb2c178g917cg4f01ga281g64ce59d0ad6b, Converter={StaticResource TranslatedStringConverter}}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SelectedMod.OriginalUploadDate}" Value="">
+                <Setter TargetName="orgiginalUploadValue" Property="Text" Value="{Binding Source=hcdb2c178g917cg4f01ga281g64ce59d0ad6b, Converter={StaticResource TranslatedStringConverter}}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SelectedMod.EnabledCurrent}" Value="False">
+                <Setter TargetName="enableModButton" Property="Template" Value="{StaticResource EnableModButtonTemplate}"/>
+            </DataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding SelectedMod.InstallState}" Value="Uninstalled"/>
+                    <Condition Binding="{Binding SelectedMod.IsAvailable}" Value="True"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="subscribeButton" Property="Visibility" Value="Visible"/>
+            </MultiDataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding SelectedMod.InstallState}" Value="Uninstalled"/>
+                    <Condition Binding="{Binding Data.ModAccountState}" Value="ModioConnected"/>
+                    <Condition Binding="{Binding ActiveTabID}" Value="Browse"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="subscribeButton" Property="Command" Value="{Binding SubscribeModCommand}"/>
+                <Setter TargetName="subscribeButton" Property="Content" Value="{Binding Source='h143b56a0g1c2eg4522g83abg5e2d25798282', Converter={StaticResource TranslatedStringConverter}}"/>
+            </MultiDataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding SelectedMod.InstallState}" Value="Downloading"/>
+                    <Condition Binding="{Binding SelectedMod.VersionState}" Value="Match"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="unsubscribedDownloadingControl" Property="Visibility" Value="Visible"/>
+            </MultiDataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding SelectedMod.InstallState}" Value="Uninstalled"/>
+                    <Condition Binding="{Binding ActiveTabID}" Value="Browse"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="subscribeButton" Property="Visibility" Value="Visible"/>
+            </MultiDataTrigger>
+            <DataTrigger Binding="{Binding SelectedMod.InstallState}" Value="Downloaded">
+                <Setter TargetName="enableModButton" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="detailUninstallButton" Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SelectedMod.InstallState}" Value="Subscribed">
+                <Setter TargetName="enableModButton" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="detailUninstallButton" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="detailUninstallButton" Property="Content" Value="{Binding Source='h75fcf9abgbe78g4aa3g835bgc8f319c8942c', Converter={StaticResource TranslatedStringConverter}}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SelectedMod.VersionState}" Value="Older">
+                <Setter TargetName="modUpdateControl" Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SelectedMod.InstallState}" Value="Downloading">
+                <Setter TargetName="modUpdateControl" Property="Template" Value="{StaticResource DownloadingBarTemplate}"/>
+                <Setter TargetName="modUpdateControl" Property="Margin" Value="0,140,0,0"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Data.ModAccountState}" Value="ModioConnected">
+                <Setter TargetName="endorseButton" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="reportButton" Property="Grid.Column" Value="5"/>
+                <Setter TargetName="reportButton" Property="Grid.ColumnSpan" Value="1"/>
+                <Setter TargetName="reportButton" Property="HorizontalAlignment" Value="Left"/>
+                <Setter TargetName="reportButton" Property="Margin" Value="0,0,0,0"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding InScreenshotZoom}" Value="True">
+                <Setter TargetName="modDependencies" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="dependenciesTitle" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="dependenciesDivider" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="explicitContentPanel" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="externalDependenciesContentPanel" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="reportButton" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="endorseButton" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="statsPanel" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="modUpdateControl" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="enableModButton" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="detailUninstallButton" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="unsubscribedDownloadingControl" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="subscribeButton" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="controlsBgImage" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="modDescription" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="lastUpdatedHint" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="lastUpdatedValue" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="orgiginalUploadHint" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="orgiginalUploadValue" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="VersionHint" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="VersionValue" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="modTags" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="authorPanel" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="titlePanel" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="headerBg" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="imageMod" Property="Margin" Value="0,-2200,0,0"/>
+                <Setter TargetName="extraImages" Property="Margin" Value="0,-2500,0,0"/>
+                <Setter TargetName="imageSpinner" Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Data.IsUGCDisabled}" Value="True">
+                <Setter TargetName="imageMod" Property="Fill" Value="{StaticResource ugcDisabledMaskBig}"/>
+                <Setter TargetName="modUpdateControl" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="dependenciesTitle" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="modDependencies" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="enableModButton" Property="IsEnabled" Value="False"/>
+                <Setter TargetName="detailUninstallButton" Property="IsEnabled" Value="False"/>
+                <Setter TargetName="imageSpinner" Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="WaitingSpinnerTemplate">
+        <StackPanel x:Name="spinnerRoot" VerticalAlignment="Top" HorizontalAlignment="Stretch">
+            <TextBlock x:Name="waitLabel" Text="{Binding Source='h18414d2cg5e53g41dag8f35g774de89faaf8', Converter={StaticResource TranslatedStringConverter}}"/>
+            <Control VerticalAlignment="Top" HorizontalAlignment="Center" Template="{StaticResource BusyElement}"/>
+        </StackPanel>
+    </ControlTemplate>
+</ResourceDictionary>

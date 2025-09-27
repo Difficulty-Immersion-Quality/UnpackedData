@@ -1,0 +1,1009 @@
+<ls:UIWidget x:Name="Friendslist"
+             ls:UIWidget.ContextName="Crossplay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             
+             xmlns:ls="clr-namespace:ls;assembly=Code"
+             xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:System="clr-namespace:System;assembly=mscorlib"
+             mc:Ignorable="d" 
+             d:DesignWidth="3840" d:DesignHeight="2160"
+             d:DataContext="{d:DesignInstance {x:Type ls:DCCrossplay}, IsDesignTimeCreatable=True}">
+
+    <b:Interaction.Triggers>
+        <b:EventTrigger EventName="Loaded">
+            <b:InvokeCommandAction Command="{Binding SetFriendsListOpenedCommand}" CommandParameter="{StaticResource TrueValue}"/>
+        </b:EventTrigger>
+        <b:EventTrigger EventName="WidgetClosing">
+            <b:InvokeCommandAction Command="{Binding SetFriendsListOpenedCommand}" CommandParameter="{StaticResource FalseValue}"/>
+            <b:InvokeCommandAction Command="{Binding ClearCurrentCrossplayFriendCommand}"/>
+        </b:EventTrigger>
+    </b:Interaction.Triggers>
+
+    <ls:UIWidget.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Core;component/Library/CrossplayHelpers.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <BitmapImage x:Key="ListEntryBackground" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel/selector_listitem_d.png"/>
+            <BitmapImage x:Key="ListEntryBackground_h" UriSource="pack://application:,,,/Core;component/Assets/CharacterPanel/selector_listitem_h.png"/>
+            <BitmapImage x:Key="CrossplayCoopIcon" UriSource="pack://application:,,,/Core;component/Assets/Crossplay/ico_coopPlayer_d.png"/>
+
+            <Style x:Key="ListSectionBackground" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource ContentBGShade}"/>
+                <Setter Property="CornerRadius" Value="12"/>
+            </Style>
+
+            <Style x:Key="PanelSubTitleStyle" TargetType="TextBlock" >
+                <Setter Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+                <Setter Property="TextAlignment" Value="Center"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+
+            <Style x:Key="PanelTitleStyle" TargetType="TextBlock" >
+                <Setter Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
+                <Setter Property="FontSize" Value="{StaticResource ScaledMassiveFontSize}"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+            </Style>
+
+            <!--FRIENDSLIST ENTRY-->
+            <ControlTemplate x:Key="FriendsListEntryTemplate" TargetType="ListBoxItem">
+                <Border x:Name="FriendEntryRoot" Background="Transparent" Visibility="{Binding IsBlocked, Converter={StaticResource BoolToCollapsedConverter}}" d:DataContext="{d:DesignInstance {x:Type ls:VMCrossplayUser}, IsDesignTimeCreatable=True}">
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="MouseLeftButtonDown">
+                            <b:InvokeCommandAction Command="{Binding DataContext.SetCurrentCrossplayFriendCommand, ElementName=Friendslist}" CommandParameter="{Binding .}" />
+                            <b:InvokeCommandAction Command="{Binding ShowContextMenuCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding ElementName=FriendEntryRoot}"/>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+                    <Border Background="Transparent">
+                        <Grid Name="FriendsListItemholder" Height="84" HorizontalAlignment="Stretch">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>    <!-- Online status -->
+                                <ColumnDefinition Width="Auto"/>    <!-- Platform icon -->
+                                <ColumnDefinition Width="*"/>       <!-- Friend's name -->
+                                <ColumnDefinition Width="350"/>     <!-- Join/Invite/In-party -->
+                                <ColumnDefinition Width="60"/>      <!-- Lobby info -->
+                                <ColumnDefinition Width="16"/>      <!-- Right Margin -->
+                            </Grid.ColumnDefinitions>
+
+                            <Image x:Name="ListEntryBg" Grid.Column="0" Grid.ColumnSpan="6" Source="{StaticResource ListEntryBackground}" Stretch="Fill"/>
+
+                            <Image x:Name="ConnectionStatus" Grid.Column="0" Source="{StaticResource OfflineStatus}" Stretch="None" VerticalAlignment="Center">
+                                <Image.ToolTip>
+                                    <ls:LSTooltip x:Name="ConnectionStatusTT" Placement="Bottom" Content="{Binding Source='hc14b4e3fgd177g468dga32fg1b01ccee1fe0', Converter={StaticResource TranslatedStringConverter}}"/>
+                                </Image.ToolTip>
+                            </Image>
+
+                            <Image x:Name="PlatformIcon" Grid.Column="1" Source="{StaticResource CrossplayGenericIcon}" Stretch="Uniform" Height="60" Margin="10,0" VerticalAlignment="Center">
+                                <Image.ToolTip>
+                                    <ls:LSTooltip x:Name="PlatformIconTT" Placement="Bottom" Content="{Binding Source='h2fd0e882gf541g49e2gaa5dga453579dda42', Converter={StaticResource TranslatedStringConverter}}"/>
+                                </Image.ToolTip>
+                            </Image>
+                            
+                            <TextBlock x:Name="PlayerName" Grid.Column="2" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0" Text="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="520" Opacity="0.65"/>
+
+                            <!-- Tag is used to flag that we're waiting for the join action to happen -->
+                            <ls:LSButton x:Name="JoinBtn" Grid.Column="3" Style="{StaticResource SmallBrownButtonStyle}" 
+                                         Content="{Binding Source='h39532095g7b80g4d10gb75fga7016dd39336', Converter={StaticResource TranslatedStringConverter}}" 
+                                         HorizontalAlignment="Center" VerticalAlignment="Center" IsEnabled="False"
+                                         Command="{Binding DataContext.JoinPartyCommand, ElementName=Friendslist}" CommandParameter="{Binding .}"
+                                         ToolTipService.ShowOnDisabled="True">
+                                <b:Interaction.Triggers>
+                                    <b:EventTrigger EventName="Click">
+                                        <b:ChangePropertyAction TargetName="JoinBtn" PropertyName="IsEnabled" Value="False" />
+                                        <b:ChangePropertyAction TargetName="JoinBtn" PropertyName="Content" Value="{Binding Source='h51e1895fgd20dg4aedga921gfd21c6acb77f', Converter={StaticResource TranslatedStringConverter}}" />
+                                        <b:InvokeCommandAction Command="{Binding DataContext.CustomEvent, ElementName=Friendslist}" CommandParameter="CloseFriendsList"/>
+                                        <b:InvokeCommandAction Command="{Binding DataContext.CustomEvent, ElementName=Friendslist}" CommandParameter="CloseAccountManagement"/>
+                                    </b:EventTrigger>
+                                </b:Interaction.Triggers>
+                                <ls:LSButton.ToolTip>
+                                    <ls:LSTooltip x:Name="JoinBtnTT" Placement="Bottom" Content="{Binding Source='hbf491057g49f8g42b9gb61bgf8f40eaea58e', Converter={StaticResource TranslatedStringConverter}}"/>
+                                </ls:LSButton.ToolTip>
+                            </ls:LSButton>
+
+                            <ls:LSButton x:Name="InviteBtn" Grid.Column="3" Style="{StaticResource SmallBrownButtonStyle}" 
+                                         Content="{Binding Source='h748e7e71g9b81g473ega584gf65b73804065', Converter={StaticResource TranslatedStringConverter}}" 
+                                         HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"
+                                         Command="{Binding DataContext.InviteToPartyCommand, ElementName=Friendslist}" CommandParameter="{Binding .}"/>
+
+                            <ls:LSButton x:Name="LeaveBtn" Grid.Column="3" Style="{StaticResource SmallBrownButtonStyle}" 
+                                         Content="{Binding Source='hcda03447gd378g40bdga0ecg6cdeda2c6644', Converter={StaticResource TranslatedStringConverter}}" 
+                                         HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"
+                                         Command="{Binding DataContext.LeavePartyCommand, ElementName=Friendslist}">
+                                <b:Interaction.Triggers>
+                                    <b:EventTrigger EventName="Click">
+                                        <b:ChangePropertyAction TargetName="LeaveBtn" PropertyName="IsEnabled" Value="False" />
+                                        <b:InvokeCommandAction Command="{Binding DataContext.CustomEvent, ElementName=Friendslist}" CommandParameter="CloseFriendsList"/>
+                                    </b:EventTrigger>
+                                </b:Interaction.Triggers>
+                            </ls:LSButton>
+
+                            <ls:LSButton x:Name="AcceptInviteBtn" Grid.Column="3" Style="{StaticResource SmallBrownButtonStyle}" 
+                                         Content="{Binding Source='h69f05317g3db9g4cf8g9586g810dfbdfc780', Converter={StaticResource TranslatedStringConverter}}" 
+                                         HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"
+                                         Command="{Binding DataContext.AcceptInviteCommand, ElementName=Friendslist}" CommandParameter="{Binding .}">
+                                <b:Interaction.Triggers>
+                                    <b:EventTrigger EventName="Click">
+                                        <b:InvokeCommandAction Command="{Binding DataContext.CustomEvent, ElementName=Friendslist}" CommandParameter="CloseFriendsList"/>
+                                        <b:InvokeCommandAction Command="{Binding DataContext.CustomEvent, ElementName=Friendslist}" CommandParameter="CloseAccountManagement"/>
+                                    </b:EventTrigger>
+                                </b:Interaction.Triggers>
+                            </ls:LSButton>
+
+                            <StackPanel x:Name="InPartyImg" Grid.Column="3" Orientation="Horizontal" Visibility="Hidden" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource LS_guestTxtColor}" Text="{Binding Source='h91944502g97c3g42f3gb9degea841ba6b55f',Converter={StaticResource TranslatedStringConverter}}"/>
+                                <Image Source="{StaticResource CrossplayCoopIcon}" Stretch="None" Margin="8,0"/>
+                            </StackPanel>
+
+                            <TextBlock x:Name="LobbyInfo" Grid.Column="4" HorizontalAlignment="Stretch" VerticalAlignment="Center" Visibility="Collapsed" TextAlignment="Center">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0}/{1}">
+                                        <Binding Path="Lobby.CurrentPlayers"/>
+                                        <Binding Path="Lobby.MaxPlayers"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                    </Border>
+
+                    <!--THIS NEEDS TO BE ON LEFT CLICK-->
+                    <Border.ContextMenu>
+                        <ls:ContextMenu x:Name="FriendslistQuickMenu" Style="{StaticResource BaseLSContextMenu}">
+                            <ls:ContextMenuItem x:Name="DeclineInviteAction" Header="{Binding Source='hfcb10e4ag024cg4dbbg9cfeg4fd63bf0ee89', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.DeclineInviteCommand, ElementName=Friendslist}" CommandParameter="{Binding .}" Visibility="Collapsed"/>
+                            <ls:ContextMenuItem x:Name="InviteToPartyAction" Header="{Binding Source='h748e7e71g9b81g473ega584gf65b73804065', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.InviteToPartyCommand, ElementName=Friendslist}" CommandParameter="{Binding .}" Visibility="Collapsed"/>
+                            <ls:ContextMenuItem x:Name="UnfriendAction" Header="{Binding Source='hd3895109g8b15g4bf4g89a4g7c453d035efc', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.OpenMessageBox, ElementName=Friendslist}" CommandParameter="{DynamicResource UnfriendUserMessageBox}"/>
+                            <ls:ContextMenuItem x:Name="ReportAction" Header="{Binding Source='h9e07d1fbg7c06g4f9bg952cg01694974705a', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.ReportUserCommand, ElementName=Friendslist}" CommandParameter="{Binding DataContext.Data.CrossplayCurrentFriend, ElementName=Friendslist}"/>
+                            <ls:ContextMenuItem x:Name="BlockUserAction" Header="{Binding Source='h4dfe51efg0143g42bfgb58ag4ef694576c04', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.OpenMessageBox, ElementName=Friendslist}" CommandParameter="{DynamicResource BlockUserMessageBox}"/>
+                        </ls:ContextMenu>
+                    </Border.ContextMenu>
+
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="ListEntryBg" Property="Source" Value="{StaticResource ListEntryBackground_h}"/>
+                    </Trigger>
+
+                    <!-- Platform icon -->
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding Platform}" Value="Steam"/>
+                            <Condition Binding="{Binding DataContext.Data.CommunityPlatform, ElementName=Friendslist}" Value="Steam"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="PlatformIcon" Property="Source" Value="{StaticResource CrossplaySteamIcon}"/>
+                        <Setter TargetName="PlatformIconTT" Property="Content" Value="{Binding DataContext.Data.CommunityPlatform, ElementName=Friendslist, Converter={StaticResource EnumTranslatedStringConverter}, ConverterParameter='hdb7e2a56g86d2g46c0g923cg11da095663d8'}"/>
+                    </MultiDataTrigger>
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding Platform}" Value="Galaxy"/>
+                            <Condition Binding="{Binding DataContext.Data.CommunityPlatform, ElementName=Friendslist}" Value="Galaxy"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="PlatformIcon" Property="Source" Value="{StaticResource CrossplayGOGIcon}"/>
+                        <Setter TargetName="PlatformIconTT" Property="Content" Value="{Binding DataContext.Data.CommunityPlatform, ElementName=Friendslist, Converter={StaticResource EnumTranslatedStringConverter}, ConverterParameter='hdb7e2a56g86d2g46c0g923cg11da095663d8'}"/>
+                    </MultiDataTrigger>
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding Platform}" Value="PSN"/>
+                            <Condition Binding="{Binding DataContext.Data.CommunityPlatform, ElementName=Friendslist}" Value="PSN"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="PlatformIcon" Property="Source" Value="{StaticResource CrossplayPSNIcon}"/>
+                        <Setter TargetName="PlatformIconTT" Property="Content" Value="{Binding DataContext.Data.CommunityPlatform, ElementName=Friendslist, Converter={StaticResource EnumTranslatedStringConverter}, ConverterParameter='hdb7e2a56g86d2g46c0g923cg11da095663d8'}"/>
+                    </MultiDataTrigger>
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding Platform}" Value="Xbox"/>
+                            <Condition Binding="{Binding DataContext.Data.CommunityPlatform, ElementName=Friendslist}" Value="Xbox"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="PlatformIcon" Property="Source" Value="{StaticResource CrossplayXboxIcon}"/>
+                        <Setter TargetName="PlatformIconTT" Property="Content" Value="{Binding DataContext.Data.CommunityPlatform, ElementName=Friendslist, Converter={StaticResource EnumTranslatedStringConverter}, ConverterParameter='hdb7e2a56g86d2g46c0g923cg11da095663d8'}"/>
+                    </MultiDataTrigger>
+
+                    <!-- Friend is online -->
+                    <DataTrigger Binding="{Binding Online}" Value="True">
+                        <Setter TargetName="PlayerName" Property="Opacity" Value="1" />
+                        <Setter TargetName="LobbyInfo" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="ConnectionStatus" Property="Source" Value="{StaticResource OnlineStatusUnavailable}"/>
+                        <Setter TargetName="ConnectionStatusTT" Property="Content" Value="{Binding Source='h3664cbcbgb01bg466cga15ag72e5119aadd3', Converter={StaticResource TranslatedStringConverter}}"/>
+                    </DataTrigger>
+
+                    <DataTrigger Binding="{Binding Lobby, Converter={StaticResource NullToBoolFalseConverter}}" Value="False">
+                        <Setter TargetName="LobbyInfo" Property="Text" Value="-"/>
+                    </DataTrigger>
+
+                    <!-- If the friend is on a lobby, show the lobby info and the join button -->
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding Online}" Value="True"/>
+                            <Condition Binding="{Binding CrossplayEnabled}" Value="True"/>
+                            <Condition Binding="{Binding Lobby, Converter={StaticResource NullToBoolFalseConverter}}" Value="True"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="JoinBtn" Property="IsEnabled" Value="{Binding DataContext.IsUpdating, ElementName=Friendslist, Converter={StaticResource InvertBoolConverter}}"/>
+                        <Setter TargetName="JoinBtnTT" Property="Content" Value="{Binding Source='h9a9113b9geb0ag4d7agad37g51c5ec1ec635', Converter={StaticResource TranslatedStringConverter}}"/>
+                        <Setter TargetName="ConnectionStatus" Property="Source" Value="{StaticResource OnlineStatusAvailable}"/>
+                        <Setter TargetName="ConnectionStatusTT" Property="Content" Value="{Binding Source='h3295a3a4g56bfg4d88g9b29gaa60c7b6536b', Converter={StaticResource TranslatedStringConverter}}"/>
+                    </MultiDataTrigger>
+
+                    <!-- Invite state -->
+                    <DataTrigger Binding="{Binding LobbyInviteSent}" Value="True">
+                        <Setter TargetName="InviteToPartyAction" Property="IsEnabled" Value="False"/>
+                        <Setter TargetName="InviteToPartyAction" Property="Header" Value="{Binding Source='h325edb4aga842g40cag8665g65bdce8f0bb2', Converter={StaticResource TranslatedStringConverter}}"/>
+                        <Setter TargetName="InviteBtn" Property="IsEnabled" Value="False"/>
+                        <Setter TargetName="InviteBtn" Property="Content" Value="{Binding Source='h325edb4aga842g40cag8665g65bdce8f0bb2', Converter={StaticResource TranslatedStringConverter}}"/>
+                    </DataTrigger>
+
+                    <!-- If the friend is on a lobby and we're also a host of another lobby, show the join context button -->
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding Online}" Value="True"/>
+                            <Condition Binding="{Binding Lobby, Converter={StaticResource NullToBoolFalseConverter}}" Value="True"/>
+                            <Condition Binding="{Binding DataContext.HasServer, ElementName=Friendslist}" Value="True"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="InviteToPartyAction" Property="Visibility" Value="Visible"/>
+                    </MultiDataTrigger>
+
+                    <!-- If the friend is not on a lobby and we're the host, show the invite button -->
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding Online}" Value="True"/>
+                            <Condition Binding="{Binding CrossplayEnabled}" Value="True"/>
+                            <Condition Binding="{Binding Lobby, Converter={StaticResource NullToBoolFalseConverter}}" Value="False"/>
+                            <Condition Binding="{Binding DataContext.HasServer, ElementName=Friendslist}" Value="True"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="InviteBtn" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="ConnectionStatus" Property="Source" Value="{StaticResource OnlineStatusAvailable}"/>
+                        <Setter TargetName="ConnectionStatusTT" Property="Content" Value="{Binding Source='h3295a3a4g56bfg4d88g9b29gaa60c7b6536b', Converter={StaticResource TranslatedStringConverter}}"/>
+                    </MultiDataTrigger>
+
+                    <!-- If the friend is on our party already, hide join/invite buttons and show the in-party indicator -->
+                    <DataTrigger Binding="{Binding InParty}" Value="True">
+                        <Setter TargetName="InPartyImg" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="LobbyInfo" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="InviteBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="ConnectionStatus" Property="Source" Value="{StaticResource OnlineStatusAvailable}"/>
+                        <Setter TargetName="ConnectionStatusTT" Property="Content" Value="{Binding Source='h3295a3a4g56bfg4d88g9b29gaa60c7b6536b', Converter={StaticResource TranslatedStringConverter}}"/>
+                    </DataTrigger>
+
+                    <!-- If the friend is the host of our party, show the leave party button -->
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding Online}" Value="True"/>
+                            <Condition Binding="{Binding InParty}" Value="True"/>
+                            <Condition Binding="{Binding Lobby, Converter={StaticResource NullToBoolFalseConverter}}" Value="True"/>
+                            <Condition Binding="{Binding DataContext.HasServer, ElementName=Friendslist}" Value="False"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="InPartyImg" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LeaveBtn" Property="Visibility" Value="Visible"/>
+                    </MultiDataTrigger>
+
+                    <!-- If the friend has invited us, show the lobby info and the accept/decline invite buttons -->
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding Online}" Value="True"/>
+                            <Condition Binding="{Binding CrossplayEnabled}" Value="True"/>
+                            <Condition Binding="{Binding InviteID, Converter={StaticResource NullToBoolFalseConverter}, ConverterParameter='EmptyString'}" Value="True"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="AcceptInviteBtn" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="DeclineInviteAction" Property="Visibility" Value="Visible"/>
+                    </MultiDataTrigger>
+
+                    <!-- If the lobby is full, disable buttons -->
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding Online}" Value="True"/>
+                            <Condition Binding="{Binding Lobby, Converter={StaticResource NullToBoolFalseConverter}}" Value="True"/>
+                            <Condition Value="True">
+                                <Condition.Binding>
+                                    <MultiBinding Converter="{StaticResource EqualConverter}">
+                                        <Binding Path="Lobby.CurrentPlayers"/>
+                                        <Binding Path="Lobby.MaxPlayers"/>
+                                    </MultiBinding>
+                                </Condition.Binding>
+                            </Condition>
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="JoinBtn" Property="IsEnabled" Value="False"/>
+                        <Setter TargetName="JoinBtnTT" Property="Content" Value="{Binding Source='hbf491057g49f8g42b9gb61bgf8f40eaea58e', Converter={StaticResource TranslatedStringConverter}}"/>
+                        <Setter TargetName="InviteBtn" Property="IsEnabled" Value="False"/>
+                    </MultiDataTrigger>
+
+                    <!-- Remove lobby stuff if we're not connected to larian.net, if the cross-play option is disabled, the friend is offline or friend has crossplay disabled-->
+                    <DataTrigger Binding="{Binding DataContext.Data.LarianNetIsConnected, ElementName=Friendslist}" Value="False">
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="InviteBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LeaveBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LobbyInfo" Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding DataContext.Data.CrossplayIsEnabled, ElementName=Friendslist}" Value="False">
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="InviteBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LeaveBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LobbyInfo" Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding DataContext.Data.IsUsingCrossplay, ElementName=Friendslist}" Value="False">
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="InviteBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LeaveBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LobbyInfo" Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding DataContext.Data.IsMultiplayerAllowedInGame, ElementName=Friendslist}" Value="False">
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="InviteBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LeaveBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LobbyInfo" Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Online}" Value="False">
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="InviteBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LeaveBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LobbyInfo" Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding CrossplayEnabled}" Value="False">
+                        <Setter TargetName="JoinBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="InviteBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LeaveBtn" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="LobbyInfo" Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <ControlTemplate x:Key="BlockedUsersListEntryTemplate" TargetType="ListBoxItem">
+                <Border x:Name="BlockedUserEntryRoot" Background="Transparent" d:DataContext="{d:DesignInstance {x:Type ls:VMCrossplayUser}, IsDesignTimeCreatable=True}">
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="MouseLeftButtonDown">
+                            <b:InvokeCommandAction Command="{Binding DataContext.SetCurrentCrossplayFriendCommand, ElementName=Friendslist}" CommandParameter="{Binding .}" />
+                            <b:InvokeCommandAction Command="{Binding ShowContextMenuCommand, ElementName=Friendslist}" CommandParameter="{Binding ElementName=BlockedUserEntryRoot}"/>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+                    <Border Background="Transparent">
+                        <Grid Name="FriendsListItemholder" Height="84" HorizontalAlignment="Stretch">
+                            <Image x:Name="ListEntryBg" Source="{StaticResource ListEntryBackground}" Stretch="Fill"/>
+                            <TextBlock x:Name="PlayerName" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0" Text="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="520"/>
+                        </Grid>
+                    </Border>
+
+                    <Border.ContextMenu>
+                        <ls:ContextMenu x:Name="FriendslistQuickMenu" Style="{StaticResource BaseLSContextMenu}">
+                            <ls:ContextMenuItem x:Name="UnblockUserAction" Header="{Binding Source='hd2f6101eg169ag4b7dg832cg4dd5383b72d3', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.OpenMessageBox, ElementName=Friendslist}" CommandParameter="{DynamicResource UnblockUserMessageBox}"/>
+                        </ls:ContextMenu>
+                    </Border.ContextMenu>
+
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="ListEntryBg" Property="Source" Value="{StaticResource ListEntryBackground_h}"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <ControlTemplate x:Key="FriendsRequestEntryTemplate" TargetType="ListBoxItem">
+                <Border x:Name="FriendEntryRoot" Background="Transparent" d:DataContext="{d:DesignInstance {x:Type ls:VMCrossplayUser}, IsDesignTimeCreatable=True}">
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="MouseLeftButtonDown">
+                            <b:ChangePropertyAction Value="{Binding .}" PropertyName="Tag" TargetName="Friendslist"/>
+                            <b:InvokeCommandAction Command="{Binding DataContext.OpenMessageBox,ElementName=Friendslist}" CommandParameter="{DynamicResource OnFriendRequestReceivedMessageBox}"/>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+                    <Border Background="Transparent" IsHitTestVisible="False">
+                        <Grid Name="FriendsListItemholder"  Height="84" HorizontalAlignment="Stretch" IsHitTestVisible="False">
+                            <Image x:Name="ListEntryBg" Source="{StaticResource ListEntryBackground}" Stretch="Fill"/>
+                            <TextBlock x:Name="PlayerName" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20,0" Text="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="520"/>
+                        </Grid>
+                    </Border>
+                    <Border.ContextMenu>
+                        <ls:ContextMenu x:Name="FriendslistQuickMenu" Style="{StaticResource BaseLSContextMenu}">
+                            <ls:ContextMenuItem Header="{Binding Source='hb7c4ac5dg2008g4cddgb3e1gaf928b680ae4',Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.AcceptFriendRequestCommand, ElementName=Friendslist}" CommandParameter="{Binding .}"/>
+                            <ls:ContextMenuItem Header="{Binding Source='hdb0aa019g69e7g4c5dg9b9egc73581b0e75e',Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.DeclineFriendRequestCommand, ElementName=Friendslist}" CommandParameter="{Binding .}"/>
+                            <ls:ContextMenuItem Header="{Binding Source='h9e07d1fbg7c06g4f9bg952cg01694974705a', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.ReportUserCommand, ElementName=Friendslist}" CommandParameter="{Binding DataContext.Data.CrossplayCurrentFriend, ElementName=Friendslist}"/>
+                        </ls:ContextMenu>
+                    </Border.ContextMenu>
+
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="ListEntryBg" Property="Source" Value="{StaticResource ListEntryBackground_h}"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <ControlTemplate x:Key="SentFriendsRequestEntryTemplate" TargetType="ListBoxItem">
+                <Border x:Name="FriendEntryRoot" Background="Transparent" d:DataContext="{d:DesignInstance {x:Type ls:VMCrossplayUser}, IsDesignTimeCreatable=True}">
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="MouseLeftButtonDown">
+                            <b:ChangePropertyAction Value="{Binding .}" PropertyName="Tag" TargetName="Friendslist"/>
+                            <b:InvokeCommandAction Command="{Binding DataContext.OpenMessageBox,ElementName=Friendslist}" CommandParameter="{DynamicResource OnRemoveSentFriendRequestMessageBox}"/>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+                    <Border Background="Transparent" IsHitTestVisible="False" >
+                        <Grid Name="FriendsListItemholder"  Height="84" HorizontalAlignment="Stretch" IsHitTestVisible="False">
+                            <Image x:Name="ListEntryBg" Source="{StaticResource ListEntryBackground}" Stretch="Fill"/>
+                            <TextBlock x:Name="PlayerName" HorizontalAlignment="Left" VerticalAlignment="Center"  Text="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="520" Margin="20,0"/>
+                        </Grid>
+                    </Border>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="ListEntryBg" Property="Source" Value="{StaticResource ListEntryBackground_h}"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <ControlTemplate x:Key="PlatformFriendsEntryTemplate" TargetType="ListBoxItem">
+                <Border x:Name="FriendEntryRoot" Background="Transparent" d:DataContext="{d:DesignInstance {x:Type ls:VMCrossplayUser}, IsDesignTimeCreatable=True}">
+                    <b:Interaction.Behaviors>
+                        <ls:CollectionContainsItemBehavior x:Name="IsAlreadyFriend" ItemSource="{Binding .}" CollectionSource="{Binding DataContext.Data.CrossplayFriends, ElementName=Friendslist}"/>
+                    </b:Interaction.Behaviors>
+
+                    <ls:LSButton x:Name="SendInviteButton" Background="Transparent" Command="{Binding DataContext.SendFriendRequestByUserIdCommand,ElementName=Friendslist}" CommandParameter="{Binding .}" Margin="20,0">
+                        <ls:LSButton.Template>
+                            <ControlTemplate TargetType="ls:LSButton">
+                                <Grid Name="FriendsListItemholder"  Height="84" HorizontalAlignment="Stretch" IsHitTestVisible="True">
+                                    <Image x:Name="ListEntryBg" Source="{StaticResource ListEntryBackground}" Stretch="Fill"/>
+                                    <TextBlock x:Name="PlayerName" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0" Text="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="520"/>
+                                    <TextBlock x:Name="Info" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0" Text="{Binding Source='h325edb4aga842g40cag8665g65bdce8f0bb2', Converter={StaticResource TranslatedStringConverter}}" TextTrimming="CharacterEllipsis" MaxWidth="520" Visibility="Collapsed"/>
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="ListEntryBg" Property="Source" Value="{StaticResource ListEntryBackground_h}"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter TargetName="Info" Property="Visibility" Value="Visible"/>
+                                        <Setter Property="Foreground" Value="{StaticResource LS_accent25TxtColor}"/>
+                                    </Trigger>
+                                    <DataTrigger Binding="{Binding Result, ElementName=IsAlreadyFriend}" Value="True">
+                                        <Setter TargetName="Info" Property="Text" Value="{Binding Source='h129d94e4gac1dg425bgba7dgeeccf636b266', Converter={StaticResource TranslatedStringConverter}}"/>
+                                    </DataTrigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </ls:LSButton.Template>
+                    </ls:LSButton>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <DataTrigger Binding="{Binding Result, ElementName=IsAlreadyFriend}" Value="True">
+                        <Setter Property="IsEnabled" Value="False"/>
+                    </DataTrigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <Style x:Key="PlatformFriendsEntryStyle"  TargetType="ListBoxItem">
+                <Setter Property="Template" Value="{StaticResource PlatformFriendsEntryTemplate}"/>
+                <Setter Property="IsEnabled" Value="True"/>
+
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding FriendRequestSent}" Value="True">
+                        <Setter Property="IsEnabled" Value="False"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+
+            <System:Double x:Key="IconDisabledOpacity">0.7</System:Double>
+            <System:Double x:Key="IconWidth">48</System:Double>
+            <System:Double x:Key="IconHeight">48</System:Double>
+
+            <BitmapImage x:Key="addMoreImg" UriSource="pack://application:,,,/Core;component/Assets/Shared/ico_addMore.png"/>
+            <BitmapImage x:Key="roundButtonDefault" UriSource="/Core;component/Assets/CharacterSheet/btn_round_medium_d.png"/>
+            <BitmapImage x:Key="roundButtonMouseOver" UriSource="/Core;component/Assets/CharacterSheet/btn_round_medium_h.png"/>
+            <BitmapImage x:Key="roundButtonPressed" UriSource="/Core;component/Assets/CharacterSheet/btn_round_medium_p.png"/>
+            <BitmapImage x:Key="roundButtonDisabled" UriSource="/Core;component/Assets/CharacterSheet/btn_round_medium_disabled.png"/>
+
+            <ControlTemplate x:Key="BaseIconButtonTemplate" TargetType="{x:Type ButtonBase}">
+                <Grid>
+                    <Image x:Name="img" Source="{TemplateBinding ls:ButtonHelper.ImageSource}" Stretch="None"/>
+                    <Image x:Name="icon" Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" Source="{TemplateBinding ls:ButtonHelper.SecondaryImageSource}" Stretch="UniformToFill" Width="{DynamicResource IconWidth}" Height="{DynamicResource IconHeight}"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Opacity" TargetName="icon" Value="{StaticResource IconDisabledOpacity}" />
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <Style x:Key="CrossplayBaseButtonStyle" TargetType="{x:Type ButtonBase}">
+                <Style.Resources>
+                    <Style TargetType="ContentPresenter">
+                        <Style.Resources>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource BtnTextGlow }"/>
+                        </Style.Resources>
+                    </Style>
+                </Style.Resources>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Template" Value="{StaticResource BaseIconButtonTemplate}"/>
+                <Setter Property="MinWidth" Value="{Binding (ls:ButtonHelper.ImageSource).Width, RelativeSource={RelativeSource Self}}"/>
+                <Setter Property="MinHeight" Value="{Binding (ls:ButtonHelper.ImageSource).Height, RelativeSource={RelativeSource Self}}"/>
+                <Setter Property="FontSize" Value="{StaticResource ScaledMediumFontSize}"/>
+                <Setter Property="Foreground" Value="{StaticResource LS_tint100}"/>
+                <Setter Property="Padding" Value="0,0" />
+                <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+                <Setter Property="ToolTipService.Placement" Value="Top"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="IsEnabled" Value="{Binding Data.LarianNetIsConnected}"/>
+                <Setter Property="ls:ButtonHelper.ImageSource" Value="{StaticResource roundButtonDefault}"/>
+                <Style.Triggers>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter Property="Padding" Value="0,4,0,0" />
+                        <Setter Property="ls:ButtonHelper.ImageSource" Value="{StaticResource roundButtonPressed}"/>
+                    </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{StaticResource LS_accent25TxtColor}" />
+                        <Setter Property="ls:ButtonHelper.ImageSource" Value="{StaticResource roundButtonDisabled}" />
+                    </Trigger>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="ls:ButtonHelper.ImageSource" Value="{StaticResource roundButtonMouseOver}" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </ls:UIWidget.Resources>
+
+
+    <ls:UIWidget.Template>
+        <ControlTemplate TargetType="ls:UIWidget">
+            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{StaticResource LS_DisabledPanelColor}">
+                <!--FRIENDSLIST-->
+                <ls:LSNineSliceImage x:Name="FriendsList" Style="{StaticResource InnerPanelWithDecor}" Height="1544" Width="1200" Opacity="1" Padding="28" Slices="100,700,100,60" >
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <!--CLOSE BUTTON-->
+                            <ls:LSButton x:Name="FriendsListCloseBtn" Panel.ZIndex="20" Style="{StaticResource SmallCloseButton}" SoundID="UI_Shared_Cancel" HorizontalAlignment="Right" VerticalAlignment="Top" BoundEvent="UICancel" Command="{Binding CustomEvent}" CommandParameter="CloseWidget"/>
+
+                            <StackPanel Margin="0,16" VerticalAlignment="Top" HorizontalAlignment="Center">
+                                <StackPanel x:Name="PlayerInfo" Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,0,0,20">
+                                    <Grid x:Name="avatarGrid">
+                                        <Image x:Name="avatarFrame" Source="{StaticResource accountFrameDefault}" Width="160" Stretch="Uniform"/>
+                                        <Rectangle x:Name="avatarIcon" Width="110" Height="110" Fill="{Binding CurrentPlayer.CommunityIcon}"/>
+                                    </Grid>
+                                    <StackPanel Orientation="Vertical" Margin="20,10,0,10">
+                                        <TextBlock x:Name="userName" Foreground="{StaticResource LS_extraspecialTxtColor}"
+                                                   FontSize="{StaticResource ScaledMassiveFontSize}" TextTrimming="CharacterEllipsis" TextAlignment="Left"
+                                                   Text="{Binding CurrentPlayer.Name}" Width="600"/>
+                                        <TextBlock x:Name="userType" Margin="0,10,0,0" Foreground="{StaticResource LS_accent100TxtColor}" Text=""/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <TextBlock x:Name="PanelTitle" Style="{StaticResource PanelSubTitleStyle}" Text="{Binding Source='hb11809a2g29e3g4984gbb64g2887fd7462a8',Converter={StaticResource TranslatedStringConverter}}"/>
+                                <TextBlock x:Name="loginHint" HorizontalAlignment="Center" FontSize="{StaticResource ScaledSmallFontSize}" Text="{Binding Source=hd9634792g470eg48bfgb314g61f1cb39643e,Converter={StaticResource TranslatedStringConverter}}" Visibility="{Binding Data.LarianNetIsConnected, Converter={StaticResource BoolToHiddenConverter}}">
+                                </TextBlock>
+
+                                <ls:LSToggleButton x:Name="ToggleSendInvitePanelButton" IsChecked="False" 
+                                                   Style="{StaticResource BigBlueButtonStyle}" SoundID="UI_HUD_Options_ToggleButton" HorizontalAlignment="Center" VerticalAlignment="Center" 
+                                                   Content="{Binding Source='hd9217f56g9097g4dcdga80dgc8e9710ece2b', Converter={StaticResource TranslatedStringConverter}}"/>
+
+                                <Grid x:Name="ToggleInviteRequestPanel" Margin="0,10,0,80" >
+                                    <ls:LSToggleButton x:Name="ToggleInviteRequestPanelButton" IsChecked="False" 
+                                                       Style="{StaticResource BigBrownButtonStyle}" SoundID="UI_HUD_Options_ToggleButton" HorizontalAlignment="Center" VerticalAlignment="Center" 
+                                                       Content="{Binding Source='h17cfde0cgb36cg49a6ga863gf5299fe6e297', Converter={StaticResource TranslatedStringConverter}}">
+                                        <b:Interaction.Triggers>
+                                            <b:EventTrigger EventName="Loaded">
+                                                <b:Interaction.Behaviors>
+                                                    <b:ConditionBehavior>
+                                                        <b:ConditionalExpression>
+                                                            <b:ComparisonCondition LeftOperand="{Binding Metadata, ElementName=Friendslist}" Operator="Equal" RightOperand="OpenFriendsRequest"/>
+                                                        </b:ConditionalExpression>
+                                                    </b:ConditionBehavior>
+                                                </b:Interaction.Behaviors>
+                                                <b:ChangePropertyAction PropertyName="IsChecked" Value="True" TargetName="ToggleInviteRequestPanelButton"/>
+                                            </b:EventTrigger>
+                                        </b:Interaction.Triggers>
+                                    </ls:LSToggleButton>
+
+                                    <ls:LSButton Style="{StaticResource CrossplayBreadcrumbsStyle}" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="170,0,-170,0"
+                                                 ls:AttachedProperties.Number="{Binding Data.CrossplayFriendRequests.Count}"/>
+                                </Grid>
+                                
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="FriendsListTopBarHolder" Grid.Row="1" Margin="16">
+                            <StackPanel x:Name="LeftBtnList" Orientation="Horizontal">
+
+                                <ComboBox Name="SortFriendsList" SelectedItem="{Binding SortSelected}" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Width="400" ItemsSource="{Binding Source={ls:EnumList Type={x:Type ls:ECrossplayUserSort}}}">
+                                    <ComboBox.Resources>
+                                        <DataTemplate DataType="{x:Type ls:ECrossplayUserSort}">
+                                            <TextBlock x:Name="txt" Text="{Binding .}"/>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding .}" Value="{x:Static ls:ECrossplayUserSort.Status}">
+                                                    <Setter TargetName="txt" Property="Text" Value="{Binding Source='h469b7c4fga5f2g4408g9b73g2e91b4152744',Converter={StaticResource TranslatedStringConverter}}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding .}" Value="{x:Static ls:ECrossplayUserSort.Alphabetical}">
+                                                    <Setter TargetName="txt" Property="Text" Value="{Binding Source='h182bfb2eg5f0eg4d65g801fgef0e72eb6586',Converter={StaticResource TranslatedStringConverter}}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding .}" Value="{x:Static ls:ECrossplayUserSort.Platform}">
+                                                    <Setter TargetName="txt" Property="Text" Value="{Binding Source='h5e7c4446g66a1g4b7cg900dgf543a1895721',Converter={StaticResource TranslatedStringConverter}}"/>
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ComboBox.Resources>
+                                    <ComboBox.Style>
+                                        <Style TargetType="ComboBox" BasedOn="{StaticResource SortListLabelStyle}">
+                                            <Setter Property="noesis:Text.Placeholder" Value="{Binding SortSelected}"/>
+                                        </Style>
+                                    </ComboBox.Style>
+                                    <ComboBox.ItemContainerStyle>
+                                        <Style TargetType="ComboBoxItem" BasedOn="{StaticResource  BaseComboBoxItemStyle}">
+
+                                            <Setter Property="MinHeight" Value="40"/>
+                                        </Style>
+                                    </ComboBox.ItemContainerStyle>
+
+                                </ComboBox>
+                                <StackPanel Name="ToggleOnlineCheckbox" Orientation="Horizontal" HorizontalAlignment="Right" Margin="16,0">
+                                    <ToggleButton Style="{StaticResource TickBox}" Foreground="{StaticResource LS_accent100TxtColor}" Padding="8,0" Content="{Binding Source='hf2ab7634g70a8g4a54g85acga520df4e8eb4',Converter={StaticResource TranslatedStringConverter}}" FlowDirection="RightToLeft" IsChecked="{Binding FilterOnline}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel x:Name="RightButtons" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <ls:LSButton x:Name="RefreshButton" SoundID="UI_HUD_Shared"  Command="{Binding RefreshFriendsListCommand}" IsEnabled="{Binding IsUpdating, Converter={StaticResource InvertBoolConverter}}">
+                                    <ls:LSButton.Resources>
+                                        <ImageSource x:Key="IconNormal">pack://application:,,,/Core;component/Assets/Shared/ico_refresh_d.png</ImageSource>
+                                        <ImageSource x:Key="IconDisabled">pack://application:,,,/Core;component/Assets/Shared/ico_refresh_d.png</ImageSource>
+                                        <ImageSource x:Key="IconHighlight">pack://application:,,,/Core;component/Assets/Shared/ico_refresh_h.png</ImageSource>
+                                        <ImageSource x:Key="IconPressed">pack://application:,,,/Core;component/Assets/Shared/ico_refresh_h.png</ImageSource>
+                                    </ls:LSButton.Resources>
+                                    <ls:LSButton.ToolTip>
+                                        <ls:LSTooltip IsHitTestVisible="False" Content="{Binding Source='h9667f309g5455g45d6gae8cga1d5f6b1dbe2', Converter={StaticResource TranslatedStringConverter}}"/>
+                                    </ls:LSButton.ToolTip>
+                                    <ls:LSButton.Style>
+                                        <Style TargetType="ls:LSButton" BasedOn="{StaticResource CrossplayBaseButtonStyle}">
+                                            <Setter Property="SoundID" Value="UI_HUD_Shared"/>
+                                            <Setter Property="ls:ButtonHelper.SecondaryImageSource" Value="{StaticResource IconNormal}"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="ls:ButtonHelper.SecondaryImageSource" Value="{StaticResource IconHighlight}" />
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter Property="ls:ButtonHelper.SecondaryImageSource" Value="{StaticResource IconPressed}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="ls:ButtonHelper.SecondaryImageSource" Value="{StaticResource IconDisabled}" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ls:LSButton.Style>
+                                </ls:LSButton>
+
+                                <ls:LSToggleButton x:Name="ToggleBlockedUsersListButton" SoundID="UI_HUD_Shared" IsChecked="False" Visibility="{Binding Data.CrossplayBlockedUsers.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                                    <ls:LSToggleButton.Resources>
+                                        <ImageSource x:Key="IconNormal">pack://application:,,,/Core;component/Assets/Crossplay/ico_blocked_d.png</ImageSource>
+                                        <ImageSource x:Key="IconDisabled">pack://application:,,,/Core;component/Assets/Crossplay/ico_blocked_d.png</ImageSource>
+                                        <ImageSource x:Key="IconHighlight">pack://application:,,,/Core;component/Assets/Crossplay/ico_blocked_h.png</ImageSource>
+                                        <ImageSource x:Key="IconPressed">pack://application:,,,/Core;component/Assets/Crossplay/ico_blocked_h.png</ImageSource>
+                                    </ls:LSToggleButton.Resources>
+                                    <ls:LSToggleButton.ToolTip>
+                                        <ls:LSTooltip IsHitTestVisible="False" Content="{Binding Source='h96d63309g08ceg4eb7g8e5ageaefcd4825d3', Converter={StaticResource TranslatedStringConverter}}"/>
+                                    </ls:LSToggleButton.ToolTip>
+                                    <ls:LSToggleButton.Style>
+                                        <Style TargetType="ls:LSToggleButton" BasedOn="{StaticResource CrossplayBaseButtonStyle}">
+                                            <Setter Property="SoundID" Value="UI_HUD_Shared"/>
+                                            <Setter Property="ls:ButtonHelper.SecondaryImageSource" Value="{StaticResource IconNormal}"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="ls:ButtonHelper.SecondaryImageSource" Value="{StaticResource IconHighlight}" />
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter Property="ls:ButtonHelper.SecondaryImageSource" Value="{StaticResource IconPressed}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="ls:ButtonHelper.SecondaryImageSource" Value="{StaticResource IconDisabled}" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ls:LSToggleButton.Style>
+                                </ls:LSToggleButton>
+                            </StackPanel>
+                        </Grid>
+                        <Border x:Name="FriendsListHolder" Grid.Row="2" Style="{StaticResource ListSectionBackground}" Margin="16">
+                            <b:Interaction.Behaviors>
+                                <ls:CollectionFilterBehavior x:Name="FriendsFiltered" ItemsSource="{Binding Data.CrossplayFriends}" Predicate="{Binding FilterOnlineUsersPredicate}"/>
+                                <ls:CollectionFilterBehavior x:Name="FriendsNoInviteFiltered" ItemsSource="{Binding FilteredItems, ElementName=FriendsFiltered}" Predicate="{Binding FilterInviteUsersPredicate}"/>
+                                <ls:CollectionSortBehavior x:Name="FriendsSorted" ItemsSource="{Binding FilteredItems, ElementName=FriendsNoInviteFiltered}" Comparer="{Binding SortUsersPredicate}"/>
+                            </b:Interaction.Behaviors>
+
+                            <ls:LSScrollViewer x:Name="Lists" Margin="8" Padding="0,0,20,0" VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <ListBox x:Name="LobbyInvitesList" ItemsSource="{Binding Data.CrossplayInvites}" 
+                                             Visibility="{Binding ItemsSource.Count, RelativeSource={RelativeSource Self}, Converter={StaticResource CountToVisibilityConverter}}"
+                                             Template="{StaticResource MinimalItemsControlTemplate}">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Template" Value="{StaticResource FriendsListEntryTemplate}"/>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                    </ListBox>
+
+                                    <ListBox x:Name="FriendsListBox" ItemsSource="{Binding ElementName=FriendsSorted,Path=SortedItems}"
+                                             Template="{StaticResource MinimalItemsControlTemplate}">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Template" Value="{StaticResource FriendsListEntryTemplate}"/>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                    </ListBox>
+                                </StackPanel>
+                            </ls:LSScrollViewer>
+                        </Border>
+
+                        <!--FRIENDREQUESTS PANEL-->
+                        <Grid x:Name="FriendRequestHolder" Grid.Row="1" Grid.RowSpan="2" Visibility="{Binding ElementName=ToggleInviteRequestPanelButton, Path=IsChecked, Converter={StaticResource BoolToVisibleConverter}}" Margin="40,0,40,40">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock x:Name="ReceivedRequestsTitle" Grid.Row="0" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,20,0,10">
+                                <Run Text="{Binding Source='h76249b41g6045g428dg825egee7ea8470e43', Converter={StaticResource TranslatedStringConverter}}"/>
+                                <Run x:Name="ReceivedRequestsCount" Text="{Binding Data.CrossplayFriendRequests.Count, StringFormat='{}({0})'}"/>
+                            </TextBlock>
+
+                            <ListBox x:Name="CrossplayFriendRequestsList" Grid.Row="1" ItemsSource="{Binding Data.CrossplayFriendRequests}" Background="#88000000">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Template" Value="{StaticResource FriendsRequestEntryTemplate}"/>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                            </ListBox>
+
+                            <TextBlock x:Name="SentRequestsTitle" Grid.Row="2" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,60,0,10">
+                                <Run Text="{Binding Source='h1db9d73fge967g40b6g98efg88e9a599094d', Converter={StaticResource TranslatedStringConverter}}"/>
+                                <Run x:Name="SentRequestsCount" Text="{Binding Data.CrossplaySentFriendRequests.Count, StringFormat='{}({0})'}"/>
+                            </TextBlock>
+
+                            <ListBox x:Name="CrossplaySentFriendRequestsList" Grid.Row="3" ItemsSource="{Binding Data.CrossplaySentFriendRequests}" Background="#88000000">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Template" Value="{StaticResource SentFriendsRequestEntryTemplate}"/>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                            </ListBox>
+
+                            <ls:LSButton x:Name="FriendsRequestCloseBtn" Grid.Row="4" Style="{StaticResource BigBrownButtonStyle}" SoundID="UI_Shared_Cancel" HorizontalAlignment="Center" VerticalAlignment="Bottom" BoundEvent="UICancel" Margin="0,150,0,0"
+                                         Content="{Binding Source='h77fec760g866dg4e47g8e81g467c9c05e447', Converter={StaticResource TranslatedStringConverter}}">
+                                <b:Interaction.Triggers>
+                                    <b:EventTrigger EventName="Click">
+                                        <b:ChangePropertyAction PropertyName="IsChecked" Value="False" TargetName="ToggleInviteRequestPanelButton"/>
+                                    </b:EventTrigger>
+                                </b:Interaction.Triggers>
+                            </ls:LSButton>
+                        </Grid>
+
+                        <!--FRIEND SEND INVITE PANEL ToggleSendInvitePanelButton-->
+                        <Grid x:Name="SendInvitePanelHolder" Grid.Row="1" Grid.RowSpan="2" Visibility="{Binding ElementName=ToggleSendInvitePanelButton, Path=IsChecked, Converter={StaticResource BoolToVisibleConverter}}" Margin="40,0,40,40">
+                            <b:Interaction.Triggers>
+                                <b:DataTrigger Binding="{Binding ElementName=SendInvitePanelHolder, Path=Visibility}" Value="Visible">
+                                    <b:InvokeCommandAction Command="{Binding ElementName=Friendslist,Path=DataContext.RequestPlatformFriendsUpdateCommand}"/>
+                                </b:DataTrigger>
+                            </b:Interaction.Triggers>
+
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock x:Name="RequestInviteText" Grid.Row="0" Text="{Binding Source='hfcc93506g8a22g48b7g8eceg1ec0c8e17c13', Converter={StaticResource TranslatedStringConverter}}" HorizontalAlignment="Center"/>
+                                <ls:LSButton x:Name="RequestInviteButton" Grid.Row="1" 
+                                             Style="{StaticResource BigBlueButtonStyle}" HorizontalAlignment="Center"
+                                             Content="{Binding Source='hb1844129g776ag4118gababgad4ea2288639', Converter={StaticResource TranslatedStringConverter}}"
+                                             Command="{Binding OpenMessageBox}"
+                                             CommandParameter="{DynamicResource SendFriendRequestMessageBox}">
+                                    <ls:LSButton.ToolTip>
+                                        <ls:LSTooltip IsHitTestVisible="False">
+                                            <TextBlock Text="{Binding Source='hfdb47799gcf47g4e77g8758g29fdc8b8e276', Converter={StaticResource TranslatedStringConverter}}"/>
+                                        </ls:LSTooltip>
+                                    </ls:LSButton.ToolTip>
+                                </ls:LSButton>
+
+                                <TextBlock x:Name="PlatformTitle" Grid.Row="2" HorizontalAlignment="Center" Margin="0,60,0,0" TextWrapping="Wrap">
+                                    <TextBlock.Text>
+                                        <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}" ConverterParameter="ha56ad5acgfb14g49e5g8b37gd6c7ad66a4b6">
+                                            <Binding Path="Text" ElementName="PlatformName"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock x:Name="PlatformWarning" Grid.Row="3" HorizontalAlignment="Center" Margin="0,0,0,20" FontStyle="Italic" TextWrapping="Wrap">
+                                    <TextBlock.Text>
+                                        <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}" ConverterParameter="h30e0d93fg9b52g48f3ga893g6c0245e4dc6a">
+                                            <Binding Path="Text" ElementName="PlatformName"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <!-- Binding directly the CommunityPlatform on above MultiBindings doesn't work, so we need to use this workaround -->
+                                <TextBlock x:Name="PlatformName" Grid.Row="2" Visibility="Collapsed" Text="{Binding Data.CommunityPlatform, Converter={StaticResource EnumTranslatedStringConverter}, ConverterParameter='hdb7e2a56g86d2g46c0g923cg11da095663d8'}"/>
+
+                                <ListBox x:Name="CrossplayPlatformFriendsList" Grid.Row="4" ItemsSource="{Binding Data.CrossplayPlatformFriends}" DockPanel.Dock="Bottom" Background="#80000000" ItemContainerStyle="{StaticResource PlatformFriendsEntryStyle}"/>
+                            </Grid>
+
+                            <ls:LSButton x:Name="InvitesCloseBtn" Grid.Row="1" Style="{StaticResource BigBrownButtonStyle}" SoundID="UI_Shared_Cancel" HorizontalAlignment="Center" VerticalAlignment="Bottom" BoundEvent="UICancel" Margin="0,80,0,0"
+                                         Content="{Binding Source='h77fec760g866dg4e47g8e81g467c9c05e447', Converter={StaticResource TranslatedStringConverter}}">
+                                <b:Interaction.Triggers>
+                                    <b:EventTrigger EventName="Click">
+                                        <b:ChangePropertyAction PropertyName="IsChecked" Value="False" TargetName="ToggleSendInvitePanelButton"/>
+                                    </b:EventTrigger>
+                                </b:Interaction.Triggers>
+                            </ls:LSButton>
+                        </Grid>
+
+                        <!--BLOCKED USERS PANEL-->
+                        <Grid x:Name="BlockedUsersPanelHolder" Grid.Row="1" Grid.RowSpan="2" Visibility="{Binding ElementName=ToggleBlockedUsersListButton, Path=IsChecked, Converter={StaticResource BoolToVisibleConverter}}" Margin="40,0,40,40">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock x:Name="BlockedUsersText" Grid.Row="0" Text="{Binding Source='hd2d20e22gcf85g45fbgbd1bgdc569082e142', Converter={StaticResource TranslatedStringConverter}}" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+
+                                <ListBox x:Name="BlockedUsersList" Grid.Row="1" ItemsSource="{Binding Data.CrossplayBlockedUsers}" Background="#80000000">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Template" Value="{StaticResource BlockedUsersListEntryTemplate}"/>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                </ListBox>
+                            </Grid>
+
+                            <ls:LSButton x:Name="BlockedUsersCloseBtn" Grid.Row="1" Style="{StaticResource BigBrownButtonStyle}" SoundID="UI_Shared_Cancel" HorizontalAlignment="Center" VerticalAlignment="Bottom" BoundEvent="UICancel" Margin="0,80,0,0"
+                                         Content="{Binding Source='h77fec760g866dg4e47g8e81g467c9c05e447', Converter={StaticResource TranslatedStringConverter}}">
+                                <b:Interaction.Triggers>
+                                    <b:EventTrigger EventName="Click">
+                                        <b:ChangePropertyAction PropertyName="IsChecked" Value="False" TargetName="ToggleBlockedUsersListButton"/>
+                                    </b:EventTrigger>
+                                </b:Interaction.Triggers>
+                            </ls:LSButton>
+                        </Grid>
+
+                        <ls:LSButton x:Name="InviteByIdBtn" Grid.Row="3"
+                                     Style="{StaticResource BigBlueButtonStyle}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,32,0,40"
+                                     Visibility="Collapsed"
+                                     Content="{Binding Source='he50e998fgba3cg404fg8c6aged7aeba0c447', Converter={StaticResource TranslatedStringConverter}}"
+                                     Command="{Binding OpenMessageBox}" CommandParameter="{DynamicResource InviteByIdMessageBox}"/>
+
+                        <StackPanel x:Name="OnlineDisabledMessage" Grid.Row="3" Visibility="{Binding Data.IsMultiplayerAllowedInGame, Converter={StaticResource BoolToCollapsedConverter}}">
+                            <TextBlock Text="{Binding Source='h13ec606eg8048g492cg956bgf8b9c75b629e', Converter={StaticResource TranslatedStringConverter}}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource LS_warning50TxtColor}" FontSize="{StaticResource ScaledMediumFontSize}" Margin="40,20"/>
+                        </StackPanel>
+
+                        <StackPanel x:Name="EnableCrossplayHolder" Grid.Row="3" Visibility="{Binding Data.CrossplayIsEnabled, Converter={StaticResource BoolToCollapsedConverter}}" Margin="0,32,0,40">
+                            <TextBlock Text="{Binding Source='h2af5b0a6gb77bg4239gae9dg26bdbf6c51a2', Converter={StaticResource TranslatedStringConverter}}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource LS_warning50TxtColor}" FontSize="{StaticResource ScaledMediumFontSize}"/>
+                            <TextBlock Text="{Binding Source='h08829171g8400g436agbab2gef2d8499cdc8', Converter={StaticResource TranslatedStringConverter}}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource LS_warning50TxtColor}" FontSize="{StaticResource ScaledMediumFontSize}" Margin="0,10,0,20"/>
+                            <ls:LSButton x:Name="EnableCrossplayBtn"
+                                         Style="{StaticResource BigBlueButtonStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                         Content="{Binding Source='hc581fed4ge657g4952ga74ag91ba3910339a', Converter={StaticResource TranslatedStringConverter}}"
+                                         Command="{Binding EnableCrossplayCommand}">
+                                <b:Interaction.Triggers>
+                                    <b:EventTrigger EventName="Click">
+                                        <b:InvokeCommandAction Command="{Binding RefreshFriendsListCommand}"/>
+                                    </b:EventTrigger>
+                                </b:Interaction.Triggers>
+                            </ls:LSButton>
+                        </StackPanel>
+                    </Grid>
+                </ls:LSNineSliceImage>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding Data.CrossplayIsEnabled}" Value="False">
+                    <Setter TargetName="LobbyInvitesList" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Data.IsUsingCrossplay}" Value="False">
+                    <Setter TargetName="LobbyInvitesList" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Data.IsMultiplayerAllowedInGame}" Value="False">
+                    <Setter TargetName="LobbyInvitesList" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="OnlineDisabledMessage" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+
+                <!-- We can only invite by ID if the lobby visibility is set to Private (invitation only) or Friends (friends-only) -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasServer}" Value="True"/>
+                        <Condition Binding="{Binding Data.CrossplayIsEnabled}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsUsingCrossplay}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsMultiplayerAllowedInGame}" Value="True"/>
+                        <Condition Binding="{Binding Data.LobbyVisibility}" Value="Private"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="InviteByIdBtn" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasServer}" Value="True"/>
+                        <Condition Binding="{Binding Data.CrossplayIsEnabled}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsUsingCrossplay}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsMultiplayerAllowedInGame}" Value="True"/>
+                        <Condition Binding="{Binding Data.LobbyVisibility}" Value="Friends"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="InviteByIdBtn" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <Trigger SourceName="ToggleInviteRequestPanelButton" Property="IsChecked" Value="True">
+                    <Setter TargetName="FriendsListTopBarHolder" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="FriendsListHolder" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="FriendsListCloseBtn" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ToggleSendInvitePanelButton" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ToggleInviteRequestPanel" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="EnableCrossplayHolder" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="InviteByIdBtn" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="PlayerInfo" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='h17cfde0cgb36cg49a6ga863gf5299fe6e297',Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="PanelTitle" Property="Style" Value="{StaticResource PanelTitleStyle}"/>
+                </Trigger>
+                <Trigger SourceName="ToggleSendInvitePanelButton" Property="IsChecked" Value="True">
+                    <Setter TargetName="FriendsListTopBarHolder" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="FriendsListHolder" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="FriendsListCloseBtn" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ToggleSendInvitePanelButton" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ToggleInviteRequestPanel" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="EnableCrossplayHolder" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="InviteByIdBtn" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="PlayerInfo" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='hd9217f56g9097g4dcdga80dgc8e9710ece2b',Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="PanelTitle" Property="Style" Value="{StaticResource PanelTitleStyle}"/>
+                </Trigger>
+                <Trigger SourceName="ToggleBlockedUsersListButton" Property="IsChecked" Value="True">
+                    <Setter TargetName="FriendsListTopBarHolder" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="FriendsListHolder" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="FriendsListCloseBtn" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ToggleSendInvitePanelButton" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ToggleInviteRequestPanel" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="EnableCrossplayHolder" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="InviteByIdBtn" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="PlayerInfo" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="PanelTitle" Property="Text" Value="{Binding Source='hb6038dd6gc717g403bg9204gd19d016635fd', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="PanelTitle" Property="Style" Value="{StaticResource PanelTitleStyle}"/>
+                </Trigger>
+                <DataTrigger Binding="{Binding Data.CrossplayFriendRequests.Count}" Value="0">
+                    <Setter TargetName="ReceivedRequestsCount" Property="Text" Value=""/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Data.CrossplaySentFriendRequests.Count}" Value="0">
+                    <Setter TargetName="SentRequestsCount" Property="Text" Value=""/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasServer}" Value="True">
+                    <Setter TargetName="userType" Property="Text" Value="{Binding Source='h4c0d0531gcbecg4a21gb5c6g5fbc0f07532b', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasServer}" Value="False"/>
+                        <Condition Binding="{Binding InParty}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="userType" Property="Text" Value="{Binding Source='hf0b34d64g7012g440cga1d5g548173dcef3f', Converter={StaticResource TranslatedStringConverter}}"/>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding Data.CommunityPlatform}" Value="Invalid">
+                    <Setter TargetName="PlatformTitle" Property="Text" Value="{Binding Source='h9ac38bb2gfb4eg407ega000gf8732870e4dc', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="PlatformWarning" Property="Text" Value="{Binding Source='hcd703274gd362g4669gb5a5gcdc51069f3d5', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding IsMainMenu}" Value="False">
+                    <Setter TargetName="EnableCrossplayHolder" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ls:UIWidget.Template>
+</ls:UIWidget>
