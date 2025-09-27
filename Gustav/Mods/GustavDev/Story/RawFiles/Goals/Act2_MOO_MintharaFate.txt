@@ -12,7 +12,6 @@ DB_CombatReact_AD_OnNextTurn((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8
 DB_GlobalFlagReactionAfterDialog(MOO_MintharaFate_Event_MintharaFightsTorturers_db163fc5-f218-96c9-7333-f466dfff804e,(DIALOGRESOURCE)MOO_MintharaFate_Torture_3cfe059b-af60-8e99-52cf-0c81ee75f33b);
 KBSECTION
 //REGION Init
-
 PROC
 PROC_MOO_MintharaFate_Init()
 AND
@@ -22,6 +21,7 @@ PROC_CharacterDisableAllCrimes(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134
 TriggerRegisterForCharacter(S_MOO_MintharaCheckpointArea_ad88de1c-cc28-46fe-b833-4d6f2d7c3574, S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b);
 PROC_SetOnStage(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, 1);
 ApplyStatus(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "TUT_RESTORATION", 6.0, 1, NULL_00000000-0000-0000-0000-000000000000);
+SetCombatGroupID(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "");
 DB_MOO_MintharaFate_TortureSceneNPCs(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b);
 DB_MOO_MintharaFate_TortureSceneNPCs(S_MOO_MindTorturer_001_480b89b1-ae6c-46e7-ad79-1b3babe3655e);
 DB_MOO_MintharaFate_TortureSceneNPCs(S_MOO_MindTorturer_002_5c744998-b3cb-4edb-8a32-4df06593e849);
@@ -434,6 +434,7 @@ SetEntityEvent(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "ClearP
 ClearFlag(MOO_MintharaFate_State_Waiting_609996c8-75d1-89f0-9ad3-1b7f73aee11d, NULL_00000000-0000-0000-0000-000000000000, 0);
 AddPartyFollower(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player);
 SetFlag(MOO_MintharaFate_State_FollowedPlayer_9bd30b81-0890-678f-75db-8ec3674a1a0a, _Player, 0);
+DB_MOO_MinatharaFate_Owner((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player);
 
 IF
 DialogActorLeft(_Dialog, _ID, S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _)
@@ -445,6 +446,7 @@ THEN
 ClearFlag(MOO_MintharaFate_State_Following_f745cd7c-b3e6-cca7-10f3-a68efc02c4d3, NULL_00000000-0000-0000-0000-000000000000, 0);
 ClearFlag(MOO_MintharaFate_State_FollowedPlayer_9bd30b81-0890-678f-75db-8ec3674a1a0a, _Player, 0);
 RemovePartyFollower(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player);
+NOT DB_MOO_MinatharaFate_Owner((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player);
 
 IF
 DialogActorLeft(_Dialog, _ID, S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _)
@@ -458,6 +460,15 @@ ClearFlag(MOO_MintharaFate_State_FollowedPlayer_9bd30b81-0890-678f-75db-8ec3674a
 NOT DB_GLO_Follower_Reassigning((CHARACTER)MOO_MintharaFate_State_FollowedPlayer_9bd30b81-0890-678f-75db-8ec3674a1a0a, _OldPlayer, _Player);
 
 IF
+DialogActorLeft((DIALOGRESOURCE)MOO_MintharaFate_Drow_deaff457-a97a-fd8f-9c46-517d1488a42a, _ID, S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _)
+AND
+DB_MOO_MintharaFate_QueueMintharaWait(_ID)
+THEN
+PROC_RemoveAllDialogEntriesForSpeaker(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b);
+DB_Dialogs(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, MOO_MintharaFate_Drow_deaff457-a97a-fd8f-9c46-517d1488a42a);
+
+
+IF
 CharacterJoinedParty(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b)
 AND
 DB_GlobalFlag(MOO_MintharaFate_State_Following_f745cd7c-b3e6-cca7-10f3-a68efc02c4d3)
@@ -465,7 +476,7 @@ THEN
 PROC_RemoveAllDialogEntriesForSpeaker(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b);
 DB_Dialogs(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, MOO_MintharaFate_DrowFollowing_f47f5656-8563-7725-e4c2-8f166eb4d6b8);
 
-IF
+IF 
 CharacterJoinedParty(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b)
 AND
 DB_GlobalFlag(MOO_MintharaFate_State_Following_f745cd7c-b3e6-cca7-10f3-a68efc02c4d3)
@@ -526,11 +537,12 @@ TriggerUnregisterForCharacter(S_MOO_DrowEscapeArea_b2805435-6f50-4f8b-afa4-a1370
 PROC_RemovePartyFollower(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b);
 ClearFlag(MOO_MintharaFate_State_Following_f745cd7c-b3e6-cca7-10f3-a68efc02c4d3, NULL_00000000-0000-0000-0000-000000000000, 0);
 ClearFlag(MOO_MintharaFate_State_FollowedPlayer_9bd30b81-0890-678f-75db-8ec3674a1a0a, _Player, 0);
+NOT DB_MOO_MinatharaFate_Owner((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player);
 
 PROC
 PROC_MOO_MintharaFate_StartEscapeDialog((CHARACTER)_Player)
 AND
-NOT QRY_StartDialog((DIALOGRESOURCE)MOO_MintharaFate_Escaped_2cc01717-c2c6-e827-2c14-82d53370556a, S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player)
+NOT QRY_StartDialog_Fixed((DIALOGRESOURCE)MOO_MintharaFate_Escaped_2cc01717-c2c6-e827-2c14-82d53370556a, S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player)
 THEN
 DB_SpotPlayers(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "MOO_MintharaFate_Escaped", NULL_00000000-0000-0000-0000-000000000000, NULL_00000000-0000-0000-0000-000000000000);
 DB_SpotPlayers_IncludeWildshapedPlayers(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "MOO_MintharaFate_Escaped");
@@ -587,6 +599,7 @@ ClearFlag(MOO_MintharaFate_State_Following_f745cd7c-b3e6-cca7-10f3-a68efc02c4d3,
 ClearFlag(MOO_MintharaFate_State_FollowedPlayer_9bd30b81-0890-678f-75db-8ec3674a1a0a, _Player, 0);
 DB_SpotPlayers(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "MOO_MintharaFate_Escaped", NULL_00000000-0000-0000-0000-000000000000, NULL_00000000-0000-0000-0000-000000000000);
 DB_SpotPlayers_IncludeWildshapedPlayers(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "MOO_MintharaFate_Escaped");
+NOT DB_MOO_MinatharaFate_Owner((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player);
 
 //Hav is destroyed, don't delay after all
 IF
@@ -603,6 +616,7 @@ ClearFlag(MOO_MintharaFate_State_Following_f745cd7c-b3e6-cca7-10f3-a68efc02c4d3,
 ClearFlag(MOO_MintharaFate_State_FollowedPlayer_9bd30b81-0890-678f-75db-8ec3674a1a0a, _Player, 0);
 DB_SpotPlayers(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "MOO_MintharaFate_Escaped", NULL_00000000-0000-0000-0000-000000000000, NULL_00000000-0000-0000-0000-000000000000);
 DB_SpotPlayers_IncludeWildshapedPlayers(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "MOO_MintharaFate_Escaped");
+NOT DB_MOO_MinatharaFate_Owner((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player);
 
 PROC
 PROC_SpotPlayers_Spotted(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "MOO_MintharaFate_Escaped", _Player)
@@ -662,6 +676,16 @@ AND
 CharacterGetOwner(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player)
 AND
 GetFlag(MOO_MintharaFate_State_FollowedPlayer_9bd30b81-0890-678f-75db-8ec3674a1a0a, _Player, 1)
+THEN
+SetFlag(MOO_MintharaFate_Event_TravelInterrupted_eaa338b4-e3c1-f62b-7258-d2e27fd8fc28, NULL_00000000-0000-0000-0000-000000000000, 0);
+PROC_MOO_MintharaFate_MintharaStopsPlayer(_Player);
+
+QRY
+QRY_REALLY_BlockFastTravel((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b)
+AND
+DB_MOO_MinatharaFate_Owner((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player)
+AND
+DB_GlobalFlag((FLAG)MOO_MintharaFate_State_Following_f745cd7c-b3e6-cca7-10f3-a68efc02c4d3)
 THEN
 SetFlag(MOO_MintharaFate_Event_TravelInterrupted_eaa338b4-e3c1-f62b-7258-d2e27fd8fc28, NULL_00000000-0000-0000-0000-000000000000, 0);
 PROC_MOO_MintharaFate_MintharaStopsPlayer(_Player);
@@ -985,6 +1009,7 @@ CharacterGetOwner((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f13438
 THEN
 PROC_State_Progress(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "MOO_MintharaFate", "MOO_MintharaFate_State_PermaDefeated");
 RemovePartyFollower((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player);
+NOT DB_MOO_MinatharaFate_Owner((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, _Player);
 
 //END_REGION
 

@@ -790,6 +790,31 @@ THEN
 PROC_SetRelationMutual((FACTION)ACT1_DEN_CapturedGoblin_40d6a49e-806c-4bce-8214-6228cc0ded72, (FACTION)ACT1_GOB_Goblins_General_633245e8-cbb8-b0c4-12ec-32d2ff9424e2, 50); // Make Sazza neutral towards the other goblins.
 PROC_SetRelationToPlayers((FACTION)ACT1_DEN_CapturedGoblin_40d6a49e-806c-4bce-8214-6228cc0ded72, 100); // Make Sazza friendly towards players.
 
+IF
+EnteredCombat(S_DEN_CapturedGoblin_783d7572-a846-455f-b686-247a95263ebb, _CombatID)
+AND
+DB_GlobalFlag(GOB_CapturedGoblin_State_Executed_5505345c-482d-cfc5-3a2b-987611beb4e3)
+AND
+NOT DB_GlobalFlag(GOB_SpiderNest_State_GoblinExecutionOver_7d89d850-e52f-47f6-891f-c85c7e7f0241)
+THEN
+DB_DrowAndCaptured_CombatResolution(_CombatID);
+
+IF
+Died((CHARACTER)_ExecutionGoblin)
+AND
+DB_GOB_SpiderNest_ExecutionGoblins(_ExecutionGoblins)
+AND
+DB_GlobalFlag(GOB_SpiderNest_State_Executioner_Ready_b9a547ef-b244-47d6-a78d-22b2c7410985)
+THEN
+ClearFlag(GOB_SpiderNest_State_Executioner_Ready_b9a547ef-b244-47d6-a78d-22b2c7410985);
+
+PROC
+PROC_GOB_SpiderNest_TryFreeCapturedGoblin()
+AND
+NOT DB_GOB_SpiderNest_VictimDialog(S_DEN_CapturedGoblin_783d7572-a846-455f-b686-247a95263ebb, GOB_SpiderNest_CapturedGoblin_88941bf9-f6bc-7b9c-9f77-20a684bdf7a0)
+THEN
+DB_GOB_SpiderNest_VictimDialog(S_DEN_CapturedGoblin_783d7572-a846-455f-b686-247a95263ebb, GOB_SpiderNest_CapturedGoblin_88941bf9-f6bc-7b9c-9f77-20a684bdf7a0);
+
 PROC
 PROC_GOB_SpiderNest_TryFreeCapturedGoblin()
 AND
@@ -808,9 +833,16 @@ THEN
 QuestUpdate(_Player, "DEN_CapturedGoblin", "SavedFromSpider");
 
 IF
+FlagSet(GOB_CapturedGoblin_QuestReward_8b396662-ad3b-1485-e6e0-2c0995ab0bb3, _, _)
+AND
+DB_Dialogs((CHARACTER)S_DEN_CapturedGoblin_783d7572-a846-455f-b686-247a95263ebb, (DIALOGRESOURCE)DEN_CapturedGoblin_db2b1587-8297-6a2c-4355-86664ddb3264)
+THEN
+PROC_GOB_SpiderNest_FreedCapturedGoblinJournalEntry();
+
+IF
 WentOnStage(S_DEN_CapturedGoblin_783d7572-a846-455f-b686-247a95263ebb, 0)
 AND
-DB_PermaDefeated(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b)
+DB_Defeated(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b)
 AND
 DB_GlobalFlag((FLAG)GOB_CapturedGoblin_State_Executed_5505345c-482d-cfc5-3a2b-987611beb4e3)
 AND

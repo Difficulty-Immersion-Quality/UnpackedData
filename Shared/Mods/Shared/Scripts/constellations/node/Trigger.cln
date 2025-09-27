@@ -7,11 +7,13 @@ game.states.Trigger = State{
             All - check for any kind of entities in the trigger
             Characters - only check for characters in the trigger
             LivingCharacters - only check for living characters in the trigger, and character will leave when it dies in the trigger
+            PartyMembers - only check for party members,
+            LivingPartyMembers - only check for living party members,
             Items - only check for items in the trigger]],
             required = false,
             default = [[All]]
         }
-
+        
         params.ExcludeTag = {
             type = EParamType.String,
             help = [[Entities entering/leaving trigger with this tag (NAME_Guid) will not trigger the event. Currently only possible to put one tag]],
@@ -33,6 +35,9 @@ game.states.Trigger = State{
         outputs.OnLeave = {help = [[Output socket that's triggered when an object left the trigger]]}
 
         outputs.Empty = {help = [[Output socket that's triggered when all objects have left]]}
+
+        local filterFunctions = {} -- See construction in helpers.Init (Enums don't exist at this point)
+        local inited = false
 
         socketEvents.Disable = function(ev)
             if me.Blackboard.GetFact("Cnst.Trigger.On") == 1 then
@@ -73,14 +78,9 @@ game.states.Trigger = State{
         -- there's currently a problem with variable sof the type EntityKind, so
         -- always convert for now
         helpers.GetTriggerIsEmptyFilter = function()
-            if params.EntityFilter == "All" then
-                return EntityKind.All
-            elseif params.EntityFilter == "Characters" then
-                return EntityKind.Character
-            elseif params.EntityFilter == "LivingCharacters" then
-                return EntityKind.Character
-            elseif params.EntityFilter == "Items" then
-                return EntityKind.Item
+            local filter = filterFunctions[params.EntityFilter].entityKind
+            if filter ~= nil then
+                return filter
             else
                 DebugLogCritical("params.EntityFilter is invalid for [1]: [2]", me.UUID, params.EntityFilter)
                 return EntityKind.All
@@ -89,11 +89,7 @@ game.states.Trigger = State{
 
         -- Does the entity need to be tracked by the trigger according to EntityFilter
         helpers.EntityFilterCountsFor = function(entity)
-            return (((params.EntityFilter == "All") or
-                    ((params.EntityFilter == "Characters") and entity.IsCharacter) or
-                    ((params.EntityFilter == "LivingCharacters") and entity.IsCharacter and not entity.Character.IsDead) or
-                    ((params.EntityFilter == "Items") and entity.IsItem))
-                    and not helpers.EntityHasIgnoreTag(entity))
+            return (filterFunctions[params.EntityFilter].filterFunction(entity) and not helpers.EntityHasIgnoreTag(entity))
         end
 
         helpers.EntityHasIgnoreTag = function(entity)
@@ -101,26 +97,77 @@ game.states.Trigger = State{
         end
 
         helpers.TriggerHasEntitiesInside = function(trigger)
-            if params.EntityFilter == "LivingCharacters" then
+            if filterFunctions[params.EntityFilter].onlyEntityKind and
+               params.ExcludeTag ~= "" then
+                -- Faster method when we don't need to check if character is alive
+                return TriggerHasAnyRegisteredEntitiesInside(me.Trigger, helpers.GetTriggerIsEmptyFilter())
                 -- Preferably we get code support for this in TriggerHasAnyRegisteredEntitiesInside
+            else
                 local triggerEntities = TriggerGetRegisteredEntitiesInside(trigger)
                 if triggerEntities ~= nil then
                     for _, entity in pairs(triggerEntities) do
-                        if entity.IsCharacter and not entity.Character.IsDead and not helpers.EntityHasIgnoreTag(entity) then
+                        if helpers.EntityFilterCountsFor(entity) then
                             return true
                         end
                     end
                 end
                 return false
-            else
-                -- Faster method when we don't need to check if character is alive
-                return TriggerHasAnyRegisteredEntitiesInside(me.Trigger, helpers.GetTriggerIsEmptyFilter())
             end
         end
 
+        self.OnInit = function()
+            helpers.Init()
+        end
+
+        --OnLoaded to be early enough in normal flow;
+        --OnInit to work for Anubis reloads.
+
         self.OnLoaded = function()
-            if me.Blackboard.GetFact("Cnst.Trigger.On") == nil then
-                me.Blackboard.SetFact("Cnst.Trigger.On", params.StartEnabled and 1 or 0)
+            helpers.Init()
+        end
+
+        helpers.Init = function()
+            if not inited then
+                filterFunctions = {All = {filterFunction = function(entity) return true end,
+                                            aliveFilter = nil,
+                                            entityKind = EntityKind.All,
+                                            onlyEntityKind = true},
+                                    Characters = {filterFunction = function(entity) return true end,
+                                                aliveFilter = nil,
+                                                entityKind = EntityKind.Character,
+                                                onlyEntityKind = true},
+                                    Items = {filterFunction = function(entity) return true end,
+                                            aliveFilter = nil,
+                                            entityKind = EntityKind.Item,
+                                            onlyEntityKind = true},
+                                    LivingCharacters = {filterFunction = function(entity) return entity.IsCharacter and not entity.Character.IsDead end,
+                                                        aliveFilter = function(entity) return true end,
+                                                        entityKind = EntityKind.Character,
+                                                        onlyEntityKind = false},
+                                    PartyMembers = {filterFunction = function(entity) return entity.IsCharacter and entity.Character.IsPartyMember end, 
+                                                    aliveFilter = nil,
+                                                    entityKind = EntityKind.Character,
+                                                    onlyEntityKind = false},
+                                    LivingPartyMembers = {filterFunction = function(entity) return entity.IsCharacter and not entity.Character.IsDead and entity.Character.IsPartyMember end,
+                                                        aliveFilter = function(entity) return entity.IsCharacter and entity.Character.IsPartyMember end,
+                                                        entityKind = EntityKind.Character,
+                                                        onlyEntityKind = false}
+                                      }
+                if not filterFunctions[params.EntityFilter] then
+                    DebugLogCritical("params.EntityFilter is invalid for [1]: [2]", me.UUID, params.EntityFilter)
+                else
+                    if me.Blackboard.GetFact("Cnst.Trigger.On") == nil then
+                        me.Blackboard.SetFact("Cnst.Trigger.On", params.StartEnabled and 1 or 0)
+                    end
+                    if filterFunctions[params.EntityFilter].aliveFilter ~= nil then
+                        local triggerEntities = TriggerGetRegisteredEntitiesInside(me.Trigger)
+                        if triggerEntities ~= nil then
+                            for _, entity in pairs(triggerEntities) do
+                                RegisterForEvents(entity)
+                            end
+                        end
+                    end
+                end
             end
         end
 
@@ -128,7 +175,7 @@ game.states.Trigger = State{
             local entity = Entity(entityRef)
             if me.Blackboard.GetFact("Cnst.Trigger.On") == 1 and
                IsInTrigger(entity, me.Trigger) and
-               params.EntityFilter == "LivingCharacters" and
+               filterFunctions[params.EntityFilter].aliveFilter(entity) and
                not helpers.EntityHasIgnoreTag(entity) then
                     TriggerOutput(outputs.OnEnter, entityRef)
             end
@@ -137,9 +184,9 @@ game.states.Trigger = State{
         forwardedEvents.Died = function(ev, entityRef)
             local entity = Entity(entityRef)
             if me.Blackboard.GetFact("Cnst.Trigger.On") == 1 and
-                params.EntityFilter == "LivingCharacters" and
-                IsInTrigger(entity, me.Trigger) and
-                not helpers.EntityHasIgnoreTag(entity) then
+               filterFunctions[params.EntityFilter].aliveFilter(entity) and
+               IsInTrigger(entity, me.Trigger) and
+               not helpers.EntityHasIgnoreTag(entity) then
                     TriggerOutput(outputs.OnLeave, entityRef)
                     if not helpers.TriggerHasEntitiesInside(me.Trigger) then
                         TriggerOutput(outputs.Empty, entityRef)
@@ -154,7 +201,7 @@ game.states.Trigger = State{
                     --InitConstellation(me)
                     TriggerOutput(outputs.OnEnter, ev.Target.EntityRef)
                 end
-                if params.EntityFilter == "LivingCharacters" then
+                if filterFunctions[params.EntityFilter].aliveFilter ~= nil then
                     RegisterForEvents(ev.Target)
                 end
             end
@@ -170,7 +217,7 @@ game.states.Trigger = State{
                         TriggerOutput(outputs.Empty, ev.Target.EntityRef)
                     end
                 end
-                if params.EntityFilter == "LivingCharacters" then
+                if filterFunctions[params.EntityFilter].aliveFilter ~= nil then
                     UnregisterForEvents(ev.Target)
                 end
             end

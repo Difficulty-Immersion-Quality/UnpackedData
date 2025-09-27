@@ -391,35 +391,44 @@ game.states.MakeSurface = State{
             end
         end
 
-        helpers.Init = function()
-            me.Blackboard.SetFact("Cnst.MakeSurface.SurfaceDrawSize", (params.MinRadius + 0.0001))
-            if params.TargetEntity == "me" then
-                me.Blackboard.SetFact("TargetEntity", me)
-            else
-                me.Blackboard.SetFact("TargetEntity", FindEntity(params.TargetEntity))
+        helpers.InitSurfaceDrawSize = function()
+            if  me.Blackboard.GetFact("Cnst.MakeSurface.SurfaceDrawSize") == nil then
+                me.Blackboard.SetFact("Cnst.MakeSurface.SurfaceDrawSize", (params.MinRadius + 0.0001))
+            end
+        end
+
+        helpers.InitTargetEntity = function()
+            if me.Blackboard.GetFact("TargetEntity") == nil then
+                if params.TargetEntity == "me" then
+                    me.Blackboard.SetFact("TargetEntity", me)
+                else
+                    me.Blackboard.SetFact("TargetEntity", FindEntity(params.TargetEntity))
+                end
             end
         end
 
         self.OnInit = function()
-            if me.Blackboard.GetFact("Cnst.MakeSurface.SurfaceDrawSize") ~= nil then
-                return
-            end
-
-            helpers.Init()
+            helpers.InitSurfaceDrawSize()
+            helpers.InitTargetEntity()
         end
 
         self.OnEditorChanges = function()
             -- clear old surface in case surface type got changed
             helpers.ClearSurface()
-            helpers.Init()
+            helpers.InitSurfaceDrawSize()
+            helpers.InitTargetEntity()
         end
 
         socketEvents.Enable = function(ev)
+            helpers.InitSurfaceDrawSize()
+            helpers.InitTargetEntity()
             helpers.DrawSurface()
             TriggerOutput(outputs.StartTimer, ev.Object, ev.Param)
         end
 
         socketEvents.Disable = function(ev)
+            helpers.InitSurfaceDrawSize()
+            helpers.InitTargetEntity()
             helpers.ClearSurface()
             me.Blackboard.SetFact("Cnst.MakeSurface.SurfaceDrawSize", (params.MinRadius + 0.0001))
             TriggerOutput(outputs.StopTimer, ev.Object, ev.Param)

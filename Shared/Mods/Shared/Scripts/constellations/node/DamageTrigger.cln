@@ -16,29 +16,25 @@ game.states.DamageTrigger = State{
         outputs.TookDamage = {help = [[The object took the specific type and amount of damage.]]}
 
         helpers.Init = function()
-            if params.TargetEntity == "me" then
-                me.Blackboard.SetFact("TargetEntity", me)
-            else
-                me.Blackboard.SetFact("TargetEntity", FindEntity(params.TargetEntity))
-            end
+            local entity = me.Blackboard.GetFact("TargetEntity")
             -- Cache the damage threshold
             -- If it's absolute, compare to the threshold. If it isn't, compare to that portion of the max HP
             local maxHP
             try
-                maxHP = me.MaxHP
+                maxHP = entity.MaxHP
             catch e if ls.CheckType(e, error.MissingComponent) then
                 if params.Threshold < 1.0 and
                 params.Threshold > 0.0 then --If at 0, assume user left it at default; if at 1, assume the user intended it to never trigger.
-                    DebugLogCritical("Damage trigger threshold for object [1] is not 0, but it has no HP component. This will never trigger.", me.UUID.String)
+                    DebugLogCritical("Damage trigger threshold for object [1] is not 0, but it has no HP component. This will never trigger.", entity.UUID.String)
                 end
             end
 
             if maxHP ~= nil then
                 if params.AbsoluteValueThreshold == true then
                     if params.Threshold < 0.0 then
-                        DebugLogCritical("Damage trigger threshold for object [1] is negative.", me.UUID.String)
+                        DebugLogCritical("Damage trigger threshold for object [1] is negative.", entity.UUID.String)
                     elseif params.Threshold > maxHP then
-                        DebugLogCritical("Damage trigger threshold for object [1] is larger than its max HP. This will never trigger.", me.UUID.String)
+                        DebugLogCritical("Damage trigger threshold for object [1] is larger than its max HP. This will never trigger.", entity.UUID.String)
                     else
                         me.Blackboard.SetFact("Cnst.DamageTrigger.Threshold", params.Threshold)
                     end
@@ -47,7 +43,7 @@ game.states.DamageTrigger = State{
                     params.Threshold >= 0.0 then
                         me.Blackboard.SetFact("Cnst.DamageTrigger.Threshold", (params.Threshold*maxHP))
                     else
-                        DebugLogCritical("Proportional damage trigger threshold is not in between 0 and 1 for item [1]", me.UUID.String)
+                        DebugLogCritical("Proportional damage trigger threshold is not in between 0 and 1 for item [1]", entity.UUID.String)
                     end
                 end
             else
@@ -56,7 +52,23 @@ game.states.DamageTrigger = State{
         end
 
         self.OnLoaded = function()
-            -- Not in OnInit, because it may never run if a grenade item was spawned in an inventory and directly thrown from there
+            -- Force Init, because it may never run if a grenade item was spawned in an inventory and directly thrown from there
+            InitConstellation(me)
+        end
+
+        self.OnInit = function()        
+            local entity = me.Blackboard.GetFact("TargetEntity")
+            if entity == nil then
+                if params.TargetEntity == "me" then
+                    entity = me
+                else
+                    entity = Entity(params.TargetEntity)
+                    RegisterForEvents(entity)
+                end
+                me.Blackboard.SetFact("TargetEntity", entity)
+            else
+                RegisterForEvents(entity)
+            end
             if me.Blackboard.GetFact("Cnst.DamageTrigger.Threshold") ~= nil then
                 return
             end
@@ -64,6 +76,14 @@ game.states.DamageTrigger = State{
         end
 
         self.OnEditorChanges = function()
+            local entity = nil
+            if params.TargetEntity == "me" then
+                entity = me
+            else
+                entity = Entity(params.TargetEntity)
+                RegisterForEvents(entity)
+            end
+            me.Blackboard.SetFact("TargetEntity", entity)
             helpers.Init()
         end
 
@@ -80,17 +100,29 @@ game.states.DamageTrigger = State{
             return params.ExcludeDamageTypes
         end
 
-
-        events.Damaged = function(ev)
-            if ev.DamageAmount >= me.Blackboard.GetFact("Cnst.DamageTrigger.Threshold") and
-               helpers.MatchDamageType(ev.DamageType) and
-               ev.DamageType ~= DamageType.NONE
-            then
-                if ev.Source ~= nil then
-                    TriggerOutput(outputs.TookDamage, ev.Source.EntityRef, nil)
+        helpers.Damaged = function(amount, type, source)
+            if me.Blackboard.GetFact("Cnst.DamageTrigger.Threshold") == nil then
+                helpers.Init()
+            end
+            if amount >= me.Blackboard.GetFact("Cnst.DamageTrigger.Threshold") and
+                helpers.MatchDamageType(type) and
+                type ~= DamageType.NONE then
+                if source ~= nil then
+                    TriggerOutput(outputs.TookDamage, source.EntityRef, nil)
                 else
                     TriggerOutput(outputs.TookDamage, nil, nil)
                 end
+            end
+        end
+
+        events.Damaged = function(ev)
+            helpers.Damaged(ev.DamageAmount, ev.DamageType, ev.Source)
+        end
+
+        forwardedEvents.Damaged = function(ev, source)
+            --DebugLog("forwardedEvents.Damaged for [1]", me.Blackboard.GetFact("TargetEntity").Name)
+            if Entity(source) == me.Blackboard.GetFact("TargetEntity") then
+                helpers.Damaged(ev.DamageAmount, ev.DamageType, ev.Source)
             end
         end
 

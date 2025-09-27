@@ -1,0 +1,91 @@
+[Vertex shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+
+struct VertexInput
+{
+	float3 Position : POSITION0;
+	float4 InstanceMatrix1 : COLOR1;
+	float4 InstanceMatrix2 : COLOR2;
+	float4 InstanceMatrix3 : COLOR3;
+	float4 InstanceMatrix_prev1 : COLOR7;
+	float4 InstanceMatrix_prev2 : COLOR8;
+	float4 InstanceMatrix_prev3 : COLOR9;
+};
+
+struct VertexOutput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float4 ProjectedPosition_prev : TEXCOORD0;
+};
+
+VertexOutput main(in VertexInput In)
+{
+	VertexOutput Out;
+
+	// Create Instance World Matrix
+	float4x4 noBillboardWorldMatrix = float4x4(In.InstanceMatrix1, In.InstanceMatrix2, In.InstanceMatrix3, float4(0.0f, 0.0f, 0.0f, 1.0f));
+
+	float4 localPositionStatic = float4(In.Position, 1.0f);
+	// World space position
+	float4 worldPosition = mul(noBillboardWorldMatrix, localPositionStatic);
+
+	// Projected position
+	float4 projectedPosition = mul(g_ViewProjectionMat, worldPosition);
+
+	// Pass projected position to pixel shader
+	Out.ProjectedPosition = projectedPosition;
+
+	// Create Instance World Matrix
+	float4x4 noBillboardWorldMatrix_prev = float4x4(In.InstanceMatrix_prev1, In.InstanceMatrix_prev2, In.InstanceMatrix_prev3, float4(0.0f, 0.0f, 0.0f, 1.0f));
+
+	float4 localPositionStatic_prev = float4(In.Position, 1.0f);
+	// World space position
+	float4 worldPosition_prev = mul(noBillboardWorldMatrix_prev, localPositionStatic_prev);
+
+	// Projected position (previous frame)
+	float4 projectedPosition_prev = mul(g_ViewProjectionMat_prev, worldPosition_prev);
+
+	// Pass projected position to pixel shader (previous frame)
+	Out.ProjectedPosition_prev = projectedPosition_prev;
+
+
+	return Out;
+}
+
+
+[Fragment shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+#include "Shaders/HLSL/ViewportHelpers.shdh"
+
+struct PixelInput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float4 ProjectedPosition_prev : TEXCOORD0;
+};
+
+struct PixelOutput
+{
+	float2 Velocity : SV_Target0;
+};
+
+PixelOutput main(in PixelInput In)
+{
+	PixelOutput Out;
+
+	// Current screen pos:
+	float2 currentScreenPos = (In.ProjectedPosition.xy + float2(g_Jitter.x, -(g_Jitter.y)));
+
+	// Previous screen pos:
+	float2 previousUV = (((In.ProjectedPosition_prev.xy / In.ProjectedPosition_prev.w) * float2(0.5f, -0.5f)) + float2(0.5f, 0.5f));
+	previousUV = ConvertTexCoordsVPtoRT(previousUV);
+	float2 previousScreenPos = (previousUV * float2(g_RTWidth, g_RTHeight));
+	previousScreenPos = (previousScreenPos + float2(g_PreviousJitter.x, -(g_PreviousJitter.y)));
+
+	Out.Velocity = (currentScreenPos - previousScreenPos);
+
+	return Out;
+}

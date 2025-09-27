@@ -9,7 +9,7 @@
              mc:Ignorable="d"
              FocusDown="UIDown" FocusLeft="UILeft" FocusRight="UIRight" FocusUp="UIUp"
              ls:UIWidget.ContextName="GameMenu" d:DesignWidth="3840" d:DesignHeight="2160" 
-             d:DataContext="{d:DesignInstance {x:Type ls:Widget}, IsDesignTimeCreatable=True}"
+             d:DataContext="{d:DesignInstance {x:Type ls:DCGameMenu}, IsDesignTimeCreatable=True}"
              Background="{StaticResource LS_PopUpBackgroundColorMedium}"
              ls:AttachedProperties.AutomationId ="{Binding (ls.UICanvas.CanvasLayout), RelativeSource={RelativeSource Mode=Self}, StringFormat='{}GameMenu_c_{0}'}">
 
@@ -67,7 +67,11 @@
 
             </ControlTemplate.Resources>
 
-            <Grid>
+            <Grid Visibility="{Binding IsInitialized, Converter={StaticResource BoolToVisibleConverter}}">
+                <b:Interaction.Behaviors>
+                    <ls:RuleSetModifierValueBehavior x:Name="IronManModifier" Modifiers="{Binding Data.CurrentRuleSetModifiers}" ModifierName="IRONMAN_MODE"/>
+                </b:Interaction.Behaviors>
+
                 <Rectangle x:Name="BackgroundCover" Fill="{StaticResource LS_PopUpBackgroundColor}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
                 <Rectangle x:Name="BackgroundGradient" HorizontalAlignment="Center" Width="1200">
@@ -98,8 +102,6 @@
                 </Image>
 
                 <StackPanel x:Name="GameMenuButtonsList" Margin="0, 900, 0, 0" VerticalAlignment="Top" HorizontalAlignment="Center">
-
-
                     <ls:LSButton x:Name="ResumeButton" Style="{StaticResource GameMenuButtonStyle}" 
                                  Content="{Binding Source='h4fbbc7e3ge45ag4c5bga315ga0155b914856', Converter={StaticResource TranslatedStringConverter}}"
                                  Command="{Binding CustomEvent}" CommandParameter="CloseGameMenu"
@@ -108,40 +110,43 @@
                             <b:EventTrigger EventName="Loaded">
                                 <ls:SetMoveFocusAction TargetName="GameMenu_c"/>
                             </b:EventTrigger>
+                            <b:EventTrigger EventName="IsVisibleChanged">
+                                <ls:SetMoveFocusAction TargetName="GameMenu_c"/>
+                            </b:EventTrigger>
                         </b:Interaction.Triggers>
                     </ls:LSButton>
 
-                    <ls:LSButton x:Name="SaveButton" Style="{StaticResource GameMenuButtonStyle}"
+                    <ls:LSButton x:Name="SaveButton" Style="{StaticResource GameMenuButtonStyle}" Visibility="Collapsed"
                                  Content="{Binding Source='h294e6fd4gb977g4429g8c81g0775aa1688a7', Converter={StaticResource TranslatedStringConverter}}"
                                  Command="{Binding OpenSaveGameDialogCommand}"/>
 
-                    <ls:LSButton x:Name="LoadButton" Style="{StaticResource GameMenuButtonStyle}"
+                    <ls:LSButton x:Name="LoadButton" Style="{StaticResource GameMenuButtonStyle}" Visibility="Collapsed"
                                  Content="{Binding Source='heb9ae2d4g4fcdg4eb2g821bg97ed63c5ce8c', Converter={StaticResource TranslatedStringConverter}}"
                                  Command="{Binding CustomEvent}" CommandParameter="LoadGameOpen"
                                  Margin="{StaticResource MainButtonLargeSpacing}"/>
 
-                    <ls:LSButton x:Name="ConnectivityButton" Style="{StaticResource GameMenuButtonStyle}"
+                    <ls:LSButton x:Name="ConnectivityButton" Style="{StaticResource GameMenuButtonStyle}" Visibility="Collapsed"
                                  Content="{Binding Source='h908649e6gdfe9g4a44g8bf3ga66cc295f28e', Converter={StaticResource TranslatedStringConverter}}"  
                                  Command="{Binding CustomEvent}" CommandParameter="CharacterAssignOpen"/>
 
-                    <ls:LSButton x:Name="CurrentGameSettings" Style="{StaticResource GameMenuButtonStyle}"
+                    <ls:LSButton x:Name="CurrentGameSettings" Style="{StaticResource GameMenuButtonStyle}" Visibility="Collapsed"
                                  Content="{Binding Source='h46616d84g0ebag4586g9230gca30c54e7596', Converter={StaticResource TranslatedStringConverter}}" 
                                  Command="{Binding CustomEvent}" CommandParameter="OpenDifficultySettings"/>
 
-                    <ls:LSButton x:Name="OptionsButton"  Style="{StaticResource GameMenuButtonStyle}"
+                    <ls:LSButton x:Name="OptionsButton"  Style="{StaticResource GameMenuButtonStyle}" Visibility="Collapsed"
                                  Content="{Binding Source='h1f5a4453gcd7ag4dc6gb127g5744ea1922ac', Converter={StaticResource TranslatedStringConverter}}"
                                  Command="{Binding CustomEvent}" CommandParameter="OpenOptions"
                                  Margin="{StaticResource MainButtonLargeSpacing}"/>
 
-                    <ls:LSButton x:Name="MainMenuButton" Style="{StaticResource GameMenuButtonStyle}"
+                    <ls:LSButton x:Name="MainMenuButton" Style="{StaticResource GameMenuButtonStyle}" Visibility="Collapsed"
                                  Content="{Binding Source='hf1a302e1ged15g4e4fgae48g5579d02b2605', Converter={StaticResource TranslatedStringConverter}}"
                                  Command="{Binding MainMenuCommand}"/>
 
-                    <ls:LSButton x:Name="DisconnectButton" Style="{StaticResource GameMenuButtonStyle}"
+                    <ls:LSButton x:Name="DisconnectButton" Style="{StaticResource GameMenuButtonStyle}" Visibility="Collapsed"
                                  Content="{Binding Source='h122d51e5g5078g4993g872eg803db71cc57b', Converter={StaticResource TranslatedStringConverter}}"
                                  Command="{Binding DisconnectCommand}"/>
 
-                    <ls:LSButton x:Name="QuitButton" Style="{StaticResource GameMenuButtonStyle}"
+                    <ls:LSButton x:Name="QuitButton" Style="{StaticResource GameMenuButtonStyle}" Visibility="Collapsed"
                                  Content="{Binding Source='h8c64e3a9gef47g4fa4g8d07g4c6056b9ab5f', Converter={StaticResource TranslatedStringConverter}}"
                                  Command="{Binding QuitGameCommand}"/>
                 </StackPanel>
@@ -187,7 +192,9 @@
                                  Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIMessageBoxX'}" 
                                  Visibility="Collapsed" Command="{Binding DataContext.QuickLoadCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" 
                                  IsEnabled="{Binding IsEnabled, ElementName=LoadButton}" 
-                                 Tag="{Binding Source='hcbe72274gae5eg4893g95f5g958f37baa0c9', Converter={StaticResource TranslatedStringConverter}}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                 Tag="{Binding Source='hcbe72274gae5eg4893g95f5g958f37baa0c9', Converter={StaticResource TranslatedStringConverter}}"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 EatInput="False"/>
 
                     <ls:LSButton ContentTemplate="{StaticResource ControllerButtonHint}" Margin="0,-12"
                                  Tag="{Binding Source='h4fbbc7e3ge45ag4c5bga315ga0155b914856',Converter={StaticResource TranslatedStringConverter}}" 
@@ -195,6 +202,15 @@
                                  Command="{Binding CustomEvent, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" 
                                  CommandParameter="CloseGameMenuWidget"
                                  EatInput="False"/>
+
+                    <ls:LSButton x:Name="OpenFriends" ContentTemplate="{StaticResource ControllerButtonHintWithValue}" Margin="0,-12"
+                                 Tag="{Binding Source='hf510f042g617cg4571g8e7ag7f9e2b8dad94',Converter={StaticResource TranslatedStringConverter}}" 
+                                 Content="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='UIMessageBoxX'}"
+                                 Command="{Binding CustomEvent}"
+                                 CommandParameter="OpenFriendsList"
+                                 BoundEvent="UIMessageBoxX"
+                                 Visibility="Collapsed"
+                                 TapTime="{StaticResource DefaultButtonTapTime}"/>
                 </StackPanel>
 
                 <TextBlock Text="{Binding Data.VersionString}"
@@ -206,39 +222,63 @@
 
                 <!-- Button Visibility Triggers -->
                 <DataTrigger Binding="{Binding IsMainPlayer}" Value="True">
-                    <Setter TargetName="DisconnectButton" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="CurrentGameSettings" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="OptionsButton" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="MainMenuButton" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="QuickSave" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="QuickLoad" Property="Visibility" Value="Visible"/>
                 </DataTrigger>
 
-                <DataTrigger Binding="{Binding IsMainPlayer}" Value="False">
-                    <Setter TargetName="CurrentGameSettings" Property="Visibility" Value="Collapsed"/>
-                    <Setter TargetName="OptionsButton" Property="Visibility" Value="Collapsed"/>
-                    <Setter TargetName="MainMenuButton" Property="Visibility" Value="Collapsed"/>
-                    <Setter TargetName="QuitButton" Property="Visibility" Value="Collapsed"/>
-                    <Setter TargetName="ConnectivityButton" Property="Visibility" Value="Collapsed"/>
-                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsMainPlayer}" Value="False"/>
+                        <Condition Binding="{Binding IsInitialized}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="DisconnectButton" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
 
-                <DataTrigger Binding="{Binding ShowQuitButton}" Value="False">
-                    <Setter TargetName="QuitButton" Property="Visibility" Value="Collapsed"/>
-                </DataTrigger>
-
-                <DataTrigger Binding="{Binding IsHost}" Value="False">
-                    <Setter TargetName="LoadButton" Property="Visibility" Value="Collapsed"/>
-                    <Setter TargetName="SaveButton" Property="Visibility" Value="Collapsed"/>
+                <DataTrigger Binding="{Binding IsHost}" Value="True">
+                    <Setter TargetName="SaveButton" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="LoadButton" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ConnectivityButton" Property="Visibility" Value="Visible"/>
                 </DataTrigger>
 
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
-                        <Condition Binding="{Binding IsHost}" Value="False"/>
-                        <Condition Binding="{Binding IsInCC}" Value="True"/>
+                        <Condition Binding="{Binding IsMainPlayer}" Value="True"/>
+                        <Condition Binding="{Binding IsInCC}" Value="False"/>
                     </MultiDataTrigger.Conditions>
-                    <Setter TargetName="ConnectivityButton" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="ConnectivityButton" Property="Visibility" Value="Visible"/>
                 </MultiDataTrigger>
 
-                <DataTrigger Binding="{Binding Data.CurrentRuleSetModifiers, Converter={StaticResource RuleSetModifierValueConverter}, ConverterParameter='IRONMAN_MODE'}" Value="True">
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsMainPlayer}" Value="True"/>
+                        <Condition Binding="{Binding ShowQuitButton}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="QuitButton" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding ModifierEnabled, ElementName=IronManModifier}" Value="True">
                     <Setter TargetName="QuickLoad" Property="Visibility" Value="Collapsed"/>
                 </DataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Data.LarianNetIsConnected}" Value="True"/>
+                        <Condition Binding="{Binding Data.IsUsingCrossplay}" Value="True"/>
+                        <Condition Binding="{Binding IsHost}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="OpenFriends" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="OpenFriends" Property="ls:AttachedProperties.Number">
+                        <Setter.Value>
+                            <MultiBinding Converter="{StaticResource AddMultipleConverter}">
+                                <Binding Path="Data.CrossplayFriendRequests.Count"/>
+                                <Binding Path="Data.CrossplayInvites.Count"/>
+                            </MultiBinding>
+                        </Setter.Value>
+                    </Setter>
+                </MultiDataTrigger>
 
                 <!-- Sound Triggers -->
                 <DataTrigger Binding="{Binding IsFocused, ElementName=ResumeButton}" Value="True">

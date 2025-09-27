@@ -248,6 +248,7 @@ PROC_TriggerRegisterForPlayers((TRIGGER)S_LOW_CountingHouse_GreatDoor_QuestUpdat
 //END_REGION
 
 //REGION Heist
+DB_DropMutingStatussesDialog(LOW_CountingHouse_Heist_63210311-4b3b-85e3-7278-2032e2a65bd7);
 DB_AddCharactersInTriggerToDialog(LOW_CountingHouse_Heist_63210311-4b3b-85e3-7278-2032e2a65bd7,S_LOW_CountingHouse_HeistDialogTrigger_feec2762-07b3-42c8-ae7f-57df907e74c0,1,1,1,1);
 DB_GlobalFlagReactionAfterDialog((FLAG)LOW_CountingHouse_State_RobbersEscaped_16197488-9cc2-48e2-94ae-36225025d4d8, (DIALOGRESOURCE)LOW_CountingHouse_Heist_63210311-4b3b-85e3-7278-2032e2a65bd7);
 PROC_TriggerRegisterForParty((TRIGGER)S_LOW_CountingHouse_HeistDialogTrigger_feec2762-07b3-42c8-ae7f-57df907e74c0);
@@ -1172,9 +1173,9 @@ DB_Players(_Character)
 AND
 QRY_OnlyOnce("LOW_CountingHouse_StartHeistDialog")
 AND
-QRY_StartDialogCustom((DIALOGRESOURCE)LOW_CountingHouse_Heist_63210311-4b3b-85e3-7278-2032e2a65bd7,S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba,S_LOW_CountingHouse_JaheiraClone_4da802f5-3237-40b8-afff-d728016e3047,S_LOW_CountingHouse_HeadBanker_f56697d0-7318-488c-852c-7c43ecdfde57,S_LOW_CountingHouse_PrivateGuard_03_459e4fa3-c9f3-478a-ba56-e09431674e32,S_LOW_CountingHouse_PrivateGuard_02_ff490513-7296-4512-8040-239f9e824f2b,_Character,0,0,0,0)
+NOT QRY_StartDialogCustom((DIALOGRESOURCE)LOW_CountingHouse_Heist_63210311-4b3b-85e3-7278-2032e2a65bd7,S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba,S_LOW_CountingHouse_JaheiraClone_4da802f5-3237-40b8-afff-d728016e3047,S_LOW_CountingHouse_HeadBanker_f56697d0-7318-488c-852c-7c43ecdfde57,S_LOW_CountingHouse_PrivateGuard_03_459e4fa3-c9f3-478a-ba56-e09431674e32,S_LOW_CountingHouse_PrivateGuard_02_ff490513-7296-4512-8040-239f9e824f2b,_Character,0,0,0,0)
 THEN
-DB_NOOP(1);
+PROC_LOW_CountingHouse_AfterHeistScene();
 
 PROC
 PROC_StartDialog_AddExtraSpeakers((DIALOGRESOURCE)LOW_CountingHouse_Heist_63210311-4b3b-85e3-7278-2032e2a65bd7, _ID)
@@ -1185,6 +1186,11 @@ PROC_DialogAddSpeakingActorAt(_ID,S_LOW_CountingHouse_Cultist_02_464de2ba-ac0b-4
 // The flag is set in the first dialog node, this way we ensure that the PROC will always go through in case the dialog starts
 PROC
 PROC_GlobalFlagReactionAfterDialog((FLAG)LOW_CountingHouse_State_RobbersEscaped_16197488-9cc2-48e2-94ae-36225025d4d8)
+THEN
+PROC_LOW_CountingHouse_AfterHeistScene();
+
+PROC
+PROC_LOW_CountingHouse_AfterHeistScene()
 THEN
 PROC_SceneOver("LOW_CountingHouse_HeistScene");
 PROC_SetRelationMutual((FACTION)ACT3_LOW_CountingHouse_Robbers_b949b011-9fd1-4ed8-b7bf-223c88838327, (FACTION)ACT3_LOW_CountingHouse_Rakaths_d8c61e85-7473-4b87-9df0-e3c5785d894f, 0);
@@ -1216,6 +1222,34 @@ AND
 QRY_OnlyOnce("LOW_CountingHouse_InitialStolenGoldAmountSetup_OnlyOnce")
 THEN
 AddGold(S_LOW_CountingHouse_StolenGoldBag_d31cdfbd-daea-4188-b685-38b708143a8d,_Amount);
+
+// Store the amount of stolen gold before the trader carrying it dies and the gold is destroyed
+IF
+Dying(_Character)
+AND
+IsTagged(_Character, (TAG)TRADER_91d5ebc6-91ea-44db-8a51-216860d69b5b, 1)
+AND
+IsInInventoryOf(S_LOW_CountingHouse_StolenGoldBag_d31cdfbd-daea-4188-b685-38b708143a8d, _Character, 1)
+AND
+GetGold(S_LOW_CountingHouse_StolenGoldBag_d31cdfbd-daea-4188-b685-38b708143a8d, _Amount)
+THEN
+DB_LOW_StolenGoldBeforeTraderDeath(_Amount);
+
+// Restore the destroyed stolen gold after the trader that carried it has died
+IF
+Died(_Character)
+AND
+IsTagged(_Character, (TAG)TRADER_91d5ebc6-91ea-44db-8a51-216860d69b5b, 1)
+AND
+IsInInventoryOf(S_LOW_CountingHouse_StolenGoldBag_d31cdfbd-daea-4188-b685-38b708143a8d, _Character, 1)
+AND
+GetGold(S_LOW_CountingHouse_StolenGoldBag_d31cdfbd-daea-4188-b685-38b708143a8d, 0)
+AND
+DB_LOW_StolenGoldBeforeTraderDeath(_Amount)
+THEN
+AddGold(S_LOW_CountingHouse_StolenGoldBag_d31cdfbd-daea-4188-b685-38b708143a8d,_Amount);
+NOT DB_LOW_StolenGoldBeforeTraderDeath(_Amount);
+
 
 // Rakath's guards turn into tadpoled guards in case smuggler's cave shipment makes it into the city
 IF

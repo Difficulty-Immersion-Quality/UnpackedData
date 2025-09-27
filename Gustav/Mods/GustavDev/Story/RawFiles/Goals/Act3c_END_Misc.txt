@@ -152,6 +152,7 @@ DB_END_General_MakeUnavailableFlag(S_Player_Laezel_58a69333-40bf-8358-1d17-fff24
 DB_END_General_MakeUnavailableFlag((CHARACTER)S_Player_Karlach_2c76687d-93a2-477b-8b18-8a14b549304c, (FLAG)GLO_END_GameFinale_DeathofKarlach_KarlachWentWithNonRomanceWyll_a552e386-af26-eb98-d198-a84221e467b0, 1);
 DB_END_General_MakeUnavailableFlag((CHARACTER)S_Player_Karlach_2c76687d-93a2-477b-8b18-8a14b549304c, (FLAG) END_GameFinale_Event_AccompanyKarlachToHell_35150cbf-2c72-1049-37ed-14dbc3736135, 1);
 DB_END_General_MakeUnavailableFlag((CHARACTER)S_Player_Wyll_c774d764-4a17-48dc-b470-32ace9ce447d, (FLAG)GLO_END_GameFinale_DeathofKarlach_KarlachWentWithNonRomanceWyll_a552e386-af26-eb98-d198-a84221e467b0, 1);
+DB_END_General_MakeUnavailableFlag((CHARACTER)S_Player_Karlach_2c76687d-93a2-477b-8b18-8a14b549304c, (FLAG)ORI_Karlach_State_AvernusAlone_c5ffd6ad-7749-6eb8-992e-48d66766f6b6, 1);
 DB_END_General_MakeUnavailableCharacterFlag((FLAG)END_BrainBattle_Event_Suicide_ad1258fa-27eb-537c-a113-91db07cb6590, 0);
 DB_END_General_MakeUnavailableCharacterFlag((FLAG)END_BrainBattle_Event_GoToJail_4a021214-a319-a17b-13f6-c3427c794684, 1);
 //END_REGION
@@ -638,7 +639,7 @@ PROC_END_Misc_Init()
 AND
 QRY_OnlyOnce("END_BlockNewPlayers")
 THEN
-SetJoinBlock(JOINBLOCKTYPE.BlockAll);
+SetJoinBlock(JOINBLOCKTYPE.BlockNew);
 
 //REGION InPartyEND Companion Dialogs
 PROC
@@ -1560,15 +1561,17 @@ THEN
 PROC_DialogAddListeningActor(_ID, _Character);
 DB_Dialog_IncludedNearbySpeakers(_ID, _Character);
 
+
 //REGION Party Member Version
 
 //Add on start - Ignore statuses
+
 PROC
 PROC_StartDialog_AddExtraSpeakers((DIALOGRESOURCE)_Dialog, (INTEGER)_ID)
 AND
 DB_END_General_FullPartyDialog(_Dialog, 0, _AddAfterStart, _BlockAttack, _BlockTrade, _IgnoreCombat, _IgnoreDefeated, _StatusIgnoreType)
 AND
-_StatusIgnoreType != 0
+_StatusIgnoreType == 2
 AND
 DB_PartyMembers(_Character)
 AND
@@ -1580,6 +1583,26 @@ QRY_SpeakerIsAvailable(_Character, _IgnoreCombat, 1)
 THEN
 PROC_DialogAddSpeakingActor(_ID, _Character, 1, 1);
 DB_Dialog_IncludedNearbySpeakers(_ID, _Character);
+PROC_RemoveMutingStatusesWithRestore(_Dialog, _Character);
+
+PROC
+PROC_StartDialog_AddExtraSpeakers((DIALOGRESOURCE)_Dialog, (INTEGER)_ID)
+AND
+DB_END_General_FullPartyDialog(_Dialog, 0, _AddAfterStart, _BlockAttack, _BlockTrade, _IgnoreCombat, _IgnoreDefeated, _StatusIgnoreType)
+AND
+_StatusIgnoreType == 1
+AND
+DB_PartyMembers(_Character)
+AND
+DB_END_RealPartOfTheTeam(_Character)
+AND
+NOT QRY_END_General_ShouldNotAddToFullPartyDialog(_Character, _Dialog)
+AND
+QRY_SpeakerIsAvailable(_Character, _IgnoreCombat, 1)
+THEN
+PROC_DialogAddSpeakingActor(_ID, _Character, 1, 1);
+DB_Dialog_IncludedNearbySpeakers(_ID, _Character);
+
 
 //Add on start - Don't ignore statuses
 PROC

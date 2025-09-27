@@ -39,6 +39,10 @@ DB_BG3_Released_Versions("Release Patch 6 Hotfix 9",4,6,900,0);
 DB_BG3_Released_Versions("Release Patch 7",4,7,0,0);
 DB_BG3_Released_Versions("Release Patch 7 Beta Hotfix 2",4,7,20,0);
 DB_BG3_Released_Versions("Release Patch 7 Beta Hotfix 3",4,7,30,0);
+DB_BG3_Released_Versions("Release Patch 7 Hotfix 2",4,7,200,0);
+DB_BG3_Released_Versions("Release Patch 8",4,8,0,0);
+DB_BG3_Released_Versions("Release Patch 8 Beta Hotfix 1",4,8,10,0);
+DB_BG3_Released_Versions("Release Patch 8 Beta Hotfix 2",4,8,30,0);
 KBSECTION
 //REGION savegame patch helpers
 IF
@@ -279,7 +283,41 @@ QRY_BG3_SaveGameIsOlderThan(4,7,30,0)
 THEN
 DB_BG3_Released_Versions("Release Patch 7 Beta Hotfix 3",4,7,30,0);
 
+IF
+SavegameLoaded()
+AND
+QRY_BG3_SaveGameIsOlderThan(4,7,200,0)
+THEN
+DB_BG3_Released_Versions("Release Patch 7 Hotfix 2",4,7,200,0);
 
+IF
+SavegameLoaded()
+AND
+QRY_BG3_SaveGameIsOlderThan(4,8,0,0)
+THEN
+DB_BG3_Released_Versions("Release Patch 8",4,8,0,0);
+
+IF
+SavegameLoaded()
+AND
+QRY_BG3_SaveGameIsOlderThan(4,8,10,0)
+THEN
+DB_BG3_Released_Versions("Release Patch 8 Beta Hotfix 1",4,8,10,0);
+
+
+IF
+SavegameLoaded()
+AND
+QRY_BG3_SaveGameIsOlderThan(4,8,20,0)
+THEN
+DB_BG3_Released_Versions("Release Patch 8 Beta Hotfix 2",4,8,20,0);
+
+IF
+SavegameLoaded()
+AND
+QRY_BG3_SaveGameIsOlderThan(4,8,30,0)
+THEN
+DB_BG3_Released_Versions("Release Patch 8 Beta Hotfix 3",4,8,30,0);
 
 //END_REGION
 
@@ -297,7 +335,7 @@ PROC_BG3_StoreCurrentVersion();
 PROC
 PROC_BG3_StoreCurrentVersion()
 AND
-GetModuleVersion("GustavDev",_Major,_Minor,_Revision,_Build)
+GetModuleVersion("GustavX",_Major,_Minor,_Revision,_Build)
 THEN
 DB_BG3Version_Trace(_Major,_Minor,_Revision,_Build);	//log all versions we encounter
 SysClear("DB_BG3Version",4);
@@ -305,6 +343,19 @@ DB_BG3Version(_Major,_Minor,_Revision,_Build);
 
 IF
 ModuleLoadedinSavegame("GustavDev",_Major,_Minor,_Revision,_Build)
+AND
+// In case this arrives after getting the event for GustavX
+QRY_BG3_SavegameUndefinedOrIsOlderThan(_Major,_Minor,_Revision,_Build)
+THEN
+SysClear("DB_BG3Version_Savegame",4);
+DB_BG3Version_Savegame(_Major,_Minor,_Revision,_Build);
+
+IF
+ModuleLoadedinSavegame("GustavX",_Major,_Minor,_Revision,_Build)
+AND
+// In case this is a savegame that was saved with the GustavX mod 1.0.0.0 version,
+// and the GustavDev loaded event arrived earlier
+QRY_BG3_SavegameUndefinedOrIsOlderThan(_Major,_Minor,_Revision,_Build)
 THEN
 SysClear("DB_BG3Version_Savegame",4);
 DB_BG3Version_Savegame(_Major,_Minor,_Revision,_Build);
@@ -329,6 +380,20 @@ AND
 DB_BG3_Released_Versions(_Version,_Major,_Minor,_Revision,_Build)
 AND
 QRY_BG3_SaveGameIsOlderThan(_Major,_Minor,_Revision,_Build)
+THEN
+DB_NOOP(1);
+
+QRY
+QRY_BG3_SavegameUndefinedOrIsOlderThan((INTEGER)_CompMajor,(INTEGER)_CompMinor,(INTEGER)_CompRev,(INTEGER)_CompBuild)
+AND
+QRY_BG3_SavegameIsOlderThan(_CompMajor,_CompMinor,_CompRev,_CompBuild)
+THEN
+DB_NOOP(1);
+
+QRY
+QRY_BG3_SavegameUndefinedOrIsOlderThan((INTEGER)_CompMajor,(INTEGER)_CompMinor,(INTEGER)_CompRev,(INTEGER)_CompBuild)
+AND
+NOT DB_BG3Version_Savegame(_,_,_,_)
 THEN
 DB_NOOP(1);
 

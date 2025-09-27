@@ -61,12 +61,30 @@ PROC_ORI_Gale_PlayerSetup(NULL_00000000-0000-0000-0000-000000000000);
 
 
 //REGION Recruitment
+//FindValidPosition Fallback
 PROC
 PROC_SpotPlayers_Spotted((CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, "ORI_Gale_FindAvatar", _Avatar)
 AND
 GetPosition(S_CHA_WaypointTrigger_Top_4141c0a2-5ba9-42c0-ab18-082426df45e7, _X, _Y, _Z)
 AND
 FindValidPosition(_X, _Y, _Z, 4.0, (CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, 1, _Vx, _Vy, _Vz)
+THEN
+DB_ORI_Gale_TeleportPosition(_Vx, _Vy, _Vz);
+
+//FindValidPosition Fallback
+PROC
+PROC_SpotPlayers_Spotted((CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, "ORI_Gale_FindAvatar", _Avatar)
+AND
+NOT DB_ORI_Gale_TeleportPosition(_, _, _)
+AND
+GetPosition(S_CHA_WaypointTrigger_Top_4141c0a2-5ba9-42c0-ab18-082426df45e7, _X, _Y, _Z)
+THEN
+DB_ORI_Gale_TeleportPosition(_X, _Y, _Z);
+
+PROC
+PROC_SpotPlayers_Spotted((CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, "ORI_Gale_FindAvatar", _Avatar)
+AND
+DB_ORI_Gale_TeleportPosition(_X, _Y, _Z)
 AND
 QRY_StartDialog(Gale_Recruitment_4b3ad930-fb84-09ff-eced-37265b7ba8c6, S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, _Avatar)
 THEN
@@ -75,7 +93,8 @@ NOT DB_SpotPlayers((CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604
 NOT DB_SpotPlayers_HasTag((CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, "ORI_Gale_FindAvatar", (TAG)AVATAR_306b9b05-1057-4770-aa17-01af21acd650, 1);
 NOT DB_SpotPlayers_SpotTrigger((CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, "ORI_Gale_FindAvatar", S_ORI_Gale_RecruitmentTrigger_22824abf-0652-4313-8caa-3cfc54d0089d);
 NOT DB_SpotPlayers_Continuous((CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, "ORI_Gale_FindAvatar");
-TeleportToPosition(S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, _Vx, _Vy, _Vz, "", 0, 0, 0, 1, 1);
+NOT DB_ORI_Gale_TeleportPosition(_X, _Y, _Z);
+TeleportToPosition(S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, _X, _Y, _Z, "", 0, 0, 0, 1, 1);
 LookFromTrigger(S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, S_CHA_WaypointTrigger_Top_4141c0a2-5ba9-42c0-ab18-082426df45e7, 1);
 PlayEffect(S_CHA_WaypointShrine_Top_8ebd584c-97e3-42fd-b81f-80d7841ebdf3, VFX_Script_Waypoint_Portal_01_f545f66c-87c8-8dde-cd27-16539cb0dc45, "", 1.0);
 PlayAnimation(S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604, CUST_WaypointAppear_01_b6aa4aaa-66d5-4564-833c-7308dc1c52e3);
@@ -218,6 +237,21 @@ FindValidPosition(_X1, _Y1, _Z1, 4.0, S_ORI_Gale_DeathMephit_4b90d334-3646-43f8-
 THEN
 DB_ORI_Gale_MephitAddPlayer(_Player, _ID);
 AppearAtPosition(S_ORI_Gale_DeathMephit_4b90d334-3646-43f8-94f4-e29b13ac75d4, _X2, _Y2, _Z2, 1, NULL_00000000-0000-0000-0000-000000000000, "ORI_Gale_MephitAt");
+
+//FindValidPosition Fallback
+IF
+FlagSet(ORI_Gale_DeathMephit_Event_Appear_01b22cad-bf94-72a1-dad4-5a890c230777, _, _ID)
+AND
+NOT DB_ORI_Gale_MephitAddPlayer(_, _ID)
+AND
+NOT DB_Dead(S_ORI_Gale_DeathMephit_4b90d334-3646-43f8-94f4-e29b13ac75d4)
+AND
+DB_DialogPlayers(_ID, _Player, 1)
+AND
+GetPosition(_Player, _X1, _Y1, _Z1)
+THEN
+DB_ORI_Gale_MephitAddPlayer(_Player, _ID);
+AppearAtPosition(S_ORI_Gale_DeathMephit_4b90d334-3646-43f8-94f4-e29b13ac75d4, _X1, _Y1, _Z1, 1, NULL_00000000-0000-0000-0000-000000000000, "ORI_Gale_MephitAt");
 
 IF
 FlagSet(ORI_Gale_DeathMephit_Event_Appear_01b22cad-bf94-72a1-dad4-5a890c230777, _, _ID)
@@ -477,7 +511,7 @@ PROC_Camp_SetModeToDay()
 AND
 DB_GlobalFlag(ORI_Gale_State_ShowGaleDouble_ad1aabf8-690d-4f54-a674-717b515dc08d)
 THEN
-ClearFlag(ORI_Gale_State_ShowGaleDouble_ad1aabf8-690d-4f54-a674-717b515dc08d, NULL_00000000-0000-0000-0000-000000000000, 0);
+PROC_GlobalClearFlagAndCache(ORI_Gale_State_ShowGaleDouble_ad1aabf8-690d-4f54-a674-717b515dc08d);
 
 PROC
 PROC_Camp_SetModeToDay()

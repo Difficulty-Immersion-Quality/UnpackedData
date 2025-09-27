@@ -315,15 +315,34 @@ DB_LOW_SorcerousSundries_Client(S_LOW_NecromancyBuyer_d33d47b9-299e-4be3-8867-ea
 DB_LOW_SorcerousSundries_Client(S_LOW_Client_004_e3fa81d4-53f3-49ad-8497-18673d399a37);
 KBSECTION
 //REGION Setting up Aradin, Lorroakan and Rolan/Projection
-
 PROC
 PROC_LOW_SorcerousSundries_NightsongSetup((CHARACTER)_Nightsong)
 AND
 NOT DB_PermaDefeated(_Nightsong)
-AND
-HasAppliedStatus(_Nightsong, "SHA_NIGHTSONG_SOULCAGE",1)
 THEN
-RemoveStatus(_Nightsong,"SHA_NIGHTSONG_SOULCAGE",_Nightsong);
+PROC_LOW_SorcerousSundries_ContinueNSSetup();
+
+PROC
+PROC_LOW_SorcerousSundries_ContinueNSSetup()
+AND
+HasAppliedStatus(S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b, "SHA_NIGHTSONG_SOULCAGE",1)
+THEN
+RemoveStatus(S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,"SHA_NIGHTSONG_SOULCAGE",S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b);
+
+PROC
+PROC_LOW_SorcerousSundries_ContinueNSSetup()
+AND
+DB_Camp_PreCampFaction((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(FACTION) ACT2_SCE_EpilogueFaction_9c896609-f2f6-4f1a-8967-c83140977975)
+THEN
+NOT DB_Camp_PreCampFaction((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(FACTION) ACT2_SCE_EpilogueFaction_9c896609-f2f6-4f1a-8967-c83140977975);
+DB_Camp_PreCampFaction((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(FACTION)ACT1_SHA_Nightsong_89d54194-f9fd-4a99-879a-e11971bfe3e4);
+
+PROC
+PROC_LOW_SorcerousSundries_ContinueNSSetup()
+AND
+GetFaction((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(FACTION)ACT2_SCE_EpilogueFaction_9c896609-f2f6-4f1a-8967-c83140977975)
+THEN
+SetFaction((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(FACTION)ACT1_SHA_Nightsong_89d54194-f9fd-4a99-879a-e11971bfe3e4);
 
 //Checking if Aradin ever told players about nightsong plot
 PROC
@@ -1524,14 +1543,33 @@ GetPosition(S_LOW_SorcerousSundriesTeleportTo_769fa8ca-63f8-4364-b903-1f0190588d
 AND
 FindValidPosition(_X,_Y,_Z,10.0,_Player,1,_TeleportX,_TeleportY,_TeleportZ)
 THEN
+DB_LOW_SorcerousSundries_PlayerTeleported(1);
 PlayEffect(_Player,(EFFECTRESOURCE)VFX_Status_SorcerousSundries_Projection_BodyFX_01_a2da89fc-c6bd-4006-086a-85b528c452ee,"",0.0);
 TeleportToPosition(_Player,_TeleportX,_TeleportY,_TeleportZ,"LOW_SorcerousSundries_TeleportedOutside",0,0,0,0,1);
+
+IF
+UseStarted(_Player,_Portal)
+AND
+NOT DB_LOW_SorcerousSundries_PlayerTeleported(1)
+AND
+DB_Players(_Player)
+AND
+DB_LOW_SorcerousSundriesPuzzlePortals(_Portal,_)
+AND
+_Portal != S_LOW_PortalToRamazith_74a258c4-774f-49d2-a673-1389bca439b5
+AND
+GetPosition(S_LOW_SorcerousSundriesTeleportTo_769fa8ca-63f8-4364-b903-1f0190588db2,_X,_Y,_Z)
+THEN
+DB_LOW_SorcerousSundries_PlayerTeleported(1);
+PlayEffect(_Player,(EFFECTRESOURCE)VFX_Status_SorcerousSundries_Projection_BodyFX_01_a2da89fc-c6bd-4006-086a-85b528c452ee,"",0.0);
+TeleportToPosition(_Player,_X,_Y,_Z,"LOW_SorcerousSundries_TeleportedOutside",0,0,0,0,1);
 
 IF
 EntityEvent(_Player,"LOW_SorcerousSundries_TeleportedOutside")
 AND
 GetHitpoints(_Player,_HP)
 THEN
+NOT DB_LOW_SorcerousSundries_PlayerTeleported(1);
 PlayEffect(_Player,(EFFECTRESOURCE)VFX_Status_SorcerousSundries_Projection_BodyFX_01_a2da89fc-c6bd-4006-086a-85b528c452ee,"",0.0);
 ApplyDamage(_Player,_HP,"Radiant",NULL_00000000-0000-0000-0000-000000000000);
 DB_LOW_SorcerousSundries_Punishing(1);
@@ -2644,6 +2682,35 @@ NOT DB_PermaDefeated(S_LOW_Miklaur_637bb24f-66b7-4447-807b-556bd1c00ed6)
 THEN
 PROC_DisappearOutOfSightTo((CHARACTER)S_LOW_Miklaur_637bb24f-66b7-4447-807b-556bd1c00ed6, S_LOW_PortalToRamazith_74a258c4-774f-49d2-a673-1389bca439b5,"Run",1,"");
 
+IF
+CombatRoundStarted(_CombatID,_)
+AND
+DB_LorroakanCombatClosePortalID(_CombatID)
+AND
+NOT QRY_LOW_SorcerousSundries_ConsciousPlayersInRT(_CombatID)
+AND
+DB_PartyMembers(_PartyMember)
+AND
+DB_Is_InCombat(_PartyMember,_CombatID)
+AND
+DB_Defeated(_PartyMember)
+THEN
+Die(_PartyMember,DEATHTYPE.DoT,1);
+
+QRY
+QRY_LOW_SorcerousSundries_ConsciousPlayersInRT((GUIDSTRING)_CombatID)
+AND
+DB_PartyMembers(_PartyMember)
+AND
+DB_Is_InCombat(_PartyMember,_CombatID)
+AND
+DB_InRegion((CHARACTER)_PartyMember, (TRIGGER)S_LOW_RamaitzhsTower_RegionTrigger_8d737a4c-9b13-4935-9ce0-34520a2de266)
+AND
+NOT DB_Defeated(_PartyMember)
+AND
+NOT DB_Is_Banished(_PartyMember)
+THEN
+DB_NOOP(1);
 
 IF
 CombatEnded(_CombatID)
@@ -2685,6 +2752,7 @@ RemoveStatus(S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,"GLO_NIGHTSONG
 DB_LOW_SorcerousSundries_LorroakanNighsongCombatID(_CombatGUID);
 DB_LOW_SorcerousSundries_NightsongImpededByLorroakan(1);
 DB_KeepDialogsOnDeath((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b);
+
 IF
 SwitchedCombat(S_LOW_Lorroakan_a9d4b71d-b0ef-429e-8210-6dc8be986ee9, _OldID, _NewID)
 AND
@@ -3322,6 +3390,7 @@ PROC_LOW_SorcerousSundries_FreeNightsong()
 AND
 NOT DB_GlobalFlag((FLAG)LOW_Rolan_State_IsPermadefeated_86a666c2-6453-4aa2-b9d9-9e4c0a432640)
 THEN
+DB_LOW_SorcerousSundries_RolanKilledOffstage(1);
 Die(S_GLO_Prodigy_b6a3a9e9-b6eb-4c19-ab3f-4c431178fe1b);
 Die(S_GLO_ProdigyBrother_d0187724-c0e2-4019-a01d-a03ee8153f1b);
 Die(S_GLO_ProdigySister_44d09b0b-0568-456c-b18d-559a0a3f981d);
@@ -3329,6 +3398,15 @@ ToInventory(S_LOW_NightsongThreat_d9df0940-238f-4451-a312-d2847ee04f9a,S_GLO_Pro
 DB_CorpseCleanup_Ignore(S_GLO_ProdigyBrother_d0187724-c0e2-4019-a01d-a03ee8153f1b);
 DB_CorpseCleanup_Ignore(S_GLO_Prodigy_b6a3a9e9-b6eb-4c19-ab3f-4c431178fe1b);
 DB_CorpseCleanup_Ignore(S_GLO_ProdigySister_44d09b0b-0568-456c-b18d-559a0a3f981d);
+TeleportTo(S_LOW_SorcerousSundries_KilledOffscreenRolanTrigger_cb007c54-43f5-48da-ba62-a762a33affe4,S_GLO_Prodigy_b6a3a9e9-b6eb-4c19-ab3f-4c431178fe1b);
+PROC_TriggerRegisterForParty((TRIGGER)S_LOW_SorcerousSundries_KilledOffscreenRolanTrigger_cb007c54-43f5-48da-ba62-a762a33affe4);
+
+IF
+EnteredTrigger(_,(TRIGGER)S_LOW_SorcerousSundries_KilledOffscreenRolanTrigger_cb007c54-43f5-48da-ba62-a762a33affe4)
+THEN
+PROC_TriggerUnregisterForParty((TRIGGER)S_LOW_SorcerousSundries_KilledOffscreenRolanTrigger_cb007c54-43f5-48da-ba62-a762a33affe4);
+QuestUpdate("SHA_Nightsong","NightsongEscapedAfterDefeat_RolanDied");
+QuestUpdate("GLO_GatherYourAllies", "RolanNoSupport");
 
 PROC
 PROC_LOW_SorcerousSundries_RolanTakeover()
@@ -3664,6 +3742,8 @@ DB_DialogSpeakers(_ID,_Player,2)
 AND
 NOT DB_GlobalFlag((FLAG)ORI_Gale_Knows_ReadKarsusNotes_2b0e541f-f49e-7e82-27d6-15fccd6ff1ff)
 AND
+DB_PartOfTheTeam((CHARACTER)S_Player_Gale_ad9af97d-75da-406a-ae13-7071c563f604)
+AND
 GetFlag((FLAG)LOW_SorcerousSundries_Event_HasKarsusBook_c7019855-fcac-4bc5-bacf-9fad0213ab28,_Player,1)
 AND
 NOT QRY_LOW_SorcerousSundries_StartDialogAfterAcquiredKarsusBook((CHARACTER)_Player)
@@ -3759,6 +3839,20 @@ THEN
 NOT DB_LOW_SorcerousSundries_CharacterMistyStepQueued((CHARACTER)_Char, (ITEM)_TeleportDestination);
 DB_LOW_SorcerousSundries_CharacterMistyStepUsed((CHARACTER)_Char);
 UseSpellAtPosition(_Char, "Projectile_LOW_RamazithsTower_Fly", _ValidX, _ValidY, _ValidZ, 1);
+
+//FindValidPosition Fallback
+IF
+ObjectTimerFinished(_Char,"LOW_SorcerousSundries_MistyStep_Timer")
+AND
+NOT DB_LOW_SorcerousSundries_CharacterMistyStepUsed((CHARACTER)_Char)
+AND
+DB_LOW_SorcerousSundries_CharacterMistyStepQueued((CHARACTER)_Char, _TeleportDestination)
+AND
+GetPosition(_TeleportDestination, _InitX, _InitY, _InitZ)
+THEN
+NOT DB_LOW_SorcerousSundries_CharacterMistyStepQueued((CHARACTER)_Char, (ITEM)_TeleportDestination);
+DB_LOW_SorcerousSundries_CharacterMistyStepUsed((CHARACTER)_Char);
+UseSpellAtPosition(_Char, "Projectile_LOW_RamazithsTower_Fly", _InitX, _InitY, _InitZ, 1);
 
 IF
 CastSpellFailed(_Char, "Projectile_LOW_RamazithsTower_Fly", _, _, _)

@@ -132,10 +132,6 @@ DB_WYR_Circus_BeastCalmedFlags((CHARACTER)S_WYR_Circus_Beast_02_cfaec473-d13a-42
 DB_WYR_Circus_BeastCalmedFlags((CHARACTER)S_WYR_Circus_Beast_01_4d909cad-9b9b-4f34-ba27-6584bc8b4e20, (FLAG)WYR_Circus_Beast_01_State_CageBlocked_a0fbd326-9087-9a8e-20a7-34b804d60ba5, "Blocked");
 
 Open((ITEM)S_WYR_Circus_CageDoor_04_d7f4ad47-85d9-442b-bd97-1f020e63a413);
-
-// setting in Osiris so we could remove it after
-SetTag((CHARACTER)S_WYR_Circus_Thug_01_e11b95c9-0e4a-4777-b935-1ebaa5166a45, ACT3_WYR_CIRCUS_CAGEOPENER_f3acc92a-eb22-4076-940b-e52988d0dbdf);
-SetTag((CHARACTER)S_WYR_Circus_Thug_02_bc256194-1856-452b-a14e-f1c3f3b8c933, ACT3_WYR_CIRCUS_CAGEOPENER_f3acc92a-eb22-4076-940b-e52988d0dbdf);
 //END_REGION
 
 //REGION Patrons
@@ -443,7 +439,7 @@ DB_WYR_Circus_ClownPieces(
 DB_GLO_CompoundFlag(WYR_Circus_Knows_DoppelgangerKilledDribbles_a1c76c3e-b21e-7a81-c594-5a34a0f44473, WYR_Circus_Knows_ClownDead_b0651ffa-2c1d-41b9-b4e8-1af9677db7e0);
 DB_GLO_CompoundFlag(WYR_Circus_State_ClownPiecesFoundAny_42d65dc1-e187-4484-8418-fec83083bff9, WYR_Circus_Knows_ClownDead_b0651ffa-2c1d-41b9-b4e8-1af9677db7e0);
 DB_GLO_CompoundFlag(WYR_Circus_Knows_MerchantHasHand_ae4d6d60-9541-388b-7e32-4233567480f1, WYR_Circus_State_ClownPiecesFoundAny_42d65dc1-e187-4484-8418-fec83083bff9);
-DB_GLO_CompoundFlag(WYR_Circus_State_ClownPiecesFoundAny_42d65dc1-e187-4484-8418-fec83083bff9, WYR_Circus_State_ClownPiecesFoundAny_42d65dc1-e187-4484-8418-fec83083bff9);
+DB_GLO_CompoundFlag(WYR_Circus_State_ClownPiecesHasAny_4fec1a52-6650-a377-983c-04e2c01d84cf, WYR_Circus_State_ClownPiecesFoundAny_42d65dc1-e187-4484-8418-fec83083bff9);
 
 // Journal
 DB_QuestDef_State_ConditionalFlag(
@@ -1338,9 +1334,9 @@ PROC_SetRelationMutual(Act3_WYR_Circus_Clown_d10eb6f8-a38c-4bd6-8bed-b155a6e5ab5
 PROC_SetRelationMutual(Act3_WYR_Circus_Clown_d10eb6f8-a38c-4bd6-8bed-b155a6e5ab5a, ACT3_WYR_Circus_Workers_1c52504e-5262-4670-a834-6248e68534ad, 0);
 PROC_SetRelationMutual(ACT3_WYR_Circus_Beasts_5afda7e4-e61a-4d23-af6d-86fdef9322a8, Act3_WYR_Circus_Workers_1c52504e-5262-4670-a834-6248e68534ad, 0);
 PROC_SetRelationMutual(Act3_WYR_Circus_Beasts_5afda7e4-e61a-4d23-af6d-86fdef9322a8, Act3_WYR_Circus_Patrons_cf592db8-2a56-4d75-8185-33b77bfa5051, 0);
-PROC_SetRelationMutual(Act3_WYR_Circus_Beasts_5afda7e4-e61a-4d23-af6d-86fdef9322a8, ACT3_WYR_Circus_Ringmaster_c8ee67a5-f6c1-46ab-8957-b1e4018adbf8, 50);
-PROC_SetRelationMutual(Act3_WYR_Circus_Clown_d10eb6f8-a38c-4bd6-8bed-b155a6e5ab5a, ACT3_WYR_Circus_Ringmaster_c8ee67a5-f6c1-46ab-8957-b1e4018adbf8, 50);
 PROC_SetRelationToPlayers(Act3_WYR_Circus_Beasts_5afda7e4-e61a-4d23-af6d-86fdef9322a8, 0);
+PROC_SetRelationToPlayers(Act3_WYR_Circus_Workers_1c52504e-5262-4670-a834-6248e68534ad, 50);
+PROC_SetRelationToPlayers(ACT3_WYR_Circus_Ringmaster_c8ee67a5-f6c1-46ab-8957-b1e4018adbf8, 50);
 
 // Fallback to combat
 IF
@@ -1413,6 +1409,32 @@ THEN
 PROC_RemoveDBTrespassTrigger(
 	S_WYR_Circus_StageTrespassArea_fc55638f-6156-4d8d-ada2-7eebab6e3e9d, 
 	S_WYR_Circus_StageTrespassOutPos_0deb2e38-5f3b-4ac8-85b1-db48ab156f7e);
+
+// Backup perfomer avoiding combat
+PROC
+PROC_WYR_Circus_OnCombatStarted()
+AND
+NOT DB_PermaDefeatedOrOffstage(S_WYR_Circus_BackupPerformer_01_df3fcab6-63af-43c7-a1a5-2f3267d3e9c9)
+THEN
+SetTag(S_WYR_Circus_BackupPerformer_01_df3fcab6-63af-43c7-a1a5-2f3267d3e9c9, (TAG)AI_UNPREFERRED_TARGET_9787450d-f34d-43bd-be88-d2bac00bb8ee);
+
+IF
+EnteredCombat(S_WYR_Circus_Ringmaster_c95af77b-6fc3-4c73-ac7c-087124f4b1e4, _)
+AND
+DB_GlobalFlag((FLAG)WYR_Circus_Clown_State_Hostile_59c1f674-0985-4d4d-9679-b8a1e4982f45)
+AND
+NOT DB_GlobalFlag((FLAG)WYR_Circus_State_PostCombat_ee4b2f6e-9d52-4bc5-bde6-bc0e1c015de4)
+AND
+NOT DB_PermaDefeatedOrOffstage(S_WYR_Circus_BackupPerformer_01_df3fcab6-63af-43c7-a1a5-2f3267d3e9c9)
+THEN
+ClearTag(S_WYR_Circus_BackupPerformer_01_df3fcab6-63af-43c7-a1a5-2f3267d3e9c9, (TAG)AI_UNPREFERRED_TARGET_9787450d-f34d-43bd-be88-d2bac00bb8ee);
+
+IF
+FlagSet((FLAG)WYR_Circus_State_PostCombat_ee4b2f6e-9d52-4bc5-bde6-bc0e1c015de4,_,_)
+AND
+NOT DB_PermaDefeatedOrOffstage(S_WYR_Circus_BackupPerformer_01_df3fcab6-63af-43c7-a1a5-2f3267d3e9c9)
+THEN
+ClearTag(S_WYR_Circus_BackupPerformer_01_df3fcab6-63af-43c7-a1a5-2f3267d3e9c9, (TAG)AI_UNPREFERRED_TARGET_9787450d-f34d-43bd-be88-d2bac00bb8ee);
 //END_REGION
 
 //REGION Clown show: Combat Ends
@@ -1490,6 +1512,17 @@ AND
 FindValidPosition(_X, _Y, _Z, 10.0, S_WYR_Circus_DoppelClown_21f541c1-e1bc-49a8-888f-d8a330c47336, 0, _vX, _vY, _vZ)
 THEN
 TeleportToPosition(S_WYR_Circus_DoppelClown_21f541c1-e1bc-49a8-888f-d8a330c47336, _vX, _vY, _vZ);
+DB_WYR_Circus_AbsolutistsCorpsesBurried(1);
+
+//FindValidPosition fallback
+PROC
+PROC_WYR_Circus_BorrowClown()
+AND
+NOT DB_WYR_Circus_AbsolutistsCorpsesBurried(1)
+AND
+GetPosition(S_WYR_Circus_Clown_DeadArea_85b576cc-f551-4322-a2c6-cca443850938, _X, _Y, _Z)
+THEN
+TeleportToPosition(S_WYR_Circus_DoppelClown_21f541c1-e1bc-49a8-888f-d8a330c47336, _X, _Y, _Z);
 DB_WYR_Circus_AbsolutistsCorpsesBurried(1);
 //END_REGION
 
@@ -1820,6 +1853,21 @@ AND
 NOT QRY_WYR_Circus_BeastCalmed(_Beast)
 THEN
 AiRemoveInterestingItem(_Beast, _Cage);
+
+// setting in Osiris so we could remove it after, and only after the combat starts otherwise they try to open the doors earlier
+PROC
+PROC_WYR_Circus_OnCombatStarted()
+AND
+NOT DB_PermaDefeatedOrOffstage(S_WYR_Circus_Thug_01_e11b95c9-0e4a-4777-b935-1ebaa5166a45)
+THEN
+SetTag((CHARACTER)S_WYR_Circus_Thug_01_e11b95c9-0e4a-4777-b935-1ebaa5166a45, ACT3_WYR_CIRCUS_CAGEOPENER_f3acc92a-eb22-4076-940b-e52988d0dbdf);
+
+PROC
+PROC_WYR_Circus_OnCombatStarted()
+AND
+NOT DB_PermaDefeatedOrOffstage(S_WYR_Circus_Thug_02_bc256194-1856-452b-a14e-f1c3f3b8c933)
+THEN
+SetTag((CHARACTER)S_WYR_Circus_Thug_02_bc256194-1856-452b-a14e-f1c3f3b8c933, ACT3_WYR_CIRCUS_CAGEOPENER_f3acc92a-eb22-4076-940b-e52988d0dbdf);
 
 // clearing cage opener tag if lost keys
 IF

@@ -1,0 +1,209 @@
+[Vertex shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+
+struct VertexInput
+{
+	float3 Position : POSITION0;
+	float4 InstanceMatrix1 : COLOR1;
+	float4 InstanceMatrix2 : COLOR2;
+	float4 InstanceMatrix3 : COLOR3;
+	float2 TexCoords0 : TEXCOORD0;
+	float4 LocalQTangent : NORMAL0;
+};
+
+struct VertexOutput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float2 TexCoords0 : TEXCOORD0;
+	float3 WorldNormal : TEXCOORD1;
+	float3 WorldBinormal : TEXCOORD2;
+	float3 WorldTangent : TEXCOORD3;
+	float3 WorldOffset : TEXCOORD4;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_MaterialConstants : register(b0)
+{
+	float3 Vector3Parameter_WPO_Strenght;
+	float FloatParameter_WPO_Size;
+	float3 _WorldExtents;
+	float FloatParameter_GlowColorIntensity;
+	float3 Vector3Parameter_GlowColor2;
+	float FloatParameter_OutlineFresnelPower;
+	float3 Vector3Parameter_GlowColor3;
+	float FloatParameter_OutlineIntensity;
+	float3 Vector3Parameter_GlowColor1;
+	float PADDING_Vector3Parameter_GlowColor1;
+	float3 Vector3Parameter_OutlineColor;
+	float PADDING_Vector3Parameter_OutlineColor;
+};
+void CalculateMatWorldPositionOffset(in float3 in_0,
+	in float4x4 in_1,
+	out float3 out_0)
+{
+	// LocalPosition {
+	// } LocalPosition
+	float Local0 = in_0.y;
+	float Local1 = (_WorldExtents.y * FloatParameter_WPO_Size);
+	float Local2 = (Local0 / Local1);
+	float Local3 = (g_CurrentTime + Local2);
+	//  TriangleWaveNode {
+	// TriangleWave
+	float Local4 = abs(((frac((Local3 + 0.5f)) * 2.0f) - 1.0f));
+	// Smooth TriangleWave
+	float Local5 = ((Local4 * Local4) * (3.0f - (2.0f * Local4)));
+	//  } TriangleWaveNode
+	float3 Local6 = (Vector3Parameter_WPO_Strenght * Local5);
+	// TransformDirectionNode {
+	float3 Local7 = mul((float3x3)(in_1), Local6);
+	// } TransformDirectionNode
+	out_0 = Local7;
+}
+
+VertexOutput main(in VertexInput In)
+{
+	VertexOutput Out;
+
+	float3 matWorldPositionOffset;
+	// Create Instance WorldOffset Matrix
+	float4x4 noBillboardWorldOffsetMatrix = float4x4(In.InstanceMatrix1, In.InstanceMatrix2, In.InstanceMatrix3, float4(0.0f, 0.0f, 0.0f, 1.0f));
+
+	CalculateMatWorldPositionOffset(In.Position.xyz, noBillboardWorldOffsetMatrix, matWorldPositionOffset);
+	float3 localPositionStatic = In.Position;
+	// World space offset
+	float3 worldOffset = mul(noBillboardWorldOffsetMatrix, float4(localPositionStatic, 1.0f)).xyz;
+
+	worldOffset = (worldOffset + matWorldPositionOffset);
+
+	// Projected position
+	float4 projectedPosition = mul(g_OffsetViewProjectionMat, float4(worldOffset, 1.0f));
+
+	// Pass projected position to pixel shader
+	Out.ProjectedPosition = projectedPosition;
+
+	Out.TexCoords0 = In.TexCoords0;
+	// Compute localTangentFrame tangent frame
+	float3x3 localTangentFrame = GetTangentFrame(In.LocalQTangent);
+
+	float3 localNormal = localTangentFrame[2];
+
+	// World space Normal
+	float3 worldNormal = mul((float3x3)(noBillboardWorldOffsetMatrix), localNormal);
+
+	// Normalize World Normal
+	float3 worldNormalNormalized = normalize(worldNormal);
+
+	Out.WorldNormal = worldNormalNormalized;
+
+	float3 localBinormal = localTangentFrame[1];
+
+	// World space Binormal
+	float3 worldBinormal = mul((float3x3)(noBillboardWorldOffsetMatrix), localBinormal);
+
+	// Normalize World Binormal
+	float3 worldBinormalNormalized = normalize(worldBinormal);
+
+	Out.WorldBinormal = worldBinormalNormalized;
+
+	float3 localTangent = localTangentFrame[0];
+
+	// World space Tangent
+	float3 worldTangent = mul((float3x3)(noBillboardWorldOffsetMatrix), localTangent);
+
+	// Normalize World Tangent
+	float3 worldTangentNormalized = normalize(worldTangent);
+
+	Out.WorldTangent = worldTangentNormalized;
+
+	// Pass world offset to pixel shader
+	Out.WorldOffset = worldOffset;
+
+
+	return Out;
+}
+
+
+[Fragment shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+
+struct PixelInput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float2 TexCoords0 : TEXCOORD0;
+	float3 WorldNormal : TEXCOORD1;
+	float3 WorldBinormal : TEXCOORD2;
+	float3 WorldTangent : TEXCOORD3;
+	float3 WorldOffset : TEXCOORD4;
+};
+
+struct PixelOutput
+{
+	float4 Color0 : SV_Target0;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_MaterialConstants : register(b0)
+{
+	float3 Vector3Parameter_WPO_Strenght;
+	float FloatParameter_WPO_Size;
+	float3 _WorldExtents;
+	float FloatParameter_GlowColorIntensity;
+	float3 Vector3Parameter_GlowColor2;
+	float FloatParameter_OutlineFresnelPower;
+	float3 Vector3Parameter_GlowColor3;
+	float FloatParameter_OutlineIntensity;
+	float3 Vector3Parameter_GlowColor1;
+	float PADDING_Vector3Parameter_GlowColor1;
+	float3 Vector3Parameter_OutlineColor;
+	float PADDING_Vector3Parameter_OutlineColor;
+};
+VK_DESCRIPTOR(DS_Shader, 1) Texture2D Texture2DParameter_MSKgradient;
+void CalculateMatEmissiveColor(in float2 in_0,
+	in float3 in_1,
+	out float3 out_0)
+{
+	// Texture2DNode {
+	float4 Local0 = Texture2DParameter_MSKgradient.Sample(_DefaultWrapSampler, in_0);
+	// [Local0] Get needed components
+	float Local1 = Local0.x;
+	// } Texture2DNode
+	float Local2 = step(Local1, 0.5f);
+	float Local3 = (1.0f - Local2);
+	float Local4 = (0.0f + (((Local1 - 0.5f) * (1.0f - 0.0f)) / max(abs((1.0f - 0.5f)), 1E-05f)));
+	float3 Local5 = lerp(Vector3Parameter_GlowColor2, Vector3Parameter_GlowColor3, float3(Local4, Local4, Local4));
+	float3 Local6 = (Local3 * Local5);
+	float Local7 = (0.0f + (((Local1 - 0.0f) * (1.0f - 0.0f)) / max(abs((0.5f - 0.0f)), 1E-05f)));
+	float3 Local8 = lerp(Vector3Parameter_GlowColor1, Vector3Parameter_GlowColor2, float3(Local7, Local7, Local7));
+	float3 Local9 = (Local2 * Local8);
+	float3 Local10 = (Local6 + Local9);
+	float3 Local11 = (FloatParameter_GlowColorIntensity * Local10);
+	// FresnelNode {
+	float Local12 = pow((1.0f - saturate(dot(float3(0.0f, 1.0f, 0.0f), in_1))), FloatParameter_OutlineFresnelPower);
+	// } FresnelNode
+	float Local13 = (Local12 * FloatParameter_OutlineIntensity);
+	float3 Local14 = (Local13 * Vector3Parameter_OutlineColor);
+	float Local15 = clamp(Local13, 0.0f, 1.0f);
+	float3 Local16 = lerp(Local11, Local14, float3(Local15, Local15, Local15));
+	out_0 = Local16;
+}
+
+PixelOutput main(in PixelInput In)
+{
+	PixelOutput Out;
+
+	float3 matEmissiveColor;
+	float3x3 NBT_WS = float3x3(In.WorldTangent, In.WorldNormal, In.WorldBinormal);
+
+	// Normalized world space view vector
+	float3 worldViewNormalized = normalize(-(In.WorldOffset));
+
+	// Calculate tangent space view vector
+	float3 tangentView = normalize(mul(NBT_WS, worldViewNormalized));
+
+	CalculateMatEmissiveColor(In.TexCoords0, tangentView, matEmissiveColor);
+	Out.Color0 = float4(matEmissiveColor, 1.0f);
+
+	return Out;
+}

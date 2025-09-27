@@ -36,6 +36,10 @@ game.states.Lever2St = State{
         inputs.ForceActivate = {help = [[A scripted flip of the lever]]}
         outputs.ForceActivateInt = {internal = true}
 
+        inputs.ForceOff = {help = [[A scripted flip of the lever, turning it off if the lever is on]]}
+        inputs.ForceOn = {help = [[A scripted flip of the lever, turning it on if the lever is off]]}
+        outputs.GoToState = {internal = true}
+
         inputs.Enable = {help = [[Turn lever on]]}
         outputs.OnInt = {internal = true}
 
@@ -54,6 +58,9 @@ game.states.Lever2St = State{
 
         inputs.UseBlockedFromStory = {help = [[Lever use was blocked from story (because it was not enabled)]]}
         outputs.UseBlockedFromStoryInt = {internal = true}
+
+        inputs.Reveal = {help = "Reveal the lever"}
+        outputs.RevealInt = {internal = true}
 
         params.StartEnabled = {type=EParamType.Bool, default = true, help = "Does the lever can be used from the start?"}
 
@@ -145,26 +152,36 @@ game.states.Lever2St = State{
             end
         end
 
-        helpers.NextStateReached= function(socketEventParam)
+        helpers.NextStateReached= function(currentState)
+            local wantedState = me.Blackboard.GetFact("Cnst.AnimationState.WantedState")
             me.Blackboard.SetFact("Cnst.Lever.Moving", 0)
-            SetCanInteract(me, true)
+            if currentState == wantedState then -- Only allow interaction of the lever if wanted state is reached
+                SetCanInteract(me, true)
+            end
+            local activator = me.Blackboard.GetFact("Cnst.Lever.Activator")
+            -- Can be nil if movement event was sent from code to set the initial state
+            activator = activator and activator.EntityRef or nil
 
             if not params.Immediate then
-                local currentState = me.Blackboard.GetFact("Cnst.AnimationState.CurrentState")
-                local activator = me.Blackboard.GetFact("Cnst.Lever.Activator")
-                -- Can be nil if movement event was sent from code to set the initial state
-                activator = activator and activator.EntityRef or nil
                 if currentState == 0 then
-                    TriggerOutput(outputs.Activated1, activator, socketEventParam)
+                    TriggerOutput(outputs.Activated1, activator)
                 elseif currentState == 2 then
-                    TriggerOutput(outputs.Activated2, activator, socketEventParam)
+                    TriggerOutput(outputs.Activated2, activator)
+                end
+            elseif currentState ~= wantedState then -- queued lever states causes the Immediate lever to send an early Activated event
+                if wantedState == 0 then -- lever will be turned off soon
+                    TriggerOutput(outputs.Activated1, activator)
+                elseif wantedState == 2 then -- lever will be turned on soon
+                    TriggerOutput(outputs.Activated2, activator)
                 end
             end
         end
 
+
         socketEvents.NextStateReached = function(ev)
             if me.Blackboard.GetFact("Cnst.Lever.Moving") == 1 then
-                helpers.NextStateReached(ev.Param)
+                local currentState = ev.Param -- currentState in blackboard can be outdated, retrieve from event instead
+                helpers.NextStateReached(currentState)
             end
         end
 
@@ -188,6 +205,9 @@ game.states.Lever2St = State{
                     TriggerOutput(outputs.Activated2, ev.Object, ev.Param)
                 end
             end
+            if params.Type == "Trapped" then
+                TriggerOutput(outputs.RevealInt, ev.Object, ev.Param)
+            end
             TriggerOutput(outputs.ToNextState, ev.Object, ev.Param)
         end
 
@@ -208,7 +228,10 @@ game.states.Lever2St = State{
             game.states.AnimationStates,
             params = {StateSequence = {0,4,2,5,0},
                       DynamicStates = {4,5}},
-            inputs = {Activated = {outputs.ToNextState}},
+            inputs = {
+                        Activate = {outputs.ToNextState},
+                        GoToState = {outputs.GoToState}
+                    },
             outputs = {NewState = {inputs.NextStateReached}},
         }
 
@@ -237,13 +260,38 @@ game.states.Lever2St = State{
                       DestroyOnDisarm = false},
             inputs = {Enable = {outputs.OnInt},
                       Disable = {outputs.OffInt},
-                      TryActivate = {outputs.TryActivateInt}},
+                      TryActivate = {outputs.TryActivateInt},
+                      Reveal = {outputs.RevealInt}},
             outputs = {Activate = {inputs.ActivatedInt},
                        ActivateAttemptFailed = {inputs.ActivateAttemptFailedInt}}
                     }
 
         socketEvents.ForceActivate = function(ev)
             TriggerOutput(outputs.ForceActivateInt, ev.Object, ev.Param)
+        end
+
+        socketEvents.ForceOff = function(ev)
+            if me.Blackboard.GetFact("Cnst.AnimationState.CurrentState") ~= 0 then
+                if me.Blackboard.GetFact("Cnst.Lever.Moving") == 0 then
+                    me.Blackboard.SetFact("Cnst.Lever.Moving", 1)
+                    SetCanInteract(me, false)
+                end
+                TriggerOutput(outputs.GoToState, ev.Object, 0)
+            end
+        end
+
+        socketEvents.ForceOn = function(ev)
+            if me.Blackboard.GetFact("Cnst.AnimationState.CurrentState") ~= 2 then
+                if me.Blackboard.GetFact("Cnst.Lever.Moving") == 0 then
+                    me.Blackboard.SetFact("Cnst.Lever.Moving", 1)
+                    SetCanInteract(me, false)
+                end
+                TriggerOutput(outputs.GoToState, ev.Object, 2)
+            end
+        end
+
+        socketEvents.Reveal = function(ev)
+            TriggerOutput(outputs.RevealInt, ev.Object, ev.Param)
         end
 
         socketEvents.Enable = function(ev)

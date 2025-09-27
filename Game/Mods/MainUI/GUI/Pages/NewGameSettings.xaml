@@ -33,10 +33,13 @@
                 <System:Double x:Key="FullscreenRatioSettingWidth">480</System:Double>
 
                 <DataTemplate x:Key="RulesetDataTemplate" DataType="{x:Type ListBoxItem}">
-                    <Grid Background="Transparent" HorizontalAlignment="Center">
+                    <Grid Background="Transparent" HorizontalAlignment="Center" d:DataContext="{d:DesignInstance {x:Type ls:VMPreset}, IsDesignTimeCreatable=True}">
                         <b:Interaction.Triggers>
                             <b:EventTrigger EventName="MouseEnter">
                                 <ls:LSPlaySound Sound="UI_Shared_Hover"/>
+                            </b:EventTrigger>
+                            <b:EventTrigger EventName="MouseUp">
+                                <ls:LSPlaySound Sound="{Binding AssetName, StringFormat='UI_HUD_MainMenu_{0}_Selected'}"/>
                             </b:EventTrigger>
                         </b:Interaction.Triggers>
 
@@ -104,7 +107,7 @@
                                      CommandParameter="OpenMoreInfo"
                                      Style="{StaticResource SmallRedButtonStyle}"
                                      Content="{Binding Source='h46c00fa7gbb38g480fg9a0fgb4232bec8658', Converter={StaticResource TranslatedStringConverter}}"
-                                     Margin="0,0,0,60"/>
+                                     Margin="0,0,0,106"/>
                     </Grid>
 
                     <DataTemplate.Triggers>
@@ -192,13 +195,13 @@
                         <ls:LSPlaySound Sound="UI_HUD_NewGameSettings_Open"/>
                     </b:EventTrigger>
 
-                    <b:DataTrigger Binding="{Binding IsOriginallyInCustomMode}" Value="True">
+                    <b:DataTrigger Binding="{Binding CanOnlyChangeCustomMode}" Value="True">
                         <b:ChangePropertyAction TargetName="PresetList" PropertyName="SelectedIndex" Value="3"/>
                         <b:ChangePropertyAction TargetName="carouselClipper" PropertyName="Margin" Value="{StaticResource WidescreenMarginCustom}"/>
                         <b:ChangePropertyAction TargetName="CustomSettingsHolder" PropertyName="Opacity" Value="1"/>
                     </b:DataTrigger>
 
-                    <b:DataTrigger Binding="{Binding IsOriginallyInCustomMode}" Value="True">
+                    <b:DataTrigger Binding="{Binding CanOnlyChangeCustomMode}" Value="True">
                         <b:Interaction.Behaviors>
                             <b:ConditionBehavior>
                                 <b:ConditionalExpression>
@@ -209,8 +212,7 @@
                         <b:ChangePropertyAction TargetName="carouselClipper" PropertyName="Margin" Value="{StaticResource LetterboxMarginCustom}"/>
                     </b:DataTrigger>
 
-
-                    <b:DataTrigger Binding="{Binding IsOriginallyInCustomMode}" Value="True">
+                    <b:DataTrigger Binding="{Binding CanOnlyChangeCustomMode}" Value="True">
                         <b:Interaction.Behaviors>
                             <b:ConditionBehavior>
                                 <b:ConditionalExpression>
@@ -283,16 +285,11 @@
                     </Grid.OpacityMask>
                     <ListBox x:Name="PresetList" 
                              ItemsSource="{Binding Presets}" 
-                             SelectedIndex="1" 
+                             SelectedIndex="{Binding PresetSelectedIndex, Mode=TwoWay}" 
                              ItemTemplate="{StaticResource RulesetDataTemplate}">
                         <b:Interaction.Behaviors>
                             <ls:SelectedIndexScrollBehavior ScrollThreshold="2"/>
                         </b:Interaction.Behaviors>
-                        <b:Interaction.Triggers>
-                            <b:EventTrigger EventName="SelectionChanged">
-                                <ls:LSPlaySound Sound="{Binding SelectedItem.AssetName, ElementName=PresetList, StringFormat='UI_HUD_MainMenu_{0}_Selected'}"/>
-                            </b:EventTrigger>
-                        </b:Interaction.Triggers>
                             <ListBox.Resources>
                             <System:Double x:Key="IndexSizeModifier">980</System:Double>
                             <System:Double x:Key="LeftMarginSize">0</System:Double>
@@ -307,11 +304,19 @@
                                     <ItemsPresenter Margin="1430,0"/>
 
                                     <b:Interaction.Triggers>
-                                        <!-- Animate sideways to selected item -->
+                                        <!-- Animate sideways to selected item unless it starts in custom mode (from Lobby) -->
                                         <b:PropertyChangedTrigger Binding="{Binding Path=SelectedItem, ElementName=PresetList}">
+                                            <b:Interaction.Behaviors>
+                                                <b:ConditionBehavior>
+                                                    <b:ConditionalExpression>
+                                                        <b:ComparisonCondition LeftOperand="{Binding Metadata, ElementName=DMSettings}" Operator="NotEqual" RightOperand="Lobby"/>
+                                                    </b:ConditionalExpression>
+                                                </b:ConditionBehavior>
+                                            </b:Interaction.Behaviors>
                                             <b:ControlStoryboardAction ControlStoryboardOption="Play">
                                                 <b:ControlStoryboardAction.Storyboard>
-                                                    <Storyboard FillBehavior="Stop" TargetName="DifficultyScrollList" TargetProperty="(ls:LSScrollViewer.HorizontalScrollOffset)">
+                                                    <!-- Not using FillBehavior="Stop" to keep scrolling working when clicking on the difficulty cards themselves -->
+                                                    <Storyboard TargetName="DifficultyScrollList" TargetProperty="(ls:LSScrollViewer.HorizontalScrollOffset)">
                                                         <DoubleAnimation Duration="0:0:0.2" AccelerationRatio="0.25" DecelerationRatio="0.25">
                                                             <DoubleAnimation.To>
                                                                 <MultiBinding Converter="{StaticResource AddMultipleConverter}">
@@ -323,17 +328,7 @@
                                                     </Storyboard>
                                                 </b:ControlStoryboardAction.Storyboard>
                                             </b:ControlStoryboardAction>
-
-                                            <b:ChangePropertyAction TargetName="DifficultyScrollList" PropertyName="HorizontalScrollOffset">
-                                                <b:ChangePropertyAction.Value>
-                                                    <MultiBinding Converter="{StaticResource AddMultipleConverter}">
-                                                        <Binding ElementName="PresetList" Path="SelectedIndex" Converter="{StaticResource MultiplierConverter}" ConverterParameter="{StaticResource IndexSizeModifier}"/>
-                                                        <Binding Source="{StaticResource LeftMarginSize}"/>
-                                                    </MultiBinding>
-                                                </b:ChangePropertyAction.Value>
-                                            </b:ChangePropertyAction>
                                         </b:PropertyChangedTrigger>
-
                                     </b:Interaction.Triggers>
                                 </ls:LSScrollViewer>
                             </ControlTemplate>
@@ -361,6 +356,13 @@
                         <RowDefinition Height="72"/>
                     </Grid.RowDefinitions>
 
+                    <TextBlock Name="CrossplayInfoText" Grid.Row="0" Text="{Binding Source='h053b7732g28a7g446egafb2g71e0b9a1dcce', Converter={StaticResource TranslatedStringConverter}}" 
+                               Foreground="{StaticResource LS_accent100TxtColor}" 
+                               FontSize="{StaticResource ScaledSmallishFontSize}" 
+                               HorizontalAlignment="Center" 
+                               Margin="0,-20,0,20"
+                               Visibility="Collapsed"/>
+
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         
                         <Image Source="{StaticResource FooterSideDecorImage}" VerticalAlignment="Center" Stretch="None"/>
@@ -387,6 +389,23 @@
                                      Visibility="Collapsed"
                                      VerticalAlignment="Center" Margin="0,0,-32,0"/>
 
+                        <!-- Crossplay button -->
+                        <ls:LSToggleButton x:Name="CrossplayBtn"
+                                         Template="{StaticResource BigBrownButtonWithCheckbox}"
+                                         Command="{Binding ToggleCrossplay, Mode=OneTime}"
+                                         Content="{Binding Source='h04159467gf478g42d4g820eg289fcf08bf7e', Converter={StaticResource TranslatedStringConverter}}"
+                                         BoundEvent="UIAccept"
+                                         SoundID="UI_Shared_Accept"
+                                         Margin="32,0,-32,0"
+                                         Visibility="Collapsed"
+                                         IsChecked="{Binding Crossplay, Mode=OneWay}"
+                                         IsEnabled="False"
+                                         ToolTipService.Placement="Right" ToolTipService.VerticalOffset="-36" ToolTipService.HorizontalOffset="20">
+                            <ls:LSToggleButton.ToolTip>
+                                <ls:LSTooltip Content="{Binding Source='h000bbed3g0fcag4339g8b5bg73af4fb93463',Converter={StaticResource TranslatedStringConverter}}"/>
+                            </ls:LSToggleButton.ToolTip>
+                        </ls:LSToggleButton>
+
                         <Image Source="{StaticResource FooterSideDecorImage}" VerticalAlignment="Center" Stretch="None" RenderTransformOrigin="0.5,0.5">
                             <Image.RenderTransform>
                                 <ScaleTransform ScaleX="-1"/>
@@ -409,6 +428,22 @@
           
 
             <ControlTemplate.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Data.DefineCrossplayEnabled}" Value="True"/>
+                        <Condition Binding="{Binding Data.LarianNetIsConnected}" Value="True"/>
+                        <Condition Binding="{Binding Data.CrossplayIsEnabled}" Value="True"/>
+                        <Condition Binding="{Binding IsMainMenu}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="CrossplayBtn" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="CrossplayBtn" Property="IsEnabled" Value="True"/>
+                    <Setter TargetName="CrossplayInfoText" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding Crossplay}" Value="True">
+                    <Setter TargetName="CrossplayInfoText" Property="Text" Value="{Binding Source='hc529d1a4g94dag4953ga9e4g74e120f54423', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+
                 <DataTrigger Binding="{Binding IsMainMenu}" Value="False">
                     <Setter TargetName="CurrentGameBackground" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="PresetList" Property="SelectedValue" Value="{Binding CurrentPreset, Mode=OneTime}"/>
@@ -429,7 +464,12 @@
                     <Setter TargetName="ConfirmBtn" Property="OverwriteClickSound" Value="UI_Shared_Open_Custom"/>
                 </DataTrigger>
 
-                <DataTrigger Binding="{Binding IsInCustomMode}" Value="True">
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasBeenInitialized}" Value="True"/>
+                        <Condition Binding="{Binding IsInCustomMode}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+
                     <Setter TargetName="CurrentGameBackground" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="TitleText" Property="Tag" Value="{Binding Source='h6f947303gef88g4640g8e4cg1ec35b5da79e', Converter={StaticResource TranslatedStringConverter}}"/>
                     <Setter TargetName="ConfirmBtn" Property="Content" Value="{Binding Source='hff3fbf0fgf6c5g427fga4dfgbb238c01cb4c', Converter={StaticResource TranslatedStringConverter}}"/>
@@ -497,9 +537,11 @@
                                                            IsChecked="{Binding Value}" 
                                                            SoundID="UI_HUD_Options_ToggleButton" 
                                                            IsEnabled="{Binding DataContext.IsHost, ElementName=DMSettings}">
-                                            <b:PropertyChangedTrigger Binding="{Binding Value}">
-                                                <b:InvokeCommandAction Command="{Binding DataContext.ValueChanged, ElementName=DMSettings, Mode=OneTime}" CommandParameter="{Binding .}"/>
-                                            </b:PropertyChangedTrigger>
+                                            <b:Interaction.Triggers>
+                                                <b:PropertyChangedTrigger Binding="{Binding Value}">
+                                                    <b:InvokeCommandAction Command="{Binding DataContext.ValueChanged, ElementName=DMSettings, Mode=OneTime}" CommandParameter="{Binding .}"/>
+                                                </b:PropertyChangedTrigger>
+                                            </b:Interaction.Triggers>
                                         </ls:LSToggleButton>
 
                                         <ControlTemplate.Triggers>
@@ -519,17 +561,17 @@
 
                                     <ControlTemplate x:Key="SliderTemplate">
                                         <ControlTemplate.Resources>
-                                            <DataTemplate x:Key="SliderRepeatButtonTemplate" DataType="{x:Type ls:LSRepeatButton}">
-                                                <DataTemplate.Resources>
+                                            <ControlTemplate x:Key="SliderRepeatButtonTemplate" TargetType="{x:Type ls:LSRepeatButton}">
+                                                <ControlTemplate.Resources>
                                                     <BitmapImage x:Key="DefaultButtonImage" UriSource="pack://application:,,,/Core;component/Assets/CharacterCreation/input_arrow_d.png"/>
-                                                </DataTemplate.Resources>
+                                                </ControlTemplate.Resources>
 
                                                 <Grid>
                                                     <Ellipse x:Name="Hitbox" Fill="Transparent" Width="60" Height="60"/>
                                                     <Image x:Name="img" Stretch="None" Source="{StaticResource DefaultButtonImage}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Grid>
 
-                                                <DataTemplate.Triggers>
+                                                <ControlTemplate.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
                                                         <Setter TargetName="img" Property="Source" Value="pack://application:,,,/Core;component/Assets/CharacterCreation/input_arrow_h.png"/>
                                                     </Trigger>
@@ -537,8 +579,8 @@
                                                     <Trigger Property="IsEnabled" Value="False">
                                                         <Setter TargetName="img" Property="Opacity" Value="{StaticResource DisabledOpacity}"/>
                                                     </Trigger>
-                                                </DataTemplate.Triggers>
-                                            </DataTemplate>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
 
                                             <Style x:Key="OptionSliderThumbStyle" TargetType="ls:LSThumb">
                                                 <Setter Property="SnapsToDevicePixels" Value="True"/>
@@ -583,10 +625,15 @@
                                                 </ControlTemplate.Resources>
 
                                                 <Grid HorizontalAlignment="Center">
+                                                    <b:Interaction.Triggers>
+                                                        <b:PropertyChangedTrigger Binding="{Binding Value, RelativeSource={RelativeSource TemplatedParent}}">
+                                                            <ls:LSPlaySound Sound="UI_HUD_SplitItem_Step"/>
+                                                        </b:PropertyChangedTrigger>
+                                                    </b:Interaction.Triggers>
                                                     <ls:LSNineSliceImage x:Name="bg" HorizontalAlignment="Center" VerticalAlignment="Center" ImageSource="{StaticResource SlideBG}" Width="{TemplateBinding Width}" Height="80" Slices="106,20"/>
 
-                                                    <ls:LSRepeatButton x:Name="PART_DecreaseRepeatButton" HorizontalAlignment="Left" ContentTemplate="{StaticResource SliderRepeatButtonTemplate}" SoundID="UI_HUD_Shared_Slider_LeftButton" Command="Slider.DecreaseLarge" />
-                                                    <ls:LSRepeatButton x:Name="PART_IncreaseRepeatButton" HorizontalAlignment="Right" ContentTemplate="{StaticResource SliderRepeatButtonTemplate}" SoundID="UI_HUD_Shared_Slider_RightButton"  Command="Slider.IncreaseLarge" RenderTransformOrigin="0.5, 0.5">
+                                                    <ls:LSRepeatButton x:Name="PART_DecreaseRepeatButton" HorizontalAlignment="Left" Template="{StaticResource SliderRepeatButtonTemplate}" SoundID="UI_HUD_Shared_Slider_LeftButton" Command="Slider.DecreaseLarge" />
+                                                    <ls:LSRepeatButton x:Name="PART_IncreaseRepeatButton" HorizontalAlignment="Right" Template="{StaticResource SliderRepeatButtonTemplate}" SoundID="UI_HUD_Shared_Slider_RightButton"  Command="Slider.IncreaseLarge" RenderTransformOrigin="0.5, 0.5">
                                                         <ls:LSRepeatButton.RenderTransform>
                                                             <ScaleTransform ScaleX="-1"/>
                                                         </ls:LSRepeatButton.RenderTransform>
@@ -733,7 +780,13 @@
                                                         <Setter Property="Template" Value="{StaticResource SliderTemplate}" TargetName="content"/>
                                                     </DataTrigger>
 
-                                                    <DataTrigger Binding="{Binding IsEdited}" Value="True">
+                                                    <DataTrigger Value="True">
+                                                        <DataTrigger.Binding>
+                                                            <MultiBinding Converter="{StaticResource EqualConverter}">
+                                                                <Binding Path="Value"/>
+                                                                <Binding Path="DefaultValue"/>
+                                                            </MultiBinding>
+                                                        </DataTrigger.Binding>
                                                         <Setter TargetName="label" Property="Foreground" Value="{StaticResource LS_accent100TxtColor}"/>
                                                     </DataTrigger>
 
@@ -872,7 +925,7 @@
                         </Setter.Value>
                     </Setter>
 
-                    <DataTrigger.EnterActions>
+                    <MultiDataTrigger.EnterActions>
                         <BeginStoryboard x:Name="CustomSettingsFadeIn">
                             <Storyboard>
                                 <DoubleAnimation Storyboard.TargetName="CustomSettingsHolder" Storyboard.TargetProperty="Opacity" To="1" BeginTime="0:0:0.3" Duration="0:0:0.5">
@@ -883,8 +936,8 @@
                             </Storyboard>
                         </BeginStoryboard>
                         <StopStoryboard BeginStoryboardName="CustomSettingsFadeOut"/>
-                    </DataTrigger.EnterActions>
-                    <DataTrigger.ExitActions>
+                    </MultiDataTrigger.EnterActions>
+                    <MultiDataTrigger.ExitActions>
                         <BeginStoryboard x:Name="CustomSettingsFadeOut">
                             <Storyboard>
                                 <DoubleAnimation Storyboard.TargetName="CustomSettingsHolder" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.1">
@@ -904,13 +957,15 @@
                             </Storyboard>
                         </BeginStoryboard>
                         <StopStoryboard BeginStoryboardName="CustomSettingsFadeIn"/>
-                    </DataTrigger.ExitActions>
-                </DataTrigger>
+                    </MultiDataTrigger.ExitActions>
+                </MultiDataTrigger>
 
                 <!-- Taller screen ratio (16:10 and plus) -->
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasBeenInitialized}" Value="True"/>
                         <Condition Binding="{Binding IsInCustomMode}" Value="True"/>
+                        <Condition Binding="{Binding CanOnlyChangeCustomMode}" Value="False"/>
                         <Condition Binding="{Binding Data.AspectRatio, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0.62}" Value="True"/>
                         <Condition Binding="{Binding Data.AspectRatio, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0.74}" Value="False"/>
                     </MultiDataTrigger.Conditions>
@@ -934,7 +989,9 @@
                 <!-- For 4:3 screen ratios and squarer -->
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasBeenInitialized}" Value="True"/>
                         <Condition Binding="{Binding IsInCustomMode}" Value="True"/>
+                        <Condition Binding="{Binding CanOnlyChangeCustomMode}" Value="False"/>
                         <Condition Binding="{Binding Data.AspectRatio, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0.74}" Value="True"/>
                     </MultiDataTrigger.Conditions>
 
@@ -957,7 +1014,9 @@
                 <!-- Wide screen counterparts -->
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasBeenInitialized}" Value="True"/>
                         <Condition Binding="{Binding IsInCustomMode}" Value="True"/>
+                        <Condition Binding="{Binding CanOnlyChangeCustomMode}" Value="False"/>
                         <Condition Binding="{Binding Data.AspectRatio, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0.62}" Value="False"/>
                     </MultiDataTrigger.Conditions>
                     
@@ -991,19 +1050,19 @@
                     <Setter TargetName="TitleText" Property="Tag" Value="{Binding Source='h3745e72dg245ag4502g8774g8965baf256eb', Converter={StaticResource TranslatedStringConverter}}"/>
                     <Setter TargetName="ConfirmBtn" Property="Content" Value="{Binding Source='h5ec59419gbcbag4572gbf24g259ad7f261f2', Converter={StaticResource TranslatedStringConverter}}"/>
                     <Setter TargetName="ConfirmBtn" Property="Command" Value="{Binding UpdateCustomDifficultyCommand, Mode=OneTime}"/>
+
+                    <Setter TargetName="DefaultCustom" Property="Content" Value="{Binding Source='hf8f0bd69gdbfeg4657gbb07gfda9602d4a08', Converter={StaticResource TranslatedStringConverter}}"/>
                 </MultiDataTrigger>
 
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
                         <Condition Binding="{Binding IsInCustomMode}" Value="True"/>
-                        <Condition Binding="{Binding IsOriginallyInCustomMode}" Value="True"/>
+                        <Condition Binding="{Binding CanOnlyChangeCustomMode}" Value="True"/>
                         <Condition Binding="{Binding IsMainMenu}" Value="False"/>
                     </MultiDataTrigger.Conditions>
 
                     <Setter TargetName="CancelBtn" Property="Command" Value="{Binding CustomEvent, Mode=OneTime}"/>
                     <Setter TargetName="CancelBtn" Property="CommandParameter" Value="CloseWidget"/>
-
-                    <Setter TargetName="DefaultCustom" Property="Content" Value="{Binding Source='hf8f0bd69gdbfeg4657gbb07gfda9602d4a08', Converter={StaticResource TranslatedStringConverter}}"/>
                 </MultiDataTrigger>
 
                 <MultiDataTrigger>

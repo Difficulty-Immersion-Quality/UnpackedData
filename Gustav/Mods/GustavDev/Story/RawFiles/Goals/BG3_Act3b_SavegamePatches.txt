@@ -11013,27 +11013,20 @@ NOT DB_LOW_SteelWatchFoundry_WaitToobinLeaveTitanRoom(1);
 //END_REGION GUS-316332
 
 //REGION GUS-315783
+
 PROC
 PROC_ApplySavegamePatches()
-AND
-QRY_BG3_SaveGameIsOlderThan("Release Patch 6")
-AND
-DB_CurrentLevel("CTY_Main_A")
 THEN
-PROC_SavegamePatches_GUS_315783();
-
-IF
-DB_CurrentLevel("CTY_Main_A")
-THEN
-PROC_SavegamePatches_GUS_315783();
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8","CTY_Main_A","GUS-315783_2");
 
 PROC
-PROC_SavegamePatches_GUS_315783()
+PROC_ApplySavegamePatchInLevel("CTY_Main_A","GUS-315783_2")
 AND
-NOT DB_BUGFIX_Marker("GUS-315783")
+Exists(LTS_GEN_Fire_Basket_A_000_9bbebf3a-6692-4b48-bc59-6353f6060eb4,1)
 THEN
-RequestDelete((ITEM)LTS_GEN_Fire_Basket_A_000_80568ae8-2384-818c-40e2-2b4c9abc5b39);
-DB_BUGFIX_Marker("GUS-315783");
+RequestDelete((ITEM)LTS_GEN_Fire_Basket_A_000_9bbebf3a-6692-4b48-bc59-6353f6060eb4);
+DB_BUGFIX_Marker("GUS-315783_2");
+
 //END_REGION
 
 //REGION GUS-315588
@@ -12337,10 +12330,6 @@ PROC_ClearStoryMove(S_LOW_Devella_Fountainhead_048defbd-d386-4272-a5b7-40c1a9e75
 //REGION GUSX-703
 PROC
 PROC_ApplySavegamePatches()
-AND
-QRY_BG3_SaveGameIsOlderThan("Release Patch 7")
-AND
-DB_LevelLoadedOnce("CTY_Main_A")
 THEN
 PROC_CheckShouldSavegamePatchInLevel_SetBugfixMarker("Release Patch 7", "CTY_Main_A", "GUSX-703");
 
@@ -12378,6 +12367,137 @@ PROC
 PROC_ReadyToMoveOn(_Clerk,"LOW_SorcerousSundries_ReadyToDisappearProjection")
 THEN
 PROC_SetOnStage(_Clerk,0);
+//END_REGION GUSX-703
+
+//REGION GUSX-7675
+
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "CTY_Main_A", "GUSX-7675");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-7675")
+AND
+DB_GLO_EmperorPrelude_NetherStoneTrackers((ITEM)_Netherstone, _, _, _, _ItemAtCampFlag, _)
+AND
+NOT DB_GlobalFlag(_ItemAtCampFlag)
+AND
+GetInventoryOwner(_Netherstone,_CampChest)
+AND
+GetTemplate(_CampChest, _CampChestTemplate)
+AND
+DB_GLO_Tutorials_CampTravellerChestRoots((ITEMROOT)_CampChestTemplate)
+THEN
+PROC_GlobalSetFlagAndCache(_ItemAtCampFlag);
+DB_BUGFIX_Marker("GUSX-7675",(GUIDSTRING)_Netherstone);
+
+//END_REGION GUSX-7675
+
+//REGION GUSX-967
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_FOR_CourierDog_ActiveScratch((CHARACTER)S_FOR_Courier_Dog_3059f69c-068d-4e28-8491-55953c027901)
+AND
+DB_Dialogs(S_FOR_Courier_Dog_3059f69c-068d-4e28-8491-55953c027901,(DIALOGRESOURCE)CAMP_Courier_Dog_2f2ab0f4-9b0e-3991-b6dd-44474a25e7a3)
+AND
+GetHasOsirisDialog(S_FOR_Courier_Dog_3059f69c-068d-4e28-8491-55953c027901,0)
+THEN
+SetHasDialog(S_FOR_Courier_Dog_3059f69c-068d-4e28-8491-55953c027901,1);
+DB_BUGFIX_Marker("GUSX-967");
+
+//END_REGION GUSX-967
+
+//REGION GUSX-7862
+// Fix for some spawns losing "MONSTER" tag after being transformed into their shirtless version
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "CTY_Main_A", "GUSX-7862");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-7862")
+AND
+DB_LOW_CazadorsPalace_RitualRoom_RitualParticipants(_Spawn)
+AND
+IsTagged(_Spawn, (TAG)MONSTER_90101158-141e-4896-8e60-f8db03f6dde3, 0)
+THEN
+SetTag(_Spawn, (TAG)MONSTER_90101158-141e-4896-8e60-f8db03f6dde3);
+DB_BUGFIX_Marker("GUSX-7862", _Spawn);
+//END_REGION GUSX-7675
+
+//REGION GUSX-7721
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel_SetBugfixMarker("Release Patch 8", "CTY_Main_A", "GUSX-7721");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-7721")
+THEN
+DB_DropMutingStatussesDialog(LOW_CountingHouse_Heist_63210311-4b3b-85e3-7278-2032e2a65bd7);
+
+// Check if the cinematic that should always start did not start
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-7721")
+AND
+DB_OnlyOnce("LOW_CountingHouse_StartHeistDialog")
+AND
+NOT DB_GlobalFlag(LOW_CountingHouse_State_RobbersEscaped_16197488-9cc2-48e2-94ae-36225025d4d8)
+AND
+NOT DB_DialogRequestCache_DialogInstance(LOW_CountingHouse_Heist_63210311-4b3b-85e3-7278-2032e2a65bd7, _)
+THEN
+SetFlag(LOW_CountingHouse_State_RobbersEscaped_16197488-9cc2-48e2-94ae-36225025d4d8);
+PROC_SavegamePatch_GUSX7721_FixHeistDialogDidntStart();
+
+// Minsc still alive in Counting House and not recruited -> reset Minsc
+PROC
+PROC_SavegamePatch_GUSX7721_FixHeistDialogDidntStart()
+AND
+NOT DB_PermaDefeated(S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba)
+AND
+NOT DB_PartOfTheTeam(S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba)
+THEN
+DialogRequestStop(S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba);
+PROC_GlobalClearFlagAndCache((FLAG)LOW_MinscHideout_State_StoneLordDisabled_1a138353-72eb-4442-80bf-d99baf3daa5d);
+PROC_GlobalClearFlagAndCache((FLAG)ORI_Minsc_State_SavedFromAbsolute_62e1d5ec-7c7e-70c2-68de-cadc7c7f5f20);
+PROC_GlobalClearFlagAndCache((FLAG)ORI_Minsc_State_NotSavedFromAbsolute_c8fdabdd-a9fa-4dbb-b693-9c7b12e1f56b);
+PROC_GlobalClearFlagAndCache((FLAG)ORI_Minsc_State_SavingBoo_c0bb9916-a2e0-416a-9117-1724bc5854c4);
+PROC_GlobalClearFlagAndCache((FLAG)ORI_Minsc_State_KnockedOutOnce_036e01e6-181d-404b-8fb2-51f9f93ed666);
+ClearFlag((FLAG)GLO_KnockedOut_Event_Wake_4095904d-ce99-1d77-7dfd-a77f04005032, S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba);
+NOT DB_OnlyOnce("Minsc_StartSaveFromAbsoluteDialog");
+DB_DontRemoveDialogsOnKnockedOut((CHARACTER)S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba);
+DB_PreventKnockedOutPermaDefeated((CHARACTER)S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba);
+DB_Dialogs((CHARACTER)S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba, LOW_Minsc_SaveFromAbsolute_eeb5d970-975f-5f16-80ba-4aa54cb65702);
+PROC_LOW_CountingHouse_AfterHeistScene();
+DB_BUGFIX_Marker("GUSX-7721-MinscAlive");
+
+// Minsc recruited -> don't progress state, leave Minsc in party
+PROC
+PROC_SavegamePatch_GUSX7721_FixHeistDialogDidntStart()
+AND
+NOT DB_PermaDefeated(S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba)
+AND
+DB_PartOfTheTeam(S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba)
+THEN
+PROC_SceneOver("LOW_CountingHouse_HeistScene");
+PROC_SetRelationMutual((FACTION)ACT3_LOW_CountingHouse_Robbers_b949b011-9fd1-4ed8-b7bf-223c88838327, (FACTION)ACT3_LOW_CountingHouse_Rakaths_d8c61e85-7473-4b87-9df0-e3c5785d894f, 0);
+PROC_SetRelationToPlayers((FACTION)ACT3_LOW_CountingHouse_Robbers_b949b011-9fd1-4ed8-b7bf-223c88838327,0);
+PROC_TriggerUnregisterForPlayers((TRIGGER)S_LOW_CountingHouse_GreatDoor_QuestUpdate_Trigger_3388109d-41a3-4530-a847-0f6c1e5c7121);
+DB_BUGFIX_Marker("GUSX-7721-MinscRecruited");
+
+// Minsc permadefeated in Counting House -> leave Minsc dead but progress state
+PROC
+PROC_SavegamePatch_GUSX7721_FixHeistDialogDidntStart()
+AND
+DB_PermaDefeated(S_Player_Minsc_0de603c5-42e2-4811-9dad-f652de080eba)
+THEN
+PROC_LOW_CountingHouse_AfterHeistScene();
+DB_BUGFIX_Marker("GUSX-7721-MinscPermaDefeated");
+//END_REGION GUSX-7721
 
 //REGION GUSX-7895
 PROC
@@ -12402,6 +12522,30 @@ NOT DB_GLO_BUGFIX_GUSX7895_AddCustomDefeatedState(1);
 DB_BUGFIX_Marker("GUSX-7895");
 DB_CustomDefeatedState(S_Player_Astarion_c7c13742-bacd-460a-8f65-f864fe41f255, "LOW_CAZADORSPALACE_RITUAL_INCAPACITATED");
 //END_REGION
+
+//REGION GUSX-8556
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SavegameIsOlderThan("Release Patch 8")
+AND
+NOT DB_PermaDefeated(S_GLO_Wulbren_2d70edbf-1a70-4047-8099-48f3e75d93bf)
+AND
+HasActiveStatus(S_GLO_Wulbren_2d70edbf-1a70-4047-8099-48f3e75d93bf, "PEACEFUL_RESOLUTION_XP", 1)
+THEN
+SetFlag(LOW_SteelWatchFoundry_State_Outcome_WulbrenLeft_498c6f1b-871e-4c2a-9c23-a85df85cfe5c);
+DB_BUGFIX_Marker("GUSX-8556_FixJournal");
+
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SavegameIsOlderThan("Release Patch 8")
+AND
+DB_LevelLoadedOnce("CTY_Main_A")
+THEN
+DB_DropMutingStatussesDialog((DIALOGRESOURCE)LOW_SteelWatchFoundry_Outcome_48c04ebf-a688-ab2c-da8d-e54d427a796f);
+DB_BUGFIX_Marker("GUSX-8556_ForSafety");
+//END_REGION GUSX-8556
 
 //REGION GUSX-8880
 PROC
@@ -12429,6 +12573,102 @@ DB_BUGFIX_Marker("GUSX-8880-B");
 DB_PermaDefeatedEvent(S_LOW_Viconia_b1ea974d-96fb-47ca-b6d9-9c85fcb69313, (FLAG)ORI_Shadowheart_State_KilledViconia_472e18f2-15f9-4004-bdae-a9340fff7b15);
 //END_REGION
 
+//REGION GUSX-7513
+
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_LevelLoadedOnce("CTY_Main_A")
+AND
+NOT DB_LevelUnreachable("CTY_Main_A")
+THEN
+PROC_CheckShouldSavegamePatchInLevel_SetBugfixMarker("Release Patch 8", "CTY_Main_A", "GUSX-7513");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-7513")
+AND
+IsInInventory(BOOK_UNI_LOW_HoH_TamingHope_PartTwo_001_d01d38aa-c775-8869-421d-e15e7304a631, 0)
+THEN
+PROC_SetOnStage(BOOK_UNI_LOW_HoH_TamingHope_PartTwo_001_d01d38aa-c775-8869-421d-e15e7304a631, 0);
+DB_BUGFIX_Marker("GUSX-7513-WasntPickedUp");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-7513")
+AND
+IsInInventory(BOOK_UNI_LOW_HoH_TamingHope_PartTwo_001_d01d38aa-c775-8869-421d-e15e7304a631, 1)
+AND
+GetInventoryOwner(BOOK_UNI_LOW_HoH_TamingHope_PartTwo_001_d01d38aa-c775-8869-421d-e15e7304a631, _InventoryOwner)
+THEN
+TeleportTo(BOOK_UNI_LOW_HoH_TamingHope_PartTwo_001_d01d38aa-c775-8869-421d-e15e7304a631, _InventoryOwner);
+PROC_SetOnStage(BOOK_UNI_LOW_HoH_TamingHope_PartTwo_001_d01d38aa-c775-8869-421d-e15e7304a631, 0);
+ToInventory(BOOK_UNI_LOW_HoH_TamingHope_PartThree_000_577228f3-1ee6-8928-6f19-854d31731d60, _InventoryOwner, 1, 0);
+DB_BUGFIX_Marker("GUSX-7513-WasPickedUp");
+
+//END_REGION
+
+//REGION GUSX-10305
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_CurrentLevel("CTY_Main_A")
+AND
+DB_GlobalFlag(LOW_HouseOfHope_Event_RaphaelAppeared_c25358e0-5ea1-929b-b511-6e745596d789)
+AND
+IsInTrigger(S_GLO_Orthon_1dc8091d-2af6-4d33-9268-998ef266d19c, (TRIGGER)S_LOW_HouseOfHope_SUB_49462249-7f39-4b91-af1d-ba121c711213, 0)
+THEN
+PROC_GLO_SetupForAct_Place(
+	(CHARACTER)S_GLO_Orthon_1dc8091d-2af6-4d33-9268-998ef266d19c,
+	(TRIGGER)S_LOW_HouseOfHope_OrthonPoint_a29bb35d-c5f3-404f-9a27-d75c67322bcb,
+	(FACTION)Act3_LOW_HouseOfHope_Orthon_905611e9-4399-47e3-a576-aaa840ab1724);
+DB_BUGFIX_Marker("GUSX-10305");
+
+//END_REGION
+
+//REGION GUSX-9248
+
+// In the previous case that funeral could end (the dialogue doesn't really support it, it was always expected that it's either the end of the quest, or waveservants are hostile)
+
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_LevelLoadedOnce("CTY_Main_A")
+AND
+NOT DB_LevelUnreachable("CTY_Main_A")
+AND
+DB_GlobalFlag((FLAG)LOW_WaterQueensHouse_State_FuneralEnded_cebde540-6e92-ea5d-2187-c40eb9f5f95f)
+AND
+DB_GlobalFlag((FLAG)LOW_Allandra_State_AcceptedQuest_d0f4ea27-21a9-b8e9-f799-de5de71d441e)
+AND
+NOT DB_PermaDefeated(S_LOW_AllandraGrey_32d78583-07c6-4160-9ec7-3a24b15149c8)
+THEN
+PROC_RemoveDBTrespassTrigger((TRIGGER)S_LOW_WaterQueensHouse_AllandraOffice_TrespassTrigger_aff0f58f-da00-42cf-b942-9aeed53d4e2b);
+PROC_SpotPlayers_StopSpotting("LOW_GuardWaveservant_Spotted");
+DB_BUGFIX_Marker("GUSX-9248");
+
+//END_REGION
+
+//REGION GUSX-10936
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+THEN
+PROC_CheckShouldSavegamePatchInLevel_SetBugfixMarker("Release Patch 8", "CTY_Main_A", "GUSX-10936");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-10936")
+AND
+DB_GlobalFlag(LOW_Sewer_State_FireWizardPeace_dc00f52a-cbc2-c709-80a5-a291a97829da)
+THEN
+SetHasDialog(S_LOW_FireWizard_5a4f7f77-43c9-4f84-b3f4-4076d876ccde, 1);
+//END_REGION GUSX-10936
+
 //REGION GUSX-9906
 PROC
 PROC_ApplySavegamePatches()
@@ -12448,6 +12688,429 @@ PROC_RemoveDialog(S_GLO_GithKnight_2adce2df-0799-49dc-b867-ba7ca21e9aea);
 DB_Dialogs(S_GLO_GithKnight_2adce2df-0799-49dc-b867-ba7ca21e9aea, LOW_VossSewers_6a70d80c-2c97-445b-4850-e6ac62c3b4bc);
 DB_BUGFIX_Marker("GUSX-9906");
 //END_REGION
+
+//REGION GUSX-9144-ShadowheartParents
+
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+THEN
+PROC_CheckShouldSavegamePatchInLevel_SetBugfixMarker("Release Patch 8", "CTY_Main_A", "GUSX-9144-ShadowheartParents");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-9144-ShadowheartParents")
+AND
+DB_LOW_SharGrotto_ShadowheartParents(_Parent, _, _, _)
+THEN
+SetFaction(_Parent, (FACTION)ACT3_LOW_ShadowheartParents_d1e07405-3878-4a83-b85d-6c7b4e46c86b);
+DB_BUGFIX_Marker("GUSX-9144-ShadowheartParents");
+
+//END_REGION
+
+//REGION GUSX-9144
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel_SetBugfixMarker("Release Patch 8", "CTY_Main_A", "GUSX-9144");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-9144")
+AND
+GetFaction(S_LOW_JaheirasHouse_Rat004_c9e8fe58-0c94-4c86-9854-23c90f56b92d, _Faction)
+AND
+_Faction != ACT3_LOW_JaheirasHouse_JaheirasFamily_2a1a2442-56e9-48a9-9b33-94f5857f7b09
+THEN
+SetFaction(S_LOW_JaheirasHouse_Rat004_c9e8fe58-0c94-4c86-9854-23c90f56b92d, (FACTION)ACT3_LOW_JaheirasHouse_JaheirasFamily_2a1a2442-56e9-48a9-9b33-94f5857f7b09);
+DB_BUGFIX_Marker("GUSX-9144-RatFactionUpdate");
+//END_REGION
+
+//REGION GUSX-9124
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel_SetBugfixMarker("Release Patch 8", "CTY_Main_A", "GUSX-9124");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-9124")
+AND
+DB_PermaDefeated(S_GLO_Prodigy_b6a3a9e9-b6eb-4c19-ab3f-4c431178fe1b)
+AND
+QRY_QuestUpdateIsUnlockedForAny("SHA_Nightsong", "NightsongDefeated_LorroakanDefeated")
+AND
+QuestIsClosed("SHA_Nightsong",0)
+AND
+DB_GlobalFlag((FLAG)LOW_SorcerousSundries_State_ProdigyHasStayedAtRamazith_524ab56a-8169-4926-9105-8bcaf8c87499)
+THEN
+TeleportTo(S_LOW_SorcerousSundries_KilledOffscreenRolanTrigger_cb007c54-43f5-48da-ba62-a762a33affe4,S_GLO_Prodigy_b6a3a9e9-b6eb-4c19-ab3f-4c431178fe1b);
+PROC_TriggerRegisterForParty((TRIGGER)S_LOW_SorcerousSundries_KilledOffscreenRolanTrigger_cb007c54-43f5-48da-ba62-a762a33affe4);
+DB_BUGFIX_Marker("GUSX-9124");
+//END_REGION
+
+//REGION GUSX-8040
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "CTY_Main_A", "GUSX-8040");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-8040")
+AND
+NOT DB_GlobalFlag((FLAG)LOW_CountingHouse_State_PassedLobbyCheckpoint_085b0568-d4e7-72f4-9281-712589a0733c)
+AND
+NOT DB_TrespassTrigger((TRIGGER)S_LOW_CountingHouse_RestrictedAreaTrespass_Trigger_8d239901-9f60-46ca-8774-2aab55b715c3, (TRIGGER)S_LOW_CountingHouse_LobbyTrespassOutTrigger_1bca742f-67a0-445d-b88a-0bec24fcd24f,"LOW_CountingHouse_BankPass_Trespassing")
+THEN
+DB_TrespassTrigger((TRIGGER)S_LOW_CountingHouse_RestrictedAreaTrespass_Trigger_8d239901-9f60-46ca-8774-2aab55b715c3, (TRIGGER)S_LOW_CountingHouse_LobbyTrespassOutTrigger_1bca742f-67a0-445d-b88a-0bec24fcd24f,"LOW_CountingHouse_BankPass_Trespassing");
+DB_BUGFIX_Marker("GUSX-8040-ReappliedTrespass");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-8040")
+AND
+DB_GlobalFlag((FLAG)LOW_OskarsBeloved_State_ArtistLeftHideout_76dca7be-5c6a-4444-afa4-3ae4b13d6315)
+THEN
+PROC_RemoveDBTrespassTrigger((TRIGGER)S_LOW_OskarsBeloved_UpperMansionTrespassArea_4c9a3444-39d0-4f73-a97c-d16f728d1e2a);
+DB_BUGFIX_Marker("GUSX-8040-RemovedTrespass");
+
+//END_REGION
+
+//REGION GUSX-10220
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_GLO_Backgrounds_ChainAfterGlobalFlagInDialog((FLAG)LOW_SerialKiller_PlayerWarnCoraAboutPoison_8c1d6f61-b422-ef19-1707-a107515a7159, "Act3_Sage_AnsurDiscovered")
+THEN
+NOT DB_GLO_Backgrounds_ChainAfterGlobalFlagInDialog((FLAG)LOW_SerialKiller_PlayerWarnCoraAboutPoison_8c1d6f61-b422-ef19-1707-a107515a7159, "Act3_Sage_AnsurDiscovered");
+DB_BUGFIX_Marker("GUSX-10220");
+//END_REGION GUSX-10220
+
+//REGION GUSX-8172
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_LevelLoadedOnce("CTY_Main_A")
+AND
+NOT DB_LevelUnreachable("CTY_Main_A")
+AND
+NOT QRY_QuestUpdateIsUnlockedForAny("GLO_DoubtingArtist", "LootedTorch")
+AND
+QuestIsClosed("GLO_DoubtingArtist",0)
+THEN
+DB_OskarsBeloved_TorchInfoUpdates("TalkedToCarrion_MentionedTorch");
+DB_OskarsBeloved_TorchInfoUpdates("ReadClientList");
+DB_BUGFIX_Marker("GUSX-8172-AddedDBs");
+
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_LevelLoadedOnce("CTY_Main_A")
+AND
+GetFlag((FLAG)LOW_FatherCarrion_State_WasAskedAboutOskar_9f6778f0-4cb2-4459-98a5-240241ea6b6e, S_LOW_FatherCarrion_b003409c-364f-4065-94bf-7436001d890e,1)
+AND
+NOT QRY_QuestUpdateIsUnlockedForAny("GLO_DoubtingArtist", "TalkedToCarrion_MentionedTorch")
+AND
+NOT QRY_QuestUpdateIsUnlockedForAny("GLO_DoubtingArtist", "TalkedToCarrion_NotKnowAboutTorch")
+AND
+QuestIsClosed("GLO_DoubtingArtist",0)
+THEN
+QuestUpdate("GLO_DoubtingArtist", "TalkedToCarrion_NotKnowAboutTorch");
+DB_BUGFIX_Marker("GUSX-8172-TalkedToCarrionApplied");
+
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_LevelLoadedOnce("CTY_Main_A")
+AND
+QuestIsClosed("GLO_DoubtingArtist",0)
+AND
+DB_Players(_Player)
+AND
+GetFlag((FLAG)LOW_PhilgravesMansion_State_HasTorch_963a8ced-1976-41fa-8994-c5b71330cc9b,_Player,1)
+AND
+NOT QRY_QuestUpdateIsUnlockedForAny("GLO_DoubtingArtist", "LootedTorch")
+AND
+QRY_LOW_OskarsBeloved_KnowAboutTorch()
+THEN
+QuestUpdate("GLO_DoubtingArtist", "LootedTorch");
+DB_BUGFIX_Marker("GUSX-8172-LootedTorchedBeApplied");
+
+//END_REGION
+
+//REGION GUSX-7226
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "CTY_Main_A", "GUSX-7226");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-7226")
+AND
+DB_GlobalFlag((FLAG)LOW_FatherCarrion_State_IsIndebtedToPlayers_b2e22b4d-f88a-437a-b893-1f20e3e5ebf9)
+AND
+DB_GlobalFlag((FLAG)LOW_PhilgravesMansion_State_HeartInThrumbosInventory_46beba15-84e7-47ac-bc46-922cf0345b1a)
+AND
+IsInTrigger(S_LOW_Thrumbo_c20c1d4e-eea9-473b-b26e-abe5973ba0eb,(TRIGGER)S_LOW_PhilgravesMansion_MainHallTrigger_97b50e48-fc3e-435c-a3ba-2745eb733f2e,1)
+AND
+NOT DB_Dead(S_LOW_FatherCarrion_b003409c-364f-4065-94bf-7436001d890e)
+AND
+NOT DB_Destroyed((ITEM)S_LOW_UNI_CarrionJar_Heart_13d8bafe-6614-4ae8-be27-2e1e1d294492)
+THEN
+PROC_PhilgravesMansion_SendJarToBasement((ITEM)S_LOW_UNI_CarrionJar_Heart_13d8bafe-6614-4ae8-be27-2e1e1d294492);
+DB_BUGFIX_Marker("GUSX-7226");
+//END_REGION
+
+//REGION GUSX-7226
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_LevelUnreachable("INT_Main_A")
+AND
+NOT DB_LevelUnreachable("CTY_Main_A")
+AND
+DB_Camp_PreCampFaction((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(FACTION)ACT2_SCE_EpilogueFaction_9c896609-f2f6-4f1a-8967-c83140977975)
+THEN
+NOT DB_Camp_PreCampFaction((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(FACTION)ACT2_SCE_EpilogueFaction_9c896609-f2f6-4f1a-8967-c83140977975);
+DB_Camp_PreCampFaction((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(FACTION)ACT1_SHA_Nightsong_89d54194-f9fd-4a99-879a-e11971bfe3e4);
+DB_BUGFIX_Marker("GUSX-7226-UpdatedPreCamp");
+
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "CTY_Main_A", "GUSX-7226");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-7226")
+AND
+GetFaction((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(FACTION)ACT2_SCE_EpilogueFaction_9c896609-f2f6-4f1a-8967-c83140977975)
+THEN
+SetFaction((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(FACTION)ACT1_SHA_Nightsong_89d54194-f9fd-4a99-879a-e11971bfe3e4);
+DB_BUGFIX_Marker("GUSX-7226");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-7226")
+AND
+IsInTrigger((CHARACTER)S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,(TRIGGER)S_LOW_SorcerousSundries_RamazithOwnershipTrigger_af5a1002-68b2-4b3e-8399-e077af9f1dd5,1)
+AND
+NOT DB_OnlyOnce("LOW_SorcerousSundries_Conclude")
+AND
+DB_GlobalFlag((FLAG)LOW_SorcerousSundries_State_PlayersSideWithNightsong_992ec758-9536-40ce-9a45-72193c81ec1b)
+AND
+IsInCombat(S_GLO_Nightsong_6c55edb0-901b-4ba4-b9e8-3475a8392d9b,0)
+AND
+DB_PermaDefeated(S_LOW_Lorroakan_a9d4b71d-b0ef-429e-8210-6dc8be986ee9)
+THEN
+PROC_LOW_SorcerousSundries_SetupConclusion(NULL_00000000-0000-0000-0000-000000000000);
+
+//END_REGION
+
+//REGION GUSX-3719
+PROC
+PROC_ApplySavegamePatches()
+AND
+NOT DB_LevelUnreachable("CTY_Main_A")
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "CTY_Main_A", "GUSX-3719");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-3719")
+AND
+DB_LOW_DevilsFee_CellarUnlocked(1)
+AND
+GetRotation(S_LOW_DevilsFee_CellarLockBust_11221eb7-0681-4a8b-99fb-dd63e544573b, _X, _Y, _Z)
+THEN
+ItemRotateYToAngle(S_LOW_DevilsFee_Cellar_Bust_92e9d1a9-189b-42f7-9025-ba88f889eab7, _Y, 90.0);
+PROC_SetOnStage(S_LOW_DevilsFee_CellarLockBust_11221eb7-0681-4a8b-99fb-dd63e544573b, 0);
+DB_BUGFIX_Marker("GUSX-3719");
+//END_REGION GUSX-3719
+
+//REGION GUSX-8203
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_LevelLoadedOnce("INT_Main_A")
+AND
+CanTrade(S_Player_Jaheira_91b6b200-7d00-4d62-8dc9-99e8339dfa1a, 1)
+THEN
+SetCanTrade(S_Player_Jaheira_91b6b200-7d00-4d62-8dc9-99e8339dfa1a, 0);
+DB_BUGFIX_Marker("GUSX-8203-RemoveJaheiraTrade");
+
+//END_REGION GUSX-8203
+
+//REGION GUSX-2099
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+NOT DB_GlobalFlag(LOW_MurderTribunal_Knows_WordOfPassage_839150e6-d168-4c89-a980-68b9e9f60556)
+AND
+DB_Players(_Player)
+AND
+QuestUpdateIsUnlocked(_Player, "LOW_FindBhaalTemple", "MurderTribunal_KillTwoVictims", 1)
+AND
+QRY_OnlyOnce("GUSX-2099")
+THEN
+QuestUpdateRevert(_Player, "LOW_FindBhaalTemple", "MurderTribunal_KillTwoVictims");
+DB_BUGFIX_Marker("GUSX-2099");
+//END_REGION GUSX-2099
+
+//REGION GUSX-2062
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "CTY_Main_A", "GUSX-2062");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-2062")
+THEN
+PROC_SetRelationMutual(GLO_SteelWatcher_BrainControlled_f0bb90ec-b609-4864-9716-0ad5d7222689, ACT3_LOW_BaldursMouth_Security_1c0ff36f-78a7-4c16-b624-70cb8e18f346, 100);
+DB_BUGFIX_Marker("GUSX-2062");
+
+//END_REGION
+
+//REGION GUSX-6747
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+NOT DB_GlobalFlag((FLAG)PLA_ZhentShipment_State_ChestSentAway_5d9f274d-a38b-4d81-bc9f-bc8c1fcb59ca)
+AND
+GetFlag((FLAG)PLA_ZhentShipment_State_HadShipment_3bb17316-cbb3-4e73-95d8-04b826a5cecd, S_LOW_Guildhall_Zhent_Mercenary_001_5ac9c7ec-d26f-404e-bd17-e9d3dad000c4, 1)
+THEN
+QuestUpdate("HIDDEN_CTY_Boosters", "LOW_Guildhall_DeliveredZhentShipment");
+DB_BUGFIX_Marker("GUS-304501");
+//END_REGION GUSX-6747
+
+//REGION GUSX-12210
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "CTY_Main_A", "GUSX-12210");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-12210")
+AND
+DB_GlobalFlag((FLAG)ORI_Laezel_State_VossWaitingForHammerInSewers_47b30289-c885-46a9-ab6e-82b5460c161d)
+AND
+IsOnStage(S_LOW_VossDragonborn_7952187b-7636-418f-884c-adfdd33fda8b, 1)
+AND
+IsOnStage(S_GLO_GithKnight_2adce2df-0799-49dc-b867-ba7ca21e9aea, 0)
+AND
+NOT DB_PermaDefeated(S_LOW_VossDragonborn_7952187b-7636-418f-884c-adfdd33fda8b)
+AND
+NOT DB_PermaDefeated(S_GLO_GithKnight_2adce2df-0799-49dc-b867-ba7ca21e9aea)
+THEN
+PROC_LOW_VossSewers_SetupVoss();
+DB_BUGFIX_Marker("GUSX-12210");
+//END_REGION GUSX-12210
+
+//REGION GUSX-6534
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_GlobalFlag((FLAG)LOW_WindmillMindflayeFollowup_Event_MetLOWFamily_7bc6936a-eb73-742e-f9cd-80660cb12f9c)
+AND
+DB_Players(_Player)
+THEN
+SetFlag(LOW_WindmillMindflayeFollowup_Event_PlayerMetLOWFamily_b561aad0-d0f1-4b8c-b275-059d056fd3d2, _Player);
+DB_BUGFIX_Marker("GUSX-6534");
+//END_REGION GUSX-6534
+
+//REGION GUSX-8382
+PROC
+PROC_ApplySavegamePatches()
+AND
+NOT DB_LevelUnreachable("CTY_Main_A")
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "CTY_Main_A", "GUSX-8382");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-8382")
+AND
+IsInTrigger(S_GLO_DoubtingArtist_3ae152be-8ff6-420c-81a0-68d6a55cd5bd, (TRIGGER)S_LOW_OskarsBeloved_ConclusionSpotTrigger_fb48ce73-fad6-4df8-9204-14ea37c75cf5,1)
+AND
+DB_OnlyOnce("LOW_OskarsBeloved_HandleOskarDiabled")
+AND
+NOT DB_OnlyOnce("LOW_OskarsBeloved_FreeKerri")
+AND
+NOT DB_Dead((CHARACTER)S_GLO_DoubtingArtist_3ae152be-8ff6-420c-81a0-68d6a55cd5bd)
+AND
+QRY_GUSX_8382_CheckOskarWrongStatuses()
+THEN
+ApplyStatus(S_GLO_DoubtingArtist_3ae152be-8ff6-420c-81a0-68d6a55cd5bd,"KNOCKED_OUT",-1.0);
+ApplyStatus(S_GLO_DoubtingArtist_3ae152be-8ff6-420c-81a0-68d6a55cd5bd,"KNOCKED_OUT_PERMANENTLY",-1.0);
+DB_BUGFIX_Marker("GUSX-8382");
+
+QRY
+QRY_GUSX_8382_CheckOskarWrongStatuses()
+AND
+HasActiveStatus(S_GLO_DoubtingArtist_3ae152be-8ff6-420c-81a0-68d6a55cd5bd,"KNOCKED_OUT",0)
+THEN
+DB_NOOP(1);
+
+QRY
+QRY_GUSX_8382_CheckOskarWrongStatuses()
+AND
+HasActiveStatus(S_GLO_DoubtingArtist_3ae152be-8ff6-420c-81a0-68d6a55cd5bd,"KNOCKED_OUT_TEMPORARILY",1)
+THEN
+DB_NOOP(1);
+
+//END_REGION GUSX-8382
+
+//REGION GUSX-12566
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "CTY_Main_A", "GUSX-12566");
+
+PROC
+PROC_ApplySavegamePatchInLevel("CTY_Main_A", "GUSX-12566")
+AND
+QRY_GUSX_12566_IsRogerOutWineFestivalIfCoraDies()
+THEN
+DB_BUGFIX_Marker("GUSX-12566");
+TeleportTo(S_LOW_RogerHighberry_09559a52-5b22-42aa-abfa-04098ecae404, S_LOW_SerialKiller_RogerToFestival_e9581a27-db04-4ceb-9060-72d1867210e2);
+
+
+QRY
+QRY_GUSX_12566_IsRogerOutWineFestivalIfCoraDies()
+AND
+DB_PermaDefeated(S_LOW_CoraHighberry_8a520cf7-c5da-419f-bdd4-792b27c5c679)
+AND
+IsInTrigger(S_LOW_RogerHighberry_09559a52-5b22-42aa-abfa-04098ecae404, S_LOW_SerialKiller_VisitWineFestival_f5419edc-b46c-4f87-9853-eaf67eaefa23, 0)//Character could be anywhere if players move the corpse around the map.
+THEN
+DB_NOOP(1);
+//END_REGION GUSX-12566
+
+//REGION GUSX-9352
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_QuestIsOpened("GLO_DoubtingArtist")
+AND
+DB_GlobalFlag((FLAG)LOW_Oskar_State_Leaving_da5734d2-74ad-4e35-92e6-d477ece23571)
+THEN
+QuestClose("GLO_DoubtingArtist");
+DB_BUGFIX_Marker("GUSX-9352");
+//END_REGION GUSX-9352
+
+
 EXITSECTION
 
 ENDEXITSECTION

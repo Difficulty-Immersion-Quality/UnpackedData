@@ -88,13 +88,14 @@ game.states.Perception =  State{
             end
             StartRealtimeTimer (me, "Cnst.Perception.RemoveOverlay", 5.0, 0)
             local entity = me.Blackboard.GetFact("TargetEntity")
-            if silent ~= true and
-               spotter ~= nil and
+            if spotter ~= nil and
                EntityExists(spotter) and
                spotter.IsCharacter and
-               spotter.Character.IsPartyMember and
-               mod.dialog.IsSpeakerAvailable(spotter) then
-                if perceptionAD ~= nil then
+               spotter.Character.IsPartyMember then
+                RequestPing(entity.Position, entity, spotter, false)
+                if silent ~= true and
+                   perceptionAD ~= nil and
+                   mod.dialog.IsSpeakerAvailable(spotter) then
                     if not GetFlag(suppressFlag, spotter) then
                         StartAutomatedDialogImmediate(perceptionAD, spotter)
                     end
@@ -224,11 +225,10 @@ game.states.Perception =  State{
         events.TimerFinished  = function(e)
             if e.TimerName == "Cnst.Perception.CheckSight" then
                 local entity = me.Blackboard.GetFact("TargetEntity")
-                local actives = GetActiveCharacters(entity, 10.0)
+                local actives = GetActiveCharacters(entity, params.MinDistance)
 
                 for _,char in pairs(actives) do
                     if char.Character.IsPlayer and
-                       (GetDistanceTo(char, me) <= params.MinDistance) and
                        HasLineOfSight(char, me) then
                         if me.Blackboard.GetFact("Cnst.Perception.Known") ~= 1 then
                             local charUUID = char.UUID.String

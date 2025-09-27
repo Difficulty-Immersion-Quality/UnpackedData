@@ -1,0 +1,254 @@
+[Vertex shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+#include "Shaders/HLSL/SkinningHelpers.shdh"
+#include "Shaders/HLSL/ShadowHelpers.shdh"
+
+struct VertexInput
+{
+	float3 Position : POSITION0;
+	uint VertexID : SV_VertexID;
+	float4 VertexColor : COLOR0;
+	float2 TexCoords0 : TEXCOORD0;
+};
+
+struct VertexOutput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float4 TetrahedronClipDistances : SV_ClipDistance0;
+	float Depth : TEXCOORD0;
+	float2 TexCoords0 : TEXCOORD1;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_EngineParams : register(b0)
+{
+	float4x4 WorldOffsetMatrix;
+	float4 VirtualTexture_CB_Texture[2];
+	uint TransformedVerticesOffset;
+	uint VirtualTexture_TilesetDataIndex;
+	uint PADDING0_VirtualTexture_TilesetDataIndex;
+	uint PADDING1_VirtualTexture_TilesetDataIndex;
+};
+VK_DESCRIPTOR(DS_Shader, 1) cbuffer CB_MaterialConstants : register(b1)
+{
+	float4 DynamicParameter;
+	float3 Vector3Parameter_WPO;
+	float FloatParameter_Switch_WPO_HeightShimmerWave;
+	float3 Vector3Parameter_WPO_Strenght;
+	float FloatParameter_DepthBlendDistance;
+	float3 _WorldExtents;
+	float FloatParameter_UseVT;
+};
+VK_DESCRIPTOR(DS_Shader, 2) SamplerState _PointWrapSampler;
+VK_DESCRIPTOR(DS_Shader, 4) Texture2D Texture2DParameter_VertexColor_MSK;
+void CalculateMatWorldPositionOffset(in float4 in_0,
+	in float3 in_1,
+	in float4x4 in_2,
+	in float3 in_3,
+	in float3 in_4,
+	in float4 in_5,
+	out float3 out_0)
+{
+	// DynamicParameterNode {
+	// } DynamicParameterNode
+	float3 Local0 = lerp(Vector3Parameter_WPO, float3(0.0f, 0.0f, 0.0f), float3(in_0.y, in_0.y, in_0.y));
+	// LocalPosition {
+	// } LocalPosition
+	float Local1 = in_1.y;
+	float Local2 = (_WorldExtents.y * 0.02f);
+	float Local3 = (Local1 / Local2);
+	float Local4 = (g_CurrentTime + Local3);
+	//  TriangleWaveNode {
+	// TriangleWave
+	float Local5 = abs(((frac((Local4 + 0.5f)) * 2.0f) - 1.0f));
+	// Smooth TriangleWave
+	float Local6 = ((Local5 * Local5) * (3.0f - (2.0f * Local5)));
+	//  } TriangleWaveNode
+	float3 Local7 = (Vector3Parameter_WPO_Strenght * Local6);
+	// TransformDirectionNode {
+	float3 Local8 = mul((float3x3)(in_2), Local7);
+	// } TransformDirectionNode
+	float3 Local9 = lerp(float3(0.0f, 0.0f, 0.0f), Local8, float3(FloatParameter_Switch_WPO_HeightShimmerWave, FloatParameter_Switch_WPO_HeightShimmerWave, FloatParameter_Switch_WPO_HeightShimmerWave));
+	float3 Local10 = (Local0 + Local9);
+	// ObjectWorldPositionNode {
+	// ] ObjectWorldPositionNode
+	// WorldPositionNode {
+	// } WorldPositionNode
+	float3 Local11 = (in_3 - in_4);
+	float Local12 = fmod(in_5.y, 0.0625f);
+	float Local13 = (16.0f * Local12);
+	float Local14 = (16.0f * in_5.y);
+	float Local15 = floor(Local14);
+	float Local16 = (0.0625f * Local15);
+	float2 Local17 = float2(Local13, Local16);
+	// Texture2DNode {
+	float4 Local18 = Texture2DParameter_VertexColor_MSK.SampleLevel(_PointWrapSampler, Local17, 0.0f);
+	// [Local18] Get needed components
+	float Local19 = Local18.y;
+	// } Texture2DNode
+	float Local20 = step(0.01f, Local19);
+	float3 Local21 = (Local11 * Local20);
+	float3 Local22 = (Local10 + Local21);
+	out_0 = Local22;
+}
+
+VertexOutput main(in VertexInput In)
+{
+	VertexOutput Out;
+
+	float3 matWorldPositionOffset;
+	// Object World Offset
+	float3 objectWorldOffset = float3(WorldOffsetMatrix[0].w, WorldOffsetMatrix[1].w, WorldOffsetMatrix[2].w);
+
+	// Object World Position
+	float3 objectWorldPosition = (objectWorldOffset + g_CameraWorldPos.xyz);
+
+	float3 localPositionStatic = In.Position;
+	[branch]
+	if ((TransformedVerticesOffset > 0))
+	{
+		// Skinned vertex
+		localPositionStatic = GetSkinnedPosition(In.VertexID, TransformedVerticesOffset);
+	}
+	// World space offset
+	float3 worldOffset = mul(WorldOffsetMatrix, float4(localPositionStatic, 1.0f)).xyz;
+
+	// World Position
+	float3 worldPosition = (worldOffset + g_CameraWorldPos.xyz);
+
+	CalculateMatWorldPositionOffset(DynamicParameter, In.Position.xyz, WorldOffsetMatrix, objectWorldPosition, worldPosition.xyz, In.VertexColor, matWorldPositionOffset);
+	worldOffset = (worldOffset + matWorldPositionOffset);
+
+	// Projected position
+	float4 projectedPosition = mul(g_OffsetViewProjectionMat, float4(worldOffset, 1.0f));
+
+	// Pass projected position to pixel shader
+	Out.ProjectedPosition = projectedPosition;
+
+	// Tetrahedron clip plane distances
+	float4 tetrahedronClipDistances = GetTetrahedronClipDistances(worldOffset);
+
+	// Pass tetrahedronClipDistances to pixel shader
+	Out.TetrahedronClipDistances = tetrahedronClipDistances;
+
+	// View space position
+	float3 viewPosition = mul((float3x3)(g_ViewMat), worldOffset);
+
+	// Depth
+	float depth = viewPosition.z;
+
+	// Pass depth to pixel shader
+	Out.Depth = depth;
+
+	Out.TexCoords0 = In.TexCoords0;
+
+	return Out;
+}
+
+
+[Fragment shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+#include "Shaders/HLSL/Global/DS_ForwardMaterials.shdh"
+#include "Shaders/HLSL/VirtualTexturing.shdh"
+
+struct PixelInput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float4 TetrahedronClipDistances : SV_ClipDistance0;
+	float Depth : TEXCOORD0;
+	float2 TexCoords0 : TEXCOORD1;
+};
+
+struct PixelOutput
+{
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_EngineParams : register(b0)
+{
+	float4x4 WorldOffsetMatrix;
+	float4 VirtualTexture_CB_Texture[2];
+	uint TransformedVerticesOffset;
+	uint VirtualTexture_TilesetDataIndex;
+	uint PADDING0_VirtualTexture_TilesetDataIndex;
+	uint PADDING1_VirtualTexture_TilesetDataIndex;
+};
+VK_DESCRIPTOR(DS_Shader, 1) cbuffer CB_MaterialConstants : register(b1)
+{
+	float4 DynamicParameter;
+	float3 Vector3Parameter_WPO;
+	float FloatParameter_Switch_WPO_HeightShimmerWave;
+	float3 Vector3Parameter_WPO_Strenght;
+	float FloatParameter_DepthBlendDistance;
+	float3 _WorldExtents;
+	float FloatParameter_UseVT;
+};
+VK_DESCRIPTOR(DS_Shader, 3) SamplerState _DefaultBorderSampler;
+VK_DESCRIPTOR(DS_Shader, 5) Texture2D VirtualTexture_Pagetable;
+VK_DESCRIPTOR(DS_Shader, 6) Texture2DArray VirtualTexture_Cache0;
+VK_DESCRIPTOR(DS_Shader, 7) Texture2D Texture2DParameter_basemap_RGBA;
+VK_DESCRIPTOR(DS_Shader, 8) Texture2D Texture2DParameter_basemap_A;
+void CalculateMatOpacity(in float4 in_0,
+	in float2 in_1,
+	in float in_2,
+	in float2 in_3,
+	out float out_0)
+{
+	// DynamicParameterNode {
+	// } DynamicParameterNode
+	float Local0 = (FloatParameter_DepthBlendDistance * in_0.w);
+	// DepthDifferenceBlend
+	float Local1 = (_LinearDepth.Sample(_PointMirrorSampler, in_1).x * g_FarPlane);
+	float Local2 = (Local1 - in_2);
+	float Local3 = Local2;
+	float Local4 = saturate((Local3 / max(Local0, 0.0001f)));
+	// ~DepthDifferenceBlend
+
+	// OverlayTextureSwitchNode {
+	float Local5;
+	if ((FloatParameter_UseVT > 0.0f))
+	{
+		// VirtualTextureNode {
+		float4 Local6;
+		float4 Local7 = SampleVirtualTexture(in_3, VirtualTexture_Pagetable, VirtualTexture_Cache0, _DefaultBorderSampler, VirtualTexture_TilesetDataIndex, VirtualTexture_CB_Texture, 0, Local6);
+		// } VirtualTextureNode
+		Local5 = Local7.w;
+	}
+	else
+	{
+		// Texture2DNode {
+		float4 Local8 = Texture2DParameter_basemap_RGBA.Sample(_DefaultWrapSampler, in_3);
+		// [Local8] Get needed components
+		float Local9 = Local8.w;
+		// } Texture2DNode
+		Local5 = Local9;
+	}
+	// } OverlayTextureSwitchNode
+	// Texture2DNode {
+	float4 Local10 = Texture2DParameter_basemap_A.Sample(_DefaultWrapSampler, in_3);
+	// [Local10] Get needed components
+	float Local11 = Local10.w;
+	// } Texture2DNode
+	float Local12 = (Local5 * Local11);
+	float Local13 = smoothstep(0.02f, 0.05f, Local12);
+	clip((Local13 - 0.01f));
+	float Local14 = (Local4 * Local13);
+	out_0 = Local14;
+}
+
+PixelOutput main(in PixelInput In)
+{
+	PixelOutput Out;
+
+	float matOpacity;
+	// UV position
+	float2 Local0 = (In.ProjectedPosition.xy * float2(g_RTInvWidth, g_RTInvHeight));
+
+	CalculateMatOpacity(DynamicParameter, Local0, In.Depth, In.TexCoords0, matOpacity);
+	clip((matOpacity - 0.5f));
+
+
+	return Out;
+}

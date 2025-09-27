@@ -664,7 +664,7 @@ AND
 QRY_OnlyOnce("LOW_BhaalTemple_SwapNetherstoneDagger")
 THEN
 DB_GEN_OrinsAbduction_GaveDagger(1);
-ToInventory((ITEM)S_GLO_Orin_Bhaalist_Dagger_Netherstone_7051fd5c-d777-457e-9aaf-e007b4cbbb55, (CHARACTER)S_GLO_BhaalTemple_OrinDummy_879a56ce-1e1c-4b2c-bac7-db7b3c6354ec); 
+RequestDelete((ITEM)S_GLO_Orin_Bhaalist_Dagger_Netherstone_7051fd5c-d777-457e-9aaf-e007b4cbbb55);
 PROC_GEN_OrinsAbduction_GiveDagger_WithoutNetherstone((CHARACTER)_Player);
 PROC_GEN_OrinsAbduction_GiveStone((CHARACTER)_Player);
 
@@ -3480,7 +3480,23 @@ GetPosition(_Harper,_X,_Y,_Z)
 AND
 FindValidPosition(_X,_Y,_Z,6.0,_Harper,1,_CastX,_CastY,_CastZ)
 THEN
+DB_LOW_BhaalTemple_HarpersWoodlandSpellUsed(_Harper);
 UseSpellAtPosition(_Harper,"Target_ConjureWoodlandBeings",_CastX,_CastY,_CastZ);
+
+//FindValidPosition fallback
+IF
+WentOnStage((CHARACTER)_Harper,1)
+AND
+NOT DB_LOW_BhaalTemple_HarpersWoodlandSpellUsed(_Harper)
+AND
+DB_LOW_BhaalTemple_Harpers(_Harper)
+AND
+HasSpell(_Harper,"Target_ConjureWoodlandBeings",1)
+AND
+GetPosition(_Harper,_X,_Y,_Z)
+THEN
+DB_LOW_BhaalTemple_HarpersWoodlandSpellUsed(_Harper);
+UseSpellAtPosition(_Harper,"Target_ConjureWoodlandBeings",_X,_Y,_Z);
 
 IF
 WentOnStage((CHARACTER)_Harper,1)
@@ -3493,8 +3509,37 @@ GetPosition(_Harper,_X,_Y,_Z)
 AND
 FindValidPosition(_X,_Y,_Z,6.0,_Harper,1,_CastX,_CastY,_CastZ)
 THEN
+DB_LOW_BhaalTemple_HarpersWolfSpellUsed(_Harper);
 UseSpellAtPosition(_Harper,"Target_RangersCompanion_Wolf",_CastX,_CastY,_CastZ);
 
+//FindValidPosition fallback
+IF
+WentOnStage((CHARACTER)_Harper,1)
+AND
+NOT DB_LOW_BhaalTemple_HarpersWolfSpellUsed(_Harper)
+AND
+DB_LOW_BhaalTemple_Harpers(_Harper)
+AND
+HasSpell(_Harper,"Target_RangersCompanion_Wolf",1)
+AND
+GetPosition(_Harper,_X,_Y,_Z)
+THEN
+DB_LOW_BhaalTemple_HarpersWolfSpellUsed(_Harper);
+UseSpellAtPosition(_Harper,"Target_RangersCompanion_Wolf",_X,_Y,_Z);
+
+PROC
+PROC_LOW_BhaalTemple_Confrontation_Harper_Setup()
+AND
+DB_LOW_BhaalTemple_HarpersWolfSpellUsed(_Harper)
+THEN
+NOT DB_LOW_BhaalTemple_HarpersWolfSpellUsed(_Harper);
+
+PROC
+PROC_LOW_BhaalTemple_Confrontation_Harper_Setup()
+AND
+DB_LOW_BhaalTemple_HarpersWoodlandSpellUsed(_Harper)
+THEN
+NOT DB_LOW_BhaalTemple_HarpersWoodlandSpellUsed(_Harper);
 //END_REGION
 
 //REGION CONFRONTATION - Jaheira Setup
@@ -4314,8 +4359,20 @@ DB_GlobalFlag((FLAG)LOW_BhaalTemple_State_KilledVictim_ba91f332-45d5-483c-b460-d
 AND
 DB_GEN_OrinsAbduction_ChosenChar(_TargetChar)
 THEN
-Die(_TargetChar, DEATHTYPE.None, S_GLO_Orin_bf24e0ec-a3a6-4905-bd2d-45dc8edf8101, 0, 1);
+PROC_LOW_BhaalTemple_KillVictim(_TargetChar);
+
+PROC
+PROC_LOW_BhaalTemple_KillVictim((CHARACTER)_Victim)
+THEN
+Die(_Victim, DEATHTYPE.None, S_GLO_Orin_bf24e0ec-a3a6-4905-bd2d-45dc8edf8101, 0, 1);
 PROC_GEN_OrinsAbduction_Altar_PlayEffect_Bloodied();
+
+PROC
+PROC_LOW_BhaalTemple_KillVictim((CHARACTER)_Victim)
+AND
+DB_Origins(_Victim)
+THEN
+PROC_Origins_CompanionLeavePermanently(_Victim, "CompanionMurdered");
 
 IF
 CharacterLootedCharacter(_Player, (CHARACTER)_TargetChar)
@@ -4467,11 +4524,7 @@ DB_ORI_DarkUrge((CHARACTER)_DarkUrge)
 AND
 DB_GEN_OrinsAbduction_OrinTransformRule_DarkUrge(_TransformRule)
 THEN
-PROC_LOW_BhaalTemple_Orin_Inventory_Save(); // save Orin's own items first, so it doesn't get lost when she turns into the Dark Urge.
-PROC_GEN_OrinsAbduction_PlayEffect_Transform();
-DB_GEN_OrinsAbduction_IsTransformed(1);
-Transform(S_GLO_Orin_bf24e0ec-a3a6-4905-bd2d-45dc8edf8101, _DarkUrge, _TransformRule);
-CopyCharacterEquipment(S_GLO_Orin_bf24e0ec-a3a6-4905-bd2d-45dc8edf8101, _DarkUrge);
+DB_NOOP(1);
 //END_REGION
 
 //REGION Check if Dark Urge is present in the Bhaal Temple at that point in time.

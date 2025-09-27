@@ -5840,6 +5840,22 @@ THEN
 DB_BUGFIX_Marker("GUS-319481");
 ApplyStatus(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "TUT_RESTORATION", 6.0, 1, S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b);
 //END_REGION
+
+//REGION GUSX-882
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 7")
+AND
+DB_GlobalFlag((FLAG)MOO_MintharaFate_State_Waiting_609996c8-75d1-89f0-9ad3-1b7f73aee11d)
+AND
+GetHasOsirisDialog(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, 0)
+THEN
+DB_BUGFIX_Marker("GUSX-882");
+PROC_RemoveAllDialogEntriesForSpeaker(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b);
+DB_Dialogs(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, (DIALOGRESOURCE)MOO_MintharaFate_Drow_deaff457-a97a-fd8f-9c46-517d1488a42a);
+//END_REGION
+
 //REGION GUSX-7928
 
 PROC
@@ -5852,6 +5868,37 @@ THEN
 DB_BUGFIX_Marker("GUSX-7928");
 PROC_SpotPlayers_StopSpotting("HAV_EnteringHaven_CheckpointSpot");
 
+//END_REGION
+
+//REGION GUSX-7420
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-7420");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-981")
+AND
+DB_TWN_MarchingArmy_Criminals(_MainCriminal, _OtherCriminal)
+AND
+NOT DB_TWN_MarchingArmy_MainCriminal(_MainCriminal)
+THEN
+DB_BUGFIX_Marker("GUSX-7420", _OtherCriminal);
+NOT DB_TWN_MarchingArmy_Criminals(_MainCriminal, _OtherCriminal);
+//END_REGION
+
+//REGION GUSX-8352
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-8352");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-8352")
+AND
+GetAnubisConfig(S_MOO_Executioner_8e75eb3b-7551-485e-8f98-2bf2e51d3e84, "")
+THEN
+PROC_SetAnubisConfig(S_MOO_Executioner_8e75eb3b-7551-485e-8f98-2bf2e51d3e84, "MOO_Executioner");
 //END_REGION
 
 //REGION GUSX-9054
@@ -5871,6 +5918,553 @@ LeaveCombat(S_GLO_Wulbren_2d70edbf-1a70-4047-8099-48f3e75d93bf);
 
 //END_REGION
 
+//REGION GUSX-9289
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-9289");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9289")
+AND
+DB_State_Current(_Harper, "SCL_DriderHarpers", "BackAtInn")
+THEN
+DB_BUGFIX_Marker("GUSX-9289", _Harper);
+SetFaction(_Harper, (FACTION)Act2_HAV_Haven_e52bfc8c-7826-470d-a9f5-f6fae80dde82);
+//END_REGION GUSX-9289
+
+//REGION GUSX-9416
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-9416");
+
+//In narrative combat but not marked as a participant
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9416")
+AND
+DB_Is_InCombat(_Entity, _ID)
+AND
+DB_GLO_NarrativeCombat_ID(_Identifier, _ID)
+AND
+IsInNarrativeCombat(_Entity, _ID, 1)
+AND
+IsCharacter(_Entity, 1)
+THEN
+PROC_BG3_SavegamePatch_GUSX9416_AddCharacterParticipant(_Entity, _Identifier, _ID);
+
+PROC
+PROC_BG3_SavegamePatch_GUSX9416_AddCharacterParticipant((GUIDSTRING)_Entity, (STRING)_Identifier, (GUIDSTRING)_ID)
+AND
+NOT QRY_GLO_NarrativeCombat_IsDefeated((CHARACTER)_Entity)
+AND
+NOT DB_GLO_NarrativeCombat_Participant(_Identifier, _ID, (GUIDSTRING)_Entity)
+THEN
+DB_GLO_NarrativeCombat_Participant(_Identifier, _ID, _Entity);	
+DB_BUGFIX_Marker("GUSX-9416_MarkedLivingParticipant", _Entity);
+
+PROC
+PROC_BG3_SavegamePatch_GUSX9416_AddCharacterParticipant((GUIDSTRING)_Entity, (STRING)_Identifier, (GUIDSTRING)_ID)
+AND
+QRY_GLO_NarrativeCombat_IsDefeated((CHARACTER)_Entity)
+AND
+NOT DB_GLO_NarrativeCombat_Participant(_Identifier, _ID, (GUIDSTRING)_Entity)
+THEN
+DB_GLO_NarrativeCombat_WasParticipant(_Identifier, _ID, _Entity);
+SetInNarrativeCombat(_Entity, _ID, 0);
+PROC_GLO_NarrativeCombat_ParticipantLeft(_Identifier, _Entity);
+DB_BUGFIX_Marker("GUSX-9416_MarkedDeadParticipant", _Entity);
+
+PROC
+PROC_BG3_SavegamePatch_GUSX9416_AddCharacterParticipant((GUIDSTRING)_Entity, (STRING)_Identifier, (GUIDSTRING)_ID)
+AND
+DB_BUGFIX_Marker("GUSX-9416_MarkedLivingParticipant", _Entity)
+AND
+DB_GLO_NarrativeCombat_Participant(_Identifier, _ID, _Entity)
+AND
+DB_GLO_NarrativeCombat_Region(_Identifier, _Trigger)
+AND
+IsInTrigger(_Entity, _Trigger, 0)
+THEN
+PROC_GLO_NarrativeCombat_LeaveCombat(_Identifier, _Entity);
+DB_BUGFIX_Marker("GUSX-9416_OutOfRegion", _Entity);
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9416")
+AND
+DB_Is_InCombat(_Entity, _ID)
+AND
+DB_GLO_NarrativeCombat_ID(_Identifier, _ID)
+AND
+IsInNarrativeCombat(_Entity, _ID, 1)
+AND
+IsItem(_Entity, 1)
+THEN
+PROC_BG3_SavegamePatch_GUSX9416_AddItemParticipant(_Entity, _Identifier, _ID);
+
+PROC
+PROC_BG3_SavegamePatch_GUSX9416_AddItemParticipant((GUIDSTRING)_Entity, (STRING)_Identifier, (GUIDSTRING)_ID)
+AND
+IsDestroyed((ITEM)_Entity, 0)
+AND
+NOT DB_GLO_NarrativeCombat_Participant(_Identifier, _ID, (GUIDSTRING)_Entity)
+THEN
+DB_GLO_NarrativeCombat_Participant(_Identifier, _ID, _Entity);	
+DB_BUGFIX_Marker("GUSX-9416_MarkedItemParticipant", _Entity);
+
+//In the combat when they are outside the region
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9416")
+AND
+DB_GLO_NarrativeCombat_Participant(_Identifier, _ID, _Entity)
+AND
+DB_GLO_NarrativeCombat_Region(_Identifier, _Region)
+AND
+IsInTrigger(_Entity, _Region, 0)
+AND
+IsCharacter(_Entity, 1)
+THEN
+PROC_GLO_NarrativeCombat_CharacterLeftRegion(_Identifier, (CHARACTER)_Entity, _Region);
+PROC_GLO_NarrativeCombat_CheckForAnyPlayersInRegion(_Region);
+DB_BUGFIX_Marker("GUSX-9416_OutsideRegion", _Entity);
+
+//Any stray summons that are not in the combat already (carry over from another issue that should be fixed)
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9416")
+AND
+DB_GLO_NarrativeCombat_Region("MOO_Assault_KethericRoofFight", _Region)
+AND
+DB_GLO_NarrativeCombat_ID("MOO_Assault_KethericRoofFight", _ID)
+AND
+DB_InRegion(_Char, _Region)
+AND
+NOT DB_GLO_NarrativeCombat_Participant("MOO_Assault_KethericRoofFight", _ID, _Char)
+AND
+NOT QRY_GLO_NarrativeCombat_IsDefeated(_Char)
+AND
+GetFaction(_Char, ACT2_MOO_Assault_Hostile_68597716-e217-4777-a391-026263f291b4)
+THEN
+PROC_GLO_NarrativeCombat_JoinCombat("MOO_Assault_KethericRoofFight", _Char);
+DB_BUGFIX_Marker("GUSX-9416_AddStraysToCombat", _Char);
+
+//Pause the combat in the case all the players are dead within the region
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9416")
+AND
+DB_GLO_NarrativeCombat_ID("MOO_Assault_KethericRoofFight", _ID)
+AND
+DB_GLO_NarrativeCombat_Region("MOO_Assault_KethericRoofFight", _Region)
+AND
+NOT QRY_GLO_NarrativeCombat_AnyLivingPartyMembersInRegion(_Region)
+AND
+NOT DB_MOO_Assault_RoofNarrativeCombatIsPaused(1)
+THEN
+DB_MOO_Assault_RoofNarrativeCombatIsPaused(1);
+PauseCombat(_ID);
+DB_BUGFIX_Marker("GUSX-9416_AllPlayerDeadPause");
+//END_REGION 
+
+//REGION GUSX-9144
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-9144");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9144")
+AND
+GetFaction(S_HAV_GnomeCat_33e545f6-9a0a-48ae-88b4-896a0c21c8ca, _Faction)
+AND
+_Faction != Act2_HAV_Haven_e52bfc8c-7826-470d-a9f5-f6fae80dde82
+THEN
+SetFaction(S_HAV_GnomeCat_33e545f6-9a0a-48ae-88b4-896a0c21c8ca, (FACTION)Act2_HAV_Haven_e52bfc8c-7826-470d-a9f5-f6fae80dde82);
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9144")
+AND
+GetFaction(S_HAV_SpiritOfTheLand_1403cdfd-0660-4592-90c6-bfe4607ccd3a, _Faction)
+AND
+_Faction != Act2_SCL_SpiritOfTheLand_e30c1bf8-de2b-46d8-85a6-3c0da62fc67d
+THEN
+SetFaction(S_HAV_SpiritOfTheLand_1403cdfd-0660-4592-90c6-bfe4607ccd3a, (FACTION)Act2_SCL_SpiritOfTheLand_e30c1bf8-de2b-46d8-85a6-3c0da62fc67d);
+//END_REGION
+
+//REGION GUSX-9144_SCL
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-9144_SCL");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9144_SCL")
+THEN
+DB_BUGFIX_Marker("GUSX-9144_SCL", S_SHA_LightTrial_Shadow_000_fb9095d7-e399-4cdb-b90a-e4dba3451882);
+SetFaction(S_SHA_LightTrial_Shadow_000_fb9095d7-e399-4cdb-b90a-e4dba3451882, (FACTION)Act2_SHA_ShadowTrial_24116bb3-6424-42d3-8b28-83493c346be2);
+DB_BUGFIX_Marker("GUSX-9144_SCL", S_SHA_LightTrial_Shadow_001_f4ef2c8e-02fd-4382-a395-4bebc674881d);
+SetFaction(S_SHA_LightTrial_Shadow_001_f4ef2c8e-02fd-4382-a395-4bebc674881d, (FACTION)Act2_SHA_ShadowTrial_24116bb3-6424-42d3-8b28-83493c346be2);
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9144_SCL")
+AND
+DB_SCL_MastiffPoachers_Mastiffs(_Mastiff, _)
+AND
+GetBaseFaction(_Mastiff, (FACTION)NeutralNPC_cfb709b3-220f-9682-bcfb-6f0d8837462e)
+THEN
+DB_BUGFIX_Marker("GUSX-9144_SCL", _Mastiff);
+SetFaction(_Mastiff, (FACTION)Act2_SCL_MastiffPoachers_Mastiffs_8b12962b-60e6-4434-9bcd-0073748ce504);
+//END_REGION GUSX-9144_SCL
+
+
+//REGION GUSX-10803
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+NOT DB_PermaDefeated(S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323)
+AND
+NOT DB_GlobalFlag(DEN_AttackOnDen_State_RaiderVictory_abe1bce8-c234-4afe-a490-76210d98a078)
+AND
+NOT DB_InCamp(S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323)
+AND
+NOT DB_State_Current(S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323, "SCL_LiftingTheCurse", "SCL_LiftingTheCurse_State_HalsinAtHaven")
+AND
+DB_LevelLoadedOnce("SCL_Main_A")
+AND
+NOT DB_LevelLoadedOnce("INT_Main_A")
+AND
+DB_Dialogs(S_GLO_Halsin_7628bc0e-52b8-42a7-856a-13a6fd413323, CAMP_Halsin2_c0ab0f6f-3ffc-d06d-0d6d-d1aaef70dfe4)
+THEN
+PROC_ORI_Halsin_RestoreToSCLCamp();
+DB_BUGFIX_Marker("GUSX-10803");
+//END_REGION
+
+//REGION GUSX-11358
+
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel_SetBugfixMarker("Release Patch 7 Hotfix 2", "SCL_Main_A", "GUSX-11358");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-11358")
+THEN
+DB_COL_Elevator_ChasmKillTriggers((TRIGGER)S_COL_Elevator_ChasmKillTrigger_001_1e1bc128-42f3-441f-878c-f006ef828db7,(TRIGGER)S_COL_Elevator_ChasmKillTrigger_ReturnPosition_001_ebedfca2-141c-48eb-aaf7-9c2e7560d414);
+DB_COL_Elevator_ChasmKillTriggers((TRIGGER)S_COL_Elevator_ChasmKillTrigger_002_e3ebf46c-a9c7-41a6-8c5e-1f0a9992a9f3,(TRIGGER)S_COL_Elevator_ChasmKillTrigger_ReturnPosition_002_6ca3b0bf-3d95-4f40-88c7-daf4f42ac269);
+
+//END_REGION GUSX-11358
+
+//REGION GUSX-10629
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-10629");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-10629")
+AND
+DB_PartyMembers(_Player)
+AND
+GetFlag(MOO_MoonriseBazaarSoulCoins_Event_FloNoteHandoff_3ecdf2fb-b353-14f0-417c-7d8f99ae5c1e, _Player, 1)
+THEN
+SetFlag(MOO_MoonriseBazaarSoulCoins_State_NoteGiven_5b8c8557-ec28-4f2a-b1bb-da9df339cde7);
+DB_BUGFIX_Marker("GUSX-10629", _Player);
+
+//END_REGION GUSX-10629
+
+//REGION GUSX-12218
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-12218");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-12218")
+AND
+DB_GLO_CharacterCorpseDialog(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b,GOB_DrowCommander_Dead_fabcb4f5-d52f-b0c6-5101-566760e060c2)
+AND
+NOT QRY_State_IsBeforeState(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, "MOO_MintharaFate", "MOO_MintharaFate_State_Escortee")
+THEN
+NOT DB_GLO_CharacterCorpseDialog(S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b,GOB_DrowCommander_Dead_fabcb4f5-d52f-b0c6-5101-566760e060c2);
+DB_GLO_CharacterCorpseDialog((CHARACTER)S_GOB_DrowCommander_25721313-0c15-4935-8176-9f134385451b, (DIALOGRESOURCE)SCE_Minthara_Dead_bad79925-03a8-6283-594e-41ca28fe224e);
+//END_REGION GUSX-12218
+
+//REGION GUSX-6271 //hatchery quest should no longer be active if the player can't go back to the creche
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-6271");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-6271")
+AND
+DB_GlobalFlag((FLAG)Act2_PointOfNoReturnReached_a3155f30-b8f3-4db5-ac21-d3036f4426e3)
+AND
+NOT DB_QuestIsClosed("CRE_Hatchery")
+THEN
+QuestClose("CRE_Hatchery");
+//END_REGION GUSX-6271
+
+//REGION GUSX-9144 (SCL)
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-9144-SCL");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9144-SCL")
+THEN
+// re-using an existing PROC
+PROC_Bugfix_GUSX_9144_WYR_CheckChangeFaction((CHARACTER)S_ORI_GaleDouble2_30edc515-b6f2-42c0-8459-41ae4c36b349, (FACTION)ORI_Gale_Double_e339933e-64a7-4168-8171-5ebd06aa8e8e);
+DB_BUGFIX_Marker("GUSX-9144-SCL");
+//END_REGION
+
+//REGION GUSX-12175
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-12175");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-12175")
+AND
+NOT DB_PartyMembers((CHARACTER)S_Player_ShadowHeart_3ed74f06-3c60-42dc-83f6-f034cb47c679)
+AND
+DB_GlobalFlag((FLAG)SHA_NightsongPrison_Event_ShadowheartThereForFate_dea37dda-dafe-4052-9935-6ef1f92febfb)
+THEN
+PROC_GlobalClearFlagAndCache((FLAG)SHA_NightsongPrison_Event_ShadowheartThereForFate_dea37dda-dafe-4052-9935-6ef1f92febfb);
+DB_BUGFIX_Marker("GUSX-12175");
+//END_REGION
+
+//REGION GUSX-5231
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-5231");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-5231") 
+THEN
+DB_CAMP_ThanielAlternatePositions("SCL_Main_A", "SCLMAIN", S_Spawnpoint_Thaniel_Fallback_SCLMain_A_53d6717e-0212-4631-bfba-3b81229b0e15);
+DB_CAMP_ThanielAlternatePositions("SCL_Main_A", "SHARTEMPLE", S_Spawnpoint_Thaniel_Fallback_SharTemple_A_c404a6bf-273c-4869-a2d4-00b6fdbd3fd4);
+DB_CAMP_ThanielAlternatePositions("SCL_Main_A", "HAVEN", S_Spawnpoint_Thaniel_Fallback_Haven_A_86b896c3-74a0-4baa-8b5f-125ea4274f50);
+DB_CAMP_ThanielAlternatePositions("SCL_Main_A", "MOONRISE", S_Spawnpoint_Thaniel_Fallback_Moonrise_A_4278d06e-985b-4df0-8660-3a7240741df9);
+
+//END_REGION GUSX-5231
+
+//REGION GUSX-12582
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_ORI_DarkUrge_BecameHostileAfterMurder(_Avatar)
+AND
+DB_Avatars(_Avatar) //Should never happen on Avatar characters
+THEN
+PROC_Bugfix_GUSX_12582_FixBrokenCharacter(_Avatar);
+
+PROC
+PROC_Bugfix_GUSX_12582_FixBrokenCharacter((CHARACTER)_Avatar)
+AND
+GUIDToString(_Avatar, _AvatarString)
+AND
+Concatenate("GUSX-12582_", _AvatarString, _BugfixString)
+THEN
+DB_BUGFIX_Marker(_BugfixString);
+
+PROC
+PROC_Bugfix_GUSX_12582_FixBrokenCharacter((CHARACTER)_Avatar)
+THEN
+NOT DB_Origin_BecameHostile(_Avatar);
+NOT DB_ORI_DarkUrge_BecameHostileAfterMurder(_Avatar);
+
+PROC
+PROC_Bugfix_GUSX_12582_FixBrokenCharacter((CHARACTER)_Avatar)
+AND
+DB_PermaDefeatedFlag(_Avatar, _Flag)
+THEN
+ClearFlag(_Flag);
+
+PROC
+PROC_Bugfix_GUSX_12582_FixBrokenCharacter((CHARACTER)_Avatar)
+AND
+DB_PermaDefeated(_Avatar)
+THEN
+NOT DB_Dead(_Avatar);
+NOT DB_PermaDefeated(_Avatar);
+ClearTag(_Avatar, PERMA_DEFEATED_867f3a1e-1e4b-48c2-869e-343415231727);
+ClearTag(_Avatar, BLOCK_RESURRECTION_22a75dbb-1588-407e-b559-5aa4e6d4e6a6);
+ClearTag(_Avatar, DOWNED_DISABLED_7095912e-fcb9-41dd-aec3-3cf7803e4b22);
+DB_PartOfTheTeam(_Avatar);
+Resurrect(_Avatar);
+//END_REGION
+
+//REGION GUSX-10203
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-10203");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-10203") 
+THEN
+PROC_DeclareCounter("SHA_SaveGamePatchGems_Counter");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-10203") 
+AND
+DB_SHA_Trials_HasGemFlag(_Gem, _)
+AND
+NOT DB_SHA_Trials_GemsNotTaken((ITEM)_Gem)
+AND
+Exists(_Gem, 1)
+THEN
+PROC_IncreaseCounter("SHA_SaveGamePatchGems_Counter");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-10203") 
+THEN
+PROC_SHA_SaveGamePatchGems_FindPlayer();
+
+PROC
+PROC_SHA_SaveGamePatchGems_FindPlayer()
+AND
+GetHostCharacter(_Player)
+THEN
+PROC_SHA_SaveGamePatchGems_CountGemsNeeded((CHARACTER)_Player);
+
+PROC
+PROC_SHA_SaveGamePatchGems_CountGemsNeeded((CHARACTER)_Player)
+AND
+NOT DB_GlobalFlag((FLAG)SHA_Upper_State_DiscUnlocked_4b056ce5-e145-4d90-8451-0ff502e11898)
+AND
+NOT DB_GlobalFlag((FLAG)SHA_Trials_Event_UnlockNightsongChamber_8e857d0c-990b-4029-aa28-f5b935fb8c0f)
+THEN
+PROC_SHA_SaveGamePatchGems_CheckLootedGems((CHARACTER)_Player, 4);
+
+PROC
+PROC_SHA_SaveGamePatchGems_CountGemsNeeded((CHARACTER)_Player)
+AND
+DB_GlobalFlag((FLAG)SHA_Upper_State_DiscUnlocked_4b056ce5-e145-4d90-8451-0ff502e11898)
+AND
+NOT DB_GlobalFlag((FLAG)SHA_Trials_Event_UnlockNightsongChamber_8e857d0c-990b-4029-aa28-f5b935fb8c0f)
+THEN
+PROC_SHA_SaveGamePatchGems_CheckLootedGems((CHARACTER)_Player, 3);
+
+PROC
+PROC_SHA_SaveGamePatchGems_CountGemsNeeded((CHARACTER)_Player)
+AND
+NOT DB_GlobalFlag((FLAG)SHA_Upper_State_DiscUnlocked_4b056ce5-e145-4d90-8451-0ff502e11898)
+AND
+DB_GlobalFlag((FLAG)SHA_Trials_Event_UnlockNightsongChamber_8e857d0c-990b-4029-aa28-f5b935fb8c0f)
+THEN
+PROC_SHA_SaveGamePatchGems_CheckLootedGems((CHARACTER)_Player, 1);
+
+PROC
+PROC_SHA_SaveGamePatchGems_CheckLootedGems((CHARACTER)_Player, (INTEGER)_SocketCount)
+AND
+DB_GlobalCounter("SHA_SaveGamePatchGems_Counter", _PlayerCount)
+AND
+DB_GlobalFlag((FLAG)SHA_Trials_Event_AllGemsFound_2d47ee89-2a15-4b33-b933-59f0b0aa6f3b)
+AND
+IntegerSubtract(_SocketCount, _PlayerCount, _Count)
+THEN
+TemplateAddTo(QUEST_SHA_TrialOrb_fd3fd8a9-a5fc-4726-9b6e-77f5ecf54cea, _Player, _Count, 1);
+
+PROC
+PROC_SHA_SaveGamePatchGems_CheckLootedGems((CHARACTER)_Player, (INTEGER)_SocketCount)
+AND
+DB_GlobalCounter("SHA_SaveGamePatchGems_Counter", _PlayerCount)
+AND
+DB_GlobalCounter("SHA_Trials_GemsTaken", _LootCount)
+AND
+_LootCount <= _SocketCount
+AND
+IntegerSubtract(_LootCount, _PlayerCount, _Count)
+THEN
+TemplateAddTo(QUEST_SHA_TrialOrb_fd3fd8a9-a5fc-4726-9b6e-77f5ecf54cea, _Player, _Count, 1);
+
+PROC
+PROC_SHA_SaveGamePatchGems_CheckLootedGems((CHARACTER)_Player, (INTEGER)_SocketCount)
+AND
+DB_GlobalCounter("SHA_SaveGamePatchGems_Counter", _PlayerCount)
+AND
+DB_GlobalCounter("SHA_Trials_GemsTaken", _LootCount)
+AND
+_LootCount > _SocketCount
+AND
+IntegerSubtract(_SocketCount, _PlayerCount, _Count)
+THEN
+TemplateAddTo(QUEST_SHA_TrialOrb_fd3fd8a9-a5fc-4726-9b6e-77f5ecf54cea, _Player, _Count, 1);
+
+
+//END_REGION GUSX-10203
+
+//REGION GUSX-11513
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-11513");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-11513")
+AND
+DB_GLO_NarrativeCombat_ID("MOO_Assault_KethericRoofFight", _ID)
+AND
+NOT DB_MOO_Assault_RoofNarrativeCombatEnemy(_)
+THEN
+PROC_GLO_NarrativeCombat_EndCombat("MOO_Assault_KethericRoofFight");
+DB_BUGFIX_Marker("GUSX-11513");
+//END_REGION 
+
+//REGION GUSX-9162
+PROC
+PROC_ApplySavegamePatches()
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-9162");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-9162")
+AND
+NOT DB_IgnoreMutingStatussesDialog((DIALOGRESOURCE)SCL_OliverShadow_Acceptance_f268fd19-252c-9e06-5f77-996a975ecc59)
+THEN
+DB_IgnoreMutingStatussesDialog((DIALOGRESOURCE)SCL_OliverShadow_Acceptance_f268fd19-252c-9e06-5f77-996a975ecc59);
+//END_REGION
+
+//REGION GUSX-9766
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+AND
+DB_GLO_NarrativeCombat_Participant(_Identifier, _ID, _Entity)
+AND
+DB_GLO_NarrativeCombat_Region(_Identifier, _Trigger)
+AND
+IsInTrigger(_Entity, _Trigger, 0)
+AND
+Concatenate("GUSX-9766_", _Identifier, _BugfixString)
+THEN
+PROC_GLO_NarrativeCombat_LeaveCombat(_Identifier, _Entity);
+DB_BUGFIX_Marker(_BugfixString, _Entity);
+//END_REGION GUSX-9766
+
+//REGION GUSX-5898
+PROC
+PROC_ApplySavegamePatches()
+AND
+QRY_BG3_SaveGameIsOlderThan("Release Patch 8")
+THEN
+PROC_CheckShouldSavegamePatchInLevel("Release Patch 8", "SCL_Main_A", "GUSX-5898_AcceptedLastLightQuest");
+
+PROC
+PROC_ApplySavegamePatchInLevel("SCL_Main_A", "GUSX-5898_AcceptedLastLightQuest")
+THEN
+DB_GLO_PaladinMoments_AcceptedLastLightQuest((FLAG)GLO_HAV_IsobelGaveMission_4f0dd500-6de8-08ce-7db9-083c891e67e7);
+DB_GLO_PaladinMoments_AcceptedLastLightQuest((FLAG)HAV_Isobel_State_ReceivedMoonriseQuest_3025b1d0-30ba-4572-baf9-a4e97fea8ae5);
+DB_GLO_PaladinMoments_AcceptedLastLightQuest((FLAG)HAV_Jaheira_State_MissionGiven_7516666c-4c71-86d7-9d2b-9f3a4269970b);
+//END_REGION GUSX-5898
 EXITSECTION
 
 ENDEXITSECTION

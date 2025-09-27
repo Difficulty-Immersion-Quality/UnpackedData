@@ -1,0 +1,107 @@
+[Vertex shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+#include "Shaders/HLSL/SkinningHelpers.shdh"
+
+struct VertexInput
+{
+	float3 Position : POSITION0;
+	uint VertexID : SV_VertexID;
+};
+
+struct VertexOutput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float4 ProjectedPosition_prev : TEXCOORD0;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_EngineParams : register(b0)
+{
+	float4x4 WorldMatrix;
+	float4x4 WorldMatrix_prev;
+	uint TransformedVerticesOffset;
+	uint TransformedVerticesOffset_prev;
+	uint PADDING0_TransformedVerticesOffset_prev;
+	uint PADDING1_TransformedVerticesOffset_prev;
+};
+VertexOutput main(in VertexInput In)
+{
+	VertexOutput Out;
+
+	float4 localPositionStatic = float4(In.Position, 1.0f);
+	[branch]
+	if ((TransformedVerticesOffset > 0))
+	{
+		// Skinned vertex
+		localPositionStatic.xyz = GetSkinnedPosition(In.VertexID, TransformedVerticesOffset);
+	}
+	// World space position
+	float4 worldPosition = mul(WorldMatrix, localPositionStatic);
+
+	// Projected position
+	float4 projectedPosition = mul(g_ViewProjectionMat, worldPosition);
+
+	// Pass projected position to pixel shader
+	Out.ProjectedPosition = projectedPosition;
+
+	float4 localPositionStatic_prev = float4(In.Position, 1.0f);
+	[branch]
+	if ((TransformedVerticesOffset_prev > 0))
+	{
+		// Skinned vertex
+		localPositionStatic_prev.xyz = GetPrevSkinnedPosition(In.VertexID, TransformedVerticesOffset_prev);
+	}
+	else
+	{
+		// No prev data
+		localPositionStatic_prev.xyz = localPositionStatic.xyz;;
+	}
+	// World space position
+	float4 worldPosition_prev = mul(WorldMatrix_prev, localPositionStatic_prev);
+
+	// Projected position (previous frame)
+	float4 projectedPosition_prev = mul(g_ViewProjectionMat_prev, worldPosition_prev);
+
+	// Pass projected position to pixel shader (previous frame)
+	Out.ProjectedPosition_prev = projectedPosition_prev;
+
+
+	return Out;
+}
+
+
+[Fragment shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+#include "Shaders/HLSL/ViewportHelpers.shdh"
+
+struct PixelInput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float4 ProjectedPosition_prev : TEXCOORD0;
+};
+
+struct PixelOutput
+{
+	float2 Velocity : SV_Target0;
+};
+
+PixelOutput main(in PixelInput In)
+{
+	PixelOutput Out;
+
+	// Current screen pos:
+	float2 currentScreenPos = (In.ProjectedPosition.xy + float2(g_Jitter.x, -(g_Jitter.y)));
+
+	// Previous screen pos:
+	float2 previousUV = (((In.ProjectedPosition_prev.xy / In.ProjectedPosition_prev.w) * float2(0.5f, -0.5f)) + float2(0.5f, 0.5f));
+	previousUV = ConvertTexCoordsVPtoRT(previousUV);
+	float2 previousScreenPos = (previousUV * float2(g_RTWidth, g_RTHeight));
+	previousScreenPos = (previousScreenPos + float2(g_PreviousJitter.x, -(g_PreviousJitter.y)));
+
+	Out.Velocity = (currentScreenPos - previousScreenPos);
+
+	return Out;
+}

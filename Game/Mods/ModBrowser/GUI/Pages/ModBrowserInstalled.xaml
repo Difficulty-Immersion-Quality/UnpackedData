@@ -17,9 +17,6 @@
             <Grid HorizontalAlignment="Stretch">
 
                 <Grid x:Name="InstalledGrid" HorizontalAlignment="Center" VerticalAlignment="Stretch">
-                    <b:Interaction.Behaviors>
-                        <ls:CollectionSortBehavior x:Name="ModSorted" ItemsSource="{Binding Data.AvailableMods}" Comparer="{Binding SortModsComparer}"/>
-                    </b:Interaction.Behaviors>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="1604"/>
                         <ColumnDefinition Width="1124"/>
@@ -46,11 +43,22 @@
 
                     <Rectangle Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Fill="{StaticResource CenteredGradientLightShadingBrush}" />
 
-                    <TextBlock x:Name="AvailableModsLabel" Grid.Row="1" Grid.Column="0" Margin="12,64,0,0"  Text="{Binding Source='h26846b3cgd238g4eb4g913ag60e5dce34ddc', Converter={StaticResource TranslatedStringConverter}}"
+                    <TextBlock x:Name="AvailableModsLabel" Grid.Row="1" Grid.Column="0" Margin="12,64,0,0" Text="{Binding Source='h26846b3cgd238g4eb4g913ag60e5dce34ddc', Converter={StaticResource TranslatedStringConverter}}"
                            FontSize="{StaticResource ScaledBigFontSize}" Foreground="{StaticResource LS_extraspecialTxtColor}" FontWeight="DemiBold"/>
 
+                    <StackPanel x:Name="EnableAllModsPanel" Orientation="Horizontal" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Margin="0,50,135,0" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding Source='h6675c3a8gbf70g4dc8gb7a5gef27b366fc6c', Converter={StaticResource TranslatedStringConverter}}"
+                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                            FontSize="{StaticResource ScaledBigFontSize}" Foreground="{StaticResource LS_extraspecialTxtColor}" FontWeight="DemiBold"/>
 
-                    <ListBox x:Name="ModList" Grid.Row="2" Grid.Column="0" ItemsSource="{Binding ElementName=ModSorted, Path=SortedItems}" VirtualizingPanel.ScrollUnit="Pixel" VirtualizingPanel.VirtualizationMode="Recycling" VerticalAlignment="Stretch"  HorizontalAlignment="Left" AlternationCount="{Binding ElementName=ModSorted, Path=SortedItemsCount}" SelectedIndex="0">
+                        <ls:LSToggleButton x:Name="modEnableAllToggle" ClickMode="Press" Margin="48,-7,0,0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                           IsChecked="{Binding IsAllModsEnabled, Mode=TwoWay}"
+                           Command="{Binding ToggleEnableAllCommand}"
+                           Template="{StaticResource ModEnableAllButtonTemplate}"/>
+                    </StackPanel>
+
+                    <ListBox x:Name="ModList" Grid.Row="2" Grid.Column="0" Background="Transparent" ItemsSource="{Binding Data.AvailableMods}" VirtualizingPanel.ScrollUnit="Pixel" VirtualizingPanel.VirtualizationMode="Recycling"
+                             VerticalAlignment="Stretch"  HorizontalAlignment="Left" AlternationCount="{Binding Data.AvailableMods.Count}" SelectedIndex="0">
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <VirtualizingStackPanel Orientation="Vertical"/>
@@ -63,24 +71,26 @@
                                     <Setter.Value>
                                         <ControlTemplate TargetType="ListBoxItem">
                                             <Grid Width="1526" VerticalAlignment="Stretch">
-                                                <Border x:Name="rootBorder" BorderThickness="4" Width="1526" Height="152" HorizontalAlignment="Left" VerticalAlignment="Top" BorderBrush="{StaticResource LS_tint100}" Opacity="0" />
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border x:Name="rootBorder" Grid.Column="0" Grid.ColumnSpan="2"  BorderThickness="4" Width="1526" Height="152" HorizontalAlignment="Left" VerticalAlignment="Top" BorderBrush="{StaticResource LS_tint100}" Opacity="0" />
                                                 <!-- Background-->
-                                                <Rectangle x:Name="modListBG" Fill="{StaticResource modListBGDefault}" HorizontalAlignment="Left" VerticalAlignment="Top" Width="1526" Height="152"/>
+                                                <Rectangle x:Name="modListBG" Grid.Column="0" Grid.ColumnSpan="2" Fill="{StaticResource modListBGDefault}" HorizontalAlignment="Left" VerticalAlignment="Top" Width="1526" Height="152"/>
 
                                                 <!-- Mod image and text/tag -->
-                                                <ContentPresenter x:Name="modPreviewPanel" ContentTemplate="{StaticResource ModPreviewTemplate}" Content="{Binding .}"/>
+                                                <ContentPresenter x:Name="modPreviewPanel" Grid.Column="0" ContentTemplate="{StaticResource ModPreviewTemplate}" Content="{Binding .}"/>
 
                                                 <!-- Mod Details -->
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,56,0" HorizontalAlignment="Right">
+                                                <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,56,0" HorizontalAlignment="Right">
                                                     <Image x:Name="modUpdate" Source="{StaticResource updateIcon}" Stretch="None" Margin="0,-6,0,0" Visibility="Hidden"/>
-                                                    <Image x:Name="modWarning" Source="{StaticResource IconWarningSoft}" Stretch="None" Margin="0,0,20,3" Visibility="Collapsed"/>
 
                                                     <TextBlock Text="{Binding Path=(ItemsControl.AlternationIndex), RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Converter={StaticResource AddConverter}, ConverterParameter=1}"
                                                                FontSize="{StaticResource ScaledLargeFontSize}"/>
 
                                                     <Control x:Name="modEnableToggle" Template="{StaticResource ModEnableButtonTemplate}" Margin="48,-7,0,0"
                                                              IsEnabled="{Binding Data.IsUGCDisabled, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}, Converter={StaticResource InvertBoolConverter}}"/>
-
                                                 </StackPanel>
                                             </Grid>
                                             <ControlTemplate.Triggers>
@@ -88,12 +98,9 @@
                                                     <Setter TargetName="rootBorder" Property="Opacity" Value="0.5"/>
                                                     <Setter TargetName="modListBG" Property="Fill" Value="{StaticResource modListBGHighlight}"/>
                                                 </Trigger>
-												<DataTrigger Binding="{Binding IsOutdated}" Value="True">
+                                                <DataTrigger Binding="{Binding VersionState}" Value="Older">
                                                     <Setter TargetName="modUpdate" Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
-                                            	<DataTrigger Binding="{Binding IsOfficial}" Value="False">
-                                                	<Setter TargetName="modWarning" Property="Visibility" Value="Visible"/>
-                                            	</DataTrigger>
                                                 <DataTrigger Binding="{Binding DataContext.Data.IsUGCDisabled, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="True">
                                                     <Setter TargetName="modUpdate" Property="Visibility" Value="Collapsed"/>
                                                 </DataTrigger>
@@ -103,18 +110,7 @@
                                 </Setter>
                             </Style>
                         </ListBox.ItemContainerStyle>
-                        <ListBox.Template>
-                            <ControlTemplate>
-                                <ScrollViewer x:Name="ModScrollViewer" HorizontalContentAlignment="Center" Template="{StaticResource NoForcedStyleScrollViewerTemplate}" Background="Transparent" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Auto">
-                                    <ScrollViewer.Resources>
-                                        <Style x:Key="ScrollBarStyle" TargetType="ScrollBar" BasedOn="{StaticResource DecorativeGoldScrollBar}"/>
-                                        <GridLength x:Key="Top">50</GridLength>
-                                        <GridLength x:Key="Bottom">50</GridLength>
-                                    </ScrollViewer.Resources>
-                                    <ItemsPresenter HorizontalAlignment="Center"/>
-                                </ScrollViewer>
-                            </ControlTemplate>
-                        </ListBox.Template>
+
                         <b:Interaction.Triggers>
                             <b:EventTrigger EventName="Loaded">
                                 <b:InvokeCommandAction Command="{Binding UpdateSelectedModDetails}" CommandParameter="{Binding ElementName=ModList, Path=SelectedItem}"/>
@@ -122,6 +118,11 @@
                             <b:EventTrigger EventName="SelectionChanged">
                                 <b:InvokeCommandAction Command="{Binding UpdateSelectedModDetails}" CommandParameter="{Binding ElementName=ModList, Path=SelectedItem}"/>
                             </b:EventTrigger>
+
+                            <b:DataTrigger Binding="{Binding SelectedMod, Converter={StaticResource NullToBoolTrueConverter}}" Value="True">
+                                <ls:SelectNextListBoxItem Reversed="False" TargetName="ModList" ForceSelect="True" ForceMode="Cycle"/>
+                            </b:DataTrigger>
+
                         </b:Interaction.Triggers>
                     </ListBox>
 
@@ -137,6 +138,9 @@
                 <DataTrigger Binding="{Binding InDetailsView}" Value="True">
                     <Setter TargetName="ModDetailsControl" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="InstalledGrid" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Data.AvailableMods.Count}" Value="0">
+                    <Setter TargetName="EnableAllModsPanel" Property="Visibility" Value="Collapsed"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>

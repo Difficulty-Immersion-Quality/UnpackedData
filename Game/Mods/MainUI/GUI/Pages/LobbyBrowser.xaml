@@ -32,8 +32,7 @@
                     <BitmapImage x:Key="RefreshIconDefault" UriSource="pack://application:,,,/Core;component/Assets/Buttons/ico_reset_d.png"/>
                     <BitmapImage x:Key="RefreshButtonDecoration" UriSource="pack://application:,,,/Core;component/Assets/SaveLoad/saveBtn_decoration.png"/>
 
-
-
+                    <System:Double x:Key="CrossplayColumnWidth">72</System:Double>
                     <System:Double x:Key="ServerNameColumnWidth">556</System:Double>
                     <System:Double x:Key="PlayersColumnWidth">250</System:Double>
                     <System:Double x:Key="AdventureColumnWidth">300</System:Double>
@@ -51,7 +50,7 @@
 
                 <ls:LSNineSliceImage x:Name="HeaderBg" ImageSource="{StaticResource LobbyHeaderBackground}" HorizontalAlignment="Stretch" Slices="4,0" IconWidth="3800" Height="172"/>
 
-                <Grid MaxWidth="{StaticResource DesignedContentMaxWidth}">
+                <Grid MaxWidth="{StaticResource DesignedContentMaxWidth}" Visibility="{Binding IsBrowserInitialized, Converter={StaticResource BoolToVisibleConverter}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="{StaticResource PageHeaderHeightTabs}"/>
                         <RowDefinition/>
@@ -74,6 +73,14 @@
                             <ls:LSButton.Resources>
                                 <BitmapImage x:Key="IconDefault" UriSource="pack://application:,,,/Core;component/Assets/Lobby/ico_lan_d.png"/>
                                 <BitmapImage x:Key="IconHighlight" UriSource="pack://application:,,,/Core;component/Assets/Lobby/ico_lan_h.png"/>
+                            </ls:LSButton.Resources>
+                        </ls:LSButton>
+                        <ls:LSButton x:Name="LarianNetButton" Template="{StaticResource NavButtonTemplate}" IsEnabled="False" Visibility="Collapsed" Style="{StaticResource DefaultNavButtonStyle}"
+                                         Content="{Binding Source='h04159467gf478g42d4g820eg289fcf08bf7e', Converter={StaticResource TranslatedStringConverter}}" 
+                                         Command="{Binding OnSetCommunity}" CommandParameter="LarianNet">
+                            <ls:LSButton.Resources>
+                                <BitmapImage x:Key="IconDefault" UriSource="pack://application:,,,/Core;component/Assets/Lobby/ico_crossplay_d.png"/>
+                                <BitmapImage x:Key="IconHighlight" UriSource="pack://application:,,,/Core;component/Assets/Lobby/ico_crossplay_h.png"/>
                             </ls:LSButton.Resources>
                         </ls:LSButton>
                     </StackPanel>
@@ -238,7 +245,7 @@
                                                 </Setter>
                                             </Style>
                                         </GridView.ColumnHeaderContainerStyle>
-                                            
+
                                         <GridViewColumn Width="{StaticResource ServerNameColumnWidth}"
                                                             Header="{Binding Source='h4e80f833g0112g4a9bg8ac5gd216744515ce', Converter={StaticResource TranslatedStringConverter}}">
                                             <GridViewColumn.CellTemplate>
@@ -306,12 +313,12 @@
                                         </ControlTemplate>
                                     </ListBox.Template>
                                 </ListBox>
-                                <Grid x:Name="DirectConnectRoot" Margin="0,80,0,0" HorizontalAlignment="Stretch" Visibility="{Binding DirectConnectEnabledSetting.Value, Converter={StaticResource BoolToVisibleConverter}}">
+                                <Grid x:Name="DirectConnectRoot" Margin="0,80,0,0" HorizontalAlignment="Stretch" Visibility="{Binding DirectConnectEnabledSetting.Value, Converter={StaticResource BoolToVisibleConverter}, FallbackValue=Collapsed}">
                                     <ls:LSNineSliceImage HorizontalAlignment="Stretch" Margin="60,0,0,20" ImageSource="{StaticResource DetailsBoxBig}" Slices="230,36" Padding="230,36">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20,80">
                                             <TextBlock Foreground="{StaticResource LS_accent100TxtColor}" Text="{Binding Source='hd822564egf4fag475agbd42g9270c5748a24', Converter={StaticResource TranslatedStringConverter}}"
                                                        VerticalAlignment="Center"/>
-                                                <ls:LSTextBox x:Name="DirectConnectId" Margin="10,0,0,0" Text="{Binding DefaultDirectConnectAddress, Mode=TwoWay}" Width="400" VerticalAlignment="Center" HorizontalContentAlignment="Center"
+                                            <ls:LSTextBox x:Name="DirectConnectId" Margin="10,0,0,0" Text="{Binding DefaultDirectConnectAddress, Mode=TwoWay}" Width="500" VerticalAlignment="Center" HorizontalContentAlignment="Center"
                                                           TextAlignment="Center" FontSize="{StaticResource ScaledDefaultFontSize}" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Disabled" MaxLength="16" Foreground="{StaticResource LS_accent100TxtColor}">
                                                 <ls:LSTextBox.Template>
                                                     <ControlTemplate TargetType="ls:LSTextBox">
@@ -353,12 +360,12 @@
                             </StackPanel>
 
                             <!-- Connecting -->
-                                <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,700,0,0" Grid.ZIndex="2"
-                                            Visibility="{Binding IsConnecting, Converter={StaticResource BoolToVisibleConverter}}">
+                            <StackPanel x:Name="BusyStackPanel" Grid.Row="2" Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,700,0,0" Grid.ZIndex="2"
+                                            Visibility="Collapsed">
 
                                 <Control Template="{StaticResource BusyElement}" Margin="-8,-32"/>
-                                    <TextBlock VerticalAlignment="Center" Text="{Binding LobbyMessage}" Foreground="{StaticResource LS_tint100}"
-                                               FontSize="{StaticResource ScaledTitleFontSize}" TextWrapping="Wrap" TextAlignment="Center"/>
+                                <TextBlock x:Name="BusyText" VerticalAlignment="Center" Text="{Binding LobbyMessage}" Foreground="{StaticResource LS_tint100}"
+                                               FontSize="{StaticResource ScaledTitleFontSize}" TextWrapping="Wrap" TextAlignment="Center" Visibility="Collapsed"/>
                             </StackPanel>
 
                             <!-- Error Messages -->
@@ -368,6 +375,33 @@
                                                FontSize="{StaticResource ScaledTitleFontSize}"/>
                         </Grid>
                     </Viewbox>
+
+                    <!-- Crossplay disabled warning -->
+                    <Grid x:Name="CrossplayDisabledWarning" Grid.Row="1" Background="{StaticResource LS_PanelBackground}" Visibility="Collapsed">
+                        <Grid.OpacityMask>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <LinearGradientBrush.GradientStops>
+                                    <GradientStop Offset="0" Color="Transparent"/>
+                                    <GradientStop Offset="0.035" Color="White"/>
+                                    <GradientStop Offset="0.965" Color="White"/>
+                                    <GradientStop Offset="1" Color="Transparent"/>
+                                </LinearGradientBrush.GradientStops>
+                            </LinearGradientBrush>
+                        </Grid.OpacityMask>
+
+                        <ls:LSNineSliceImage Style="{StaticResource InnerPanelWithDecor}" Width="1200" MinHeight="780" Padding="80" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <StackPanel>
+                                <TextBlock x:Name="CrossPlayWarningTitle" Text="{Binding Source='hc6d562d8g968ag42ceg9ea1g0dfc57bfd657', Converter={StaticResource TranslatedStringConverter}}" HorizontalAlignment="Center" Foreground="{StaticResource LS_tint100}" FontSize="{StaticResource ScaledMassiveFontSize}" Margin="0,0,0,60"/>
+                                <TextBlock x:Name="CrossPlayWarningBody" ls:TextBlockFormatter.SourceText="{Binding Source='h7963a24bgdd71g4592g9bb8g5b1400e4c144', Converter={StaticResource TranslatedStringConverter}}" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,80"/>
+
+                                <ls:LSButton x:Name="CrossplayButton" Style="{StaticResource BigBlueButtonStyle}"
+                                             Content="{Binding Source='hc581fed4ge657g4952ga74ag91ba3910339a', Converter={StaticResource TranslatedStringConverter}}" 
+                                             Command="{Binding OnEnableCrossplay}"
+                                             HorizontalAlignment="Center" />
+
+                            </StackPanel>
+                        </ls:LSNineSliceImage>
+                    </Grid>
 
                     <Image Grid.Row="2" Grid.RowSpan="2" Source="{StaticResource FooterFade}" Stretch="None" VerticalAlignment="Bottom"/>
 
@@ -410,20 +444,77 @@
                     </Grid>
                 </Grid>
 
-                <Border Background="{StaticResource LS_PopUpBackgroundColor}" Visibility="{Binding IsConnecting, Converter={StaticResource BoolToVisibleConverter}}"/>
-
-                <Control x:Name="ModVerificationWarning" Template="{StaticResource ModVerificationWindowTemplate}"/>
+                <Border x:Name="BusyBackground" Background="{StaticResource LS_PopUpBackgroundColor}" Visibility="Collapsed"/>
             </Grid>
 
             <ControlTemplate.Triggers>
+                <DataTrigger Binding="{Binding Data.DefineCrossplayEnabled}" Value="True">
+                    <Setter TargetName="LarianNetButton" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="LarianNetButton" Property="IsEnabled" Value="True"/>
+                </DataTrigger>
+
                 <DataTrigger Binding="{Binding Community}" Value="LAN">
                     <Setter TargetName="LANButton" Property="Style" Value="{StaticResource SelectedNavButtonStyle}"/>
                     <Setter TargetName="OnlineButton" Property="Style" Value="{StaticResource DefaultNavButtonStyle}"/>
+                    <Setter TargetName="LarianNetButton" Property="Style" Value="{StaticResource DefaultNavButtonStyle}"/>
                 </DataTrigger>
 
+                <DataTrigger Binding="{Binding Community}" Value="LarianNet">
+                    <Setter TargetName="LarianNetButton" Property="Style" Value="{StaticResource SelectedNavButtonStyle}"/>
+                    <Setter TargetName="LANButton" Property="Style" Value="{StaticResource DefaultNavButtonStyle}"/>
+                    <Setter TargetName="OnlineButton" Property="Style" Value="{StaticResource DefaultNavButtonStyle}"/>
+                </DataTrigger>
+
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Data.LarianNetIsConnected}" Value="True" />
+                        <Condition Binding="{Binding Data.CrossplayIsEnabled}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="LarianNetButton" Property="IsEnabled" Value="True"/>
+                </MultiDataTrigger>
+
                 <DataTrigger Binding="{Binding IsConnecting}" Value="True">
+                    <Setter TargetName="BusyBackground" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="BusyStackPanel" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="BusyText" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="Messages" Property="Visibility" Value="Collapsed"/>
                 </DataTrigger>
+
+                <DataTrigger Binding="{Binding IsJoiningLobby}" Value="True">
+                    <Setter TargetName="BusyBackground" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="BusyStackPanel" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="Messages" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+
+                <!-- Larian.net is not connected -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Community}" Value="LarianNet"/>
+                        <Condition Binding="{Binding LobbyBrowserState}" Value="None"/>
+                        <Condition Binding="{Binding Data.DefineCrossplayEnabled}" Value="True"/>
+                        <Condition Binding="{Binding Data.LarianNetIsConnected}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="CreateBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="CrossplayDisabledWarning" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="CrossPlayWarningTitle" Property="Text" Value="{Binding Source='he4fd41d8g9926g4562g994cgfe64a4acf9cd', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="CrossPlayWarningBody" Property="ls:TextBlockFormatter.SourceText" Value="{Binding Source='h08c50fc8gd1c4g4040gad10g70a9f40cf3ef', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="CrossplayButton" Property="Content" Value="{Binding Source='h224af12cg943dg40ebg9298g0166926b2f82', Converter={StaticResource TranslatedStringConverter}}"/>
+                    <Setter TargetName="CrossplayButton" Property="Command" Value="{Binding CustomEvent}"/>
+                    <Setter TargetName="CrossplayButton" Property="CommandParameter" Value="OpenSignUp"/>
+                </MultiDataTrigger>
+
+                <!-- Crossplay is disabled -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Community}" Value="LarianNet"/>
+                        <Condition Binding="{Binding LobbyBrowserState}" Value="None"/>
+                        <Condition Binding="{Binding Data.DefineCrossplayEnabled}" Value="True"/>
+                        <Condition Binding="{Binding Data.LarianNetIsConnected}" Value="True"/>
+                        <Condition Binding="{Binding Data.CrossplayIsEnabled}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="CreateBtn" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="CrossplayDisabledWarning" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
 
             </ControlTemplate.Triggers>
         </ControlTemplate>

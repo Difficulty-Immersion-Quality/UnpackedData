@@ -199,13 +199,30 @@ game.states.Helper_EntityEvent_Out = State{
             Name of the event
         ]]}
 
+        params.EventTarget = {type = EParamType.String, required=false, default="me", help=[[
+            'Name_UUID' of the target that will receive the entity event or 'me' to send the event to the helper itself.
+        ]]}
+
+        params.SendAllParams = {type = EParamType.Bool, default=false, help=[[
+            Send all information in the event: ev.Sender, ev.Object, ev.Param (if not nil)
+        ]]}
+
         inputs.In = {}
 
         socketEvents.In = function(ev)
-            if ev.Param == nil then
-                SetUnicastEntityEvent(me, params.EventName)
+            local eventTarget = (params.EventTarget == "me") and me or FindEntity(params.EventTarget)
+            if params.SendAllParams then
+                if ev.Param == nil then
+                    SetUnicastEntityEvent(eventTarget, params.EventName, Entity(ev.Sender), Entity(ev.Object))
+                else
+                    SetUnicastEntityEvent(eventTarget, params.EventName, Entity(ev.Sender), Entity(ev.Object), Entity(ev.Param))
+                end
             else
-                SetUnicastEntityEvent(me, params.EventName, Entity(ev.Param))
+                if ev.Param == nil then
+                    SetUnicastEntityEvent(eventTarget, params.EventName)
+                else
+                    SetUnicastEntityEvent(eventTarget, params.EventName, Entity(ev.Param))
+                end
             end
         end
 
@@ -217,7 +234,7 @@ game.states.Helper_EntityEvent_Out = State{
 game.states.Helper_GlobalFlag = State{
     function()
 
-        description = [[Catches the setting & clearing of a global flag]]
+        description = [[Catches the setting & clearing of a global flag. Allows the setting and clearing of a global flag.]]
 
         params.FlagName = {type = EParamType.String, required=true, help=[[
             Name of the Flag
@@ -225,6 +242,9 @@ game.states.Helper_GlobalFlag = State{
 
         outputs.FlagSet = {}
         outputs.FlagCleared = {}
+
+        inputs.SetFlag = {}
+        inputs.ClearFlag = {}
 
         local flagGuid
 
@@ -246,6 +266,14 @@ game.states.Helper_GlobalFlag = State{
                TriggerOutput(outputs.FlagCleared, nil)
                me.Blackboard.SetFact("Cnst.GlobalFlag.LastSent", 0)
             end
+        end
+
+        socketEvents.SetFlag = function(ev)
+            SetFlag(Flag(params.FlagName))
+        end
+
+        socketEvents.ClearFlag = function(ev)
+            ClearFlag(Flag(params.FlagName))
         end
 
         events.FlagSet = function(e)

@@ -76,17 +76,56 @@
 
             <Grid x:Name="DialogueRoot" Background="Transparent" Focusable="False" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Visibility="{Binding ShouldShow, Converter={StaticResource BoolToVisibleConverter}}">
 
+                <ls:LSInputBinding x:Name="TogglePhotoModePrimary" BoundEvent="UITogglePhotoMode" Command="{Binding ComboButtonCustomEvent}" EatInput="False">
+                    <ls:LSInputBinding.CommandParameter>
+                        <MultiBinding Converter="{StaticResource PassThroughConverter}">
+                            <Binding Path="TogglePhotoModeOnCommand"/>
+                            <Binding Source="{StaticResource TrueValue}"/>
+                        </MultiBinding>
+                    </ls:LSInputBinding.CommandParameter>
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="LSInputBindingReleased">
+                            <b:InvokeCommandAction Command="{Binding ClearComboButtonEvent}">
+                                <b:InvokeCommandAction.CommandParameter>
+                                    <MultiBinding Converter="{StaticResource PassThroughConverter}">
+                                        <Binding Path="TogglePhotoModeOnCommand"/>
+                                        <Binding Source="{StaticResource TrueValue}"/>
+                                    </MultiBinding>
+                                </b:InvokeCommandAction.CommandParameter>
+                            </b:InvokeCommandAction>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+                </ls:LSInputBinding>
+                <ls:LSInputBinding x:Name="TogglePhotoModeSecondary" BoundEvent="UITogglePhotoModeSecondary" Command="{Binding ComboButtonCustomEvent}" EatInput="False">
+                    <ls:LSInputBinding.CommandParameter>
+                        <MultiBinding Converter="{StaticResource PassThroughConverter}">
+                            <Binding Path="TogglePhotoModeOnCommand"/>
+                            <Binding Source="{StaticResource FalseValue}"/>
+                        </MultiBinding>
+                    </ls:LSInputBinding.CommandParameter>
+                    <b:Interaction.Triggers>
+                        <b:EventTrigger EventName="LSInputBindingReleased">
+                            <b:InvokeCommandAction Command="{Binding ClearComboButtonEvent}">
+                                <b:InvokeCommandAction.CommandParameter>
+                                    <MultiBinding Converter="{StaticResource PassThroughConverter}">
+                                        <Binding Path="TogglePhotoModeOnCommand"/>
+                                        <Binding Source="{StaticResource FalseValue}"/>
+                                    </MultiBinding>
+                                </b:InvokeCommandAction.CommandParameter>
+                            </b:InvokeCommandAction>
+                        </b:EventTrigger>
+                    </b:Interaction.Triggers>
+                </ls:LSInputBinding>
+
                 <Grid x:Name="OwnerPanel" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                    <ls:LSInputBinding PlayerId="{Binding PlayerId}" BoundEvent="UIUp" Command="{Binding SelectorUpCommand}" IsEnabled="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.ActiveDialogue.ShowAnswers}"
-                                       Visibility="Collapsed">
+                    <ls:LSInputBinding PlayerId="{Binding PlayerId}" AllowRepeatEvents="True"  BoundEvent="UIUp" Command="{Binding SelectorUpCommand}" IsEnabled="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.ActiveDialogue.ShowAnswers}" Visibility="Collapsed">
                         <b:Interaction.Triggers>
                             <b:EventTrigger EventName="LSInputBindingPressed">
                                 <ls:LSPlaySound Sound="UI_Shared_Hover"/>
                             </b:EventTrigger>
                         </b:Interaction.Triggers>
                     </ls:LSInputBinding>
-                    <ls:LSInputBinding PlayerId="{Binding PlayerId}" BoundEvent="UIDown" Command="{Binding SelectorDownCommand}" IsEnabled="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.ActiveDialogue.ShowAnswers}"
-                                       Visibility="Collapsed">
+                    <ls:LSInputBinding PlayerId="{Binding PlayerId}" AllowRepeatEvents="True" BoundEvent="UIDown" Command="{Binding SelectorDownCommand}" IsEnabled="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.ActiveDialogue.ShowAnswers}" Visibility="Collapsed">
                         <b:Interaction.Triggers>
                             <b:EventTrigger EventName="LSInputBindingPressed">
                                 <ls:LSPlaySound Sound="UI_Shared_Hover"/>
@@ -103,7 +142,7 @@
                         </b:Interaction.Triggers>
                     </ls:LSInputBinding>
 
-                    <ls:LSInputBinding PlayerId="{Binding PlayerId}" BoundEvent="UIAccept" Visibility="Collapsed" Command="{Binding SelectorEnterCommand}" CommandParameter="{Binding PlayerId}">
+                    <ls:LSInputBinding PlayerId="{Binding PlayerId}" BoundEvent="UIAccept" Visibility="Collapsed" Command="{Binding SelectorEnterCommand}" CommandParameter="{Binding PlayerId}" IsEnabled="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.ActiveDialogue.ShowAnswers}">
                         <b:Interaction.Triggers>
                             <b:EventTrigger EventName="LSInputBindingPressed">
                                 <ls:LSPlaySound Sound="UI_Shared_Accept"/>
@@ -384,6 +423,14 @@
 
             <ControlTemplate.Triggers>
 
+                <Trigger SourceName="TogglePhotoModePrimary" Property="IsPressed" Value="True">
+                    <Setter TargetName="TogglePhotoModeSecondary" Property="EatInput" Value="True"/>
+                </Trigger>
+
+                <Trigger SourceName="TogglePhotoModeSecondary" Property="IsPressed" Value="True">
+                    <Setter TargetName="TogglePhotoModePrimary" Property="EatInput" Value="True"/>
+                </Trigger>
+
                 <!-- Button Triggers -->
                 <DataTrigger Binding="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.ActiveDialogue.ShowAnswers}" Value="True">
                     <Setter TargetName="SelectButton" Property="Visibility" Value="Visible"/>
@@ -516,12 +563,16 @@
     </ls:UIWidget.Template>
 
     <b:Interaction.Triggers>
-        <b:DataTrigger Binding="{Binding Path=CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.ActiveDialogue}" Value="{x:Null}">
-            <b:InvokeCommandAction Command="{Binding Path=CustomEvent}" CommandParameter="DialogueHide"/>
-        </b:DataTrigger>
-
         <b:EventTrigger EventName="WidgetClosing">
             <b:InvokeCommandAction Command="{Binding Path=RecheckReward}"/>
         </b:EventTrigger>
+
+        <b:PropertyChangedTrigger Binding="{Binding CurrentPlayer.SelectedCharacter}">
+            <b:InvokeCommandAction Command="{Binding SelectedCharacterChangedCommand}"/>
+        </b:PropertyChangedTrigger>
+
+        <b:PropertyChangedTrigger Binding="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.ActiveDialogue.AllowSpeakerSelection}">
+            <b:InvokeCommandAction Command="{Binding DialogueAllowSpeakerSelectionChangedCommand}"/>
+        </b:PropertyChangedTrigger>
     </b:Interaction.Triggers>
 </ls:UIWidget>

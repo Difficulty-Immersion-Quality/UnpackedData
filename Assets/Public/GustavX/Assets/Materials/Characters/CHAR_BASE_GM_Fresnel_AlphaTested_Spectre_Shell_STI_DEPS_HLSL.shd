@@ -1,0 +1,240 @@
+[Vertex shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+
+struct VertexInput
+{
+	float3 Position : POSITION0;
+	float4 InstanceMatrix1 : COLOR1;
+	float4 InstanceMatrix2 : COLOR2;
+	float4 InstanceMatrix3 : COLOR3;
+	float4 LocalQTangent : NORMAL0;
+	float2 TexCoords0 : TEXCOORD0;
+};
+
+struct VertexOutput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float3 WorldNormal : TEXCOORD0;
+	float3 WorldBinormal : TEXCOORD1;
+	float3 WorldTangent : TEXCOORD2;
+	float3 WorldOffset : TEXCOORD3;
+	float2 TexCoords0 : TEXCOORD4;
+	float3 LocalPosition : TEXCOORD5;
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_MaterialConstants : register(b0)
+{
+	float3 Vector3Parameter_WPO_Strenght;
+	float FloatParameter_WPO_Size;
+	float3 _WorldExtents;
+	float FloatParameter_OutlineFresnelPower;
+	float3 Vector3Parameter_SubtractiveBonePosition_Offset;
+	float FloatParameter_OutlineIntensity;
+	float3 Vector3Parameter_SubtractiveBonePosition;
+	float FloatParameter_OpacityFresnelPower;
+	float2 Vector2Parameter_TillingUV;
+	float2 Vector2Parameter_SpeedUV;
+	float FloatParameter_AlphaBoost;
+	float FloatParameter_SubtractiveMaskRadius;
+	float FloatParameter_SubtractiveMaskIntensity;
+	float FloatParameter_Switch_SubtractiveMask;
+};
+void CalculateMatWorldPositionOffset(in float3 in_0,
+	in float4x4 in_1,
+	out float3 out_0)
+{
+	// LocalPosition {
+	// } LocalPosition
+	float Local0 = in_0.y;
+	float Local1 = (_WorldExtents.y * FloatParameter_WPO_Size);
+	float Local2 = (Local0 / Local1);
+	float Local3 = (g_CurrentTime + Local2);
+	//  TriangleWaveNode {
+	// TriangleWave
+	float Local4 = abs(((frac((Local3 + 0.5f)) * 2.0f) - 1.0f));
+	// Smooth TriangleWave
+	float Local5 = ((Local4 * Local4) * (3.0f - (2.0f * Local4)));
+	//  } TriangleWaveNode
+	float3 Local6 = (Vector3Parameter_WPO_Strenght * Local5);
+	// TransformDirectionNode {
+	float3 Local7 = mul((float3x3)(in_1), Local6);
+	// } TransformDirectionNode
+	out_0 = Local7;
+}
+
+VertexOutput main(in VertexInput In)
+{
+	VertexOutput Out;
+
+	float3 matWorldPositionOffset;
+	// Create Instance WorldOffset Matrix
+	float4x4 noBillboardWorldOffsetMatrix = float4x4(In.InstanceMatrix1, In.InstanceMatrix2, In.InstanceMatrix3, float4(0.0f, 0.0f, 0.0f, 1.0f));
+
+	CalculateMatWorldPositionOffset(In.Position.xyz, noBillboardWorldOffsetMatrix, matWorldPositionOffset);
+	float3 localPositionStatic = In.Position;
+	// World space offset
+	float3 worldOffset = mul(noBillboardWorldOffsetMatrix, float4(localPositionStatic, 1.0f)).xyz;
+
+	worldOffset = (worldOffset + matWorldPositionOffset);
+
+	// Projected position
+	float4 projectedPosition = mul(g_OffsetViewProjectionMat, float4(worldOffset, 1.0f));
+
+	// Pass projected position to pixel shader
+	Out.ProjectedPosition = projectedPosition;
+
+	// Compute localTangentFrame tangent frame
+	float3x3 localTangentFrame = GetTangentFrame(In.LocalQTangent);
+
+	float3 localNormal = localTangentFrame[2];
+
+	// World space Normal
+	float3 worldNormal = mul((float3x3)(noBillboardWorldOffsetMatrix), localNormal);
+
+	// Normalize World Normal
+	float3 worldNormalNormalized = normalize(worldNormal);
+
+	Out.WorldNormal = worldNormalNormalized;
+
+	float3 localBinormal = localTangentFrame[1];
+
+	// World space Binormal
+	float3 worldBinormal = mul((float3x3)(noBillboardWorldOffsetMatrix), localBinormal);
+
+	// Normalize World Binormal
+	float3 worldBinormalNormalized = normalize(worldBinormal);
+
+	Out.WorldBinormal = worldBinormalNormalized;
+
+	float3 localTangent = localTangentFrame[0];
+
+	// World space Tangent
+	float3 worldTangent = mul((float3x3)(noBillboardWorldOffsetMatrix), localTangent);
+
+	// Normalize World Tangent
+	float3 worldTangentNormalized = normalize(worldTangent);
+
+	Out.WorldTangent = worldTangentNormalized;
+
+	// Pass world offset to pixel shader
+	Out.WorldOffset = worldOffset;
+
+	Out.TexCoords0 = In.TexCoords0;
+	// Pass local position to pixel shader
+	Out.LocalPosition = In.Position;
+
+
+	return Out;
+}
+
+
+[Fragment shader]
+#include "Shaders/HLSL/Preamble.shdh"
+#include "Shaders/HLSL/Global/DS_Globals.shdh"
+#include "Shaders/HLSL/CommonHelpers.shdh"
+
+struct PixelInput
+{
+	float4 ProjectedPosition : SV_Position0;
+	float3 WorldNormal : TEXCOORD0;
+	float3 WorldBinormal : TEXCOORD1;
+	float3 WorldTangent : TEXCOORD2;
+	float3 WorldOffset : TEXCOORD3;
+	float2 TexCoords0 : TEXCOORD4;
+	float3 LocalPosition : TEXCOORD5;
+};
+
+struct PixelOutput
+{
+};
+
+VK_DESCRIPTOR(DS_Shader, 0) cbuffer CB_MaterialConstants : register(b0)
+{
+	float3 Vector3Parameter_WPO_Strenght;
+	float FloatParameter_WPO_Size;
+	float3 _WorldExtents;
+	float FloatParameter_OutlineFresnelPower;
+	float3 Vector3Parameter_SubtractiveBonePosition_Offset;
+	float FloatParameter_OutlineIntensity;
+	float3 Vector3Parameter_SubtractiveBonePosition;
+	float FloatParameter_OpacityFresnelPower;
+	float2 Vector2Parameter_TillingUV;
+	float2 Vector2Parameter_SpeedUV;
+	float FloatParameter_AlphaBoost;
+	float FloatParameter_SubtractiveMaskRadius;
+	float FloatParameter_SubtractiveMaskIntensity;
+	float FloatParameter_Switch_SubtractiveMask;
+};
+VK_DESCRIPTOR(DS_Shader, 1) Texture2D Texture2DParameter_Noise;
+void CalculateMatOpacity(in float3 in_0,
+	in float2 in_1,
+	in float3 in_2,
+	out float out_0)
+{
+	// FresnelNode {
+	float Local0 = pow((1.0f - saturate(dot(float3(0.0f, 1.0f, 0.0f), in_0))), FloatParameter_OutlineFresnelPower);
+	// } FresnelNode
+	float Local1 = (Local0 * FloatParameter_OutlineIntensity);
+	// FresnelNode {
+	float Local2 = pow((1.0f - saturate(dot(float3(0.0f, 1.0f, 0.0f), in_0))), FloatParameter_OpacityFresnelPower);
+	// } FresnelNode
+	float Local3 = max(Local1, Local2);
+	// UVNode {
+	// } UVNode
+	float2 Local4 = (in_1 * Vector2Parameter_TillingUV);
+	float2 Local5 = (g_CurrentTime * Vector2Parameter_SpeedUV);
+	float2 Local6 = (Local4 + Local5);
+	// Texture2DNode {
+	float4 Local7 = Texture2DParameter_Noise.Sample(_DefaultWrapSampler, Local6);
+	// [Local7] Get needed components
+	float Local8 = Local7.x;
+	// } Texture2DNode
+	float Local9 = (FloatParameter_AlphaBoost * Local8);
+	float3 Local10 = (Vector3Parameter_SubtractiveBonePosition_Offset + Vector3Parameter_SubtractiveBonePosition);
+	float3 Local11 = (Local10 + float3(FloatParameter_SubtractiveMaskRadius, FloatParameter_SubtractiveMaskRadius, FloatParameter_SubtractiveMaskRadius));
+	float3 Local12 = (Local10 - Local11);
+	// DotNode {
+	float Local13 = dot(Local12, Local12);
+	// } DotNode
+	float Local14 = sqrt(Local13);
+	// LocalPosition {
+	// } LocalPosition
+	float3 Local15 = (Local10 - in_2);
+	// DotNode {
+	float Local16 = dot(Local15, Local15);
+	// } DotNode
+	float Local17 = sqrt(Local16);
+	float Local18 = (Local14 - Local17);
+	float Local19 = (Local18 / Local14);
+	float Local20 = clamp(Local19, 0.0f, 1.0f);
+	float Local21 = (1.0f - Local20);
+	float Local22 = pow(Local21, FloatParameter_SubtractiveMaskIntensity);
+	float Local23 = lerp(1.0f, Local22, FloatParameter_Switch_SubtractiveMask);
+	float Local24 = (Local9 * Local23);
+	float Local25 = (Local3 * Local24);
+	float Local26;
+	Local26 = step(0.333f, Local25);
+	out_0 = Local26;
+}
+
+PixelOutput main(in PixelInput In)
+{
+	PixelOutput Out;
+
+	float matOpacity;
+	float3x3 NBT_WS = float3x3(In.WorldTangent, In.WorldNormal, In.WorldBinormal);
+
+	// Normalized world space view vector
+	float3 worldViewNormalized = normalize(-(In.WorldOffset));
+
+	// Calculate tangent space view vector
+	float3 tangentView = normalize(mul(NBT_WS, worldViewNormalized));
+
+	CalculateMatOpacity(tangentView, In.TexCoords0, In.LocalPosition.xyz, matOpacity);
+	clip((matOpacity - 0.5f));
+
+
+	return Out;
+}

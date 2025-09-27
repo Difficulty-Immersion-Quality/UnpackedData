@@ -126,6 +126,8 @@ DB_QuestDef_LevelLoaded("LOW_HelsikDeal", "ReachedEnd", "END_Main");
 //Voice barks
 
 DB_LOW_DevilsFee_CellarBustPosition(0);
+//Hiding old and asserting bust
+PROC_SetOnStage(S_LOW_DevilsFee_CellarLockBust_11221eb7-0681-4a8b-99fb-dd63e544573b, 0);
 
 //REGION Basement
 DB_ItemDialog_NarratorAD((ITEM)S_LOW_DevilsFee_Plaque1_009bf285-8e9e-487e-b3bc-cd7b4e8a2e08,(DIALOGRESOURCE)LOW_AD_DevilsFee_Plaque1_7cf10bbb-1307-608c-d0f1-6d47b0c95f75);
@@ -778,38 +780,44 @@ SetFlag((FLAG)LOW_DevilsFee_Event_CombatWithHelsik_27017c85-df88-4c89-b20e-e1537
 //REGION Cellar Puzzle
 
 IF
-UseFinished(_Player, S_LOW_DevilsFee_CellarLockBust_11221eb7-0681-4a8b-99fb-dd63e544573b, _)
+UseFinished(_Player, S_LOW_DevilsFee_Cellar_Bust_92e9d1a9-189b-42f7-9025-ba88f889eab7, _)
 AND
 DB_LOW_DevilsFee_CellarBustPosition(_Position)
 AND
-_Position != 3
-AND
 IntegerSum(_Position, 1, _NewPosition)
 THEN
-ItemRotateY((ITEM)S_LOW_DevilsFee_CellarLockBust_11221eb7-0681-4a8b-99fb-dd63e544573b, 90.0, 90.0);
+ItemRotateY((ITEM)S_LOW_DevilsFee_Cellar_Bust_92e9d1a9-189b-42f7-9025-ba88f889eab7, 90.0, 90.0);
 NOT DB_LOW_DevilsFee_CellarBustPosition(_Position);
 DB_LOW_DevilsFee_CellarBustPosition(_NewPosition);
-PlaySound(S_LOW_DevilsFee_CellarLockBust_11221eb7-0681-4a8b-99fb-dd63e544573b, "Items_Generic_Locked");
+PlaySound(S_LOW_DevilsFee_Cellar_Bust_92e9d1a9-189b-42f7-9025-ba88f889eab7, "Items_Generic_Locked");
+//Evaluate if the hatch opens or if needs to be closed again
+PROC_LOW_DevilsFee_EvaluatePosition();
 
-IF
-UseFinished(_Player, S_LOW_DevilsFee_CellarLockBust_11221eb7-0681-4a8b-99fb-dd63e544573b, _)
+PROC
+PROC_LOW_DevilsFee_EvaluatePosition()
 AND
 DB_LOW_DevilsFee_CellarBustPosition(3)
 AND
 NOT DB_LOW_DevilsFee_CellarUnlocked(1)
-AND
-QRY_OnlyOnce("LOW_DevilsFee_UnlockedCellar")
 THEN
 Unlock((ITEM)S_LOW_DevilsFee_HatchToBasement_6fb8cf28-dfe1-4259-8ccb-59ce7f805f28);
 PROC_TryStartAD((DIALOGRESOURCE)GLO_AD_MechanicalClick_fc8d3dc5-b947-6354-3aa9-d1f02fd51af4,(ITEM)S_LOW_DevilsFee_HatchToBasement_6fb8cf28-dfe1-4259-8ccb-59ce7f805f28);
 DB_LOW_DevilsFee_CellarUnlocked(1);
 
-IF
-Unlocked(S_LOW_DevilsFee_HatchToBasement_6fb8cf28-dfe1-4259-8ccb-59ce7f805f28,_,_)
+PROC
+PROC_LOW_DevilsFee_EvaluatePosition()
+AND
+DB_LOW_DevilsFee_CellarBustPosition(4)
+AND
+DB_LOW_DevilsFee_CellarUnlocked(1)
 THEN
-SetCanInteract(S_LOW_DevilsFee_CellarLockBust_11221eb7-0681-4a8b-99fb-dd63e544573b,0);
-DB_LOW_DevilsFee_CellarUnlocked(1);
+NOT DB_LOW_DevilsFee_CellarBustPosition(4);
+DB_LOW_DevilsFee_CellarBustPosition(0);
+NOT DB_LOW_DevilsFee_CellarUnlocked(1);
+PlaySound(S_LOW_DevilsFee_Cellar_Bust_92e9d1a9-189b-42f7-9025-ba88f889eab7, "Items_Generic_Locked");
+Lock(S_LOW_DevilsFee_HatchToBasement_6fb8cf28-dfe1-4259-8ccb-59ce7f805f28, "STORY_KEY");
 
+//Rotate the bust when opening the hatch by other means.
 IF
 Unlocked(S_LOW_DevilsFee_HatchToBasement_6fb8cf28-dfe1-4259-8ccb-59ce7f805f28,_,_)
 AND
@@ -822,14 +830,11 @@ AND
 IntegerProduct(_FinalPos,90,_AngleInt)
 AND
 IntegerToReal(_AngleInt,_Angle)
-AND
-QRY_OnlyOnce("LOW_DevilsFee_UnlockedCellarRotation")
 THEN
-ItemRotateY((ITEM)S_LOW_DevilsFee_CellarLockBust_11221eb7-0681-4a8b-99fb-dd63e544573b, _Angle, 180.0);
-PlaySound(S_LOW_DevilsFee_CellarLockBust_11221eb7-0681-4a8b-99fb-dd63e544573b, "Items_Generic_Locked");
+ItemRotateY((ITEM)S_LOW_DevilsFee_Cellar_Bust_92e9d1a9-189b-42f7-9025-ba88f889eab7, _Angle, 180.0);
+PlaySound(S_LOW_DevilsFee_Cellar_Bust_92e9d1a9-189b-42f7-9025-ba88f889eab7, "Items_Generic_Locked");
 
 // Lever in basement
-
 IF
 UseFinished(_Player, (ITEM)S_LOW_DevilsFeeCellar_HatchLever_cade731d-65a6-42fb-b780-d028440baaef, _)
 AND
@@ -851,7 +856,7 @@ PROC_PlayCantUseItemAD(_Player);
 //END_REGION
 
 //REGION Diabolist's Door Trap
-// https://larianstudios.atlassian.net/wiki/spaces/GUS/pages/3042246657/Devil+s+Fee+-+Thirsty+Ward+Trap
+// [Link Redacted]
 
 IF
 EnteredTrigger(_Character,(TRIGGER)S_LOW_DevilsFee_DoorTrapTrigger_0058d66a-faf1-439e-8e89-858d4162af19)

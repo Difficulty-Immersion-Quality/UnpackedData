@@ -3173,8 +3173,8 @@ DB_CRIME_IsShove(_StoryActionID,"Start")
 THEN
 DB_NOOP(1);
 
-PROC
-PROC_CRIME_CheckAttackedOutsideCombat((CHARACTER)_NPC,(CHARACTER)_Player,(CHARACTER)_Summon,(INTEGER)_DamageAmount,(STRING)_DamageSource,(INTEGER)_StoryActionID)
+QRY
+QRY_CRIME_CountsAsAssaultOutOfCombat((CHARACTER)_NPC,(CHARACTER)_Player,(CHARACTER)_Summon,(INTEGER)_DamageAmount,(STRING)_DamageSource,(INTEGER)_StoryActionID)
 AND
 _NPC != _Summon
 AND
@@ -3182,7 +3182,7 @@ NOT DB_IgnoreAssault(_NPC)
 AND
 NOT QRY_IgnoreAssaultZeroDamage(_NPC,_DamageAmount)
 AND
-NOT QRY_CRIME_IgnoreShoveStartAttack(_StoryACtionID)
+NOT QRY_CRIME_IgnoreShoveStartAttack(_StoryActionID)
 AND
 NOT DB_Is_InCombat(_NPC,_)
 AND
@@ -3199,6 +3199,13 @@ AND
 IsTagged(_NPC,(TAG)GHOST_3def9d73-7c73-487b-8111-d1df1dce076e,0)
 AND
 IsSummon(_NPC,0)
+THEN
+DB_NOOP(1);
+
+PROC
+PROC_CRIME_CheckAttackedOutsideCombat((CHARACTER)_NPC,(CHARACTER)_Player,(CHARACTER)_Summon,(INTEGER)_DamageAmount,(STRING)_DamageSource,(INTEGER)_StoryActionID)
+AND
+QRY_CRIME_CountsAsAssaultOutOfCombat(_NPC,_Player,_Summon,_DamageAmount,_DamageSource,_StoryActionID)
 THEN
 PROC_CrimeCheckAssailant(_NPC,_Player,_Summon,_DamageSource,_DamageAmount,_StoryActionID);
 
@@ -5370,7 +5377,7 @@ NOT DB_StoppedDialog(_ID);
 PROC
 PROC_CrimeInterruptStoryDialogs((STRING)_Pipeline,(INTEGER)_CrimeID,(DIALOGRESOURCE)_CrimeDialog,1,(CHARACTER)_NPC,(CHARACTER)_Criminal,(CHARACTER)_Criminal2,(CHARACTER)_Criminal3,(CHARACTER)_Criminal4)
 THEN
-PROC_TrySmoothStopDialogFor(_NPC);
+PROC_TryStopDialogFor(_NPC);
 PROC_TrySmoothStopDialogFor(_Criminal);
 PROC_TrySmoothStopDialogFor(_Criminal2);
 PROC_TrySmoothStopDialogFor(_Criminal3);
@@ -5716,6 +5723,8 @@ PROC_CharacterRegisterCrime(_Player,_CrimeName,_Item,(CHARACTER)_Owner,0);
 
 IF
 MovedBy((ITEM)_Item,(CHARACTER)_Player)
+AND
+IsItem(_Item,1)
 AND
 GetOwner(_Item,_Owner)
 AND

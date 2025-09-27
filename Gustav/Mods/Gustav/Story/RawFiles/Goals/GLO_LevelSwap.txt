@@ -17,6 +17,8 @@ DB_GLO_LevelSwap_Dialog(_Dialog, _LevelSwapFlag, _ReadyCheckID)
 AND
 DB_DialogPlayers(_Inst, _Player,_)
 AND
+_LevelSwapFlag != NULL_00000000-0000-0000-0000-000000000000
+AND
 GetFlag(_LevelSwapFlag, _Player, 1)
 AND
 DB_GLO_LevelSwap_Location(_ReadyCheckID, _, _, _ReadyCheckTranslationID, _, _, _)
@@ -66,11 +68,20 @@ PROC_GLO_LevelSwapCheckCustomReadyCheckAndProceed(_ReadyCheckID, _Player);
 QRY
 QRY_GLO_LevelSwap_IsPartyUnavailable((CHARACTER)_CheckOriginator)
 AND
+QRY_GLO_LevelSwap_IsPartyUnavailable((CHARACTER)_CheckOriginator,0)
+THEN
+DB_NOOP(1);
+
+QRY
+QRY_GLO_LevelSwap_IsPartyUnavailable((CHARACTER)_CheckOriginator,(INTEGER)_IncludeDefeatedCheck)
+AND
 DB_PartyMembers(_Character)
+AND
+Exists(_Character, 1) //Nonexistent characters should not block level swapping.
 AND
 NOT DB_GLO_LevelSwap_PartyUnavailable(1) //to break out of party member loop/not check further party members
 AND
-QRY_GLO_LevelSwap_IsPartyMemberUnavailable(_Character)
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable(_Character,_IncludeDefeatedCheck)
 THEN
 DB_GLO_LevelSwap_PartyUnavailable(1);
 PROC_GLO_LevelSwap_NotifyPartyUnavailable(_Character, _CheckOriginator);
@@ -102,15 +113,23 @@ OpenMessageBox(_Character, "ReadyCheck_YouAreNotReady");
 OpenMessageBox(_CheckOriginator, "ReadyCheck_PartyMemberNotReady");
 
 QRY
-QRY_GLO_LevelSwap_IsPartyUnavailable((CHARACTER)_Player)
+QRY_GLO_LevelSwap_IsPartyUnavailable((CHARACTER)_Player,(INTEGER)_)
 AND
 DB_GLO_LevelSwap_PartyUnavailable(1)
 THEN
 NOT DB_GLO_LevelSwap_PartyUnavailable(1);
 
-//Unavailable because party member is in (non-levelswap) dialog
+
 QRY
 QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character)
+AND
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character,0)
+THEN
+DB_NOOP(1);
+
+//Unavailable because party member is in (non-levelswap) dialog
+QRY
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character,(INTEGER)_)
 AND
 DB_InteractiveDialogSpeaker(_DialogId,_Character)
 AND
@@ -122,7 +141,7 @@ DB_NOOP(1);
 
 //Unavailable because party member is in combat
 QRY
-QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character)
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character,(INTEGER)_)
 AND
 DB_Is_InCombat(_Character,_)
 THEN
@@ -130,7 +149,7 @@ DB_NOOP(1);
 
 //Unavailable because party member is downed
 QRY
-QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character)
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character,(INTEGER)_)
 AND
 DB_Downed(_Character)
 THEN
@@ -138,41 +157,49 @@ DB_NOOP(1);
 
 //Unavailable because party member can't fast travel
 QRY
-QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character)
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character,(INTEGER)_)
 AND
 DB_InDangerZone(_Character,_)
 THEN
 DB_NOOP(1);
 
 QRY
-QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character)
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character,(INTEGER)_)
 AND
-DB_FastTravelBlock_CantMove_StatusSet(_Character)
+DB_CantMove_IgnoreDialog(_Character)
 AND
 NOT DB_Dead(_Character)
 THEN
 DB_NOOP(1);
 
 QRY
-QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character)
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character,(INTEGER)_)
 AND
 DB_FastTravelBlock_Arrested_StatusSet(_Character)
 THEN
 DB_NOOP(1);
 
 QRY
-QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character)
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character,(INTEGER)_)
 AND
 DB_FastTravelBlock_BlockedZone_StatusSet(_Character)
 THEN
 DB_NOOP(1);
 
 QRY
-QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character)
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character,(INTEGER)_)
 AND
 DB_FastTravelBlock_FugitiveInPrison_StatusSet(_Character, _FugitiveStatus)
 THEN
 DB_NOOP(1);
+
+QRY
+QRY_GLO_LevelSwap_IsPartyMemberUnavailable((CHARACTER)_Character,1)
+AND
+DB_Defeated(_Character)
+THEN
+DB_NOOP(1);
+
 //END_REGION
 
 //REGION Custom Ready Check

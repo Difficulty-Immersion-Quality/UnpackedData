@@ -1,0 +1,499 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:ls="clr-namespace:ls;assembly=Code"
+                    xmlns:System="clr-namespace:System;assembly=mscorlib"
+                    xmlns:noesis="clr-namespace:NoesisGUIExtensions;assembly=Noesis.GUI.Extensions"
+                    xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+                    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                    mc:Ignorable="d">
+
+	<!-- Combat log tooltips -->
+	<Style x:Key="CombatLog.Tooltip.Text" TargetType="TextBlock">
+		<Setter Property="FontSize" Value="{StaticResource DefaultFontSize}" />
+		<Setter Property="LineHeight" Value="48" />
+		<Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+		<Setter Property="Foreground" Value="{StaticResource CombatLog.Tooltip.DefaultTextColor}" />
+		<Setter Property="TextWrapping" Value="Wrap"/>
+		<Setter Property="Margin" Value="0,8"/>
+	</Style>
+
+	<Style x:Key="CombatLog.Entry.Text" TargetType="TextBlock">
+		<Setter Property="FontSize" Value="{StaticResource MediumFontSize}" />
+		<Setter Property="LineHeight" Value="{StaticResource DefaultFontSize}" />
+		<Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+		<Setter Property="Foreground" Value="{StaticResource CombatLog.DefaultTextColor}" />
+		<Setter Property="TextWrapping" Value="Wrap"/>
+		<Setter Property="MaxWidth" Value="920"/>
+		<Setter Property="Opacity" Value="0.9"/>
+		<Style.Triggers>
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding TooltipEntries.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True" />
+					<Condition Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
+				</MultiDataTrigger.Conditions>
+				<MultiDataTrigger.Setters>
+					<Setter Property="TextDecorations" Value="Underline" />
+				</MultiDataTrigger.Setters>
+			</MultiDataTrigger>
+
+			<DataTrigger Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True">
+				<Setter Property="Opacity" Value="1"/>
+			</DataTrigger>
+
+		</Style.Triggers>
+	</Style>
+
+	<!--Don't use basedon Styles in CtxTransStringRunGeneratorBehavior since it doesn't get copied for lsspans-->
+	<Style x:Key="CombatLog.Entry.ParamRun" TargetType="ls:LSRun">
+		<!--This provides the owner for the combatlog-->
+		<Setter Property="ls:TooltipExtender.PlayerId" Value="{Binding Path=Inline.Parent.(ls:UIWidget.PlayerId), RelativeSource={RelativeSource Mode=Self}}" />
+		<Setter Property="ls:TooltipExtender.Owner" Value="{Binding Path=DataContext.CurrentPlayer.SelectedCharacter, RelativeSource={RelativeSource AncestorType=ls:UIWidget}}" />
+		<Setter Property="ToolTipService.IsEnabled" Value="{Binding HasTooltip}"/>
+		<Style.Triggers>
+
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding TooltipEntries.Count}" Value="0" />
+					<Condition Binding="{Binding HasTooltip}" Value="True" />
+					<Condition Binding="{Binding ManagedTooltip}" Value="True" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="ToolTip" >
+					<Setter.Value>
+						<ls:LSTooltip Content="{Binding Path=Inline.DataContext, RelativeSource={RelativeSource Mode=Self}}" ls:TooltipExtender.Owner="{Binding Path=Inline.(ls:TooltipExtender.Owner), RelativeSource={RelativeSource Mode=Self}}" PlayerId="{Binding Path=Inline.Parent.(ls:UIWidget.PlayerId), RelativeSource={RelativeSource Mode=Self}}" Placement="Top" VerticalOffset="-5" HorizontalOffset="-14" IsHitTestVisible="False" />
+					</Setter.Value>
+				</Setter>
+
+			</MultiDataTrigger>
+
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding TooltipEntries.Count}" Value="0" />
+					<Condition Binding="{Binding HasTooltip}" Value="True" />
+					<Condition Binding="{Binding ManagedTooltip}" Value="False" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="ToolTip" Value="{StaticResource ManagedTooltip}"/>
+
+			</MultiDataTrigger>
+
+			<DataTrigger Binding="{Binding TooltipEntries.Count,Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True">
+				<Setter Property="ToolTipService.IsEnabled" Value="True"/>
+				<Setter Property="ToolTip" >
+					<Setter.Value>
+						<ls:LSTooltip Content="{Binding Path=Inline.DataContext,RelativeSource={RelativeSource Mode=Self}}" ContentTemplate="{DynamicResource CombatLog.Tooltip}" IsHitTestVisible="False" Placement="Top" PlayerId="{Binding Path=Inline.Parent.(ls:UIWidget.PlayerId), RelativeSource={RelativeSource Mode=Self}}" CanBePinned="False">
+						</ls:LSTooltip>
+					</Setter.Value>
+				</Setter>
+			</DataTrigger>
+
+			<DataTrigger Binding="{Binding Rolls.Count,Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True">
+				<Setter Property="ToolTipService.IsEnabled" Value="True"/>
+				<Setter Property="ToolTip">
+					<Setter.Value>
+						<ls:LSTooltip Content="{Binding Path=Inline.DataContext,RelativeSource={RelativeSource Mode=Self}}" ContentTemplate="{DynamicResource CombatLog.RollsTooltip}" IsHitTestVisible="False" Placement="Top" PlayerId="{Binding Path=Inline.Parent.(ls:UIWidget.PlayerId), RelativeSource={RelativeSource Mode=Self}}" CanBePinned="True" />
+					</Setter.Value>
+				</Setter>
+			</DataTrigger>
+
+			<DataTrigger Binding="{Binding Type}" Value="Distance" >
+				<Setter Property="Text" Value="{Binding Text, Converter={StaticResource UnitConverter}, ConverterParameter='Distance Short'}"/>
+			</DataTrigger>
+
+
+			<DataTrigger Binding="{Binding Type}" Value="Weight" >
+				<Setter Property="Text" Value="{Binding Text, Converter={StaticResource UnitConverter}, ConverterParameter='Weight Short'}"/>
+			</DataTrigger>
+
+			<!-- Enemy character (MISSING COLOR CODE) -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Character" />
+					<Condition Binding="{Binding RelationType}" Value="Enemy" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource RelationType.Enemy}" />
+			</MultiDataTrigger>
+			<!-- Ally character (MISSING COLOR CODE) -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Character" />
+					<Condition Binding="{Binding RelationType}" Value="Ally" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource RelationType.Ally}" />
+			</MultiDataTrigger>
+			<!-- Damage type: None -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="None" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.None}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Slashing -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Slashing" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Physical}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Piercing -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Piercing" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Physical}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Bludgeoning -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Bludgeoning" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Physical}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Force -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Force" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Force}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Psychic -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Psychic" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Psychic}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Thunder -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Thunder" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Thunder}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Lightning -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Lightning" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Lightning}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Cold -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Cold" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Cold}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Necrotic -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Necrotic" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Necrotic}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Poison -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Poison" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Poison}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Acid -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Acid" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Acid}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Radiant -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Radiant" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Radiant}" />
+			</MultiDataTrigger>
+			<!-- Damage type: Fire -->
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding Type}" Value="Damage" />
+					<Condition Binding="{Binding DamageType}" Value="Fire" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="Foreground" Value="{StaticResource DamageType.Fire}" />
+			</MultiDataTrigger>
+			<!-- Healing -->
+			<DataTrigger Binding="{Binding Type}" Value="HealAmount">
+				<Setter Property="Foreground" Value="{StaticResource DamageType.HealAmount}" />
+			</DataTrigger>
+			<!-- Spell (MISSING COLOR CODE) -->
+			<DataTrigger Binding="{Binding Type}" Value="Spell">
+				<Setter Property="Foreground" Value="{StaticResource CombatLog.Spell}" />
+			</DataTrigger>
+			<!-- Experience (MISSING COLOR CODE) -->
+			<DataTrigger Binding="{Binding Type}" Value="Experience">
+				<Setter Property="Foreground" Value="{StaticResource LS_ExperienceTextColor}" />
+			</DataTrigger>
+			<DataTrigger Binding="{Binding Type}" Value="ExperienceOverflow">
+				<Setter Property="Foreground" Value="{StaticResource LS_ExperienceOverflowTextColor}" />
+			</DataTrigger>
+			<!-- Status (MISSING COLOR CODE) -->
+			<DataTrigger Binding="{Binding Type}" Value="Status">
+				<Setter Property="Foreground" Value="{StaticResource CombatLog.Status}" />
+			</DataTrigger>
+			<!-- Passive (MISSING COLOR CODE) -->
+			<DataTrigger Binding="{Binding Type}" Value="Passive">
+				<Setter Property="Foreground" Value="{StaticResource CombatLog.Status}" />
+			</DataTrigger>
+			<!-- Surface (MISSING COLOR CODE) -->
+			<DataTrigger Binding="{Binding Type}" Value="Surface">
+				<Setter Property="ToolTipService.IsEnabled" Value="True"/>
+				<Setter Property="ToolTip">
+					<Setter.Value>
+						<ls:LSTooltip IsHitTestVisible="False" Template="{StaticResource BaseSurfaceTooltipTemplate}" ContentTemplate="{StaticResource SurfaceTooltipContentTemplate}" PlayerId="{Binding Path=Inline.Parent.(ls:UIWidget.PlayerId), RelativeSource={RelativeSource Mode=Self}}"  Content="{Binding Path=Inline.DataContext.SurfaceInformation, RelativeSource={RelativeSource Mode=Self}}" Placement="Top" VerticalOffset="-6" HorizontalOffset="-14"/>
+					</Setter.Value>
+				</Setter>
+			</DataTrigger>
+			<!-- Round -->
+			<DataTrigger Binding="{Binding Type}" Value="Round">
+				<Setter Property="Foreground" Value="{StaticResource LS_accent00TxtColor}" />
+			</DataTrigger>
+
+			<DataTrigger Binding="{Binding Path=IsMouseOver, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type TextBlock}}}" Value="True">
+				<Setter Property="TextDecorations" Value="Underline" />
+			</DataTrigger>
+			<DataTrigger Binding="{Binding HasTooltip}" Value="False">
+				<Setter Property="TextDecorations" Value="None" />
+			</DataTrigger>
+			<MultiDataTrigger>
+				<MultiDataTrigger.Conditions>
+					<Condition Binding="{Binding TooltipEntries.Count}" Value="0" />
+					<Condition Binding="{Binding ManagedTooltip}" Value="False" />
+				</MultiDataTrigger.Conditions>
+				<Setter Property="TextDecorations" Value="None" />
+			</MultiDataTrigger>
+		</Style.Triggers>
+	</Style>
+
+	<Style x:Key="CombatLog.Tooltip.ParamRun" TargetType="ls:LSRun" BasedOn="{StaticResource CombatLog.Entry.ParamRun}">
+		<Style.Triggers>
+			<DataTrigger Binding="{Binding Type}" Value="DiceDescription">
+				<Setter Property="Foreground" Value="{StaticResource CombatLog.Tooltip.SecondaryTextColor}" />
+			</DataTrigger>
+			<DataTrigger Binding="{Binding Type}" Value="ExpressionVariable">
+				<Setter Property="Foreground" Value="{StaticResource CombatLog.Tooltip.SecondaryTextColor}" />
+			</DataTrigger>
+		</Style.Triggers>
+	</Style>
+
+	<DataTemplate x:Key="CombatLog.Tooltip.Entry" DataType="{x:Type ls:CombatLogTooltipEntry}">
+		<DockPanel>
+			<Border x:Name="iconContainer" DockPanel.Dock="Left" >
+				<Image x:Name="icon" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-8,4,4,0" Stretch="None" Visibility="Collapsed"/>
+			</Border>
+
+			<TextBlock Style="{StaticResource CombatLog.Tooltip.Text}" HorizontalAlignment="Stretch">
+				<b:Interaction.Behaviors>
+					<ls:CtxTransStringRunGeneratorBehavior Source="{Binding CtxTransText}" ParamRunStyle="{StaticResource CombatLog.Tooltip.ParamRun}" />
+				</b:Interaction.Behaviors>
+			</TextBlock>
+		</DockPanel>
+		<DataTemplate.Triggers>
+			<DataTrigger Binding="{Binding Type}" Value="Dice">
+				<Setter TargetName="icon" Property="Visibility" Value="Visible" />
+				<Setter TargetName="icon" Property="Source" Value="pack://application:,,,/Core;component/Assets/Tooltips/ico_dice.png" />
+			</DataTrigger>
+			<DataTrigger Binding="{Binding Type}" Value="ArmorClass">
+				<Setter TargetName="icon" Property="Visibility" Value="Visible" />
+				<Setter TargetName="icon" Property="Source" Value="pack://application:,,,/Core;component/Assets/Tooltips/ico_AC.png" />
+			</DataTrigger>
+		</DataTemplate.Triggers>
+	</DataTemplate>
+
+	<DataTemplate DataType="ls:VMEquipStatusEntry">
+		<TextBlock x:Name="LogEntry" Style="{DynamicResource TextStyle}">
+			<b:Interaction.Behaviors>
+				<ls:CtxTransStringRunGeneratorBehavior x:Name="EntryBehavior" LocaSource="{Binding Source='haf935496gcddag4a9egace0g69ec9cca84e4', Converter={StaticResource TranslatedStringConverter}}" ParamRunStyle="{StaticResource CombatLog.Entry.ParamRun}">
+					<ls:CtxTransStringRunGeneratorBehavior.ParamList>
+						<MultiBinding Converter="{StaticResource PassThroughConverter}">
+							<Binding Path="StatusParam"/>
+							<Binding Path="ItemParam"/>
+						</MultiBinding>
+					</ls:CtxTransStringRunGeneratorBehavior.ParamList>
+				</ls:CtxTransStringRunGeneratorBehavior>
+			</b:Interaction.Behaviors>
+		</TextBlock>
+	</DataTemplate>
+
+	<DataTemplate DataType="ls:VMPingEntry">
+		<TextBlock x:Name="LogEntry" Style="{DynamicResource TextStyle}" ls:CtxTransStringHelper.LocaSource="{Binding Source='h8eb32f43g65dfg4691ga17agca8c8e91bf78', Converter={StaticResource TranslatedStringConverter}}">
+			<b:Interaction.Behaviors>
+				<ls:CtxTransStringRunGeneratorBehavior x:Name="EntryBehavior" LocaSource="{Binding (ls:CtxTransStringHelper.LocaSource), ElementName=LogEntry}" ParamRunStyle="{StaticResource CombatLog.Entry.ParamRun}">
+					<ls:CtxTransStringRunGeneratorBehavior.ParamList>
+						<MultiBinding Converter="{StaticResource PassThroughConverter}">
+							<Binding Path="PingSourceParam"/>
+							<Binding Path="PingTargetParam"/>
+						</MultiBinding>
+					</ls:CtxTransStringRunGeneratorBehavior.ParamList>
+				</ls:CtxTransStringRunGeneratorBehavior>
+			</b:Interaction.Behaviors>
+		</TextBlock>
+
+		<DataTemplate.Triggers>
+			<DataTrigger Binding="{Binding HasPingTarget}" Value="True">
+				<Setter TargetName="LogEntry" Property="ls:CtxTransStringHelper.LocaSource" Value="{Binding Source='h8bb590d5gffb3g4acega9a6g54d1ce796626', Converter={StaticResource TranslatedStringConverter}}"/>
+			</DataTrigger>
+		</DataTemplate.Triggers>
+	</DataTemplate>
+
+	<DataTemplate DataType="ls:VMDialogStartEntry">
+		<TextBlock x:Name="LogEntry" Style="{DynamicResource TextStyle}" ls:CtxTransStringHelper.LocaSource="{Binding Source='heab630b8g2443g46dbg80f0ga1cf4d5f9108', Converter={StaticResource TranslatedStringConverter}}">
+			<b:Interaction.Behaviors>
+				<ls:CtxTransStringRunGeneratorBehavior x:Name="EntryBehavior" LocaSource="{Binding (ls:CtxTransStringHelper.LocaSource), ElementName=LogEntry}" ParamRunStyle="{StaticResource CombatLog.Entry.ParamRun}">
+					<ls:CtxTransStringRunGeneratorBehavior.ParamList>
+						<MultiBinding Converter="{StaticResource PassThroughConverter}">
+							<Binding Path="DialogSpeakerParam"/>
+							<Binding Path="DialogTargetParam"/>
+						</MultiBinding>
+					</ls:CtxTransStringRunGeneratorBehavior.ParamList>
+				</ls:CtxTransStringRunGeneratorBehavior>
+			</b:Interaction.Behaviors>
+		</TextBlock>
+
+		<DataTemplate.Triggers>
+			<DataTrigger Binding="{Binding HasDialogTarget}" Value="True">
+				<Setter TargetName="LogEntry" Property="ls:CtxTransStringHelper.LocaSource" Value="{Binding Source='h3c5d590cgd9ccg4a90g8ef3g5633ca73b343', Converter={StaticResource TranslatedStringConverter}}"/>
+			</DataTrigger>
+		</DataTemplate.Triggers>
+	</DataTemplate>
+
+	<DataTemplate DataType="ls:VMStealthSpottedEntry">
+		<TextBlock x:Name="LogEntry" Style="{DynamicResource TextStyle}" ls:CtxTransStringHelper.LocaSource="{Binding Source='hef4a8757g53eag4970gbb6cga7b2da0c21fe', Converter={StaticResource TranslatedStringConverter}}">
+			<ls:CtxTransStringHelper.ParamList>
+				<MultiBinding Converter="{StaticResource PassThroughConverter}">
+					<Binding Path="SpottedParam"/>
+					<Binding Path="SpotterParam"/>
+					<Binding Path="StatusParam"/>
+				</MultiBinding>
+			</ls:CtxTransStringHelper.ParamList>
+
+			<b:Interaction.Behaviors>
+				<ls:CtxTransStringRunGeneratorBehavior x:Name="EntryBehavior" LocaSource="{Binding (ls:CtxTransStringHelper.LocaSource), ElementName=LogEntry}" ParamRunStyle="{StaticResource CombatLog.Entry.ParamRun}" ParamList="{Binding (ls:CtxTransStringHelper.ParamList), ElementName=LogEntry}"/>
+			</b:Interaction.Behaviors>
+		</TextBlock>
+
+		<DataTemplate.Triggers>
+			<DataTrigger Binding="{Binding ObscuredState}" Value="LightlyObscured">
+				<Setter TargetName="LogEntry" Property="ls:CtxTransStringHelper.LocaSource" Value="{Binding Source='hec64a614gf5d4g42feg9790gae378a29395a', Converter={StaticResource TranslatedStringConverter}}"/>
+			</DataTrigger>
+			<DataTrigger Binding="{Binding StatusParam, Converter={StaticResource NullToBoolTrueConverter}}" Value="False">
+				<Setter TargetName="LogEntry" Property="ls:CtxTransStringHelper.LocaSource" Value="{Binding Source='h9b3fc3a8gde15g4893gadd4gbd074ae2bd0f', Converter={StaticResource TranslatedStringConverter}}"/>
+			</DataTrigger>
+			<DataTrigger Binding="{Binding PassiveParam, Converter={StaticResource NullToBoolTrueConverter}}" Value="False">
+				<Setter TargetName="LogEntry" Property="ls:CtxTransStringHelper.LocaSource" Value="{Binding Source='h9b3fc3a8gde15g4893gadd4gbd074ae2bd0f', Converter={StaticResource TranslatedStringConverter}}"/>
+				<Setter TargetName="LogEntry" Property="ls:CtxTransStringHelper.ParamList">
+					<Setter.Value>
+						<MultiBinding Converter="{StaticResource PassThroughConverter}">
+							<Binding Path="SpottedParam"/>
+							<Binding Path="SpotterParam"/>
+							<Binding Path="PassiveParam"/>
+						</MultiBinding>
+					</Setter.Value>
+				</Setter>
+			</DataTrigger>
+		</DataTemplate.Triggers>
+	</DataTemplate>
+
+	<DataTemplate x:Key="CombatLog.Tooltip" >
+		<ItemsControl ItemsSource="{Binding TooltipEntries}" ItemTemplate="{StaticResource CombatLog.Tooltip.Entry}">
+			<ItemsControl.ItemsPanel>
+				<ItemsPanelTemplate>
+					<StackPanel />
+				</ItemsPanelTemplate>
+			</ItemsControl.ItemsPanel>
+		</ItemsControl>
+	</DataTemplate>
+
+	<DataTemplate  x:Key="CombatLog.RollsTooltip">
+		<ItemsControl ItemsSource="{Binding Rolls}" AlternationCount="{Binding Rolls.Count}">
+			<ItemsControl.ItemsPanel>
+				<ItemsPanelTemplate>
+					<StackPanel />
+				</ItemsPanelTemplate>
+			</ItemsControl.ItemsPanel>
+			<ItemsControl.ItemTemplate>
+				<DataTemplate>
+					<StackPanel Orientation="Horizontal">
+						<Image x:Name="Icon" Source="{StaticResource IconReroll}" Stretch="None" Visibility="Hidden"/>
+						<Grid>
+							<!--TODO fix Text="{Binding DiceTypeSet.DiceType} needs to be Translated-->
+							<TextBlock x:Name="Text" Foreground="{StaticResource TooltipColor.Primary}">
+								<Run Text="1"/>
+								<Run Text="{Binding DiceTypeSet.DiceType}"/>
+								<Run Text="{Binding Source='hb897c56egaa6fg460bg8676g8ebfa0340954',Converter={StaticResource TranslatedStringConverter}}"/>
+								<Run Text="{Binding RolledNumber}" Foreground="{StaticResource TooltipColor.Secondary}"/>
+							</TextBlock>
+							<Rectangle x:Name="Strikethrough" Fill="{StaticResource TooltipColor.Primary}" Height="2" Visibility="Collapsed"/>
+						</Grid>
+					</StackPanel>
+					<DataTemplate.Triggers>
+						<DataTrigger Binding="{Binding RerollType}" Value="Old">
+							<Setter TargetName="Strikethrough" Property="Visibility" Value="Visible"/>
+						</DataTrigger>
+						<DataTrigger Binding="{Binding RerollType}" Value="New">
+							<Setter TargetName="Icon" Property="Visibility" Value="Visible"/>
+						</DataTrigger>
+					</DataTemplate.Triggers>
+				</DataTemplate>
+			</ItemsControl.ItemTemplate>
+		</ItemsControl>
+	</DataTemplate>
+
+	<Style x:Key="CombatLog.GeneratedRunWithTooltip" TargetType="ls:LSRun">
+		<Setter Property="ToolTipService.InitialShowDelay" Value="{StaticResource ToolTipInitialShowDelay}" />
+		<Setter Property="ToolTipService.PlacementTarget" Value="{Binding Path=Parent, RelativeSource={RelativeSource Self}}" />
+	</Style>
+
+	<DataTemplate x:Key="CombatLogGenericTemplate" >
+		<TextBlock x:Name="LogEntry" Style="{DynamicResource TextStyle}">
+			<b:Interaction.Behaviors>
+				<ls:CtxTransStringRunGeneratorBehavior Source="{Binding CtxTransText}" ParamRunStyle="{StaticResource CombatLog.Entry.ParamRun}" />
+			</b:Interaction.Behaviors>
+		</TextBlock>
+	</DataTemplate>
+
+	<!--VMContextTransStringDamageParam-->
+	<DataTemplate DataType="{x:Type ls:VMContextTransStringDamageParam}">
+		<StackPanel MaxWidth="{StaticResource MaxCombatEntryTooltipWidth}">
+			<ItemsControl ItemsSource="{Binding TooltipEntries}" ItemTemplate="{StaticResource CombatLog.Tooltip.Entry}">
+				<ItemsControl.ItemsPanel>
+					<ItemsPanelTemplate>
+						<StackPanel />
+					</ItemsPanelTemplate>
+				</ItemsControl.ItemsPanel>
+			</ItemsControl>
+		</StackPanel>
+	</DataTemplate>
+
+	<!--VMContextTransStringParam-->
+	<DataTemplate DataType="{x:Type ls:VMContextTransStringParam}">
+		<ItemsControl ItemsSource="{Binding TooltipEntries}" ItemTemplate="{StaticResource CombatLog.Tooltip.Entry}" MaxWidth="{StaticResource MaxCombatEntryTooltipWidth}">
+			<ItemsControl.ItemsPanel>
+				<ItemsPanelTemplate>
+					<StackPanel />
+				</ItemsPanelTemplate>
+			</ItemsControl.ItemsPanel>
+		</ItemsControl>
+	</DataTemplate>
+	
+</ResourceDictionary>

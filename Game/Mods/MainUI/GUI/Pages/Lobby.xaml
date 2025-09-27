@@ -21,6 +21,7 @@
                     <ResourceDictionary.MergedDictionaries>
                         <ResourceDictionary Source="pack://application:,,,/Core;component/Library/OptionTemplates.xaml"/>
                         <ResourceDictionary Source="pack://application:,,,/Core;component/Library/LobbyTemplates_k.xaml"/>
+                        <ResourceDictionary Source="pack://application:,,,/Core;component/Library/CrossplayLib.xaml"/>
                     </ResourceDictionary.MergedDictionaries>
 
                     <BitmapImage x:Key="HeaderButtonBg" UriSource="pack://application:,,,/Core;component/Assets/Buttons/tabNav_selected_d.png"/>
@@ -67,13 +68,20 @@
 
                     <ControlTemplate x:Key="PlayerImageTemplate">
                         <StackPanel>
+                            <StackPanel.Resources>
+                                <ImageSource x:Key="BlockedIcon">pack://application:,,,/Core;component/Assets/Crossplay/ico_blocked_d.png</ImageSource>
+                            </StackPanel.Resources>
+
                             <TextBlock Name="number"  HorizontalAlignment="Center" VerticalAlignment="Top" Foreground="{StaticResource LS_PrimaryColor}"
-                               Text="{Binding SlotIndex, Converter={StaticResource DecimalToRomanConverter}, ConverterParameter=true}"/>
+                                       Text="{Binding SlotIndex, Converter={StaticResource DecimalToRomanConverter}, ConverterParameter=true}"/>
+
                             <Grid x:Name="PlayerPortaitSlot" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,52,0,0">
                                 <Image Source="{StaticResource HostIcon}" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,-40,0,40" Visibility="{Binding IsHost, Converter={StaticResource BoolToVisibleConverter}}"/>
+
                                 <Image Name="bg" Source="{StaticResource PortraitFrameDefault}" Stretch="None" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+
                                 <Border Background="{Binding Player.CommunityIcon}" Height="152" Width="152" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                
+
                                 <ls:LSButton Name="emptyIcon" Command="{Binding DataContext.InvitePlayer, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" SoundID="UI_HUD_Shared" VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <ls:LSButton.ToolTip>
                                         <ls:LSTooltip Content="{Binding Source='h5bacb1e0geecag4473g9aa1g3f3ed207377e',Converter={StaticResource TranslatedStringConverter}}" ToolTipService.Placement="Bottom"/>
@@ -90,6 +98,7 @@
                                             <Style.Triggers>
                                                 <Trigger Property="IsEnabled" Value="False">
                                                     <Setter Property="ToolTip" Value="{x:Null}"/>
+                                                    <Setter Property="Opacity" Value="{StaticResource DisabledOpacity}"/>
                                                 </Trigger>
                                                 <DataTrigger Binding="{Binding State}" Value="Taken">
                                                     <Setter Property="Visibility" Value="Collapsed" />
@@ -107,6 +116,12 @@
                                         </Style>
                                     </ls:LSButton.Style>
                                 </ls:LSButton>
+
+                                <Image Name="blocked" Source="{StaticResource BlockedIcon}" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,56,0,-56" Visibility="{Binding CrossplayUser.IsBlocked, Converter={StaticResource BoolToVisibleConverter}, FallbackValue=Collapsed}" Stretch="None">
+                                    <Image.ToolTip>
+                                        <ls:LSTooltip Placement="Right" Content="{Binding Source='h4b3ab313g239eg4d2aga0bag3a6e9c9e76c9', Converter={StaticResource TranslatedStringConverter}}"/>
+                                    </Image.ToolTip>
+                                </Image>
                             </Grid>
 
                             <TextBlock x:Name="YouLabel" Text="{Binding Source='h0818d69bgad1eg4355ga953gfaa88b9e8cdd',Converter={StaticResource TranslatedStringConverter}}" FontSize="{StaticResource ScaledMediumFontSize}" Foreground="{StaticResource LS_accent100TxtColor}" HorizontalAlignment="Center" Visibility="Hidden" Margin="0,10,0,0"/>
@@ -121,9 +136,15 @@
                                        HorizontalAlignment="Center" 
                                        Text="{Binding Source='h336a8d4cga78dg439dg91d8g19932bdac7cb', Converter ={StaticResource TranslatedStringConverter}}" 
                                        FontSize="{StaticResource ScaledMediumFontSize}" Foreground="{StaticResource LS_accent25TxtColor}"/>
+
                         </StackPanel>
 
                         <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding DataContext.Data.IsUsingCrossplay, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="True">
+                                <Setter TargetName="emptyIcon" Property="Command" Value="{Binding DataContext.CustomEvent, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"  />
+                                <Setter TargetName="emptyIcon" Property="CommandParameter" Value="OpenFriendsList"  />
+                            </DataTrigger>
+
                             <DataTrigger Binding="{Binding Player.CommunityIcon, Converter={StaticResource NullToBoolFalseConverter}}" Value="True">
                                 <Setter TargetName="emptyIcon" Property="Visibility" Value="Hidden"/>
                             </DataTrigger>
@@ -309,13 +330,42 @@
                                                HorizontalAlignment="Center"
                                                FontSize="{StaticResource ScaledMassiveFontSize}" 
                                                Foreground="{StaticResource LS_PrimaryColor}"/>
+
+                                    <TextBlock Text="{Binding Source='he26d61a7g0ce4g4006g9f87gf7be81e85526', Converter ={StaticResource TranslatedStringConverter}, StringFormat='{} - {0}'}" 
+                                               HorizontalAlignment="Center"
+                                               FontSize="{StaticResource ScaledMassiveFontSize}" 
+                                               Foreground="{StaticResource LS_PrimaryColor}"
+                                               Visibility="{Binding Data.IsUsingCrossplay, Converter={StaticResource BoolToVisibleConverter}}"/>
                                 </StackPanel>
 
                                 <Viewbox Stretch="Uniform" StretchDirection="DownOnly" VerticalAlignment="Top">
                                     <ItemsControl x:Name="PlayerSlotsSection" ItemsSource="{Binding PlayerSlots}" Margin="0,32,0,0">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type ls:VMLobbyPlayerInfo}">
-                                                <Grid Margin="12,0">
+                                                <Grid Margin="12,0" x:Name="Root">
+                                                    <b:Interaction.Triggers>
+                                                        <b:EventTrigger EventName="MouseRightButtonDown">
+                                                            <b:Interaction.Behaviors>
+                                                                <b:ConditionBehavior>
+                                                                    <b:ConditionalExpression>
+                                                                        <b:ComparisonCondition LeftOperand="{Binding CrossplayUser}" Operator="NotEqual" RightOperand="{x:Null}"/>
+                                                                    </b:ConditionalExpression>
+                                                                </b:ConditionBehavior>
+                                                            </b:Interaction.Behaviors>
+
+                                                            <b:InvokeCommandAction Command="{Binding DataContext.SetCurrentCrossplayFriendCommand, ElementName=Lobby}" CommandParameter="{Binding CrossplayUser}" />
+                                                            <b:InvokeCommandAction Command="{Binding ShowContextMenuCommand, ElementName=Lobby}" CommandParameter="{Binding ElementName=Root}"/>
+                                                        </b:EventTrigger>
+                                                    </b:Interaction.Triggers>
+
+                                                    <Grid.ContextMenu>
+                                                        <ls:ContextMenu x:Name="CrossplayQuickMenu" Style="{StaticResource BaseLSContextMenu}">
+                                                            <ls:ContextMenuItem x:Name="ReportAction" Header="{Binding Source='h9e07d1fbg7c06g4f9bg952cg01694974705a', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.ReportUserCommand, ElementName=Lobby}" CommandParameter="{Binding DataContext.Data.CrossplayCurrentFriend, ElementName=Lobby}"/>
+                                                            <ls:ContextMenuItem x:Name="BlockUserAction" Header="{Binding Source='h4dfe51efg0143g42bfgb58ag4ef694576c04', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.OpenMessageBox, ElementName=Lobby}" CommandParameter="{DynamicResource BlockUserMessageBox}" Visibility="{Binding CrossplayUser.IsBlocked, Converter={StaticResource BoolToCollapsedConverter}}"/>
+                                                            <ls:ContextMenuItem x:Name="UnblockUserAction" Header="{Binding Source='hd2f6101eg169ag4b7dg832cg4dd5383b72d3', Converter={StaticResource TranslatedStringConverter}}" Command="{Binding DataContext.OpenMessageBox, ElementName=Lobby}" CommandParameter="{DynamicResource UnblockUserMessageBox}" Visibility="{Binding CrossplayUser.IsBlocked, Converter={StaticResource BoolToVisibleConverter}}"/>
+                                                        </ls:ContextMenu>
+                                                    </Grid.ContextMenu>
+
                                                     <Image Source="{StaticResource PlayerSlotBg}" />
                                                     <ls:LSButton x:Name="btnKick" 
                                                                  Visibility="Collapsed" 
@@ -395,54 +445,53 @@
 
                             <!-- Lobby Options -->
                             <StackPanel Grid.Row="1" Grid.Column="2" Width="1380" Margin="32,72,0,0">
-                                
-                                    <ListBox x:Name="LobbyOptions" ItemsSource="{Binding Options}" Template="{StaticResource MinimalItemsControlTemplate}">
-                                        <ListBox.ItemContainerStyle>
-                                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource LobbyOptionStyle}">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ListItemType}" Value="Button">
-                                                        <Setter Property="ContentTemplate">
-                                                            <Setter.Value>
-                                                                <DataTemplate>
-                                                                    <DataTemplate.Resources>
-                                                                        <BitmapImage x:Key="ButtonBg" UriSource="pack://application:,,,/Core;component/Assets/Lobby/lobby_settings_buttonDecoration.png"/>
-                                                                    </DataTemplate.Resources>
-                                                                    <Grid Margin="0,8">
-                                                                        <Image Source="{StaticResource ButtonBg}" Stretch="None"/>
+                                <ListBox x:Name="LobbyOptions" ItemsSource="{Binding Options}" Template="{StaticResource MinimalItemsControlTemplate}">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource LobbyOptionStyle}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ListItemType}" Value="Button">
+                                                    <Setter Property="ContentTemplate">
+                                                        <Setter.Value>
+                                                            <DataTemplate DataType="{x:Type ls:VMListButton}">
+                                                                <DataTemplate.Resources>
+                                                                    <BitmapImage x:Key="ButtonBg" UriSource="pack://application:,,,/Core;component/Assets/Lobby/lobby_settings_buttonDecoration.png"/>
+                                                                </DataTemplate.Resources>
+                                                                <Grid Margin="0,8">
+                                                                    <Image Source="{StaticResource ButtonBg}" Stretch="None"/>
 
-                                                                        <ls:LSButton x:Name="Button"
-                                                                                     Style="{StaticResource BigBrownButtonTextAndIconStyle}" 
-                                                                                     HorizontalAlignment="Center"
-                                                                                     FontWeight="DemiBold"
-                                                                                     Margin="0,0,20,0"
-                                                                                     FontSize="{StaticResource ScaledSmallishFontSize}"
-                                                                                     IsEnabled="{Binding DataContext.IsMaster, ElementName=Lobby}"
-                                                                                     Content="{Binding Text}" 
-                                                                                     Command="{Binding ButtonCommand.ActionCommand, Mode=OneTime}">
-                                                                            <ls:LSButton.Resources>
-                                                                                <ImageBrush x:Key="IconNormal" ImageSource="pack://application:,,,/Core;component/Assets/CharacterAssign/ico_settings_d.png" Stretch="Fill"/>
-                                                                                <ImageBrush x:Key="IconPressed" ImageSource="pack://application:,,,/Core;component/Assets/CharacterAssign/ico_settings_h.png" Stretch="Fill"/>
-                                                                                <ImageBrush x:Key="IconHighlight" ImageSource="pack://application:,,,/Core;component/Assets/CharacterAssign/ico_settings_h.png" Stretch="Fill"/>
-                                                                                <ImageBrush x:Key="IconDisabled" ImageSource="pack://application:,,,/Core;component/Assets/CharacterAssign/ico_settings_d.png" Stretch="Fill"/>
-                                                                                <System:Double x:Key="IconWidth">36</System:Double>
-                                                                                <System:Double x:Key="IconHeight">36</System:Double>
-                                                                            </ls:LSButton.Resources>
-                                                                        </ls:LSButton>
-                                                                    </Grid>
+                                                                    <ls:LSButton x:Name="Button"
+                                                                                 Style="{StaticResource BigBrownButtonTextAndIconStyle}" 
+                                                                                 HorizontalAlignment="Center"
+                                                                                 FontWeight="DemiBold"
+                                                                                 Margin="0,0,20,0"
+                                                                                 FontSize="{StaticResource ScaledSmallishFontSize}"
+                                                                                 IsEnabled="{Binding DataContext.IsMaster, ElementName=Lobby}"
+                                                                                 Content="{Binding Text}" 
+                                                                                 Command="{Binding ButtonCommand.ActionCommand, Mode=OneTime}">
+                                                                        <ls:LSButton.Resources>
+                                                                            <ImageBrush x:Key="IconNormal" ImageSource="pack://application:,,,/Core;component/Assets/CharacterAssign/ico_settings_d.png" Stretch="Fill"/>
+                                                                            <ImageBrush x:Key="IconPressed" ImageSource="pack://application:,,,/Core;component/Assets/CharacterAssign/ico_settings_h.png" Stretch="Fill"/>
+                                                                            <ImageBrush x:Key="IconHighlight" ImageSource="pack://application:,,,/Core;component/Assets/CharacterAssign/ico_settings_h.png" Stretch="Fill"/>
+                                                                            <ImageBrush x:Key="IconDisabled" ImageSource="pack://application:,,,/Core;component/Assets/CharacterAssign/ico_settings_d.png" Stretch="Fill"/>
+                                                                            <System:Double x:Key="IconWidth">36</System:Double>
+                                                                            <System:Double x:Key="IconHeight">36</System:Double>
+                                                                        </ls:LSButton.Resources>
+                                                                    </ls:LSButton>
+                                                                </Grid>
 
-                                                                    <DataTemplate.Triggers>
-                                                                        <DataTrigger Binding="{Binding DataContext.RulesetIsCustom, ElementName=Lobby}" Value="False">
-                                                                            <Setter TargetName="Button" Property="IsEnabled" Value="False"/>
-                                                                        </DataTrigger>
-                                                                    </DataTemplate.Triggers>
-                                                                </DataTemplate>
-                                                            </Setter.Value>
-                                                        </Setter>
-                                                        <Setter Property="HorizontalAlignment" Value="Right"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </ListBox.ItemContainerStyle>
+                                                                <DataTemplate.Triggers>
+                                                                    <DataTrigger Binding="{Binding DataContext.RulesetIsCustom, ElementName=Lobby}" Value="False">
+                                                                        <Setter TargetName="Button" Property="IsEnabled" Value="False"/>
+                                                                    </DataTrigger>
+                                                                </DataTemplate.Triggers>
+                                                            </DataTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                    <Setter Property="HorizontalAlignment" Value="Right"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
                                 </ListBox>
 
                                 <StackPanel Margin="0 50 0 0" Visibility="{Binding DirectConnectionID, Converter={StaticResource StringToVisibilityConverter}}">
@@ -529,6 +578,10 @@
     <b:Interaction.Triggers>
         <b:EventTrigger EventName="Loaded">
             <ls:LSPlaySound Sound="Music_Lobby_Screen"/>
+        </b:EventTrigger>
+
+        <b:EventTrigger EventName="WidgetClosing">
+            <b:InvokeCommandAction Command="{Binding ClearCurrentCrossplayFriendCommand}"/>
         </b:EventTrigger>
     </b:Interaction.Triggers>
 </ls:UIWidget> 

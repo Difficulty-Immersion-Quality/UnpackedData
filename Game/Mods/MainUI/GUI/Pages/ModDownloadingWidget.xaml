@@ -29,7 +29,14 @@
                 <BitmapImage x:Key="ModCheckIcon" UriSource="/Core;component/Assets/ModDownloadingWidget/tick_update.png" />
 
                 <ControlTemplate x:Key="ModDownloadingWidget">
-                    <Grid>
+                    <Grid x:Name="Root">
+                        <Grid.Tag>
+                            <!-- Store the total amount of processed mods to show as a text later as part of a MultiBinding -->
+                            <MultiBinding Converter="{StaticResource AddMultipleConverter}">
+                                <Binding Path="Data.FinishedMods.Count"/>
+                                <Binding Path="Data.FailedMods.Count"/>
+                            </MultiBinding>
+                        </Grid.Tag>
                         <b:Interaction.Behaviors>
                             <ls:CollectionFilterBehavior x:Name="FinishedUpdates" ItemsSource="{Binding Data.FinishedMods}"
                              Predicate="{Binding ModUpdatePredicate}"/>
@@ -133,7 +140,7 @@
                             <Setter TargetName="DownloadInfo2" Property="Foreground" Value="{StaticResource LS_partyTxtColor}"/>
                             <Setter TargetName="DownloadInfo2" Property="Visibility" Value="Visible"/>
                         </MultiDataTrigger>
-                        <!-- When finished downloading/updating and there's failed mods-->
+                        <!-- When finished downloading/updating and all mods failed-->
                         <MultiDataTrigger>
                             <MultiDataTrigger.Conditions>
                                 <Condition Binding="{Binding Data.RequestedMods.Count}" Value="0"/>
@@ -144,7 +151,40 @@
                             <Setter TargetName="Icon" Property="Visibility" Value="Visible"/>
                             <Setter TargetName="Icon" Property="Source" Value="{StaticResource redWarningIcon}"/>
                             <Setter TargetName="ProgressCount" Property="Visibility" Value="Collapsed"/>
-                            <Setter TargetName="DownloadInfo1" Property="Text" Value="{Binding Source='h2684a2f2g7e7eg4d64gb960g148bd16142ec', Converter={StaticResource TranslatedStringConverter}}"/>
+                            <Setter TargetName="DownloadInfo1" Property="Text" >
+                                <Setter.Value>
+                                    <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                        <Binding Source="h2684a2f2g7e7eg4d64gb960g148bd16142ec"/>
+                                        <Binding Path="Data.FailedMods.Count"/>
+                                    </MultiBinding>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter TargetName="DownloadInfo1" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
+                            <Setter TargetName="DownloadInfo1" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="DownloadInfo1" Property="TextWrapping" Value="Wrap"/>
+                            <Setter TargetName="DownloadInfo2" Property="Visibility" Value="Collapsed"/>
+                        </MultiDataTrigger>
+                        <!-- When finished downloading/updating and just some mods failed-->
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Data.RequestedMods.Count}" Value="0"/>
+                                <Condition Binding="{Binding Data.FinishedMods.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True"/>
+                                <Condition Binding="{Binding Data.FailedMods.Count, Converter={StaticResource GreaterThanConverter}, ConverterParameter=0}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="ProgressCircleBg" Property="Source" Value="{StaticResource ModCircleLoadFailedCircle}"/>
+                            <Setter TargetName="Icon" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="Icon" Property="Source" Value="{StaticResource redWarningIcon}"/>
+                            <Setter TargetName="ProgressCount" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="DownloadInfo1" Property="Text" >
+                                <Setter.Value>
+                                    <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}">
+                                        <Binding Source="h19197e03g617cg4481g95bag04393b1f7e98"/>
+                                        <Binding Path="Data.FailedMods.Count"/>
+                                        <!-- Total amount of processed mods -->
+                                        <Binding Path="Tag" ElementName="Root"/>
+                                    </MultiBinding>
+                                </Setter.Value>
+                            </Setter>
                             <Setter TargetName="DownloadInfo1" Property="Foreground" Value="{StaticResource LS_alertTxtColor}"/>
                             <Setter TargetName="DownloadInfo1" Property="Visibility" Value="Visible"/>
                             <Setter TargetName="DownloadInfo1" Property="TextWrapping" Value="Wrap"/>

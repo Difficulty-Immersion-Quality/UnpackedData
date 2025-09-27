@@ -255,6 +255,11 @@ function IsMainHandAttack()
 	return ConditionResult(result)
 end
 
+function IsMainHandWeaponAttack()
+    result = context.HitDescription.AttackType == AttackType.RangedWeaponAttack or context.HitDescription.AttackType == AttackType.MeleeWeaponAttack
+	return ConditionResult(result)
+end
+
 function IsOffHandAttack()
     result = context.HitDescription.AttackType == AttackType.MeleeOffHandWeaponAttack or context.HitDescription.AttackType == AttackType.RangedOffHandWeaponAttack
 	return ConditionResult(result)
@@ -1053,7 +1058,7 @@ function ExtendedSpellCheck()
 end
 
 function HeightenedSpellCheck()
-    return (HasStringInSpellRoll('SavingThrow') | HasStringInFunctorConditions('SavingThrow') | HasStringInSpellRoll('SpellAutoResolveOnAlly') | HasStringInSpellRoll('HeatMetalInitialCheck') | HasStringInSpellRoll('HeatMetalReapplyCheck')) & (HasSpellFlag(SpellFlags.Spell) | NonSpellMetamagicAbilities())
+    return (HasStringInSpellRoll('SavingThrow') | HasStringInFunctorConditions('SavingThrow') | HasStringInSpellRoll('SpellAutoResolveOnAlly') | HasStringInSpellRoll('SpellAutoResolveOnCharmed') | HasStringInSpellRoll('HeatMetalInitialCheck') | HasStringInSpellRoll('HeatMetalReapplyCheck')) & (HasSpellFlag(SpellFlags.Spell) | NonSpellMetamagicAbilities())
 end
 
 function QuickenedSpellCheck()
@@ -1069,7 +1074,7 @@ function SubtleSpellCheck()
 end
 
 function TwinnedProjectileSpellCheck()
-    return ~NumberOfTargetsGreaterThan(1) & ~AreaRadiusGreaterThan(0) & (HasSpellFlag(SpellFlags.Spell) | NonSpellMetamagicAbilities()) & SpellTypeIs(SpellType.Projectile) & ~MetamagicExclusionSpells() & ~IsSpellChildOrVariantFromContext('Projectile_WitchBolt')
+    return ~NumberOfTargetsGreaterThan(1) & ~AreaRadiusGreaterThan(0) & (HasSpellFlag(SpellFlags.Spell) | NonSpellMetamagicAbilities()) & SpellTypeIs(SpellType.Projectile) & ~MetamagicExclusionSpells() & ~IsSpellChildOrVariantFromContext('Projectile_WitchBolt') & ~IsSpellChildOrVariantFromContext('Projectile_ChainLightning')
 end
 
 function TwinnedTargetSpellCheck()
@@ -1078,6 +1083,18 @@ end
 
 function TwinnedTargetTouchSpellCheck()
     return ~NumberOfTargetsGreaterThan(1) & TargetRadiusGreaterThan(0) & ~TargetRadiusGreaterThan(1.5) & ~AreaRadiusGreaterThan(0) & (HasSpellFlag(SpellFlags.Spell) | NonSpellMetamagicAbilities()) & SpellTypeIs(SpellType.Target) & ~HasFunctor(StatsFunctorType.Summon) & ~MetamagicExclusionSpells()
+end
+
+function TwinnedProjectileSpellCheckReaper()
+    return TwinnedProjectileSpellCheck() & ~SpellId('Target_TollTheDead') & ~SpellId('Target_ChillTouch')
+end
+
+function TwinnedTargetSpellCheckReaper()
+    return TwinnedTargetSpellCheck() & ~SpellId('Target_TollTheDead') & ~SpellId('Target_ChillTouch')
+end
+
+function TwinnedTargetTouchSpellCheckReaper()
+    return TwinnedTargetTouchSpellCheck() & ~SpellId('Target_TollTheDead') & ~SpellId('Target_ChillTouch')
 end
 
 function WildMagicSpell()
@@ -1293,7 +1310,7 @@ function HasInstrumentEquipped(entity)
 end
 
 function ExtraAttackSpellCheck()
-    return HasStringInSpellRoll('WeaponAttack') | HasStringInSpellRoll('UnarmedAttack') | HasStringInSpellRoll('ThrowAttack') | SpellId('Target_CommandersStrike') | SpellId('Target_Bufotoxin_Frog_Summon') | SpellId('Projectile_ArrowOfSmokepowder')
+    return HasStringInSpellRoll('WeaponAttack') | HasStringInSpellRoll('UnarmedAttack') | HasStringInSpellRoll('ThrowAttack') | SpellId('Target_CommandersStrike') | SpellId('Target_Bufotoxin_Frog_Summon') | SpellId('Projectile_ArrowOfSmokepowder') | SpellId('Projectile_ArcaneShot_SeekingArrow') | SpellId('Zone_ArcaneShot_PiercingArrow')
 end
 
 function ExtraAttackCheck()
@@ -1323,7 +1340,7 @@ function RollDieAgainstDC(diceType, DC)
 end
 
 function IsSmiteStatusCondition()
-    return (StatusId('BLINDING_SMITE_BLINDED') | StatusId('BRANDING_SMITE') | StatusId('SEARING_SMITE') | StatusId('FRIGHTENED') | StatusId('BANISHING_SMITE'))
+    return (StatusId('BLINDING_SMITE_BLINDED') | StatusId('BRANDING_SMITE') | StatusId('SEARING_SMITE') | StatusId('FRIGHTENED') | StatusId('BANISHING_SMITE') | StatusId('STAGGERING_SMITE'))
 end
 
 function IsSmiteSpells()
@@ -1423,13 +1440,14 @@ function MagicalAmbushCheck()
 end
 
 function IsClericCantrip()
-	return SpellId ('Target_SacredFlame')
+	return SpellId ('Target_SacredFlame') | SpellId ('Target_TollTheDead') | SpellId ('Target_BurstingSinew')
 end
 
 function MagicMissileSpellCheck()
     return SpellId('Projectile_MAG_MagicMissile_Shot')
     | SpellId('Projectile_UND_MagicMissile_SocietyOfBrilliance_Amulet') 
     | SpellId('Projectile_MagicMissile')
+    | SpellId('Projectile_MagicMissile_MindFlayer')
     | IsSpellChildOrVariantFromContext('Projectile_MagicMissile')
 end
 
@@ -1814,7 +1832,7 @@ function CharismaModifierEqualsOrLessThan(value, entity)
 end
 
 function StatusDoesNotInvokeOnStatusApply()
-    return StatusId('PERFORM_POSITIVE_DOS2_1')
+	return StatusId('PERFORM_POSITIVE_DOS2_1')
     | StatusId('PERFORM_POSITIVE_DOS2_2')
     | StatusId('PERFORM_POSITIVE_DOS2_3')
     | StatusId('DOS2_JOIN_1')
@@ -1843,6 +1861,42 @@ function StatusDoesNotInvokeOnStatusApply()
     | StatusId('MAG_FIRE_HEAT_DURATION_TECHNICAL')
     | StatusId('MAG_THUNDER_REVERBERATION_DURATION_TECHNICAL')
     | StatusId('MAG_PSYCHIC_MENTAL_FATIGUE_DURATION_TECHNICAL')
+	| StatusId('MAG_VIOLENCE_DURATION_TECHNICAL')
+	| StatusId('MAG_MOMENTUM_DURATION_TECHNICAL')
+	| StatusId('MAG_CHARGED_LIGHTNING_DURATION_TECHNICAL')
+	| StatusId('MAG_ATTACK_DEBUFF_DURATION_TECHNICAL')
+	| StatusId('MAG_FORCE_SHIELD_WARD_TECHNICAL')
+	| StatusId('MAG_GISH_ARCANE_ACUITY_DURATION_TECHNICAL')
+	| StatusId('PASSIVE_AGONIZING_BLAST')
+	| StatusId('PASSIVE_ARMOR_OF_AGATHYS')
+	| StatusId('PASSIVE_ARMOR_OF_AGATHYS_ATTACKER')
+	| StatusId('PASSIVE_BANE')
+	| StatusId('PASSIVE_BLESS')
+	| StatusId('PASSIVE_DARK_ONES_BLESSING')
+	| StatusId('PASSIVE_DEFENSIVE_DUELIST')
+	| StatusId('PASSIVE_DISCIPLE_OF_LIFE')
+	| StatusId('PASSIVE_FIGHTING_STYLE_PROTECTION')
+	| StatusId('PASSIVE_HEX')
+	| StatusId('PASSIVE_HUNTERS_MARK')
+	| StatusId('PASSIVE_REPELLING_BLAST')
+	| StatusId('PASSIVE_STAGE_FRIGHT')
+	| StatusId('PASSIVE_TRUE_STRIKE')
+	| StatusId('PASSIVE_WARDING_FLARE')
+	| StatusId('PASSIVE_STEADY_ATTACK')
+	| StatusId('PASSIVE_FULL_SWING_ATTACK')
+	| StatusId('PASSIVE_GAPING_WOUND_ATTACK')
+	| StatusId('PASSIVE_OVERWHELM_ATTACK')
+	| StatusId('INTERRUPT_SMITE_DIVINE_VFX')
+	| StatusId('INTERRUPT_BARDIC_INSPIRATION_ATTACK')
+	| StatusId('INTERRUPT_BARDIC_INSPIRATION_SAVINGTHROW')
+	| StatusId('INTERRUPT_BARDIC_INSPIRATION_COMBAT_ATTACK')
+	| StatusId('INTERRUPT_BARDIC_INSPIRATION_COMBAT_DEFENSE')
+	| StatusId('INTERRUPT_BARDIC_INSPIRATION_COMBAT_DAMAGE')
+	| StatusId('INTERRUPT_CUTTING_WORDS')
+	| StatusId('INTERRUPT_CUTTING_WORDS_TARGET')
+	| StatusId('INTERRUPT_DEFENSIVE_DUELIST')
+	| StatusId('INTERRUPT_GIANTKILLER')
+	| StatusId('INTERRUPT_RIPOSTE')
 end
 
 function IsExtraAttackStatuses()
@@ -1903,4 +1957,158 @@ function Level2HitCostSpellCheck()
     | SpellId('Target_Smite_Thunderous_2')
     | SpellId('Target_Smite_Wrathful_2')
     | SpellId('Target_Smite_Branding')
+end
+
+function CanEnlarge()
+    return Character()
+end
+
+function CanEnlarge(entity)
+    entity = entity or context.Source
+    return ~HasStatus('RAGE_GIANT',entity)
+end
+
+function IsCurvingShot()
+    local res = SpellId('Projectile_HamstringShot') | SpellId('Projectile_AcidArrow') | SpellId('Projectile_ArcaneShot_BanishingArrow') | SpellId('Projectile_ArcaneShot_BeguilingArrow') | SpellId('Projectile_ArcaneShot_BurstingArrow') | SpellId('Projectile_ArcaneShot_EnfeeblingArrow') | SpellId('Projectile_ArcaneShot_GraspingArrow') | SpellId('Projectile_ArcaneShot_SeekingArrow') | SpellId('Projectile_ArcaneShot_ShadowArrow') | SpellId('Projectile_ArrowOfFire') | SpellId('Projectile_ArrowOfDetonation') | SpellId('Projectile_ArrowOfFire') | SpellId('Projectile_ArrowOfDarkness') | SpellId('Projectile_ArrowOfIce') | SpellId('Projectile_ArrowOfAcid') | SpellId('Projectile_ArrowOfLightning') | SpellId('Projectile_ArrowOfPiercing') | SpellId('Projectile_Barbed_Arrow') | SpellId('Projectile_ArrowOfAntimagic') | SpellId('Projectile_ArrowOfWraithsEmbrace') | SpellId('Projectile_ArrowOfAberrationSlaying') | SpellId('Projectile_ArrowOfBeastSlaying') | SpellId('Projectile_ArrowOfCelestialSlaying') | SpellId('Projectile_ArrowOfConstructSlaying') | SpellId('Projectile_ArrowOfDragonSlaying') | SpellId('Projectile_ArrowOfElementalSlaying') | SpellId('Projectile_ArrowOfFeySlaying') | SpellId('Projectile_ArrowOfFiendSlaying') | SpellId('Projectile_ArrowOfGiantSlaying') | SpellId('Projectile_ArrowOfHumanoidSlaying') | SpellId('Projectile_ArrowOfMonstrositySlaying') | SpellId('Projectile_ArrowOfOozeSlaying') | SpellId('Projectile_ArrowOfPlantSlaying') | SpellId('Projectile_ArrowOfUndeadSlaying') | SpellId('Projectile_BladeFlourish_Defensive') | SpellId('Projectile_BladeFlourish_Mobile') | SpellId('Projectile_BladeFlourish_Slashing') | SpellId('Projectile_DreadAmbusher') | SpellId('Projectile_MainHandAttack') | SpellId('Projectile_Dipped_Fire') | SpellId('Projectile_Dipped_Poison') | SpellId('Projectile_SneakAttack') | SpellId('Projectile_HordeBreaker') | SpellId('Projectile_EnsnaringStrike') | SpellId('Projectile_EnsnaringStrike_2') | SpellId('Projectile_EnsnaringStrike_3') | SpellId('Projectile_PinDown') | SpellId('Projectile_Smite_Branding') | SpellId('Projectile_Smite_Branding_ZarielTiefling') | SpellId('Projectile_PiercingShot') | SpellId('Projectile_MobileShooting') | SpellId('Projectile_Headcrack') | SpellId('Projectile_MAG_Victory_Longbow_RoaringShot') | SpellId('Projectile_Smite_Banishing') | SpellId('Projectile_Smite_Banishing_6') | SpellId('Projectile_MAG_Automaton_LightTagging_Shot')
+    return ConditionResult(res.Result, {ConditionError("HasNotMetalWeapon")}, {ConditionError("HasMetalWeapon")})
+end
+
+function IsCurvingShotMiss()
+    local isMiss = (context.InterruptedRoll.Total < context.InterruptedRoll.Difficulty) or (context.InterruptedRoll.NaturalRoll == 1)
+    return ConditionResult(isMiss)
+end
+
+function RollDieAgainstPercent(diceType, DC)
+    local roll = Roll(1, diceType, 0)
+
+	if type(roll) == "number" then
+        if roll % 2 == 0 then
+		    return ConditionResult(true)
+        end
+
+    	return ConditionResult(false)
+	end
+    return ConditionResult(true,{},{},1)
+end
+
+function CanBarbarianGiantShoveWeight()
+    strengthMultiplier = 24
+   return ConditionResult(context.Source.Strength * strengthMultiplier >= (GetLiftingWeight(context.Target) / 1000),{ConditionError("CanShoveWeight_False")})
+end
+
+function HasHexbladeWeapon(entity, mainHand)
+    local entity = entity or context.Source
+    local weaponEntity = GetActiveWeapon(entity, true)
+    if weaponEntity.IsValid then
+        result = Character(entity) & HasStatus('HEXBLADE_BIND', weaponEntity)
+        return ConditionResult(result.Result, {ConditionError("HasNotHexbladeWeapon")}, {ConditionError("HasHexbladeWeapon")})
+    end
+    return ConditionResult(false, {ConditionError("HasNotHexbladeWeapon")}, {ConditionError("HasHexbladeWeapon")})
+end
+
+function HasMediumArmor(entity)
+    entity = entity or context.Target
+    local armor = GetActiveArmor(entity)
+    return IsOfProficiencyGroup("MediumArmor", armor)
+end
+
+function BladesongAttackCheck()
+    return HasStringInSpellRoll('WeaponAttack') | HasStringInSpellRoll('UnarmedAttack') | HasStringInSpellRoll('ThrowAttack') | SpellId('Target_CommandersStrike') | SpellId('Target_Bufotoxin_Frog_Summon') | SpellId('Projectile_ArrowOfSmokepowder')
+end
+
+function SpellAutoResolveOnCharmed(ability, dc, result)
+    local result = result or false
+    local charmed = HasStatus('SG_Charmed')
+    if not charmed.Result then
+        local st = ~SavingThrow(ability, dc)
+        return ConditionResult(st.Result,{},{},st.Chance)
+    end
+    return ConditionResult(result)
+end
+
+function OmenRolling(status, diceType, DC)
+        if HasStatus(status).Result then
+        return ConditionResult(false)
+    end
+        return RollDieAgainstPercent(diceType, DC)
+end
+
+function BladesongAvaliable()
+    local hasbladesong = HasStatus('BLADESONG')
+    if hasbladesong.Result then 
+        return ~hasbladesong
+    end
+    local hasbladesongweapon = IsWeaponOfProficiencyGroup('Daggers|Sickles|Shortswords|Rapiers|Scimitars|Longswords', GetItemInEquipmentSlot(EquipmentSlot.MeleeMainHand))
+    local hasarmor = HasHeavyArmor(context.Source) | HasMediumArmor(context.Source) 
+    local hasshield = HasShieldEquipped(context.Source)
+    
+    local count = 0
+    if not hasbladesongweapon.Result then count = count + 1 end
+    if hasarmor.Result then count = count + 1 end
+    if hasshield.Result then count = count + 1 end
+
+    if count >= 2 then
+        return ConditionResult(false, {ConditionError("HasMultipleBladeSongIssues")})
+    end
+
+    if not hasbladesongweapon.Result then
+        return ConditionResult(false, {ConditionError("HasNotBladesongWeapon")}) 
+    end
+    
+    if hasarmor.Result then 
+        return ConditionResult(false, {ConditionError("HasNotBladesongArmor")})
+    end 
+
+    return ~hasshield
+end
+
+function HasHuntersMark()
+    return HasStatus('HUNTERS_MARK',context.Target) 
+end
+
+function IsRecastSpell()
+    return SpellId('Target_Moonbeam_Move')
+    | SpellId('Target_Moonbeam_Move_3')
+    | SpellId('Target_Moonbeam_Move_4')
+    | SpellId('Target_Moonbeam_Move_5')
+    | SpellId('Target_Moonbeam_Move_6')
+    | SpellId('Target_VampiricTouch_Free')
+    | SpellId('Target_VampiricTouch_Free_4')
+    | SpellId('Target_VampiricTouch_Free_5')
+    | SpellId('Target_VampiricTouch_Free_6')
+    | SpellId('Target_HuntersMark_Reapply')
+    | SpellId('Target_TAD_Imperil_Recast')
+    | SpellId('Target_MF_Imperil_Recast')
+    | SpellId('Zone_Sunbeam_Recreate')
+    | SpellId('Target_Cloudkill_Recast')
+    | SpellId('Target_Cloudkill_Recast_6')
+    | SpellId('Target_TAD_BlackHole_Recast')
+    | SpellId('Throw_Telekinesis_Recast')
+    | SpellId('Target_Eyebite_Asleep_Free')
+    | SpellId('Target_Eyebite_Panicked_Free')
+    | SpellId('Target_Eyebite_Sickened_Free')
+end 
+
+function HasBladesongClimaxBlocked()
+    result = HasStatus('BLADESONG_ARMOR_MESSAGE') | HasStatus('BLADESONG_SHIELD_MESSAGE') | HasStatus('BLADESONG_WEAPON_MESSAGE') | HasStatus('BLADESONG_UNARMED_MESSAGE') | HasStatus('BLADESONG_SHIELD')
+    return ConditionResult(result.Result, {ConditionError("BladesongClimaxNotBlocked")}, {ConditionError("BladesongClimaxBlocked")})
+end
+
+function ArcaneAcuityGlovesCondition()
+	return IsSmiteSpells()
+	| SpellId('Target_BoomingBlade_ClassSpell')
+	| IsSpellChildOrVariantFromContext('Target_BoomingBlade_ClassSpell')
+	| SpellId('Target_BoomingBlade')
+	| IsSpellChildOrVariantFromContext('Target_BoomingBlade')
+	| SpellId('Target_EnsnaringStrike')
+	| SpellId('Projectile_EnsnaringStrike')
+	| IsSpellChildOrVariantFromContext('Target_EnsnaringStrike')
+	| IsSpellChildOrVariantFromContext('Projectile_EnsnaringStrike')
+	| SpellId('Projectile_HailOfThorns')
+	| IsSpellChildOrVariantFromContext('Projectile_HailOfThorns')
+	| HasStatus('FLAME_BLADE',GetActiveWeapon()) 
+	| HasStatus('FLAME_BLADE_4',GetActiveWeapon())
+	| HasStatus('FLAME_BLADE_6',GetActiveWeapon())
+	| HasStatus('SHADOW_BLADE',GetActiveWeapon())
+	| (IsSpell() & IsWeaponAttack())
 end

@@ -16,10 +16,10 @@
                 <ResourceDictionary Source="/Core;component/Library/SaveLoad.xaml"/>
             </ControlTemplate.Resources>
 
-            <Border>
-                <Border.Background>
+            <Grid>
+                <Grid.Background>
                     <ImageBrush ImageSource="{StaticResource OptionsBackground}" Stretch="UniformToFill"/>
-                </Border.Background>
+                </Grid.Background>
                 <Grid x:Name="ContentGrid" MaxWidth="{StaticResource DesignedContentMaxWidth}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="{StaticResource PageHeaderHeightTabs}"/>
@@ -51,7 +51,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Grid Grid.Column="0" x:Name="SaveListContainer">
+                        <Grid Grid.Column="0" x:Name="SaveListContainer" Margin="0,0,0,32">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
@@ -75,6 +75,13 @@
                             <RowDefinition/>
                             <RowDefinition Height="72"/>
                         </Grid.RowDefinitions>
+
+                        <TextBlock Name="CrossplayInfoText" Grid.Row="0" Text="{Binding Source='h053b7732g28a7g446egafb2g71e0b9a1dcce', Converter={StaticResource TranslatedStringConverter}}" 
+                                   Foreground="{StaticResource LS_accent100TxtColor}" 
+                                   FontSize="{StaticResource ScaledSmallishFontSize}" 
+                                   HorizontalAlignment="Center" 
+                                   Margin="0,-20,0,20"
+                                   Visibility="Collapsed"/>
 
                         <StackPanel Grid.Row="0" x:Name="ButtonsContainer" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
 
@@ -109,6 +116,22 @@
                                          Style="{StaticResource BigBlueButtonStyle}"
                                          Visibility="{Binding CurrentPlayer.UIData.CloudSaveSyncFailed, Converter={StaticResource BoolToVisibleConverter}}"/>
 
+                            <!-- Crossplay button -->
+                            <ls:LSToggleButton x:Name="CrossplayBtn"
+                                         Template="{StaticResource BigBrownButtonWithCheckbox}"
+                                         Content="{Binding Source='h04159467gf478g42d4g820eg289fcf08bf7e', Converter={StaticResource TranslatedStringConverter}}"
+                                         BoundEvent="UIAccept"
+                                         SoundID="UI_Shared_Accept"
+                                         Margin="10,0,-10,0"
+                                         Visibility="Collapsed"
+                                         IsChecked="{Binding Crossplay, Mode=TwoWay}"
+                                         IsEnabled="False"
+                                         ToolTipService.Placement="Right" ToolTipService.VerticalOffset="-36" ToolTipService.HorizontalOffset="20">
+                                <ls:LSToggleButton.ToolTip>
+                                    <ls:LSTooltip Content="{Binding Source='h000bbed3g0fcag4339g8b5bg73af4fb93463',Converter={StaticResource TranslatedStringConverter}}"/>
+                                </ls:LSToggleButton.ToolTip>
+                            </ls:LSToggleButton>
+
                             <Image Source="{StaticResource FooterSideDecorImage}" VerticalAlignment="Center" Stretch="None" RenderTransformOrigin="0.5,0.5" Margin="-32,0">
                                 <Image.RenderTransform>
                                     <ScaleTransform ScaleX="-1"/>
@@ -118,14 +141,36 @@
 
                         <Image Grid.Row="0" Source="{StaticResource FooterCenterDecorImage}" VerticalAlignment="Bottom" Stretch="None" Margin="0,-20"/>
                     </Grid>
-
-                <Control x:Name="ModVerificationWarning" Grid.RowSpan="3" Template="{StaticResource ModVerificationWindowTemplate}"/>
-
                 </Grid>
-            </Border>
+                <Grid Background="{StaticResource LS_PanelBackground}" Visibility="{Binding RefreshSaveGames, Converter={StaticResource BoolToVisibleConverter}}">
+                    <Control x:Name="Spinner" HorizontalAlignment="Center" VerticalAlignment="Center" Template="{StaticResource BusyElement}"/>
+                </Grid>
+            </Grid>
             <ControlTemplate.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Data.DefineCrossplayEnabled}" Value="True"/>
+                        <Condition Binding="{Binding Data.LarianNetIsConnected}" Value="True"/>
+                        <Condition Binding="{Binding Data.CrossplayIsEnabled}" Value="True"/>
+                        <Condition Binding="{Binding IsMainMenu}" Value="True"/>
+                        <Condition Binding="{Binding SelectedSave, Converter={StaticResource NullToBoolTrueConverter}}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="CrossplayBtn" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="CrossplayBtn" Property="IsEnabled" Value="True"/>
+                    <Setter TargetName="CrossplayInfoText" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+
+                <DataTrigger Binding="{Binding Crossplay}" Value="True">
+                    <Setter TargetName="CrossplayInfoText" Property="Text" Value="{Binding Source='hc529d1a4g94dag4953ga9e4g74e120f54423', Converter={StaticResource TranslatedStringConverter}}"/>
+                </DataTrigger>
+
                 <DataTrigger Binding="{Binding SelectedPlaythrough, Converter={StaticResource NullToBoolFalseConverter}}" Value="True">
                     <Setter TargetName="PresenterControl" Property="Template" Value="{StaticResource CampaignPresenterTemplate}"/>
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding ShowModValidationWindow}" Value="True">
+                    <Setter TargetName="PlaythroughHolder" Property="IsEnabled" Value="False"/>
+                    <Setter TargetName="ButtonsContainer" Property="IsEnabled" Value="False"/>
                 </DataTrigger>
 
                 <!-- Load button triggers -->

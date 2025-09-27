@@ -51,6 +51,27 @@ AND
 DB_CRIME_StoryActionHandle_CombineQueued(_Criminal,_CrimeType,_StoryActionID,_Evidence,_Victim,_CrimeID)
 THEN
 NOT DB_CRIME_StoryActionHandle_CombineQueued(_Criminal,_CrimeType,_StoryActionID,_Evidence,_Victim,_CrimeID);
+
+PROC
+PROC_CRIME_StoryActionHandled_ResetAll((INTEGER)_StoryActionID)
+AND
+DB_CRIME_StoryActionHandled(_Criminal,_CrimeType,_StoryActionID,_Evidence,_Victim,_CrimeID)
+THEN
+NOT DB_CRIME_StoryActionHandled(_Criminal,_CrimeType,_StoryActionID,_Evidence,_Victim,_CrimeID);
+
+PROC
+PROC_CRIME_StoryActionHandled_ResetAll((INTEGER)_StoryActionID)
+AND
+DB_CRIME_StoryActionHandle_CombineQueued(_Criminal,_CrimeType,_StoryActionID,_Evidence,_Victim,_CrimeID)
+THEN
+NOT DB_CRIME_StoryActionHandle_CombineQueued(_Criminal,_CrimeType,_StoryActionID,_Evidence,_Victim,_CrimeID);
+
+PROC
+PROC_CRIME_StoryActionHandled_ResetAll((INTEGER)_StoryActionID)
+AND
+DB_CRIME_StoryActionHandledManually(_Victim,_StoryActionID)
+THEN
+NOT DB_CRIME_StoryActionHandledManually(_Victim,_StoryActionID);
 //END_REGION
 
 //REGION Helpers for combining crimes related to the same story action
@@ -93,6 +114,8 @@ DB_NOOP(1);
 
 QRY
 QRY_CRIME_StoryActionHandled_CombineOverride((CHARACTER)_Criminal,(STRING)_CrimeType,(INTEGER)_StoryActionID,(GUIDSTRING)_Evidence,(CHARACTER)_Victim,(INTEGER)_OldCrimeID,(INTEGER)_NewCrimeID)
+AND
+_NewCrimeID != -1
 THEN
 DB_CRIME_StoryActionHandle_CombineQueued(_Criminal,_CrimeType,_StoryActionID,_Evidence,_Victim,_NewCrimeID);
 
@@ -288,8 +311,18 @@ NOT DB_CRIME_StoryActionHandled(_Criminal,_CrimeType,_StoryActionID,_Victim,_Evi
 //END_REGION
 
 //REGION Manual registration for handled Story Action IDs
+// NULL character means "for everyone" -> clear existing individual entries
+PROC
+PROC_CRIME_StoryActionHandled((CHARACTER)NULL_00000000-0000-0000-0000-000000000000, (INTEGER)_StoryActionID)
+AND
+DB_CRIME_StoryActionHandledManually(_Victim,_StoryActionID)
+THEN
+NOT DB_CRIME_StoryActionHandledManually(_Victim,_StoryActionID);
+
 PROC
 PROC_CRIME_StoryActionHandled((CHARACTER)_Victim, (INTEGER)_StoryActionID)
+AND
+NOT DB_CRIME_StoryActionHandledManually((CHARACTER)NULL_00000000-0000-0000-0000-000000000000,_StoryActionID)
 THEN
 DB_CRIME_StoryActionHandledManually(_Victim,_StoryActionID);
 
@@ -297,6 +330,13 @@ QRY
 QRY_CRIME_StoryActionHandled_Specific((CHARACTER)_Criminal,(STRING)_CrimeType,(INTEGER)_StoryActionID,(GUIDSTRING)_Evidence,(CHARACTER)_Victim,(INTEGER)_CrimeID)
 AND
 DB_CRIME_StoryActionHandledManually(_Victim,_StoryActionID)
+THEN
+DB_NOOP(1);
+
+QRY
+QRY_CRIME_StoryActionHandled_Specific((CHARACTER)_Criminal,(STRING)_CrimeType,(INTEGER)_StoryActionID,(GUIDSTRING)_Evidence,(CHARACTER)_Victim,(INTEGER)_CrimeID)
+AND
+DB_CRIME_StoryActionHandledManually((CHARACTER)NULL_00000000-0000-0000-0000-000000000000,_StoryActionID)
 THEN
 DB_NOOP(1);
 
@@ -310,11 +350,76 @@ NOT DB_CRIME_StoryActionHandledManually(_Victim,_StoryActionID);
 //END_REGION
 
 //REGION Prevent crimes getting registered for attacks that may have effects after combat ends (e.g. bleeding)
-PROC
-PROC_CRIME_AttackedInCombat((CHARACTER)_NPC,(CHARACTER)_Player,(GUIDSTRING)_CombatID,(INTEGER)_StoryActionID)
+// Also for spells that don't necessarily hit anyone, but that e.g. transform surfaces in a way that triggers
+// a passive from a player when someone gets hit. E.g. cast Call Lightning which electrifies surface, and have
+// the thunderbolt passive -> when friendly NPC walks into the surface after combat ends we don't react to the
+// AttackedBy of walking into the surface (SurfaceMove context), but that triggers the thunderbolt passive which
+// results in a shockwave status that does trigger an attack. That status will have the same story action ID
+// as the initial spell cast, so record story action IDs of spells successfully cast in combat.
+IF
+CastedSpell(_Caster,_,_,_,_StoryActionID)
+AND
+DB_Is_InCombat(_Caster,_CombatID)
+AND
+QRY_IsPartyMember(_Caster,0)
 THEN
-PROC_CRIME_StoryActionHandled(_NPC,_StoryActionID);
+DB_CRIME_CastedInCombat(_StoryActionID,_CombatID);
 
+IF
+SwitchedCombat(_,_OldCombat,_NewCombat)
+AND
+DB_CRIME_CastedInCombat(_StoryActionID,_OldCombat)
+THEN
+DB_CRIME_CastedInCombat(_StoryActionID,_NewCombat);
+
+// After the combat ends, start ignoring the spell's effects. Not during combat, because casting a fireball
+// on NPCs that are not in the combat should still result in crime reactions, and the AttackedBy events
+// from the spellcast will arrive only after the CastedSpell event (code only sends them once it knows
+// whether or not the attacks killed the targets so we can check IsDead at that point, which takes a
+// few frames).
+IF
+CombatEnded(_CombatID)
+AND
+DB_CRIME_CastedInCombat(_StoryActionID,_CombatID)
+AND
+NOT QRY_CRIME_StoryActionID_OtherCombats(_StoryActionID,_CombatID)
+AND
+DB_CurrentLevel(_Level)
+AND
+DB_GLO_LevelNameIndexMap(_Level,_Index)
+THEN
+PROC_CRIME_StoryActionHandled(NULL_00000000-0000-0000-0000-000000000000,_StoryActionID);
+DB_CRIME_CleanupStoryActionIDOnLevelUnreachable(_Index,_StoryActionID);
+
+IF
+CombatEnded(_CombatID)
+AND
+DB_CRIME_CastedInCombat(_StoryActionID,_CombatID)
+THEN
+NOT DB_CRIME_CastedInCombat(_StoryActionID,_CombatID);
+
+QRY
+QRY_CRIME_StoryActionID_OtherCombats((INTEGER)_StoryActionID,(GUIDSTRING)_CombatID)
+AND
+DB_CRIME_CastedInCombat(_StoryActionID,_OtherCombatID)
+AND
+_OtherCombatID != _CombatID
+THEN
+DB_NOOP(1);
+
+// Clean up when level becomes unreachable (technically, the effect of a spell
+// could survive leaving and returning to a level). There's still the edge
+// case where a global with such a spell effect afterwards gets teleported
+// to the current level, but let's leave that for now.
+PROC
+PROC_LevelBecameUnreachable((STRING)_Level)
+AND
+DB_GLO_LevelNameIndexMap(_Level,_Index)
+AND
+DB_CRIME_CleanupStoryActionIDOnLevelUnreachable(_Index,_StoryActionID)
+THEN
+PROC_CRIME_StoryActionHandled_ResetAll(_StoryActionID);
+NOT DB_CRIME_CleanupStoryActionIDOnLevelUnreachable(_Index,_StoryActionID);
 //END_REGION
 
 EXITSECTION

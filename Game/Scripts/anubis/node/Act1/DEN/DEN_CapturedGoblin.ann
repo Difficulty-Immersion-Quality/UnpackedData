@@ -116,6 +116,7 @@ game.states.DEN_CapturedGoblin_Execution = State{
     local GOB_GuardPolite = Entity("S_GOB_GuardPolite_56540e3d-f1ac-441b-a690-5f9602c04b86")
     local GOB_SpiderNest_State_Executioner_Ready = Flag("GOB_SpiderNest_State_Executioner_Ready_b9a547ef-b244-47d6-a78d-22b2c7410985")
     local GOB_SpiderNest_State_Freed = Flag("GOB_SpiderNest_State_Freed_c3a960f6-6488-4e5a-831e-66bde4715d5c")
+    local GOB_CapturedGoblin_State_Spared = Flag(" GOB_CapturedGoblin_State_Spared_28a0e5c2-ee4a-3b33-a7cc-467adb5bdb88")
     local GEN_DisappearOutOfSight = Flag("GEN_DisappearOutOfSight_5dc33889-cbfb-c3d2-9e4e-8d826bf8566f")
     local GOB_SpiderNest_State_GoblinEscortFailed = Flag("GOB_SpiderNest_State_GoblinEscortFailed_8a05de38-c4ea-4a32-b600-bd4603afeb22")
     local GOB_SpiderNest_State_ExecutionInProgress = Flag("GOB_SpiderNest_State_ExecutionInProgress_de1118ca-c0ed-4f2d-8257-68280aacaefc")
@@ -136,6 +137,9 @@ game.states.DEN_CapturedGoblin_Execution = State{
     end
 
         nodes.WaitForExecution = Action{
+            OnEnter = function()
+                ClearFlag(GOB_SpiderNest_State_Freed, me)
+            end,
             function()
                 if not IsInTrigger(me, GOB_SpiderNest_ThePit.Trigger) then
                     SteerTo(GOB_GuardPolite, true)
@@ -154,7 +158,8 @@ game.states.DEN_CapturedGoblin_Execution = State{
                             CanSee(me, GOB_GuardVulgar)) or
                             (not GetFlag(GOB_SpiderNest_State_GoblinEscortFailed) and
                             not mod.character.IsDefeated(GOB_GuardPolite) and
-                            CanSee(me, GOB_GuardPolite))))
+                            CanSee(me, GOB_GuardPolite))) or 
+                            not GetFlag(GOB_CapturedGoblin_State_Spared, me))
                 else
                     return (not mod.character.IsDefeated(GOB_GiantSpider_Tiny) or
                             not mod.character.IsDefeated(GOB_GiantSpider_Small)) and
@@ -163,15 +168,12 @@ game.states.DEN_CapturedGoblin_Execution = State{
                             not mod.items.SafeIsDestroyed(GOB_SpiderNest_CageDoor)) and
                             not GetFlag(GOB_SpiderNest_State_Freed, me)
                 end
-            end,
-            OnEnter = function()
-                ClearFlag(GOB_SpiderNest_State_Freed, me)
             end
         }
 
         nodes.AvoidedExecution = Action{
             function()
-                Sleep(10.0)
+                Sleep(5.0)
                 SetFlag(GEN_DisappearOutOfSight, me)
             end,
             CanEnter = function()
@@ -185,12 +187,15 @@ game.states.DEN_CapturedGoblin_Execution = State{
                    GetFlag(GOB_SpiderNest_State_ExecutionInProgress) then
                     Sleep(5.0)
                 else
-                    Sleep(20.0)
+                    Sleep(5.0)
                 end
                 SetFlag(GEN_DisappearOutOfSight, me)
             end,
             OnEnter = function()
                 SetFlag(GOB_SpiderNest_State_Freed, me)
+            end,
+            Valid = function()
+                return GetFlag(GOB_CapturedGoblin_State_Spared)
             end
         }
 

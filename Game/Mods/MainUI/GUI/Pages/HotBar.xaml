@@ -261,23 +261,25 @@
                             <b:Interaction.Behaviors>
                                 <ls:WidgetDataConnectionBehavior/>
                             </b:Interaction.Behaviors>
+                            <ls:AttachedProperties.AutomationId>
+                                <MultiBinding StringFormat="{}HotbarItems_{0}">
+                                    <Binding Path="HotBarType"/>
+                                </MultiBinding>
+                            </ls:AttachedProperties.AutomationId>
                             <ListBox.ItemContainerStyle>
                                 <Style TargetType="ListBoxItem">
                                     <Setter Property="Template" >
                                         <Setter.Value>
                                             <ControlTemplate TargetType="ListBoxItem">
-                                                <ls:LSButton x:Name="contentContainer" ls:WidgetData.DataContext="{Binding Path=(ls:WidgetData.DataContext), RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource HotBarSlotStyle}" Content="{TemplateBinding Content}"/>
-                                                <ControlTemplate.Triggers>
-                                                    <MultiDataTrigger>
-                                                        <MultiDataTrigger.Conditions>
-                                                            <Condition Binding="{Binding (ls:WidgetData.DataContext).CurrentActiveSlot.SlotType, RelativeSource={RelativeSource TemplatedParent}}" Value="Item"/>
-                                                            <!--GUS-210767: When CanHideActiveSlotFilter is True it means we're in a weapon filter and this is an item there (i.e. an arrow in a bow filter), so we DON'T want to change the owner for the hotbar tooltips-->
-                                                            <Condition Binding="{Binding (ls:WidgetData.DataContext).CanHideActiveSlotFilter, RelativeSource={RelativeSource TemplatedParent}}" Value="False"/>
-                                                        </MultiDataTrigger.Conditions>
-                                                        <Setter TargetName="contentContainer" Property="ls:TooltipExtender.Owner" Value="{Binding (ls:WidgetData.DataContext).CurrentActiveSlot.GameObject, RelativeSource={RelativeSource TemplatedParent}}"/>
-                                                    </MultiDataTrigger>
-                                                </ControlTemplate.Triggers>
+                                                <ls:LSButton x:Name="contentContainer" ls:WidgetData.DataContext="{Binding Path=(ls:WidgetData.DataContext), RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource HotBarSlotStyle}" Content="{Binding Content}"/>
                                             </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Setter Property="ls:AttachedProperties.AutomationId">
+                                        <Setter.Value>
+                                            <MultiBinding StringFormat="{}HotbarSlotIndex_{0}">
+                                                <Binding Path="SlotIndex"/>
+                                            </MultiBinding>
                                         </Setter.Value>
                                     </Setter>
                                 </Style>
@@ -341,7 +343,7 @@
                         <MultiDataTrigger>
                             <MultiDataTrigger.Conditions>
                                 <Condition Binding="{Binding HotBarType}" Value="InvalidHotBar"/>
-                                <Condition Binding="{Binding DataContext.CurrentActiveSlot.Spell.WeaponActionType, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Melee"/>
+                                <Condition Binding="{Binding DataContext.CurrentActiveSlot.Content.WeaponActionType, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Melee"/>
                                 <Condition Binding="{Binding DataContext.IsSelectingUpcastedSpell, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="False"/>
                                 <Condition Binding="{Binding DataContext.IsShowingAContainerWithVariants, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="False"/>
                             </MultiDataTrigger.Conditions>
@@ -351,7 +353,7 @@
                         <MultiDataTrigger>
                             <MultiDataTrigger.Conditions>
                                 <Condition Binding="{Binding HotBarType}" Value="InvalidHotBar"/>
-                                <Condition Binding="{Binding DataContext.CurrentActiveSlot.Spell.WeaponActionType, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Ranged"/>
+                                <Condition Binding="{Binding DataContext.CurrentActiveSlot.Content.WeaponActionType, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Ranged"/>
                                 <Condition Binding="{Binding DataContext.IsSelectingUpcastedSpell, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="False"/>
                                 <Condition Binding="{Binding DataContext.IsShowingAContainerWithVariants, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="False"/>
                             </MultiDataTrigger.Conditions>
@@ -361,7 +363,7 @@
                         <MultiDataTrigger>
                             <MultiDataTrigger.Conditions>
                                 <Condition Binding="{Binding HotBarType}" Value="InvalidHotBar"/>
-                                <Condition Binding="{Binding DataContext.CurrentActiveSlot.GameObject.UseType, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Arrow"/>
+                                <Condition Binding="{Binding DataContext.CurrentActiveSlot.Content.UseType, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="Arrow"/>
                                 <Condition Binding="{Binding DataContext.IsSelectingUpcastedSpell, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="False"/>
                                 <Condition Binding="{Binding DataContext.IsShowingAContainerWithVariants, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="False"/>
                             </MultiDataTrigger.Conditions>
@@ -543,7 +545,7 @@
                             <Setter Property="Opacity" Value="0.6"/>
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter Property="BoundEvent" Value="{x:Null}"/>
+                            <Setter Property="BoundEvent" Value="Unknown"/>
                         </Trigger>
 
                     </Style.Triggers>
@@ -595,6 +597,11 @@
                         </DoubleAnimation.EasingFunction>
                     </DoubleAnimation>
                     <DoubleAnimation FillBehavior="Stop" Duration="{StaticResource SingleHotbarAnimationsDuration}" To="0.0" Storyboard.TargetProperty="Opacity" Storyboard.TargetName="HotbarsBehindSingleHotbar">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseIn"/>
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation FillBehavior="Stop" Duration="{StaticResource SingleHotbarAnimationsDuration}" To="0.0" Storyboard.TargetProperty="Opacity" Storyboard.TargetName="SummonHotbarDecorator">
                         <DoubleAnimation.EasingFunction>
                             <CubicEase EasingMode="EaseIn"/>
                         </DoubleAnimation.EasingFunction>
@@ -667,6 +674,11 @@
                         </DoubleAnimation.EasingFunction>
                     </DoubleAnimation>
                     <DoubleAnimation FillBehavior="Stop" Duration="{StaticResource SingleHotbarAnimationsDuration}" To="1" Storyboard.TargetProperty="Opacity" Storyboard.TargetName="HotbarsBehindSingleHotbar">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseIn"/>
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation FillBehavior="Stop" Duration="{StaticResource SingleHotbarAnimationsDuration}" To="1" Storyboard.TargetProperty="Opacity" Storyboard.TargetName="SummonHotbarDecorator">
                         <DoubleAnimation.EasingFunction>
                             <CubicEase EasingMode="EaseIn"/>
                         </DoubleAnimation.EasingFunction>
@@ -1344,7 +1356,7 @@
                                         <!--UNEQUIPPED-->
                                         <ls:LSButton x:Name="MainAttack" Grid.Column="0" VerticalAlignment="Bottom" HorizontalAlignment="Center" Style="{StaticResource HotBarSlotStyle}" Visibility="Collapsed"  Width="{StaticResource HotBarSlotWidth}"
                                                      Height="{StaticResource HotBarSlotWidth}" DataContext="{Binding DataContext.CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.MainMeleeSpell, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"
-                                                     Content="{Binding DataContext.CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.MainMeleeSpell, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}">
+                                                     Content="{Binding DataContext.CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.MainMeleeSpell.Content, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}">
                                         </ls:LSButton>
                                         <!--RANGED WEAPON-->
                                         <Button x:Name="RangedWeapon" Grid.Column="1" Template="{StaticResource WeaponSlotTemplate}" DataContext="{Binding CurrentPlayer.SelectedCharacter.Equipment.RangedMainHand}" VerticalAlignment="Bottom" HorizontalAlignment="Center" Command="{Binding DataContext.UseRangedWeaponCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}">
@@ -1357,7 +1369,7 @@
                                         </Button>
                                     </Grid>
 
-                                    <StackPanel Orientation="Horizontal" Grid.Row="1" HorizontalAlignment="Center" Margin="0,20,0,0">
+                                    <StackPanel Orientation="Horizontal" Grid.Row="1" HorizontalAlignment="Center" Margin="0,20,0,0" x:Name="WeaponSetSwitcher">
                                         <!--MELEE TOGGLE-->
                                         <ls:LSRadioButton x:Name="MeleeToggle" HorizontalContentAlignment="Left" SoundID="UI_HUD_Hotbar_MeleeSet"
                                               DataContext="{Binding CurrentPlayer.UIData.InputEvents, Converter={StaticResource FindInputEventConverter}, ConverterParameter='ToggleWeaponSet'}"
@@ -1743,9 +1755,9 @@
                                                                         ls:AttachedProperties.InheritedTag="{StaticResource FalseValue}" AllowDrop="True"/>
                                                     </Grid>
                                                 </AdornerDecorator>
-                                                <Border ClipToBounds="True" >
-                                                    <ContentControl x:Name="SummonHotBar" Background="{x:Null}" HorizontalAlignment="Stretch" VerticalAlignment="Top" Tag="HideScrollbar" Margin="{StaticResource FixedHotbarMargin}" ContentTemplate="{StaticResource HotBarTemplate}" Height="{Binding ActualHeight, ElementName=Concertina, Converter={StaticResource AddConverter}, ConverterParameter=-14}" Content="{Binding SummonHotBar}" Visibility="{Binding SummonHotBar.SlotList.Count, Converter={StaticResource CountToVisibilityConverter}}" ls:AttachedProperties.InheritedTag="{StaticResource TrueValue}" AllowDrop="False"/>
-                                                </Border>
+                                                <AdornerDecorator x:Name="SummonHotbarDecorator" ClipToBounds="True">
+                                                    <ContentControl x:Name="SummonHotBar" Background="{x:Null}" HorizontalAlignment="Stretch" VerticalAlignment="Top" Tag="HideScrollbar" ContentTemplate="{StaticResource HotBarTemplate}" Height="{Binding ActualHeight, ElementName=Concertina, Converter={StaticResource AddConverter}, ConverterParameter=-14}" Content="{Binding SummonHotBar}" Visibility="{Binding SummonHotBar.SlotList.Count, Converter={StaticResource CountToVisibilityConverter}}" ls:AttachedProperties.InheritedTag="{StaticResource TrueValue}" AllowDrop="False"/>
+                                                </AdornerDecorator>
                                                 <Border ClipToBounds="True" >
                                                     <ContentControl x:Name="SingleHotBar" Background="{x:Null}"  HorizontalAlignment="Stretch" VerticalAlignment="Top" ContentTemplate="{StaticResource HotBarTemplate}" Height="{Binding ActualHeight, ElementName=Concertina, Converter={StaticResource AddConverter}, ConverterParameter=-14}"
                                                             Content="{Binding SingleHotBar}" Visibility="{Binding CurrentSingleHotbarFilter, Converter={StaticResource NullToCollapsedConverter}, ConverterParameter='EmptyString'}"
@@ -1905,21 +1917,41 @@
                                         <ControlTemplate TargetType="ItemsControl">
                                             <Border BorderThickness="{TemplateBinding BorderThickness}" BorderBrush="{TemplateBinding BorderBrush}" Background="{TemplateBinding Background}" Margin="-24,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <Image Width="{StaticResource HotbarSlotIconSize}" Height="{StaticResource HotbarSlotIconSize}" VerticalAlignment="Center" HorizontalAlignment="Center" Stretch="Uniform" Margin="0,0,24,0" ls:TooltipExtender.Owner="{Binding DataContext.CurrentPlayer.SelectedCharacter, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" ToolTipService.Placement="Top">
-                                                        <Image.Source>
-                                                            <MultiBinding Converter="{StaticResource IconIdToSourceConverter}">
-                                                                <Binding Source="Assets/Tooltips/Icons/"/>
-                                                                <Binding Path="DataContext.CurrentActiveSlot.Spell.IconName" ElementName="HotBar"/>
-                                                            </MultiBinding>
-                                                        </Image.Source>
-
+                                                    <Image x:Name="ContainerIcon" Width="{StaticResource HotbarSlotIconSize}" Height="{StaticResource HotbarSlotIconSize}" VerticalAlignment="Center" HorizontalAlignment="Center" Stretch="Uniform" Margin="0,0,24,0" ls:TooltipExtender.Owner="{Binding DataContext.CurrentPlayer.SelectedCharacter, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" ToolTipService.Placement="Top">
                                                         <Image.ToolTip>
-                                                            <ls:LSTooltip Content="{Binding DataContext.CurrentActiveSlot.Spell, ElementName=HotBar}" VerticalOffset="-60"/>
+                                                            <ls:LSTooltip Content="{Binding DataContext.CurrentActiveSlot.Content, ElementName=HotBar}" VerticalOffset="-60"/>
                                                         </Image.ToolTip>
                                                     </Image>
                                                     <ItemsPresenter VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Border>
+                                            <ControlTemplate.Triggers>
+                                                <!--
+                                                    This seems complex on first sight, it could be done by just having the Source always be the MultiBinding and hiding when it's an item, for example, instead of having 2 DataTriggers.
+                                                    But that makes the MultiBinding go through the converter for one frame and IconIdToSourceConverter reads from disk, so that's going to be worse for performance no matter what. It also
+                                                    throws an assert because in the case of items the path doesn't exist.
+                                                -->
+                                                <DataTrigger Binding="{Binding DataContext.CurrentActiveSlot.SlotType, ElementName=HotBar}" Value="Spell">
+                                                    <Setter TargetName="ContainerIcon" Property="Source">
+                                                        <Setter.Value>
+                                                            <MultiBinding Converter="{StaticResource IconIdToSourceConverter}">
+                                                                <Binding Source="Assets/Tooltips/Icons/"/>
+                                                                <Binding Path="DataContext.CurrentActiveSlot.Content.IconName" ElementName="HotBar"/>
+                                                            </MultiBinding>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding DataContext.CurrentActiveSlot.SlotType, ElementName=HotBar}" Value="Action">
+                                                    <Setter TargetName="ContainerIcon" Property="Source">
+                                                        <Setter.Value>
+                                                            <MultiBinding Converter="{StaticResource IconIdToSourceConverter}">
+                                                                <Binding Source="Assets/Tooltips/Icons/"/>
+                                                                <Binding Path="DataContext.CurrentActiveSlot.Content.IconName" ElementName="HotBar"/>
+                                                            </MultiBinding>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </DataTrigger>
+                                            </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </ItemsControl.Template>
 
@@ -1927,7 +1959,7 @@
                                         <DataTemplate DataType="ls:VMHotBarSlot">
                                             <Border x:Name="contentContainer" ToolTipService.IsEnabled="True" ToolTipService.Placement="Top" ls:TooltipExtender.Owner="{Binding DataContext.CurrentPlayer.SelectedCharacter, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"  Background="{StaticResource HotbarSlotBackground}" Width="{StaticResource MinimalistSlotSize}" Height="{StaticResource MinimalistSlotSize}">
                                                 <Border.ToolTip>
-                                                    <ls:LSTooltip Content="{Binding DataContext.Spell, RelativeSource={RelativeSource Mode=TemplatedParent}}" ls:TooltipExtender.Context="Hotbar" VerticalOffset="-60" ls:TooltipExtender.Owner="{Binding Path=(ls:TooltipExtender.Owner), ElementName=contentContainer}"/>
+                                                    <ls:LSTooltip Content="{Binding DataContext.Content, RelativeSource={RelativeSource Mode=TemplatedParent}}" ls:TooltipExtender.Context="Hotbar" VerticalOffset="-60" ls:TooltipExtender.Owner="{Binding Path=(ls:TooltipExtender.Owner), ElementName=contentContainer}"/>
                                                 </Border.ToolTip>
                                                 <b:Interaction.Triggers>
                                                     <b:EventTrigger EventName="MouseEnter">
@@ -1937,34 +1969,8 @@
                                                         <b:InvokeCommandAction Command="{Binding DataContext.ClearResourceHighlightsCommand, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" CommandParameter="{Binding}"/>
                                                     </b:EventTrigger>
                                                 </b:Interaction.Triggers>
-                                                <ls:LSButton x:Name="HotbarslotBtn" ls:WidgetData.DataContext="{Binding Path=(ls:WidgetData.DataContext), RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource HotBarSlotStyle}" Content="{Binding .}"/>
+                                                <ls:LSButton x:Name="HotbarslotBtn" ls:WidgetData.DataContext="{Binding Path=(ls:WidgetData.DataContext), RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource HotBarSlotStyle}" Content="{Binding Content}"/>
                                             </Border>
-                                            <DataTemplate.Triggers>
-                                                <MultiDataTrigger>
-                                                    <MultiDataTrigger.Conditions>
-                                                        <Condition Binding="{Binding IsActive}" Value="True"/>
-                                                        <Condition Binding="{Binding SlotType}" Value="Spell"/>
-                                                    </MultiDataTrigger.Conditions>
-                                                    <Setter Property="Command" Value="{x:Null}" TargetName="HotbarslotBtn"/>
-                                                    <Setter Property="IsEnabled" Value="False"/>
-                                                </MultiDataTrigger>
-                                                <MultiDataTrigger>
-                                                    <MultiDataTrigger.Conditions>
-                                                        <Condition Binding="{Binding IsActive}" Value="True"/>
-                                                        <Condition Binding="{Binding SlotType}" Value="Action"/>
-                                                    </MultiDataTrigger.Conditions>
-                                                    <Setter Property="Command" Value="{x:Null}" TargetName="HotbarslotBtn"/>
-                                                    <Setter Property="IsEnabled" Value="False"/>
-                                                </MultiDataTrigger>
-                                                <MultiDataTrigger>
-                                                    <MultiDataTrigger.Conditions>
-                                                        <Condition Binding="{Binding IsActive}" Value="True"/>
-                                                        <Condition Binding="{Binding SlotType}" Value="Item"/>
-                                                    </MultiDataTrigger.Conditions>
-                                                    <Setter Property="Command" Value="{x:Null}" TargetName="HotbarslotBtn"/>
-                                                    <Setter Property="IsEnabled" Value="False"/>
-                                                </MultiDataTrigger>
-                                            </DataTemplate.Triggers>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -1972,7 +1978,7 @@
 
                             <!-- UPCAST / MULTITARGET TWO STEP DECK -->
                             <StackPanel x:Name="UpcastSection" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" Background="{x:Null}">
-                                <ItemsControl x:Name="ContainerItems" Width="Auto" HorizontalContentAlignment="Right" HorizontalAlignment="Center" VerticalAlignment="Center" ItemsSource="{Binding CurrentActiveSlot.Spell.SpellUpcast}">
+                                <ItemsControl x:Name="ContainerItems" Width="Auto" HorizontalContentAlignment="Right" HorizontalAlignment="Center" VerticalAlignment="Center" ItemsSource="{Binding CurrentActiveSlot.Content.SpellUpcast}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <StackPanel Orientation="Horizontal" Background="{x:Null}"/>
@@ -1988,7 +1994,7 @@
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate DataType="ls:VMActionResource">
                                                                 <Grid x:Name="resourceDisplay" Visibility="Collapsed" ToolTip="{StaticResource ManagedTooltip}" ToolTipService.IsEnabled="True" ToolTipService.Placement="Right" Margin="0,0,30,0">
-                                                                    <Image Stretch="None" Style="{StaticResource SectionImageStyle}" Margin="0,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+                                                                    <Image Stretch="None" Style="{DynamicResource SectionImageStyle}" Margin="0,0,0,0" HorizontalAlignment="Center" VerticalAlignment="Top"/>
                                                                     <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" ls:TextBlockFormatter.SourceText="{Binding MaxValue}" Visibility="{Binding MaxValue, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter='1'}" Margin="0,24,0,0" TextAlignment="Center" noesis:Text.Stroke="Black" noesis:Text.StrokeThickness="4"/>
                                                                 </Grid>
                                                                 <DataTemplate.Triggers>
@@ -2003,12 +2009,12 @@
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
                                                     <Grid x:Name="MainSpellIcon" Width="{StaticResource HotbarSlotIconSize}" Height="{StaticResource HotbarSlotIconSize}" VerticalAlignment="Center" Margin="0,0,24,0" Visibility="{Binding IsShowingAContainerWithVariants, Converter={StaticResource BoolToCollapsedConverter},FallbackValue=Collapsed}">
-                                                        <Rectangle Fill="{Binding CurrentActiveSlot.Spell.Icon}" />
+                                                        <Rectangle Fill="{Binding CurrentActiveSlot.Content.Icon}" />
                                                         <Control x:Name="SpellModifiedGlow" Visibility="Collapsed" DataContext="{Binding CurrentActiveSlot}" Tag="True"  IsHitTestVisible="False" Template="{StaticResource HotbarSlotGlow}"/>
 
                                                     </Grid>
-                                                    <Grid Width="{StaticResource HotbarSlotIconSize}" Height="{StaticResource HotbarSlotIconSize}" VerticalAlignment="Center" Margin="0,-8,0,8" Visibility="{Binding CurrentActiveSlot.GameObject.Icon, Converter={StaticResource NullToCollapsedConverter}, FallbackValue=Collapsed}">
-                                                        <Rectangle Fill="{Binding CurrentActiveSlot.GameObject.Icon}"  />
+                                                    <Grid Width="{StaticResource HotbarSlotIconSize}" Height="{StaticResource HotbarSlotIconSize}" VerticalAlignment="Center" Margin="0,-8,0,8" Visibility="{Binding CurrentActiveSlot.Content.Icon, Converter={StaticResource NullToCollapsedConverter}, FallbackValue=Collapsed}">
+                                                        <Rectangle Fill="{Binding CurrentActiveSlot.Content.Icon}"  />
                                                         <Control x:Name="ItemModifiedGlow" DataContext="{Binding CurrentActiveSlot}" Tag="True"  IsHitTestVisible="False" Visibility="Collapsed" Template="{StaticResource HotbarSlotGlow}"/>
                                                     </Grid>
                                                     <ItemsPresenter VerticalAlignment="Center"/>
@@ -2016,13 +2022,13 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
 
-                                                <DataTrigger Binding="{Binding CurrentActiveSlot.GameObject.IsModified}" Value="True" >
+                                                <DataTrigger Binding="{Binding CurrentActiveSlot.Content.IsModified}" Value="True" >
                                                     <Setter TargetName="ItemModifiedGlow" Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding CurrentActiveSlot.Spell.IsModified}" Value="True" >
+                                                <DataTrigger Binding="{Binding CurrentActiveSlot.Content.IsModified}" Value="True" >
                                                     <Setter TargetName="SpellModifiedGlow" Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding CurrentActiveSlot.GameObject, Converter={StaticResource NullToBoolFalseConverter}}" Value="True" >
+                                                <DataTrigger Binding="{Binding CurrentActiveSlot.Content, Converter={StaticResource NullToBoolFalseConverter}}" Value="True" >
                                                     <Setter TargetName="MainSpellIcon" Property="Visibility" Value="Collapsed"/>
                                                 </DataTrigger>
                                             </ControlTemplate.Triggers>
@@ -2100,269 +2106,33 @@
                                                                     <Setter TargetName="Background" Property="Opacity" Value="0.5"/>
                                                                 </DataTrigger>
 
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="ActionPoint">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconActionPoint}"/>
+                                                                <!-- Action Resource Icon from TypeId/ResourceName -->
+                                                                <DataTrigger Binding="{Binding ResourceName, Converter={StaticResource NullToBoolTrueConverter}, ConverterParameter='EmptyString'}" Value="False">
+                                                                    <Setter TargetName="ResourceImage" Property="Source">
+                                                                        <Setter.Value>
+                                                                            <MultiBinding Converter="{StaticResource IconIdToSourceConverter}" FallbackValue="{StaticResource TypeIdToSourceFallback}">
+                                                                                <Binding Source="{StaticResource ActionResourceIconsPath}"/>
+                                                                                <Binding Path="ResourceName"/>
+                                                                            </MultiBinding>
+                                                                        </Setter.Value>
+                                                                    </Setter>
                                                                 </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="ActionPoint"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconActionPointUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="BonusActionPoint">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconBonusActionPoint}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="BonusActionPoint"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconBonusActionPointUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="ReactionActionPoint">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconReactionPoint}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="IconReactionPoint"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconReactionPointUnavailable}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="Movement">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconMovement}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="Movement"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconMovementUnavailable}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="WarlockSpellSlot">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconWarlockSpellSlot}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="WarlockSpellSlot"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconWarlockSpellSlotUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="SpellSlot">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconSpellSlot}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="SpellSlot"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource IconSpellSlotUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="ShadowSpellSlot">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource ShadowSpellSlot}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="ShadowSpellSlot"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource ShadowSpellSlotUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="SorceryPoint">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource SorceryPoint}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="SorceryPoint"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource SorceryPointUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="KiPoint">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource KiPoint}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="KiPoint"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource KiPointUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="LayOnHandsCharge">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource LayOnHandsCharge}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="LayOnHandsCharge"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource LayOnHandsChargeUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="Rage">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource Rage}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="Rage"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource RageUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="BardicInspiration">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource BardicInspiration}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="BardicInspiration"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource BardicInspirationUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="ChannelDivinity">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource ChannelDivinity}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="ChannelDivinity"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource ChannelDivinityUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="ChannelOath">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource ChannelOath}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="ChannelOath"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource ChannelOathUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="SuperiorityDie">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource SuperiorityDie}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="SuperiorityDie"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource SuperiorityDieUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="ArcaneRecoveryPoint">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource ArcaneRecoveryPoint}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="ArcaneRecoveryPoint"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource ArcaneRecoveryPointUsed}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="NaturalRecoveryPoint">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource NaturalRecovery}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="NaturalRecoveryPoint"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource NaturalRecoverySpent}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="WildShape">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource WildShape}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="WildShape"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource WildShapeSpent}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="TidesOfChaos">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource TidesOfChaos}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="TidesOfChaos"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource TidesOfChaosSpent}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="WarPriestActionPoint">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource WarPriestActionPoint}"/>
-                                                                </DataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="LuckPoint">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource LuckPoint}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="LuckPoint"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource LuckPointSpent}"/>
-                                                                </MultiDataTrigger>
 
                                                                 <MultiDataTrigger>
                                                                     <MultiDataTrigger.Conditions>
                                                                         <Condition Binding="{Binding CanUse}" Value="False"/>
                                                                         <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="WarPriestActionPoint"/>
                                                                     </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource WarPriestActionPointSpent}"/>
-                                                                </MultiDataTrigger>
-
-                                                                <DataTrigger Binding="{Binding ResourceName}" Value="FungalInfestationCharge">
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource FungalInfestationCharge}"/>
-                                                                </DataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding CanUse}" Value="False"/>
-                                                                        <Condition Binding="{Binding IsFake}" Value="False"/>
-                                                                        <Condition Binding="{Binding ResourceName}" Value="FungalInfestationCharge"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter TargetName="ResourceImage" Property="Source" Value="{StaticResource FungalInfestationChargeSpent}"/>
+                                                                    <MultiDataTrigger.Setters>
+                                                                        <Setter TargetName="ResourceImage" Property="Source">
+                                                                            <Setter.Value>
+                                                                                <MultiBinding Converter="{StaticResource IconIdToSourceConverter}" FallbackValue="{StaticResource TypeIdToSourceFallback}">
+                                                                                    <Binding Source="{StaticResource ActionResourceUsedIconsPath}"/>
+                                                                                    <Binding Path="ResourceName"/>
+                                                                                </MultiBinding>
+                                                                            </Setter.Value>
+                                                                        </Setter>
+                                                                    </MultiDataTrigger.Setters>
                                                                 </MultiDataTrigger>
 
                                                                 <DataTrigger Binding="{Binding CastAbility}" Value="Strength">
@@ -2536,8 +2306,8 @@
 
                                                         <Image x:Name="SpellSlotLevels" Stretch="None" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,-10,0,0" IsHitTestVisible="False" Style="{StaticResource RomanNumeralLevelImage}" Visibility="Hidden" DataContext="{Binding ActionResource}"/>
 
-                                                        <TextBlock x:Name="ResourcesNumeralDisplay" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,25,0,0"
-                                                                    Foreground="{Binding Foreground, ElementName=ResourcePoints}" IsHitTestVisible="False"
+                                                        <TextBlock x:Name="ResourcesNumeralDisplay" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,20,0,-20"
+                                                                    Foreground="{Binding Foreground, ElementName=ResourcePoints}" IsHitTestVisible="False" FontWeight="Bold"
                                                                     FontSize="{DynamicResource MediumFontSize}" Text="{Binding ActionResource.Value}"
                                                                     noesis:Text.Stroke="{StaticResource LS_PrimaryColorOutlineColor}" noesis:Text.StrokeThickness="4">
                                                             <!-- ResourcePoints' from MaxGroupActionPoints doesn't seem to be accessible from DataTemplate triggers or from Interaction triggers 
@@ -2777,7 +2547,7 @@
                                 <ls:LSInputBinding x:Name="ReactionsLineBinding" BoundEvent="ToggleReactions" Command="{Binding CustomEvent}" CommandParameter="ToggleInterrupts"/>
                                 <ls:LSButton x:Name="ReactionsLineBtn" Command="{Binding CustomEvent}" CommandParameter="ToggleInterrupts" ls:TutorialProperties.TargetID="TUT_BardicInspiration" ls:TutorialProperties.ModalType="BottomRight" IsHitTestVisible="True" >
                                     <b:Interaction.Behaviors>
-                                        <ls:CollectionFilterBehavior x:Name="CharacterInterruptsFilter" ItemsSource="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.Interrupts}" Predicate="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.CharacterInterruptsFilterPredicate}"/>
+                                        <ls:CollectionFilterBehavior x:Name="CharacterInterruptsFilter" ItemsSource="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.Interrupts}" Predicate="{Binding Data.CharacterInterruptsFilterPredicate}"/>
                                     </b:Interaction.Behaviors>
                                     <ItemsControl x:Name="ReactionsList" ItemsSource="{Binding FilteredItems, ElementName=CharacterInterruptsFilter}" HorizontalAlignment="Center" Background="Transparent">
                                         <ItemsControl.ItemsPanel>
@@ -3498,18 +3268,8 @@
                                             <ls:LSTooltip DataContext="{Binding DataContext.CurrentPlayer.SelectedCharacter.Stats.MovementResource, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}">
                                                 <ls:LSTooltip.Content>
                                                     <TextBlock Style="{StaticResource TooltipBaseTextStyle}">
-                                                        <Run>
-                                                            <Run.Style>
-                                                                <Style TargetType="Run">
-                                                                    <Setter Property="Text" Value="{Binding Value, Converter={StaticResource UnitConverter}, ConverterParameter='Distance RoundUp N1'}"/>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding Value, Converter={StaticResource GreaterThanConverter}, ConverterParameter='1.5'}" Value="True">
-                                                                            <Setter Property="Text" Value="{Binding Value, Converter={StaticResource UnitConverter}, ConverterParameter='Distance'}"/>
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </Run.Style>
-                                                        </Run><Run Text="{Binding MaxValue, Converter={StaticResource UnitConverter}, ConverterParameter='Distance Short', StringFormat='/{0}'}"/>
+                                                        <Run Text="{Binding Value, Converter={StaticResource UnitConverter}, ConverterParameter='Distance RoundUp N1'}" /><Run
+                                                            Text="{Binding MaxValue, Converter={StaticResource UnitConverter}, ConverterParameter='Distance Short', StringFormat=' / {0}'}"/>
                                                     </TextBlock>
                                                 </ls:LSTooltip.Content>
                                             </ls:LSTooltip>
@@ -3995,8 +3755,12 @@
                                 <MenuItem x:Name="ShortRestItem" Style="{StaticResource SubMenuItemStyle}" Command="{Binding ShortRest}"
                                           IsEnabled="{Binding CurrentPlayer.SelectedCharacter.PlayerCharacterProperties.IsShortRestAvailable}" ls:TutorialProperties.TargetID="TUT_ShortRestDowned" ls:TutorialProperties.ModalType="RightBottom"
                                           ls:TutorialProperties.IsAnimating="{Binding (ls:TutorialProperties.IsAnimating), RelativeSource={RelativeSource AncestorType={x:Type ItemsPresenter}}}">
+                                    <b:Interaction.Behaviors>
+                                        <ls:RuleSetModifierValueBehavior x:Name="ShortRestFullyHealsModifier" Modifiers="{Binding DataContext.Data.CurrentRuleSetModifiers, ElementName=HotBar}" ModifierName="SHORT_REST_FULLY_HEALS"/>
+                                    </b:Interaction.Behaviors>
+
                                     <MenuItem.ToolTip>
-                                        <ls:LSTooltip IsHitTestVisible="False" Placement="Right" VerticalOffset="-16" ls:TooltipExtender.Owner="{Binding DataContext.CurrentPlayer.SelectedCharacter, ElementName=HotBar}" ls:AttachedProperties.InheritedTag="{Binding DataContext.Data.CurrentRuleSetModifiers, Converter={StaticResource RuleSetModifierValueConverter}, ConverterParameter='SHORT_REST_FULLY_HEALS', ElementName=HotBar}">
+                                        <ls:LSTooltip IsHitTestVisible="False" Placement="Right" VerticalOffset="-16" ls:TooltipExtender.Owner="{Binding DataContext.CurrentPlayer.SelectedCharacter, ElementName=HotBar}" ls:AttachedProperties.InheritedTag="{Binding ModifierEnabled, ElementName=ShortRestFullyHealsModifier}">
                                             <ls:LSTooltip.ContentTemplate>
                                                 <DataTemplate>
                                                     <StackPanel MaxWidth="{StaticResource MaxTooltipContentWidth}" >
@@ -4656,7 +4420,7 @@
                 <!-- Level up button -->
                 <ls:LSNineSliceImage x:Name="LevelUpHolder" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="292,0,0,8" ImageSource="{StaticResource LevelUPFrame}" Slices="130,0" Padding="44,0" MinHeight="78">
 
-                    <ls:LSButton HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16,0" Command="{Binding StartLevelUp}" CommandParameter="{Binding CurrentPlayer.SelectedCharacter}" ls:TutorialProperties.TargetID="TUT_LevelUp" ls:TutorialProperties.ModalType="Bottom" RenderTransformOrigin="0.5,0.5">
+                    <ls:LSButton x:Name="HotBarLevelUpButton" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16,0" Command="{Binding StartLevelUp}" CommandParameter="{Binding CurrentPlayer.SelectedCharacter}" ls:TutorialProperties.TargetID="TUT_LevelUp" ls:TutorialProperties.ModalType="Bottom" RenderTransformOrigin="0.5,0.5">
                         <ls:LSButton.Template>
                             <ControlTemplate TargetType="{x:Type ls:LSButton}">
                                 <ls:LSNineSliceImage x:Name="bg" ImageSource="{StaticResource FilterButtonBackground}" Slices="36" Padding="10" MinWidth="{Binding MaxWidth, RelativeSource={RelativeSource AncestorType={x:Type ContentPresenter}}}">
@@ -4817,22 +4581,6 @@
                 <b:Interaction.Triggers>
                     <b:PropertyChangedTrigger Binding="{Binding Path=CurrentPlayer.SelectedCharacter}">
                         <!-- Reset HotBar when SelectedCharacter is changed -->
-                        <b:InvokeCommandAction Command="{Binding ClearSingleHotbarCommand}"/>
-                        <b:ChangePropertyAction TargetName="HotBar" PropertyName="Tag" Value="{x:Null}"/>
-                    </b:PropertyChangedTrigger>
-
-                    <b:PropertyChangedTrigger Binding="{Binding SingleHotBar.SlotList.Count}">
-                        <b:Interaction.Behaviors>
-                            <b:ConditionBehavior>
-                                <b:ConditionalExpression>
-                                    <b:ComparisonCondition LeftOperand="{Binding SingleHotBar.SlotList.Count}" Operator="Equal" RightOperand="0"/>
-                                    <b:ComparisonCondition LeftOperand="{Binding IsVisible, ElementName=SingleHotBar}" Operator="Equal" RightOperand="True"/>
-                                    <b:ComparisonCondition LeftOperand="{Binding IsSelectingUpcastedSpell}" Operator="Equal" RightOperand="False"/>
-                                    <b:ComparisonCondition LeftOperand="{Binding IsShowingAContainerWithVariants}" Operator="Equal" RightOperand="True"/>
-                                </b:ConditionalExpression>
-                            </b:ConditionBehavior>
-                        </b:Interaction.Behaviors>
-                        <!-- Close single hotbar when it has no more options available (i.e. unequipping instrument) -->
                         <b:InvokeCommandAction Command="{Binding ClearSingleHotbarCommand}"/>
                         <b:ChangePropertyAction TargetName="HotBar" PropertyName="Tag" Value="{x:Null}"/>
                     </b:PropertyChangedTrigger>
@@ -5079,7 +4827,7 @@
                     <Setter TargetName="UpcastSection" Property="Visibility" Value="Visible"/>
                 </MultiDataTrigger>
 
-                <DataTrigger Binding="{Binding CurrentActiveSlot.Spell.SpellSlotLevel}" Value="0">
+                <DataTrigger Binding="{Binding CurrentActiveSlot.Content.SpellSlotLevel}" Value="0">
                     <Setter TargetName="UpcastDescription" Property="Visibility" Value="Collapsed"/>
                     <Setter TargetName="UpcastSection" Property="Margin" Value="0,0,0,14"/>
                 </DataTrigger>
@@ -5146,6 +4894,11 @@
                     <Setter TargetName="Concertina" Property="IsHitTestVisible" Value="False"/>
                 </MultiDataTrigger>
 
+                <DataTrigger Binding="{Binding IsVisible, ElementName=SummonHotBar}" Value="True">
+                    <Setter TargetName="Concertina" Property="Visibility" Value="Hidden"/>
+                    <Setter TargetName="Concertina" Property="IsHitTestVisible" Value="False"/>
+                </DataTrigger>
+
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
                         <Condition Binding="{Binding CurrentSingleHotbarFilter, Converter={StaticResource NullToBoolFalseConverter}}" Value="True"/>
@@ -5154,6 +4907,8 @@
                     <Setter TargetName="Concertina" Property="Opacity" Value="0"/>
                     <Setter TargetName="Concertina" Property="IsHitTestVisible" Value="False"/>
                     <Setter TargetName="HotbarsBehindSingleHotbar" Property="Opacity" Value="0"/>
+                    <Setter TargetName="SummonHotbarDecorator" Property="Opacity" Value="0"/>
+                    <Setter TargetName="SummonHotbarDecorator" Property="IsHitTestVisible" Value="False"/>
                 </MultiDataTrigger>
 
                 <DataTrigger Binding="{Binding CurrentPlayer.IsSelectingCharacter}" Value="True">
@@ -5182,13 +4937,13 @@
                     <Setter TargetName="RestMenu" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
 
-                <DataTrigger Binding="{Binding CurrentActiveSlot.Spell.WeaponActionType}" Value="Melee">
+                <DataTrigger Binding="{Binding CurrentActiveSlot.Content.WeaponActionType}" Value="Melee">
                     <Setter TargetName="MeleeWeapon" Property="IsEnabled" Value="False"/>
                 </DataTrigger>
-                <DataTrigger Binding="{Binding CurrentActiveSlot.Spell.WeaponActionType}" Value="Ranged">
+                <DataTrigger Binding="{Binding CurrentActiveSlot.Content.WeaponActionType}" Value="Ranged">
                     <Setter TargetName="RangedWeapon" Property="IsEnabled" Value="False"/>
                 </DataTrigger>
-                <DataTrigger Binding="{Binding CurrentActiveSlot.GameObject.UseType}" Value="Arrow">
+                <DataTrigger Binding="{Binding CurrentActiveSlot.Content.UseType}" Value="Arrow">
                     <Setter TargetName="RangedWeapon" Property="IsEnabled" Value="False"/>
                 </DataTrigger>
 
