@@ -1,0 +1,253 @@
+<ResourceDictionary
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+    xmlns:ls="clr-namespace:ls;assembly=Code"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:System="clr-namespace:System;assembly=mscorlib"
+    mc:Ignorable="d">
+
+    <System:Int32 x:Key="StickerLimit">30</System:Int32>
+
+    <System:Double x:Key="DegreeInRadians">0.0174533</System:Double>
+
+    <Storyboard x:Key="FadeInPhotoModeNotification" FillBehavior="Stop">
+        <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity" Storyboard.TargetName="PhotoModeNotificationControl">
+            <EasingDoubleKeyFrame KeyTime="0" Value="0"/>
+            <EasingDoubleKeyFrame KeyTime="0:0:0.5" Value="1"/>
+            <EasingDoubleKeyFrame KeyTime="0:0:2.5" Value="1"/>
+            <EasingDoubleKeyFrame KeyTime="0:0:3" Value="0"/>
+        </DoubleAnimationUsingKeyFrames>
+    </Storyboard>
+
+    <ControlTemplate x:Key="DecorBarTemplate">
+        <Grid IsHitTestVisible="False">
+            <Rectangle x:Name="rect1" Fill="Black" Opacity="{Binding SelectedDecorBarOpacity}"/>
+            <Rectangle x:Name="rect2" Fill="Black" Opacity="{Binding SelectedDecorBarOpacity}"/>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding SelectedDecorBar, FallbackValue=None, TargetNullValue=None}" Value="None">
+                <Setter Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SelectedDecorBar}" Value="Vertical">
+                <Setter TargetName="rect1" Property="HorizontalAlignment" Value="Left"/>
+                <Setter TargetName="rect2" Property="HorizontalAlignment" Value="Right"/>
+                <Setter TargetName="rect1" Property="Width" Value="{Binding SelectedDecorBarSize, Converter={StaticResource MultiplierConverter}, ConverterParameter=420}"/>
+                <Setter TargetName="rect2" Property="Width" Value="{Binding SelectedDecorBarSize, Converter={StaticResource MultiplierConverter}, ConverterParameter=420}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SelectedDecorBar}" Value="Horizontal">
+                <Setter TargetName="rect1" Property="VerticalAlignment" Value="Top"/>
+                <Setter TargetName="rect2" Property="VerticalAlignment" Value="Bottom"/>
+                <Setter TargetName="rect1" Property="Height" Value="{Binding SelectedDecorBarSize, Converter={StaticResource MultiplierConverter}, ConverterParameter=300}"/>
+                <Setter TargetName="rect2" Property="Height" Value="{Binding SelectedDecorBarSize, Converter={StaticResource MultiplierConverter}, ConverterParameter=300}"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <Style x:Key="PhotoModeFrameStyle" TargetType="ls:LSNineSliceImage" BasedOn="{StaticResource {x:Type ls:LSNineSliceImage}}">
+        <Setter Property="ImageSource">
+            <Setter.Value>
+                <MultiBinding Converter="{StaticResource IconIdToSourceConverter}">
+                    <Binding Source="Assets/DecorFrames/Full/"/>
+                    <Binding Path="SelectedDecorFrame.FrameImageName"/>
+                </MultiBinding>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Slices">
+            <Setter.Value>
+                <MultiBinding Converter="{StaticResource CreateRectConverter}">
+                    <Binding Path="SelectedDecorFrame.LeftSliceSize"/>
+                    <Binding Path="SelectedDecorFrame.TopSliceSize"/>
+                    <Binding Path="SelectedDecorFrame.RightSliceSize"/>
+                    <Binding Path="SelectedDecorFrame.BottomSliceSize"/>
+                </MultiBinding>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="IconWidth" Value="{Binding SelectedDecorFrame.IconWidth}"/>
+    </Style>
+
+    <Style x:Key="PhotoModeNotification9Slice" TargetType="ls:LSNineSliceImage" BasedOn="{StaticResource {x:Type ls:LSNineSliceImage}}">
+        <Setter Property="Slices" Value="64,72,64,72"/>
+        <Setter Property="Padding" Value="100,60,100,60"/>
+        <Setter Property="ImageSource" Value="pack://application:,,,/Core;component/Assets/Notification/notificationGeneric.png"/>
+        <Setter Property="IconWidth" Value="72"/>
+    </Style>
+
+    <ControlTemplate x:Key="PhotoModeNotificationTemplate">
+        <ls:LSNineSliceImage x:Name="PhotoModeNotification" Style="{StaticResource GenericNotification9Slice}" >
+            <TextBlock x:Name="Content" 
+                       VerticalAlignment="Center" HorizontalAlignment="Center" 
+                       TextAlignment="Center" 
+                       MaxWidth="900" 
+                       TextWrapping="Wrap"/>
+        </ls:LSNineSliceImage>
+        <ControlTemplate.Triggers>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding IsConsolePlatform}" Value="False"/>
+                    <Condition Binding="{Binding PhotoResult}" Value="Success"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="Content" Property="Text">
+                    <Setter.Value>
+                        <MultiBinding Converter="{StaticResource ParameterizedTranslatedStringConverter}" ConverterParameter="hd250a050gc646g4671g904cg0293c960b02f">
+                            <Binding Path="ScreenshotPath"/>
+                        </MultiBinding>
+                    </Setter.Value>
+                </Setter>
+            </MultiDataTrigger>
+            <DataTrigger Binding="{Binding PhotoResult}" Value="Failure">
+                <Setter TargetName="Content" Property="Text" Value="{Binding Source=h04e1aad8g0d0eg4724gb4f0g4d29c327af5a, Converter={StaticResource TranslatedStringConverter}}"/>
+            </DataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding IsConsolePlatform}" Value="True"/>
+                    <Condition Binding="{Binding PhotoResult}" Value="Success"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="Content" Property="Text" Value="{Binding Source=h084f1f19g3c51g4598g8f87g5d33b9a5f560, Converter={StaticResource TranslatedStringConverter}}"/>
+            </MultiDataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <DataTemplate x:Key="StickerTemplate">
+        <Grid x:Name="ImageBorder"  RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
+            <b:Interaction.Behaviors>
+                <ls:FloatingElementBehavior x:Name="FloatingElementBehavior" 
+                                            Container="{Binding ., RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}"
+                                            Scale="{Binding Size}"
+                                            PosX="{Binding PosX, Mode=TwoWay}"
+                                            PosY="{Binding PosY, Mode=TwoWay}"
+                                            ElementTransformOrigin="{Binding RenderTransformOrigin, ElementName=ImageBorder}"/>
+            </b:Interaction.Behaviors>
+            <Grid.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform>
+                        <ScaleTransform.ScaleX>
+                            <MultiBinding Converter="{StaticResource LinearInterpolationConverter}">
+                                <Binding Source="{StaticResource DoubleZeroValue}"/>
+                                <Binding Path="MaxScale" ElementName="FloatingElementBehavior"/>
+                                <Binding Path="Size"/>
+                            </MultiBinding>
+                        </ScaleTransform.ScaleX>
+                        <ScaleTransform.ScaleY>
+                            <MultiBinding Converter="{StaticResource LinearInterpolationConverter}">
+                                <Binding Source="{StaticResource DoubleZeroValue}"/>
+                                <Binding Path="MaxScale" ElementName="FloatingElementBehavior"/>
+                                <Binding Path="Size"/>
+                            </MultiBinding>
+                        </ScaleTransform.ScaleY>
+                    </ScaleTransform>
+                    <ScaleTransform>
+                        <ScaleTransform.ScaleX>
+                            <MultiBinding Converter="{StaticResource AddMultipleConverter}">
+                                <Binding Source="{StaticResource DoubleOneValue}"/>
+                                <Binding Path="MirrorX" Converter="{StaticResource BoolToIntConverter}" ConverterParameter="{StaticResource DoubleMinusTwoValue}"/>
+                            </MultiBinding>
+                        </ScaleTransform.ScaleX>
+                        <ScaleTransform.ScaleY>
+                            <MultiBinding Converter="{StaticResource AddMultipleConverter}">
+                                <Binding Source="{StaticResource DoubleOneValue}"/>
+                                <Binding Path="MirrorY" Converter="{StaticResource BoolToIntConverter}" ConverterParameter="{StaticResource DoubleMinusTwoValue}"/>
+                            </MultiBinding>
+                        </ScaleTransform.ScaleY>
+                    </ScaleTransform>
+                    <RotateTransform Angle="{Binding Rotation}"/>
+                    <TranslateTransform>
+                        <TranslateTransform.X>
+                            <MultiBinding Converter="{StaticResource LinearInterpolationConverter}">
+                                <Binding Path="MinHorizontalRange" ElementName="FloatingElementBehavior"/>
+                                <Binding Path="MaxHorizontalRange" ElementName="FloatingElementBehavior"/>
+                                <Binding Path="PosX"/>
+                            </MultiBinding>
+                        </TranslateTransform.X>
+                        <TranslateTransform.Y>
+                            <MultiBinding Converter="{StaticResource LinearInterpolationConverter}">
+                                <Binding Path="MinVerticalRange" ElementName="FloatingElementBehavior"/>
+                                <Binding Path="MaxVerticalRange" ElementName="FloatingElementBehavior"/>
+                                <Binding Path="PosY"/>
+                            </MultiBinding>
+                        </TranslateTransform.Y>
+                    </TranslateTransform>
+                </TransformGroup>
+            </Grid.RenderTransform>
+            <Image x:Name="Img" Stretch="None">
+                <Image.Source>
+                    <MultiBinding Converter="{StaticResource IconIdToSourceConverter}">
+                        <Binding Source="Assets/Stickers/Full/"/>
+                        <Binding Path="StickerData.StickerImageName"/>
+                    </MultiBinding>
+                </Image.Source>
+            </Image>
+            <Border x:Name="StickerHighlight" Background="#8FFFFFFF" Visibility="Collapsed">
+                <Border.Triggers>
+                    <EventTrigger RoutedEvent="Loaded">
+                        <BeginStoryboard>
+                            <BeginStoryboard.Storyboard>
+                                <Storyboard RepeatBehavior="Forever" FillBehavior="Stop">
+                                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity" Storyboard.TargetName="StickerHighlight">
+                                        <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0"/>
+                                        <EasingDoubleKeyFrame KeyTime="0:0:0.5" Value="1"/>
+                                        <EasingDoubleKeyFrame KeyTime="0:0:1" Value="0" />
+                                    </DoubleAnimationUsingKeyFrames>
+                                </Storyboard>
+                            </BeginStoryboard.Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Border.Triggers>
+                <Border.OpacityMask>
+                    <ImageBrush>
+                        <ImageBrush.ImageSource>
+                            <MultiBinding Converter="{StaticResource IconIdToSourceConverter}">
+                                <Binding Source="Assets/Stickers/Full/"/>
+                                <Binding Path="StickerData.StickerImageName"/>
+                            </MultiBinding>
+                        </ImageBrush.ImageSource>
+                    </ImageBrush>
+                </Border.OpacityMask>
+            </Border>
+        </Grid>
+        <DataTemplate.Triggers>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Value="True">
+                        <Condition.Binding>
+                            <MultiBinding Converter="{StaticResource EqualConverter}">
+                                <Binding Path="DataContext.HighlightedStickerElement" RelativeSource="{RelativeSource AncestorType={x:Type ls:UIWidget}}"/>
+                                <Binding Path="."/>
+                            </MultiBinding>
+                        </Condition.Binding>
+                    </Condition>
+                    <Condition Binding="{Binding DataContext.PhotoPreviewOn, RelativeSource={RelativeSource AncestorType={x:Type ls:UIWidget}}}" Value="False"/>
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="StickerHighlight" Property="Visibility" Value="Visible"/>
+            </MultiDataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <ControlTemplate x:Key="ReticleGridTemplate">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Image x:Name="Reticle" Stretch="Uniform" Source="{StaticResource ReticleImage}" IsHitTestVisible="False" VerticalAlignment="Center" HorizontalAlignment="Center" Grid.Row="1" Grid.Column="1"/>
+        </Grid>
+    </ControlTemplate>
+
+    <Storyboard x:Key="PhotoModeFlashStoryboard" Storyboard.TargetName="PhotoFlash" FillBehavior="Stop">
+        <DoubleAnimation Storyboard.TargetProperty="Opacity" Duration="0:0:0.8" From="1" To="0"/>
+
+        <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Visibility">
+            <DiscreteObjectKeyFrame KeyTime="0:0:0" Value="{x:Static Visibility.Visible}"/>
+            <DiscreteObjectKeyFrame KeyTime="0:0:0.8" Value="{x:Static Visibility.Hidden}"/>
+        </ObjectAnimationUsingKeyFrames>
+    </Storyboard>
+</ResourceDictionary>
